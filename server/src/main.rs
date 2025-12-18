@@ -1,52 +1,24 @@
-use tonic::{transport::Server, Request, Response, Status};
-use tokio_stream::wrappers::ReceiverStream;
+mod connection_tracker;
+mod menu_service;
+mod game_service;
+
+use tonic::transport::Server;
 use common::{
-    menu_service_server::{MenuService, MenuServiceServer},
-    game_service_server::{GameService, GameServiceServer},
-    MenuClientMessage, MenuServerMessage,
-    GameClientMessage, GameServerMessage,
+    menu_service_server::MenuServiceServer,
+    game_service_server::GameServiceServer,
     logger,
     log,
 };
 use clap::Parser;
+use connection_tracker::ConnectionTracker;
+use menu_service::MenuServiceImpl;
+use game_service::GameServiceImpl;
 
 #[derive(Parser)]
 #[command(name = "snake_game_server")]
 struct Args {
     #[arg(long)]
     use_log_prefix: bool,
-}
-
-#[derive(Debug, Default)]
-pub struct MenuServiceImpl {}
-
-#[tonic::async_trait]
-impl MenuService for MenuServiceImpl {
-    type MenuStreamStream = ReceiverStream<Result<MenuServerMessage, Status>>;
-
-    async fn menu_stream(
-        &self,
-        request: Request<tonic::Streaming<MenuClientMessage>>,
-    ) -> Result<Response<Self::MenuStreamStream>, Status> {
-        let (_tx, rx) = tokio::sync::mpsc::channel(128);
-        Ok(Response::new(ReceiverStream::new(rx)))
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct GameServiceImpl {}
-
-#[tonic::async_trait]
-impl GameService for GameServiceImpl {
-    type GameStreamStream = ReceiverStream<Result<GameServerMessage, Status>>;
-
-    async fn game_stream(
-        &self,
-        request: Request<tonic::Streaming<GameClientMessage>>,
-    ) -> Result<Response<Self::GameStreamStream>, Status> {
-        let (_tx, rx) = tokio::sync::mpsc::channel(128);
-        Ok(Response::new(ReceiverStream::new(rx)))
-    }
 }
 
 #[tokio::main]
@@ -61,8 +33,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     logger::init_logger(prefix);
 
     let addr = "[::1]:5001".parse()?;
-    let menu_service = MenuServiceImpl::default();
-    let game_service = GameServiceImpl::default();
+    let tracker = ConnectionTracker::new();
+
+    let menu_service = MenuServiceImpl::new(tracker.clone());
+    let game_service = GameServiceImpl::new(tracker);
 
     log!("Snake Game Server listening on {}", addr);
 

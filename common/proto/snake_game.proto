@@ -19,11 +19,13 @@ service GameService {
 message MenuClientMessage {
     string client_id = 1;
     oneof message {
-        ListLobbiesRequest list_lobbies = 2;
-        CreateLobbyRequest create_lobby = 3;
-        JoinLobbyRequest join_lobby = 4;
-        LeaveLobbyRequest leave_lobby = 5;
-        MarkReadyRequest mark_ready = 6;
+        ConnectRequest connect = 2;
+        DisconnectRequest disconnect = 3;
+        ListLobbiesRequest list_lobbies = 4;
+        CreateLobbyRequest create_lobby = 5;
+        JoinLobbyRequest join_lobby = 6;
+        LeaveLobbyRequest leave_lobby = 7;
+        MarkReadyRequest mark_ready = 8;
     }
 }
 
@@ -38,6 +40,10 @@ message MenuServerMessage {
         ErrorResponse error = 7;
     }
 }
+
+message ConnectRequest {}
+
+message DisconnectRequest {}
 
 message ListLobbiesRequest {}
 
@@ -109,7 +115,9 @@ message ErrorResponse {
 message GameClientMessage {
     string client_id = 1;
     oneof message {
-        TurnCommand turn = 2;
+        ConnectRequest connect = 2;
+        DisconnectRequest disconnect = 3;
+        TurnCommand turn = 4;
     }
 }
 
