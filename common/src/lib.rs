@@ -4,5 +4,7 @@ pub mod proto {
 
 pub mod id_generator;
 pub mod logger;
+pub mod identifiers;
 
 pub use proto::*;
+pub use identifiers::*;

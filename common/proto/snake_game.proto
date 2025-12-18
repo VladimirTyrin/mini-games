@@ -50,6 +50,7 @@ message ListLobbiesRequest {}
 message CreateLobbyRequest {
     string lobby_name = 1;
     uint32 max_players = 2;
+    LobbySettings settings = 3;
 }
 
 message JoinLobbyRequest {
@@ -82,12 +83,15 @@ message LobbyDetails {
     string lobby_name = 2;
     repeated PlayerInfo players = 3;
     uint32 max_players = 4;
+    LobbySettings settings = 5;
 }
 
 message PlayerInfo {
     string client_id = 1;
     bool ready = 2;
 }
+
+message LobbySettings {}
 
 message PlayerJoinedNotification {
     string client_id = 1;

@@ -4,6 +4,7 @@ use tokio_stream::StreamExt;
 use common::{
     game_service_server::GameService,
     GameClientMessage, GameServerMessage,
+    ClientId,
     log,
 };
 use crate::connection_tracker::ConnectionTracker;
@@ -32,11 +33,13 @@ impl GameService for GameServiceImpl {
         let tracker = self.tracker.clone();
 
         tokio::spawn(async move {
-            let mut client_id: Option<String> = None;
+            let mut client_id: Option<ClientId> = None;
 
             while let Some(result) = stream.next().await {
                 match result {
                     Ok(msg) => {
+                        let msg_client_id = ClientId::new(msg.client_id.clone());
+
                         if let Some(message) = msg.message {
                             match message {
                                 common::game_client_message::Message::Connect(_) => {
@@ -44,11 +47,11 @@ impl GameService for GameServiceImpl {
                                         break;
                                     }
 
-                                    if tracker.add_game_client(&msg.client_id).await {
-                                        client_id = Some(msg.client_id.clone());
-                                        log!("Game client connected: {}", msg.client_id);
+                                    if tracker.add_game_client(&msg_client_id).await {
+                                        client_id = Some(msg_client_id.clone());
+                                        log!("Game client connected: {}", msg_client_id);
                                     } else {
-                                        log!("Game connection rejected (duplicate): {}", msg.client_id);
+                                        log!("Game connection rejected (duplicate): {}", msg_client_id);
                                         break;
                                     }
                                 }
