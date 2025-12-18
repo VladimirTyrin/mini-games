@@ -5,7 +5,17 @@ use common::{
     game_service_server::{GameService, GameServiceServer},
     MenuClientMessage, MenuServerMessage,
     GameClientMessage, GameServerMessage,
+    logger,
+    log,
 };
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(name = "snake_game_server")]
+struct Args {
+    #[arg(long)]
+    use_log_prefix: bool,
+}
 
 #[derive(Debug, Default)]
 pub struct MenuServiceImpl {}
@@ -41,11 +51,20 @@ impl GameService for GameServiceImpl {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+
+    let prefix = if args.use_log_prefix {
+        Some("Server".to_string())
+    } else {
+        None
+    };
+    logger::init_logger(prefix);
+
     let addr = "[::1]:5001".parse()?;
     let menu_service = MenuServiceImpl::default();
     let game_service = GameServiceImpl::default();
 
-    println!("Snake Game Server listening on {}", addr);
+    log!("Snake Game Server listening on {}", addr);
 
     Server::builder()
         .add_service(MenuServiceServer::new(menu_service))

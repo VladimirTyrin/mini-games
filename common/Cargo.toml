@@ -8,6 +8,7 @@ tonic = "0.12"
 prost = "0.13"
 tokio = { version = "1.0", features = ["full"] }
 rand = "0.8"
+chrono = "0.4"
 
 [build-dependencies]
 tonic-build = "0.12"
