@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package snake_game;
+
+// Menu Service - handles lobby management
+service MenuService {
+    // Bidirectional streaming for menu interactions
+    rpc MenuStream(stream MenuClientMessage) returns (stream MenuServerMessage);
+}
+
+// Game Service - handles active game sessions
+service GameService {
+    // Bidirectional streaming for game session
+    rpc GameStream(stream GameClientMessage) returns (stream GameServerMessage);
+}
+
+// === Menu Messages ===
+
+message MenuClientMessage {
+    string client_id = 1;
+    oneof message {
+        ListLobbiesRequest list_lobbies = 2;
+        CreateLobbyRequest create_lobby = 3;
+        JoinLobbyRequest join_lobby = 4;
+        LeaveLobbyRequest leave_lobby = 5;
+        MarkReadyRequest mark_ready = 6;
+    }
+}
+
+message MenuServerMessage {
+    oneof message {
+        LobbyListResponse lobby_list = 1;
+        LobbyUpdateNotification lobby_update = 2;
+        PlayerJoinedNotification player_joined = 3;
+        PlayerLeftNotification player_left = 4;
+        PlayerReadyNotification player_ready = 5;
+        GameStartingNotification game_starting = 6;
+        ErrorResponse error = 7;
+    }
+}
+
+message ListLobbiesRequest {}
+
+message CreateLobbyRequest {
+    string lobby_name = 1;
+    uint32 max_players = 2;
+}
+
+message JoinLobbyRequest {
+    string lobby_id = 1;
+}
+
+message LeaveLobbyRequest {}
+
+message MarkReadyRequest {
+    bool ready = 1;
+}
+
+message LobbyListResponse {
+    repeated LobbyInfo lobbies = 1;
+}
+
+message LobbyInfo {
+    string lobby_id = 1;
+    string lobby_name = 2;
+    uint32 current_players = 3;
+    uint32 max_players = 4;
+}
+
+message LobbyUpdateNotification {
+    LobbyDetails lobby = 1;
+}
+
+message LobbyDetails {
+    string lobby_id = 1;
+    string lobby_name = 2;
+    repeated PlayerInfo players = 3;
+    uint32 max_players = 4;
+}
+
+message PlayerInfo {
+    string client_id = 1;
+    bool ready = 2;
+}
+
+message PlayerJoinedNotification {
+    string client_id = 1;
+}
+
+message PlayerLeftNotification {
+    string client_id = 1;
+}
+
+message PlayerReadyNotification {
+    string client_id = 1;
+    bool ready = 2;
+}
+
+message GameStartingNotification {
+    string session_id = 1;
+}
+
+message ErrorResponse {
+    string message = 1;
+}
+
+// === Game Messages ===
+
+message GameClientMessage {
+    string client_id = 1;
+    oneof message {
+        TurnCommand turn = 2;
+    }
+}
+
+message GameServerMessage {
+    oneof message {
+        GameStateUpdate state = 1;
+        GameOverNotification game_over = 2;
+    }
+}
+
+message TurnCommand {
+    Direction direction = 1;
+}
+
+enum Direction {
+    DIRECTION_UNSPECIFIED = 0;
+    UP = 1;
+    DOWN = 2;
+    LEFT = 3;
+    RIGHT = 4;
+}
+
+message GameStateUpdate {
+    uint64 tick = 1;
+    repeated Snake snakes = 2;
+    repeated Position food = 3;
+    uint32 field_width = 4;
+    uint32 field_height = 5;
+}
+
+message Snake {
+    string client_id = 1;
+    repeated Position segments = 2;
+    bool alive = 3;
+    uint32 score = 4;
+}
+
+message Position {
+    int32 x = 1;
+    int32 y = 2;
+}
+
+message GameOverNotification {
+    repeated ScoreEntry scores = 1;
+    string winner_id = 2;
+}
+
+message ScoreEntry {
+    string client_id = 1;
+    uint32 score = 2;
+}

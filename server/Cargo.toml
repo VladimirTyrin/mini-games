@@ -9,3 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 common = { path = "../common" }
+tonic = "0.12"
+tokio = { version = "1.0", features = ["full"] }
+tokio-stream = "0.1"
