@@ -1,0 +1,11 @@
+[package]
+name = "snake_game_client"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "snake_game_client"
+path = "src/main.rs"
+
+[dependencies]
+common = { path = "../common" }
