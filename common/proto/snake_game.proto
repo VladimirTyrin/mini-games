@@ -38,6 +38,7 @@ message MenuServerMessage {
         PlayerReadyNotification player_ready = 5;
         GameStartingNotification game_starting = 6;
         ErrorResponse error = 7;
+        LobbyListUpdateNotification lobby_list_update = 8;
     }
 }
 
@@ -109,6 +110,8 @@ message PlayerReadyNotification {
 message GameStartingNotification {
     string session_id = 1;
 }
+
+message LobbyListUpdateNotification {}
 
 message ErrorResponse {
     string message = 1;

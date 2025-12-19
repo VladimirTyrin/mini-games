@@ -2,6 +2,7 @@ mod connection_tracker;
 mod menu_service;
 mod game_service;
 mod lobby_manager;
+mod broadcaster;
 
 use tonic::transport::Server;
 use common::{

@@ -1,0 +1,68 @@
+use tokio::sync::{mpsc, Mutex};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tonic::Status;
+use common::{ClientId, LobbyDetails, MenuServerMessage};
+
+pub type ClientSender = mpsc::Sender<Result<MenuServerMessage, Status>>;
+
+#[derive(Clone)]
+pub struct ClientBroadcaster {
+    clients: Arc<Mutex<HashMap<ClientId, ClientSender>>>,
+}
+
+impl std::fmt::Debug for ClientBroadcaster {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientBroadcaster").finish()
+    }
+}
+
+impl ClientBroadcaster {
+    pub fn new() -> Self {
+        Self {
+            clients: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn register(&self, client_id: ClientId, sender: ClientSender) {
+        self.clients.lock().await.insert(client_id, sender);
+    }
+
+    pub async fn unregister(&self, client_id: &ClientId) {
+        self.clients.lock().await.remove(client_id);
+    }
+
+    pub async fn broadcast_to_lobby(&self, lobby_details: &LobbyDetails, message: MenuServerMessage) {
+        let clients = self.clients.lock().await;
+        for player in &lobby_details.players {
+            let player_id = ClientId::new(player.client_id.clone());
+            if let Some(sender) = clients.get(&player_id) {
+                let _ = sender.send(Ok(message.clone())).await;
+            }
+        }
+    }
+
+    pub async fn broadcast_to_lobby_except(
+        &self,
+        lobby_details: &LobbyDetails,
+        message: MenuServerMessage,
+        except: &ClientId,
+    ) {
+        let clients = self.clients.lock().await;
+        for player in &lobby_details.players {
+            let player_id = ClientId::new(player.client_id.clone());
+            if &player_id != except {
+                if let Some(sender) = clients.get(&player_id) {
+                    let _ = sender.send(Ok(message.clone())).await;
+                }
+            }
+        }
+    }
+
+    pub async fn broadcast_to_all(&self, message: MenuServerMessage) {
+        let clients = self.clients.lock().await;
+        for sender in clients.values() {
+            let _ = sender.send(Ok(message.clone())).await;
+        }
+    }
+}
