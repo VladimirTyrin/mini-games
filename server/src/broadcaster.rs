@@ -67,4 +67,11 @@ impl ClientBroadcaster {
             }
         }
     }
+
+    pub async fn broadcast_to_all(&self, message: MenuServerMessage) {
+        let clients = self.clients.lock().await;
+        for (_, sender) in clients.iter() {
+            let _ = sender.send(Ok(message.clone())).await;
+        }
+    }
 }

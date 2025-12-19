@@ -26,12 +26,12 @@ pub struct MenuServiceImpl {
 }
 
 impl MenuServiceImpl {
-    pub fn new(tracker: ConnectionTracker, lobby_manager: LobbyManager) -> Self {
+    pub fn new(tracker: ConnectionTracker, lobby_manager: LobbyManager, broadcaster: ClientBroadcaster) -> Self {
         Self {
             dependencies: MenuServiceDependencies {
                 tracker,
                 lobby_manager,
-                broadcaster: ClientBroadcaster::new()
+                broadcaster,
             }
         }
     }

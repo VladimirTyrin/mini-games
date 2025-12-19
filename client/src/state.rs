@@ -25,6 +25,7 @@ pub enum AppState {
 pub struct SharedState {
     state: Arc<Mutex<AppState>>,
     error: Arc<Mutex<Option<String>>>,
+    should_close: Arc<Mutex<bool>>,
 }
 
 impl SharedState {
@@ -32,6 +33,7 @@ impl SharedState {
         Self {
             state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![] })),
             error: Arc::new(Mutex::new(None)),
+            should_close: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -61,6 +63,14 @@ impl SharedState {
     pub fn clear_error(&self) {
         *self.error.lock().unwrap() = None;
     }
+
+    pub fn set_should_close(&self) {
+        *self.should_close.lock().unwrap() = true;
+    }
+
+    pub fn should_close(&self) -> bool {
+        *self.should_close.lock().unwrap()
+    }
 }
 
 impl Clone for SharedState {
@@ -68,6 +78,7 @@ impl Clone for SharedState {
         Self {
             state: Arc::clone(&self.state),
             error: Arc::clone(&self.error),
+            should_close: Arc::clone(&self.should_close),
         }
     }
 }

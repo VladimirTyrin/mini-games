@@ -242,6 +242,9 @@ impl eframe::App for MenuApp {
                     ui.label(&error);
                     if ui.button("OK").clicked() {
                         self.shared_state.clear_error();
+                        if self.shared_state.should_close() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                     }
                 });
         }

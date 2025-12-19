@@ -156,6 +156,11 @@ pub async fn grpc_client_task(
                                 common::menu_server_message::Message::Error(err) => {
                                     shared_state.set_error(err.message);
                                 }
+                                common::menu_server_message::Message::ServerShuttingDown(notification) => {
+                                    shared_state.set_error(notification.message);
+                                    shared_state.set_should_close();
+                                    break;
+                                }
                                 _ => {}
                             }
                         }
@@ -163,6 +168,7 @@ pub async fn grpc_client_task(
                     Ok(None) => break,
                     Err(e) => {
                         shared_state.set_error(format!("Connection error: {}", e));
+                        shared_state.set_should_close();
                         break;
                     }
                 }

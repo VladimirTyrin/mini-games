@@ -39,6 +39,7 @@ message MenuServerMessage {
         GameStartingNotification game_starting = 6;
         ErrorResponse error = 7;
         LobbyListUpdateNotification lobby_list_update = 8;
+        ServerShuttingDownNotification server_shutting_down = 9;
     }
 }
 
@@ -112,6 +113,10 @@ message GameStartingNotification {
 }
 
 message LobbyListUpdateNotification {}
+
+message ServerShuttingDownNotification {
+    string message = 1;
+}
 
 message ErrorResponse {
     string message = 1;
