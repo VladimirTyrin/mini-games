@@ -9,12 +9,15 @@ use tokio::sync::mpsc;
 
 use state::SharedState;
 use client::grpc_client_task;
+use common::logger::init_logger;
 use ui::MenuApp;
 use settings::ClientSettings;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = ClientSettings::default();
     let client_id = generate_client_id();
+    
+    init_logger(Some(client_id.clone()));
 
     let shared_state = SharedState::new();
     let (command_tx, command_rx) = mpsc::unbounded_channel();

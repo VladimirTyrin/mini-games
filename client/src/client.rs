@@ -1,11 +1,30 @@
 use common::menu_service_client::MenuServiceClient;
-use common::{
-    MenuClientMessage, ConnectRequest, DisconnectRequest,
-    ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest,
-    MarkReadyRequest, LobbySettings,
-};
+use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, LobbySettings, log};
 use tokio::sync::mpsc;
 use crate::state::{ClientCommand, SharedState, AppState};
+
+#[derive(Clone)]
+pub struct LoggingSender<T> {
+    inner: mpsc::Sender<T>,
+}
+
+impl<T> LoggingSender<T>
+where
+    T: std::fmt::Debug,
+{
+    pub fn new(inner: mpsc::Sender<T>) -> Self {
+        Self { inner }
+    }
+
+    pub async fn send(&self, value: T) -> Result<(), mpsc::error::SendError<T>> {
+        log!("Sending request: {:?}", value);
+        self.inner.send(value).await
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
+}
 
 pub async fn grpc_client_task(
     client_id: String,
@@ -15,7 +34,8 @@ pub async fn grpc_client_task(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut menu_client = MenuServiceClient::connect(server_address).await?;
 
-    let (tx, rx) = mpsc::channel(128);
+    let (tx_raw, rx) = mpsc::channel(128);
+    let tx = LoggingSender::new(tx_raw);
 
     let menu_stream = menu_client
         .menu_stream(tokio_stream::wrappers::ReceiverStream::new(rx))
