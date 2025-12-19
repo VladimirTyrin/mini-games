@@ -6,11 +6,11 @@ use common::{
     MenuClientMessage, MenuServerMessage, ErrorResponse,
     ClientId, LobbyId,
     PlayerJoinedNotification, PlayerLeftNotification, PlayerReadyNotification,
-    LobbyUpdateNotification, LobbyListUpdateNotification,
+    LobbyUpdateNotification, LobbyListUpdateNotification, LobbyClosedNotification,
     log,
 };
 use crate::connection_tracker::ConnectionTracker;
-use crate::lobby_manager::LobbyManager;
+use crate::lobby_manager::{LobbyManager, LobbyStateAfterLeave};
 use crate::broadcaster::ClientBroadcaster;
 
 #[derive(Clone, Debug)]
@@ -43,26 +43,41 @@ impl MenuServiceImpl {
         dependencies.broadcaster.unregister(&id).await;
 
         if let Some(leave_details) = dependencies.lobby_manager.leave_lobby(&id).await.ok() {
-            if let Some(details) = leave_details.state_after_leave {
-                dependencies.broadcaster.broadcast_to_lobby(
-                    &details,
-                    MenuServerMessage {
-                        message: Some(common::menu_server_message::Message::PlayerLeft(
-                            PlayerLeftNotification {
-                                client_id: id.to_string(),
-                            }
-                        )),
-                    },
-                ).await;
+            match leave_details.state {
+                LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
+                    dependencies.broadcaster.broadcast_to_lobby(
+                        &updated_details,
+                        MenuServerMessage {
+                            message: Some(common::menu_server_message::Message::PlayerLeft(
+                                PlayerLeftNotification {
+                                    client_id: id.to_string(),
+                                }
+                            )),
+                        },
+                    ).await;
 
-                dependencies.broadcaster.broadcast_to_lobby(
-                    &details,
-                    MenuServerMessage {
-                        message: Some(common::menu_server_message::Message::LobbyUpdate(
-                            LobbyUpdateNotification { lobby: Some(details.clone()) }
-                        )),
-                    },
-                ).await;
+                    dependencies.broadcaster.broadcast_to_lobby(
+                        &updated_details,
+                        MenuServerMessage {
+                            message: Some(common::menu_server_message::Message::LobbyUpdate(
+                                LobbyUpdateNotification { lobby: Some(updated_details.clone()) }
+                            )),
+                        },
+                    ).await;
+                }
+                LobbyStateAfterLeave::HostLeft { kicked_players } => {
+                    dependencies.broadcaster.broadcast_to_clients(
+                        &kicked_players,
+                        MenuServerMessage {
+                            message: Some(common::menu_server_message::Message::LobbyClosed(
+                                LobbyClosedNotification {
+                                    message: "Lobby closed: Host left".to_string(),
+                                }
+                            )),
+                        }
+                    ).await;
+                }
+                LobbyStateAfterLeave::LobbyEmpty => {}
             }
 
             dependencies.broadcaster.broadcast_to_all_except(
@@ -240,10 +255,8 @@ impl MenuService for MenuServiceImpl {
                                     }
 
                                     match lobby_manager.leave_lobby(&msg_client_id).await {
-                                        Ok(leave_details_opt) => {
-                                            let details_opt = leave_details_opt.state_after_leave;
-                                            let lobby_id = leave_details_opt.lobby_id;
-                                            log!("[{}] {} left lobby", lobby_id, msg_client_id);
+                                        Ok(leave_details) => {
+                                            log!("[{}] {} left lobby", leave_details.lobby_id, msg_client_id);
 
                                             broadcaster.broadcast_to_all_except(
                                                 MenuServerMessage {
@@ -261,26 +274,41 @@ impl MenuService for MenuServiceImpl {
                                                 )),
                                             })).await;
 
-                                            if let Some(details) = details_opt {
-                                                broadcaster.broadcast_to_lobby(
-                                                    &details,
-                                                    MenuServerMessage {
-                                                        message: Some(common::menu_server_message::Message::PlayerLeft(
-                                                            PlayerLeftNotification {
-                                                                client_id: msg_client_id.to_string(),
-                                                            }
-                                                        )),
-                                                    },
-                                                ).await;
+                                            match leave_details.state {
+                                                LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
+                                                    broadcaster.broadcast_to_lobby(
+                                                        &updated_details,
+                                                        MenuServerMessage {
+                                                            message: Some(common::menu_server_message::Message::PlayerLeft(
+                                                                PlayerLeftNotification {
+                                                                    client_id: msg_client_id.to_string(),
+                                                                }
+                                                            )),
+                                                        },
+                                                    ).await;
 
-                                                broadcaster.broadcast_to_lobby(
-                                                    &details,
-                                                    MenuServerMessage {
-                                                        message: Some(common::menu_server_message::Message::LobbyUpdate(
-                                                            LobbyUpdateNotification { lobby: Some(details.clone()) }
-                                                        )),
-                                                    },
-                                                ).await;
+                                                    broadcaster.broadcast_to_lobby(
+                                                        &updated_details,
+                                                        MenuServerMessage {
+                                                            message: Some(common::menu_server_message::Message::LobbyUpdate(
+                                                                LobbyUpdateNotification { lobby: Some(updated_details.clone()) }
+                                                            )),
+                                                        },
+                                                    ).await;
+                                                }
+                                                LobbyStateAfterLeave::HostLeft { kicked_players } => {
+                                                    broadcaster.broadcast_to_clients(
+                                                        &kicked_players,
+                                                        MenuServerMessage {
+                                                            message: Some(common::menu_server_message::Message::LobbyClosed(
+                                                                LobbyClosedNotification {
+                                                                    message: "Lobby closed: Host left".to_string(),
+                                                                }
+                                                            )),
+                                                        }
+                                                    ).await;
+                                                }
+                                                LobbyStateAfterLeave::LobbyEmpty => {}
                                             }
                                         }
                                         Err(e) => {

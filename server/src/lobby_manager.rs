@@ -13,9 +13,15 @@ pub struct Lobby {
     pub players: HashMap<ClientId, bool>,
 }
 
+pub enum LobbyStateAfterLeave {
+    LobbyStillActive { updated_details: LobbyDetails },
+    LobbyEmpty,
+    HostLeft { kicked_players: Vec<ClientId> },
+}
+
 pub struct LeaveLobbyDetails {
-    pub state_after_leave: Option<LobbyDetails>,
-    pub lobby_id: LobbyId
+    pub lobby_id: LobbyId,
+    pub state: LobbyStateAfterLeave,
 }
 
 impl Lobby {
@@ -53,6 +59,7 @@ impl Lobby {
             players,
             max_players: self.max_players,
             settings: Some(self.settings.clone()),
+            creator_id: self.creator_id.to_string(),
         }
     }
 
@@ -153,20 +160,36 @@ impl LobbyManager {
         let mut lobbies = self.lobbies.lock().await;
 
         let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        let is_host = &lobby.creator_id == client_id;
+
         lobby.remove_player(client_id);
 
-        if lobby.players.is_empty() {
+        if is_host {
+            let kicked_players: Vec<ClientId> = lobby.players.keys().cloned().collect();
+
+            for player in &kicked_players {
+                client_to_lobby.remove(player);
+            }
+
+            lobbies.remove(&lobby_id);
+
+            Ok(LeaveLobbyDetails {
+                lobby_id,
+                state: LobbyStateAfterLeave::HostLeft { kicked_players },
+            })
+        } else if lobby.players.is_empty() {
             lobbies.remove(&lobby_id);
             Ok(LeaveLobbyDetails {
-                state_after_leave: None,
                 lobby_id,
+                state: LobbyStateAfterLeave::LobbyEmpty,
             })
         } else {
             Ok(LeaveLobbyDetails {
-                state_after_leave: Some(
-                    lobby.to_details()
-                ),
                 lobby_id,
+                state: LobbyStateAfterLeave::LobbyStillActive {
+                    updated_details: lobby.to_details(),
+                },
             })
         }
     }

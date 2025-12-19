@@ -161,6 +161,17 @@ pub async fn grpc_client_task(
                                     shared_state.set_should_close();
                                     break;
                                 }
+                                common::menu_server_message::Message::LobbyClosed(notification) => {
+                                    shared_state.set_error(notification.message);
+                                    if tx.send(MenuClientMessage {
+                                        client_id: client_id.clone(),
+                                        message: Some(common::menu_client_message::Message::ListLobbies(
+                                            ListLobbiesRequest {}
+                                        )),
+                                    }).await.is_err() {
+                                        break;
+                                    }
+                                }
                                 _ => {}
                             }
                         }

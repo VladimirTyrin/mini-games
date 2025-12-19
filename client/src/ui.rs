@@ -161,10 +161,13 @@ impl MenuApp {
         for player in &details.players {
             ui.horizontal(|ui| {
                 let is_self = player.client_id == self.client_id;
-                let player_display = if is_self {
-                    format!("👤 {} (You)", player.client_id)
-                } else {
-                    format!("👤 {}", player.client_id)
+                let is_host = player.client_id == details.creator_id;
+
+                let player_display = match (is_self, is_host) {
+                    (true, true) => format!("👤 {} (You, Host)", player.client_id),
+                    (true, false) => format!("👤 {} (You)", player.client_id),
+                    (false, true) => format!("👤 {} (Host)", player.client_id),
+                    (false, false) => format!("👤 {}", player.client_id),
                 };
 
                 ui.label(player_display);

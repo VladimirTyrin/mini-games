@@ -74,4 +74,13 @@ impl ClientBroadcaster {
             let _ = sender.send(Ok(message.clone())).await;
         }
     }
+
+    pub async fn broadcast_to_clients(&self, client_ids: &Vec<ClientId>, message: MenuServerMessage) {
+        let clients = self.clients.lock().await;
+        for client_id in client_ids {
+            if let Some(sender) = clients.get(client_id) {
+                let _ = sender.send(Ok(message.clone())).await;
+            }
+        }
+    }
 }
