@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -12,12 +11,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tonic_prost_build::configure()
         .file_descriptor_set_path(&descriptor_path)
+        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile_protos(&["proto/snake_game.proto"], &["proto"])?;
-
-    let descriptor_bytes = fs::read(&descriptor_path)?;
-
-    pbjson_build::Builder::new()
-        .register_descriptors(&descriptor_bytes)?
-        .build(&["."])?;
+    
     Ok(())
 }

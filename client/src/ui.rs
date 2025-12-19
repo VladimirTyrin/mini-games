@@ -65,7 +65,7 @@ impl MenuApp {
                         egui::Sense::click(),
                     );
 
-                    let button_clicked = ui.allocate_new_ui(
+                    let button_clicked = ui.scope_builder(
                         egui::UiBuilder::new().max_rect(rect),
                         |ui| {
                             ui.group(|ui| {

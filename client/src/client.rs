@@ -4,20 +4,20 @@ use tokio::sync::mpsc;
 use crate::state::{ClientCommand, SharedState, AppState};
 
 #[derive(Clone)]
-pub struct LoggingSender<T> {
+pub struct GrpcLoggingSender<T> {
     inner: mpsc::Sender<T>,
 }
 
-impl<T> LoggingSender<T>
+impl<T> GrpcLoggingSender<T>
 where
-    T: std::fmt::Debug,
+    T: std::fmt::Debug + prost::Message
 {
     pub fn new(inner: mpsc::Sender<T>) -> Self {
         Self { inner }
     }
 
     pub async fn send(&self, value: T) -> Result<(), mpsc::error::SendError<T>> {
-        log!("Sending request: {:?}", value);
+        log!("Sending: {:?}", value);
         self.inner.send(value).await
     }
 }
@@ -31,7 +31,7 @@ pub async fn grpc_client_task(
     let mut menu_client = MenuServiceClient::connect(server_address).await?;
 
     let (tx_raw, rx) = mpsc::channel(128);
-    let tx = LoggingSender::new(tx_raw);
+    let tx = GrpcLoggingSender::new(tx_raw);
 
     let menu_stream = menu_client
         .menu_stream(tokio_stream::wrappers::ReceiverStream::new(rx))
@@ -99,6 +99,8 @@ pub async fn grpc_client_task(
             result = response_stream.message() => {
                 match result {
                     Ok(Some(server_msg)) => {
+                        log!("Received: {:?}", server_msg);
+
                         if let Some(msg) = server_msg.message {
                             match msg {
                                 common::menu_server_message::Message::LobbyList(list) => {
