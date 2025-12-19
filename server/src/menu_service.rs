@@ -13,31 +13,38 @@ use crate::connection_tracker::ConnectionTracker;
 use crate::lobby_manager::LobbyManager;
 use crate::broadcaster::ClientBroadcaster;
 
-#[derive(Debug)]
-pub struct MenuServiceImpl {
+#[derive(Clone, Debug)]
+struct MenuServiceDependencies {
     tracker: ConnectionTracker,
     lobby_manager: LobbyManager,
     broadcaster: ClientBroadcaster,
 }
 
+#[derive(Debug)]
+pub struct MenuServiceImpl {
+    dependencies: MenuServiceDependencies
+}
+
 impl MenuServiceImpl {
     pub fn new(tracker: ConnectionTracker, lobby_manager: LobbyManager) -> Self {
         Self {
-            tracker,
-            lobby_manager,
-            broadcaster: ClientBroadcaster::new(),
+            dependencies: MenuServiceDependencies {
+                tracker,
+                lobby_manager,
+                broadcaster: ClientBroadcaster::new()
+            }
         }
     }
 }
 
 impl MenuServiceImpl {
-    async fn handle_client_disconnected(&self, id: ClientId) {
-        self.tracker.remove_menu_client(&id).await;
-        self.broadcaster.unregister(&id).await;
+    async fn handle_client_disconnected(dependencies: &MenuServiceDependencies, id: ClientId) {
+        dependencies.tracker.remove_menu_client(&id).await;
+        dependencies.broadcaster.unregister(&id).await;
 
-        if let Some(leave_details) = self.lobby_manager.leave_lobby(&id).await.ok() {
+        if let Some(leave_details) = dependencies.lobby_manager.leave_lobby(&id).await.ok() {
             if let Some(details) = leave_details.state_after_leave {
-                self.broadcaster.broadcast_to_lobby(
+                dependencies.broadcaster.broadcast_to_lobby(
                     &details,
                     MenuServerMessage {
                         message: Some(common::menu_server_message::Message::PlayerLeft(
@@ -48,7 +55,7 @@ impl MenuServiceImpl {
                     },
                 ).await;
 
-                self.broadcaster.broadcast_to_lobby(
+                dependencies.broadcaster.broadcast_to_lobby(
                     &details,
                     MenuServerMessage {
                         message: Some(common::menu_server_message::Message::LobbyUpdate(
@@ -58,7 +65,7 @@ impl MenuServiceImpl {
                 ).await;
             }
 
-            self.broadcaster.broadcast_to_all_except(
+            dependencies.broadcaster.broadcast_to_all_except(
                 MenuServerMessage {
                     message: Some(common::menu_server_message::Message::LobbyListUpdate(
                         LobbyListUpdateNotification {}
@@ -80,9 +87,10 @@ impl MenuService for MenuServiceImpl {
     ) -> Result<Response<Self::MenuStreamStream>, Status> {
         let mut stream = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::channel(128);
-        let tracker = self.tracker.clone();
-        let lobby_manager = self.lobby_manager.clone();
-        let broadcaster = self.broadcaster.clone();
+        let dependencies = self.dependencies.clone();
+        let tracker = dependencies.tracker.clone();
+        let lobby_manager = dependencies.lobby_manager.clone();
+        let broadcaster = dependencies.broadcaster.clone();
 
         tokio::spawn(async move {
             let mut client_id: Option<ClientId> = None;
@@ -119,7 +127,7 @@ impl MenuService for MenuServiceImpl {
                                 }
                                 common::menu_client_message::Message::Disconnect(_) => {
                                     if let Some(id) = &client_id {
-                                        self.handle_client_disconnected(id.clone()).await;
+                                        Self::handle_client_disconnected(&dependencies, id.clone()).await;
                                         log!("Menu client disconnected: {}", id);
                                         client_id = None;
                                     }
@@ -336,7 +344,7 @@ impl MenuService for MenuServiceImpl {
 
             if let Some(id) = client_id {
                 log!("Menu client disconnected (stream ended): {}", id);
-                self.handle_client_disconnected(id).await;
+                Self::handle_client_disconnected(&dependencies, id).await;
             }
         });
 
