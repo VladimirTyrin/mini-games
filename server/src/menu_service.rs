@@ -30,6 +30,46 @@ impl MenuServiceImpl {
     }
 }
 
+impl MenuServiceImpl {
+    async fn handle_client_disconnected(&self, id: ClientId) {
+        self.tracker.remove_menu_client(&id).await;
+        self.broadcaster.unregister(&id).await;
+
+        if let Some(leave_details) = self.lobby_manager.leave_lobby(&id).await.ok() {
+            if let Some(details) = leave_details.state_after_leave {
+                self.broadcaster.broadcast_to_lobby(
+                    &details,
+                    MenuServerMessage {
+                        message: Some(common::menu_server_message::Message::PlayerLeft(
+                            PlayerLeftNotification {
+                                client_id: id.to_string(),
+                            }
+                        )),
+                    },
+                ).await;
+
+                self.broadcaster.broadcast_to_lobby(
+                    &details,
+                    MenuServerMessage {
+                        message: Some(common::menu_server_message::Message::LobbyUpdate(
+                            LobbyUpdateNotification { lobby: Some(details.clone()) }
+                        )),
+                    },
+                ).await;
+            }
+
+            self.broadcaster.broadcast_to_all_except(
+                MenuServerMessage {
+                    message: Some(common::menu_server_message::Message::LobbyListUpdate(
+                        LobbyListUpdateNotification {}
+                    )),
+                },
+                &id,
+            ).await;
+        }
+    }
+}
+
 #[tonic::async_trait]
 impl MenuService for MenuServiceImpl {
     type MenuStreamStream = ReceiverStream<Result<MenuServerMessage, Status>>;
@@ -79,9 +119,7 @@ impl MenuService for MenuServiceImpl {
                                 }
                                 common::menu_client_message::Message::Disconnect(_) => {
                                     if let Some(id) = &client_id {
-                                        tracker.remove_menu_client(id).await;
-                                        broadcaster.unregister(id).await;
-                                        lobby_manager.cleanup_client(id).await;
+                                        self.handle_client_disconnected(id.clone()).await;
                                         log!("Menu client disconnected: {}", id);
                                         client_id = None;
                                     }
@@ -297,10 +335,8 @@ impl MenuService for MenuServiceImpl {
             }
 
             if let Some(id) = client_id {
-                tracker.remove_menu_client(&id).await;
-                broadcaster.unregister(&id).await;
-                lobby_manager.cleanup_client(&id).await;
                 log!("Menu client disconnected (stream ended): {}", id);
+                self.handle_client_disconnected(id).await;
             }
         });
 

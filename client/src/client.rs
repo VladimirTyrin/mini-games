@@ -61,6 +61,13 @@ pub async fn grpc_client_task(
                             ready,
                         }))
                     }
+                    ClientCommand::Disconnect => {
+                        let _ = tx.send(MenuClientMessage {
+                            client_id: client_id.clone(),
+                            message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
+                        }).await;
+                        break;
+                    }
                 };
 
                 if let Some(msg) = message {

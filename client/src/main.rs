@@ -1,6 +1,7 @@
 mod state;
 mod client;
 mod ui;
+mod settings;
 
 use common::id_generator::generate_client_id;
 use eframe::egui;
@@ -9,16 +10,17 @@ use tokio::sync::mpsc;
 use state::SharedState;
 use client::grpc_client_task;
 use ui::MenuApp;
+use settings::ClientSettings;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let settings = ClientSettings::default();
     let client_id = generate_client_id();
-    let server_address = "http://[::1]:5001".to_string();
 
     let shared_state = SharedState::new();
     let (command_tx, command_rx) = mpsc::unbounded_channel();
 
     let client_id_clone = client_id.clone();
-    let server_address_clone = server_address.clone();
+    let server_address = settings.server_address.clone();
     let shared_state_clone = shared_state.clone();
 
     std::thread::spawn(move || {
@@ -26,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         rt.block_on(async {
             if let Err(e) = grpc_client_task(
                 client_id_clone,
-                server_address_clone,
+                server_address,
                 shared_state_clone,
                 command_rx,
             ).await {
@@ -50,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 client_id,
                 shared_state,
                 command_tx,
+                settings.disconnect_timeout,
             )))
         }),
     )?;

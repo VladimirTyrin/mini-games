@@ -186,8 +186,4 @@ impl LobbyManager {
 
         Ok(lobby.to_details())
     }
-
-    pub async fn cleanup_client(&self, client_id: &ClientId) {
-        let _ = self.leave_lobby(client_id).await;
-    }
 }

@@ -10,6 +10,8 @@ pub struct MenuApp {
     create_lobby_dialog: bool,
     lobby_name_input: String,
     max_players_input: String,
+    disconnect_timeout: std::time::Duration,
+    disconnecting: Option<std::time::Instant>,
 }
 
 impl MenuApp {
@@ -17,6 +19,7 @@ impl MenuApp {
         client_id: String,
         shared_state: SharedState,
         command_tx: mpsc::UnboundedSender<ClientCommand>,
+        disconnect_timeout: std::time::Duration
     ) -> Self {
         Self {
             client_id,
@@ -25,6 +28,8 @@ impl MenuApp {
             create_lobby_dialog: false,
             lobby_name_input: String::new(),
             max_players_input: "4".to_string(),
+            disconnecting: None,
+            disconnect_timeout
         }
     }
 
@@ -66,10 +71,15 @@ impl MenuApp {
                             ui.group(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.vertical(|ui| {
+                                        let full_message = if lobby.current_players == lobby.max_players {
+                                            " (Full)"
+                                        } else {
+                                            ""
+                                        };
                                         ui.label(format!("📋 {}", lobby.lobby_name));
                                         ui.label(format!(
-                                            "👥 Players: {}/{}",
-                                            lobby.current_players, lobby.max_players
+                                            "👥 Players: {}/{} {}",
+                                            lobby.current_players, lobby.max_players, full_message
                                         ));
                                     });
 
@@ -205,6 +215,26 @@ impl MenuApp {
 
 impl eframe::App for MenuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if let Some(disconnect_time) = self.disconnecting {
+                if disconnect_time.elapsed() < self.disconnect_timeout {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                } else {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            } else {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                let _ = self.command_tx.send(ClientCommand::Disconnect);
+                self.disconnecting = Some(std::time::Instant::now());
+            }
+        }
+
+        if let Some(disconnect_time) = self.disconnecting {
+            if disconnect_time.elapsed() >= self.disconnect_timeout {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+
         if let Some(error) = self.shared_state.get_error() {
             egui::Window::new("Error")
                 .collapsible(false)
