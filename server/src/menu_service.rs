@@ -113,11 +113,14 @@ impl MenuService for MenuServiceImpl {
                                         Ok(details) => {
                                             log!("Lobby created: {} by {}", details.lobby_id, msg_client_id);
 
-                                            broadcaster.broadcast_to_all(MenuServerMessage {
-                                                message: Some(common::menu_server_message::Message::LobbyListUpdate(
-                                                    LobbyListUpdateNotification {}
-                                                )),
-                                            }).await;
+                                            broadcaster.broadcast_to_all_except(
+                                                MenuServerMessage {
+                                                    message: Some(common::menu_server_message::Message::LobbyListUpdate(
+                                                        LobbyListUpdateNotification {}
+                                                    )),
+                                                },
+                                                &msg_client_id,
+                                            ).await;
 
                                             let _ = tx.send(Ok(MenuServerMessage {
                                                 message: Some(common::menu_server_message::Message::LobbyUpdate(
@@ -146,11 +149,14 @@ impl MenuService for MenuServiceImpl {
                                         Ok(details) => {
                                             log!("{} joined lobby {}", msg_client_id, details.lobby_id);
 
-                                            broadcaster.broadcast_to_all(MenuServerMessage {
-                                                message: Some(common::menu_server_message::Message::LobbyListUpdate(
-                                                    LobbyListUpdateNotification {}
-                                                )),
-                                            }).await;
+                                            broadcaster.broadcast_to_all_except(
+                                                MenuServerMessage {
+                                                    message: Some(common::menu_server_message::Message::LobbyListUpdate(
+                                                        LobbyListUpdateNotification {}
+                                                    )),
+                                                },
+                                                &msg_client_id,
+                                            ).await;
 
                                             broadcaster.broadcast_to_lobby_except(
                                                 &details,
@@ -191,11 +197,21 @@ impl MenuService for MenuServiceImpl {
                                         Ok(details_opt) => {
                                             log!("{} left lobby", msg_client_id);
 
-                                            broadcaster.broadcast_to_all(MenuServerMessage {
-                                                message: Some(common::menu_server_message::Message::LobbyListUpdate(
-                                                    LobbyListUpdateNotification {}
+                                            broadcaster.broadcast_to_all_except(
+                                                MenuServerMessage {
+                                                    message: Some(common::menu_server_message::Message::LobbyListUpdate(
+                                                        LobbyListUpdateNotification {}
+                                                    )),
+                                                },
+                                                &msg_client_id,
+                                            ).await;
+
+                                            let lobbies = lobby_manager.list_lobbies().await;
+                                            let _ = tx.send(Ok(MenuServerMessage {
+                                                message: Some(common::menu_server_message::Message::LobbyList(
+                                                    common::LobbyListResponse { lobbies }
                                                 )),
-                                            }).await;
+                                            })).await;
 
                                             if let Some(details) = details_opt {
                                                 broadcaster.broadcast_to_lobby(
@@ -235,7 +251,7 @@ impl MenuService for MenuServiceImpl {
 
                                     match lobby_manager.mark_ready(&msg_client_id, req.ready).await {
                                         Ok(details) => {
-                                            log!("{} marked ready: {}", msg_client_id, req.ready);
+                                            log!("[{}] {} marked ready: {}", details.lobby_id, msg_client_id, req.ready);
 
                                             broadcaster.broadcast_to_lobby_except(
                                                 &details,

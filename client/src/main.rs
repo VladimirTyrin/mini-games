@@ -125,33 +125,43 @@ impl MenuApp {
         if lobbies.is_empty() {
             ui.label("No lobbies available. Create one!");
         } else {
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("lobby_list_scroll")
+                .show(ui, |ui| {
                 for lobby in lobbies {
                     let can_join = lobby.current_players < lobby.max_players;
 
-                    let response = ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.vertical(|ui| {
-                                ui.label(format!("📋 {}", lobby.lobby_name));
-                                ui.label(format!(
-                                    "👥 Players: {}/{}",
-                                    lobby.current_players, lobby.max_players
-                                ));
-                            });
+                    let (rect, inner_response) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), 60.0),
+                        egui::Sense::click(),
+                    );
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.add_enabled_ui(can_join, |ui| {
-                                    if ui.button("Join").clicked() {
-                                        let _ = self.command_tx.send(ClientCommand::JoinLobby {
-                                            lobby_id: lobby.lobby_id.clone(),
-                                        });
-                                    }
-                                });
-                            });
-                        });
-                    });
+                    let button_clicked = ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(rect),
+                        |ui| {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui| {
+                                        ui.label(format!("📋 {}", lobby.lobby_name));
+                                        ui.label(format!(
+                                            "👥 Players: {}/{}",
+                                            lobby.current_players, lobby.max_players
+                                        ));
+                                    });
 
-                    if response.response.double_clicked() && can_join {
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        ui.add_enabled_ui(can_join, |ui| {
+                                            ui.button("Join").clicked()
+                                        })
+                                    })
+                                })
+                            })
+                        }
+                    ).inner.inner.inner.inner.inner;
+
+                    let double_clicked = inner_response.double_clicked() && can_join;
+
+                    if button_clicked || double_clicked {
                         let _ = self.command_tx.send(ClientCommand::JoinLobby {
                             lobby_id: lobby.lobby_id.clone(),
                         });
@@ -214,26 +224,24 @@ impl MenuApp {
         ui.separator();
         ui.heading("Players:");
 
-        egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-            for player in &details.players {
-                ui.horizontal(|ui| {
-                    let is_self = player.client_id == self.client_id;
-                    let player_display = if is_self {
-                        format!("👤 {} (You)", player.client_id)
-                    } else {
-                        format!("👤 {}", player.client_id)
-                    };
+        for player in &details.players {
+            ui.horizontal(|ui| {
+                let is_self = player.client_id == self.client_id;
+                let player_display = if is_self {
+                    format!("👤 {} (You)", player.client_id)
+                } else {
+                    format!("👤 {}", player.client_id)
+                };
 
-                    ui.label(player_display);
+                ui.label(player_display);
 
-                    if player.ready {
-                        ui.label("✅ Ready");
-                    } else {
-                        ui.label("⏳ Not Ready");
-                    }
-                });
-            }
-        });
+                if player.ready {
+                    ui.label("✅ Ready");
+                } else {
+                    ui.label("⏳ Not Ready");
+                }
+            });
+        }
 
         ui.separator();
 
@@ -259,11 +267,14 @@ impl MenuApp {
         ui.separator();
         ui.heading("Events:");
 
-        egui::ScrollArea::vertical().max_height(150.0).stick_to_bottom(true).show(ui, |ui| {
-            for event in event_log {
-                ui.label(event);
-            }
-        });
+        egui::ScrollArea::vertical()
+            .id_salt("events_scroll")
+            .stick_to_bottom(true)
+            .show(ui, |ui| {
+                for event in event_log {
+                    ui.label(event);
+                }
+            });
     }
 }
 
@@ -473,7 +484,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 700.0])
-            .with_title("Snake Game - Lobby"),
+            .with_title(format!("Snake Game - {}", client_id)),
         ..Default::default()
     };
 

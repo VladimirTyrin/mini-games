@@ -59,10 +59,12 @@ impl ClientBroadcaster {
         }
     }
 
-    pub async fn broadcast_to_all(&self, message: MenuServerMessage) {
+    pub async fn broadcast_to_all_except(&self, message: MenuServerMessage, except: &ClientId) {
         let clients = self.clients.lock().await;
-        for sender in clients.values() {
-            let _ = sender.send(Ok(message.clone())).await;
+        for (client_id, sender) in clients.iter() {
+            if client_id != except {
+                let _ = sender.send(Ok(message.clone())).await;
+            }
         }
     }
 }
