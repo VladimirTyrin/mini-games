@@ -20,10 +20,6 @@ where
         log!("Sending request: {:?}", value);
         self.inner.send(value).await
     }
-
-    pub fn is_closed(&self) -> bool {
-        self.inner.is_closed()
-    }
 }
 
 pub async fn grpc_client_task(

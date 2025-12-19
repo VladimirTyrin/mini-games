@@ -3,21 +3,36 @@ mod client;
 mod ui;
 mod settings;
 
+use clap::Parser;
 use common::id_generator::generate_client_id;
 use eframe::egui;
 use tokio::sync::mpsc;
 
-use state::SharedState;
 use client::grpc_client_task;
 use common::logger::init_logger;
-use ui::MenuApp;
 use settings::ClientSettings;
+use state::SharedState;
+use ui::MenuApp;
+
+#[derive(Parser)]
+#[command(name = "snake_game_client")]
+struct Args {
+    #[arg(long)]
+    use_log_prefix: bool,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = ClientSettings::default();
     let client_id = generate_client_id();
-    
-    init_logger(Some(client_id.clone()));
+
+    let args = Args::parse();
+
+    let prefix = if args.use_log_prefix {
+        Some(client_id.clone())
+    } else {
+        None
+    };
+    init_logger(prefix);
 
     let shared_state = SharedState::new();
     let (command_tx, command_rx) = mpsc::unbounded_channel();
