@@ -111,7 +111,7 @@ impl MenuService for MenuServiceImpl {
                                         msg_client_id.clone(),
                                     ).await {
                                         Ok(details) => {
-                                            log!("Lobby created: {} by {}", details.lobby_id, msg_client_id);
+                                            log!("[{}] Lobby created by {}", details.lobby_id, msg_client_id);
 
                                             broadcaster.broadcast_to_all_except(
                                                 MenuServerMessage {
@@ -147,7 +147,7 @@ impl MenuService for MenuServiceImpl {
                                         msg_client_id.clone(),
                                     ).await {
                                         Ok(details) => {
-                                            log!("{} joined lobby {}", msg_client_id, details.lobby_id);
+                                            log!("[{}] {} joined lobby", details.lobby_id, msg_client_id);
 
                                             broadcaster.broadcast_to_all_except(
                                                 MenuServerMessage {
@@ -194,8 +194,10 @@ impl MenuService for MenuServiceImpl {
                                     }
 
                                     match lobby_manager.leave_lobby(&msg_client_id).await {
-                                        Ok(details_opt) => {
-                                            log!("{} left lobby", msg_client_id);
+                                        Ok(leave_details_opt) => {
+                                            let details_opt = leave_details_opt.state_after_leave;
+                                            let lobby_id = leave_details_opt.lobby_id;
+                                            log!("[{}] {} left lobby", lobby_id, msg_client_id);
 
                                             broadcaster.broadcast_to_all_except(
                                                 MenuServerMessage {

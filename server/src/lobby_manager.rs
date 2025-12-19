@@ -13,6 +13,11 @@ pub struct Lobby {
     pub players: HashMap<ClientId, bool>,
 }
 
+pub struct LeaveLobbyDetails {
+    pub state_after_leave: Option<LobbyDetails>,
+    pub lobby_id: LobbyId
+}
+
 impl Lobby {
     fn new(id: LobbyId, name: String, creator_id: ClientId, max_players: u32, settings: LobbySettings) -> Self {
         Self {
@@ -140,7 +145,7 @@ impl LobbyManager {
         Ok(lobby.to_details())
     }
 
-    pub async fn leave_lobby(&self, client_id: &ClientId) -> Result<Option<LobbyDetails>, String> {
+    pub async fn leave_lobby(&self, client_id: &ClientId) -> Result<LeaveLobbyDetails, String> {
         let mut client_to_lobby = self.client_to_lobby.lock().await;
 
         let lobby_id = client_to_lobby.remove(client_id).ok_or("Not in a lobby")?;
@@ -152,9 +157,17 @@ impl LobbyManager {
 
         if lobby.players.is_empty() {
             lobbies.remove(&lobby_id);
-            Ok(None)
+            Ok(LeaveLobbyDetails {
+                state_after_leave: None,
+                lobby_id,
+            })
         } else {
-            Ok(Some(lobby.to_details()))
+            Ok(LeaveLobbyDetails {
+                state_after_leave: Some(
+                    lobby.to_details()
+                ),
+                lobby_id,
+            })
         }
     }
 
