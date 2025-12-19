@@ -188,6 +188,9 @@ impl MenuApp {
             .map(|p| p.ready)
             .unwrap_or(false);
 
+        let is_host = self.client_id == details.creator_id;
+        let all_ready = details.players.iter().all(|p| p.ready);
+
         ui.horizontal(|ui| {
             let button_text = if current_ready { "Mark Not Ready" } else { "Mark Ready" };
             if ui.button(button_text).clicked() {
@@ -198,6 +201,12 @@ impl MenuApp {
 
             if ui.button("🚪 Leave Lobby").clicked() {
                 let _ = self.command_tx.send(ClientCommand::LeaveLobby);
+            }
+
+            if is_host && all_ready {
+                if ui.button("▶ Start Game").clicked() {
+                    let _ = self.command_tx.send(ClientCommand::StartGame);
+                }
             }
         });
 

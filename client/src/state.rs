@@ -8,6 +8,7 @@ pub enum ClientCommand {
     JoinLobby { lobby_id: String },
     LeaveLobby,
     MarkReady { ready: bool },
+    StartGame,
     Disconnect,
 }
 

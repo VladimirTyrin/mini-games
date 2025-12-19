@@ -11,6 +11,7 @@ pub struct Lobby {
     pub max_players: u32,
     pub settings: LobbySettings,
     pub players: HashMap<ClientId, bool>,
+    pub in_game: bool,
 }
 
 pub enum LobbyStateAfterLeave {
@@ -24,6 +25,11 @@ pub struct LeaveLobbyDetails {
     pub state: LobbyStateAfterLeave,
 }
 
+pub struct StartGameResult {
+    pub lobby_id: LobbyId,
+    pub player_ids: Vec<ClientId>,
+}
+
 impl Lobby {
     fn new(id: LobbyId, name: String, creator_id: ClientId, max_players: u32, settings: LobbySettings) -> Self {
         Self {
@@ -33,6 +39,7 @@ impl Lobby {
             max_players,
             settings,
             players: HashMap::new(),
+            in_game: false,
         }
     }
 
@@ -118,6 +125,7 @@ impl LobbyManager {
 
         let mut lobby = Lobby::new(lobby_id.clone(), name, creator_id.clone(), max_players, settings);
         lobby.add_player(creator_id.clone());
+        lobby.set_ready(&creator_id, true);
 
         let details = lobby.to_details();
 
@@ -130,7 +138,10 @@ impl LobbyManager {
 
     pub async fn list_lobbies(&self) -> Vec<LobbyInfo> {
         let lobbies = self.lobbies.lock().await;
-        lobbies.values().map(|lobby| lobby.to_info()).collect()
+        lobbies.values()
+            .filter(|lobby| !lobby.in_game)
+            .map(|lobby| lobby.to_info())
+            .collect()
     }
 
     pub async fn join_lobby(&self, lobby_id: LobbyId, client_id: ClientId) -> Result<LobbyDetails, String> {
@@ -143,6 +154,10 @@ impl LobbyManager {
         let mut lobbies = self.lobbies.lock().await;
 
         let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        if lobby.in_game {
+            return Err("Cannot join: Game already started".to_string());
+        }
 
         if !lobby.add_player(client_id.clone()) {
             return Err("Lobby is full or already joined".to_string());
@@ -208,5 +223,37 @@ impl LobbyManager {
         }
 
         Ok(lobby.to_details())
+    }
+
+    pub async fn start_game(&self, client_id: &ClientId) -> Result<StartGameResult, String> {
+        let client_to_lobby = self.client_to_lobby.lock().await;
+
+        let lobby_id = client_to_lobby.get(client_id).ok_or("Not in a lobby")?;
+
+        let mut lobbies = self.lobbies.lock().await;
+
+        let lobby = lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
+
+        if &lobby.creator_id != client_id {
+            return Err("Only the host can start the game".to_string());
+        }
+
+        if lobby.in_game {
+            return Err("Game already started".to_string());
+        }
+
+        let all_ready = lobby.players.values().all(|ready| *ready);
+        if !all_ready {
+            return Err("Not all players are ready".to_string());
+        }
+
+        lobby.in_game = true;
+
+        let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
+
+        Ok(StartGameResult {
+            lobby_id: lobby_id.clone(),
+            player_ids,
+        })
     }
 }

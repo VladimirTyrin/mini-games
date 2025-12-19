@@ -7,6 +7,7 @@ use common::{
     ClientId, LobbyId,
     PlayerJoinedNotification, PlayerLeftNotification, PlayerReadyNotification,
     LobbyUpdateNotification, LobbyListUpdateNotification, LobbyClosedNotification,
+    GameStartingNotification,
     log,
 };
 use crate::connection_tracker::ConnectionTracker;
@@ -349,6 +350,44 @@ impl MenuService for MenuServiceImpl {
                                                         LobbyUpdateNotification { lobby: Some(details.clone()) }
                                                     )),
                                                 },
+                                            ).await;
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(Ok(MenuServerMessage {
+                                                message: Some(common::menu_server_message::Message::Error(
+                                                    ErrorResponse { message: e }
+                                                )),
+                                            })).await;
+                                        }
+                                    }
+                                }
+                                common::menu_client_message::Message::StartGame(_) => {
+                                    if client_id.is_none() {
+                                        continue;
+                                    }
+
+                                    match lobby_manager.start_game(&msg_client_id).await {
+                                        Ok(start_result) => {
+                                            log!("[{}] Game starting with {} players", start_result.lobby_id, start_result.player_ids.len());
+
+                                            broadcaster.broadcast_to_clients(
+                                                &start_result.player_ids,
+                                                MenuServerMessage {
+                                                    message: Some(common::menu_server_message::Message::GameStarting(
+                                                        GameStartingNotification {
+                                                            session_id: start_result.lobby_id.to_string(),
+                                                        }
+                                                    )),
+                                                },
+                                            ).await;
+
+                                            broadcaster.broadcast_to_all_except(
+                                                MenuServerMessage {
+                                                    message: Some(common::menu_server_message::Message::LobbyListUpdate(
+                                                        LobbyListUpdateNotification {}
+                                                    )),
+                                                },
+                                                &msg_client_id,
                                             ).await;
                                         }
                                         Err(e) => {

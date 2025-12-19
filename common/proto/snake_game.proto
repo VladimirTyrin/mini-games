@@ -26,6 +26,7 @@ message MenuClientMessage {
         JoinLobbyRequest join_lobby = 6;
         LeaveLobbyRequest leave_lobby = 7;
         MarkReadyRequest mark_ready = 8;
+        StartGameRequest start_game = 9;
     }
 }
 
@@ -65,6 +66,8 @@ message LeaveLobbyRequest {}
 message MarkReadyRequest {
     bool ready = 1;
 }
+
+message StartGameRequest {}
 
 message LobbyListResponse {
     repeated LobbyInfo lobbies = 1;

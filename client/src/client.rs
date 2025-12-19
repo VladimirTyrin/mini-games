@@ -1,5 +1,5 @@
 use common::menu_service_client::MenuServiceClient;
-use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, LobbySettings, log};
+use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, log};
 use tokio::sync::mpsc;
 use crate::state::{ClientCommand, SharedState, AppState};
 
@@ -76,6 +76,9 @@ pub async fn grpc_client_task(
                         Some(common::menu_client_message::Message::MarkReady(MarkReadyRequest {
                             ready,
                         }))
+                    }
+                    ClientCommand::StartGame => {
+                        Some(common::menu_client_message::Message::StartGame(StartGameRequest {}))
                     }
                     ClientCommand::Disconnect => {
                         let _ = tx.send(MenuClientMessage {
@@ -171,6 +174,10 @@ pub async fn grpc_client_task(
                                     }).await.is_err() {
                                         break;
                                     }
+                                }
+                                common::menu_server_message::Message::GameStarting(notification) => {
+                                    log!("Game starting! Session ID: {}", notification.session_id);
+                                    // TODO: Transition to game state
                                 }
                                 _ => {}
                             }
