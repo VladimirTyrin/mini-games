@@ -261,6 +261,8 @@ impl eframe::App for MenuApp {
             }
         });
 
-        ctx.request_repaint();
+        if self.disconnecting.is_some() {
+            ctx.request_repaint();
+        }
     }
 }
