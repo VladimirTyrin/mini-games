@@ -179,7 +179,6 @@ pub async fn grpc_client_task(
                                     log!("Game starting! Session ID: {}", notification.session_id);
                                     // TODO: Transition to game state
                                 }
-                                _ => {}
                             }
                         }
                     }
