@@ -99,7 +99,17 @@ message PlayerInfo {
     bool ready = 2;
 }
 
-message LobbySettings {}
+message LobbySettings {
+    uint32 field_width = 1;
+    uint32 field_height = 2;
+    WallCollisionMode wall_collision_mode = 3;
+}
+
+enum WallCollisionMode {
+    WALL_COLLISION_MODE_UNSPECIFIED = 0;
+    WALL_COLLISION_MODE_DEATH = 1;
+    WALL_COLLISION_MODE_WRAP_AROUND = 2;
+}
 
 message PlayerJoinedNotification {
     string client_id = 1;

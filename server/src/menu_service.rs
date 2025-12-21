@@ -13,12 +13,15 @@ use common::{
 use crate::connection_tracker::ConnectionTracker;
 use crate::lobby_manager::{LobbyManager, LobbyStateAfterLeave};
 use crate::broadcaster::ClientBroadcaster;
+use crate::game_session_manager::GameSessionManager;
+use crate::game::WallCollisionMode;
 
 #[derive(Clone, Debug)]
 struct MenuServiceDependencies {
     tracker: ConnectionTracker,
     lobby_manager: LobbyManager,
     broadcaster: ClientBroadcaster,
+    session_manager: GameSessionManager,
 }
 
 #[derive(Debug)]
@@ -27,12 +30,13 @@ pub struct MenuServiceImpl {
 }
 
 impl MenuServiceImpl {
-    pub fn new(tracker: ConnectionTracker, lobby_manager: LobbyManager, broadcaster: ClientBroadcaster) -> Self {
+    pub fn new(tracker: ConnectionTracker, lobby_manager: LobbyManager, broadcaster: ClientBroadcaster, session_manager: GameSessionManager) -> Self {
         Self {
             dependencies: MenuServiceDependencies {
                 tracker,
                 lobby_manager,
                 broadcaster,
+                session_manager,
             }
         }
     }
@@ -175,12 +179,31 @@ impl MenuServiceImpl {
         client_id: &ClientId,
         start_result: &crate::lobby_manager::StartGameResult,
     ) {
+        let session_id = start_result.lobby_id.to_string();
+
+        let wall_mode = match common::WallCollisionMode::try_from(start_result.settings.wall_collision_mode) {
+            Ok(common::WallCollisionMode::Death) => WallCollisionMode::Death,
+            Ok(common::WallCollisionMode::WrapAround) => WallCollisionMode::WrapAround,
+            _ => WallCollisionMode::WrapAround,
+        };
+
+        if let Err(e) = dependencies.session_manager.create_session(
+            session_id.clone(),
+            start_result.player_ids.clone(),
+            start_result.settings.field_width as usize,
+            start_result.settings.field_height as usize,
+            wall_mode,
+        ).await {
+            log!("Failed to create game session: {}", e);
+            return;
+        }
+
         dependencies.broadcaster.broadcast_to_clients(
             &start_result.player_ids,
             MenuServerMessage {
                 message: Some(common::menu_server_message::Message::GameStarting(
                     GameStartingNotification {
-                        session_id: start_result.lobby_id.to_string(),
+                        session_id,
                     }
                 )),
             },

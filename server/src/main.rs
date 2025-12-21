@@ -3,6 +3,8 @@ mod menu_service;
 mod game_service;
 mod lobby_manager;
 mod broadcaster;
+mod game;
+mod game_session_manager;
 
 use tonic::transport::Server;
 use common::{
@@ -19,6 +21,7 @@ use menu_service::MenuServiceImpl;
 use game_service::GameServiceImpl;
 use lobby_manager::LobbyManager;
 use broadcaster::ClientBroadcaster;
+use game_session_manager::GameSessionManager;
 
 #[derive(Parser)]
 #[command(name = "snake_game_server")]
@@ -42,9 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tracker = ConnectionTracker::new();
     let lobby_manager = LobbyManager::new();
     let broadcaster = ClientBroadcaster::new();
+    let session_manager = GameSessionManager::new();
 
-    let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager, broadcaster.clone());
-    let game_service = GameServiceImpl::new(tracker);
+    let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager, broadcaster.clone(), session_manager.clone());
+    let game_service = GameServiceImpl::new(tracker, session_manager);
 
     log!("Snake Game Server listening on {}", addr);
 

@@ -1,5 +1,5 @@
 use common::menu_service_client::MenuServiceClient;
-use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, log};
+use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, WallCollisionMode, log};
 use tokio::sync::mpsc;
 use crate::state::{ClientCommand, SharedState, AppState};
 
@@ -61,7 +61,11 @@ pub async fn grpc_client_task(
                         Some(common::menu_client_message::Message::CreateLobby(CreateLobbyRequest {
                             lobby_name: name,
                             max_players,
-                            settings: Some(LobbySettings {}),
+                            settings: Some(LobbySettings {
+                                field_width: 15,
+                                field_height: 15,
+                                wall_collision_mode: WallCollisionMode::WrapAround.into(),
+                            }),
                         }))
                     }
                     ClientCommand::JoinLobby { lobby_id } => {

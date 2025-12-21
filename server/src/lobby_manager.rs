@@ -31,6 +31,7 @@ pub struct LeaveLobbyDetails {
 pub struct StartGameResult {
     pub lobby_id: LobbyId,
     pub player_ids: Vec<ClientId>,
+    pub settings: LobbySettings,
 }
 
 impl Lobby {
@@ -115,6 +116,14 @@ impl LobbyManager {
     }
 
     pub async fn create_lobby(&self, name: String, max_players: u32, settings: LobbySettings, creator_id: ClientId) -> Result<LobbyDetails, String> {
+        if settings.field_width < 5 || settings.field_width > 30 {
+            return Err("Field width must be between 5 and 30".to_string());
+        }
+
+        if settings.field_height < 5 || settings.field_height > 30 {
+            return Err("Field height must be between 5 and 30".to_string());
+        }
+
         let mut client_to_lobby = self.client_to_lobby.lock().await;
 
         if client_to_lobby.contains_key(&creator_id) {
@@ -253,10 +262,12 @@ impl LobbyManager {
         lobby.in_game = true;
 
         let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
+        let settings = lobby.settings.clone();
 
         Ok(StartGameResult {
             lobby_id: lobby_id.clone(),
             player_ids,
+            settings,
         })
     }
 }
