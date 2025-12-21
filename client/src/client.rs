@@ -39,13 +39,13 @@ pub async fn grpc_client_task(
     let mut response_stream = menu_stream.into_inner();
 
     tx.send(MenuClientMessage {
-        client_id: client_id.clone(),
-        message: Some(common::menu_client_message::Message::Connect(ConnectRequest {})),
+        message: Some(common::menu_client_message::Message::Connect(ConnectRequest {
+            client_id: client_id.clone(),
+        })),
     })
     .await?;
 
     tx.send(MenuClientMessage {
-        client_id: client_id.clone(),
         message: Some(common::menu_client_message::Message::ListLobbies(ListLobbiesRequest {})),
     })
     .await?;
@@ -82,7 +82,6 @@ pub async fn grpc_client_task(
                     }
                     ClientCommand::Disconnect => {
                         let _ = tx.send(MenuClientMessage {
-                            client_id: client_id.clone(),
                             message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
                         }).await;
                         break;
@@ -91,7 +90,6 @@ pub async fn grpc_client_task(
 
                 if let Some(msg) = message {
                     if tx.send(MenuClientMessage {
-                        client_id: client_id.clone(),
                         message: Some(msg),
                     }).await.is_err() {
                         break;
@@ -147,7 +145,6 @@ pub async fn grpc_client_task(
                                     let current_state = shared_state.get_state();
                                     if matches!(current_state, AppState::LobbyList { .. }) {
                                         if tx.send(MenuClientMessage {
-                                            client_id: client_id.clone(),
                                             message: Some(common::menu_client_message::Message::ListLobbies(
                                                 ListLobbiesRequest {}
                                             )),
@@ -167,7 +164,6 @@ pub async fn grpc_client_task(
                                 common::menu_server_message::Message::LobbyClosed(notification) => {
                                     shared_state.set_error(notification.message);
                                     if tx.send(MenuClientMessage {
-                                        client_id: client_id.clone(),
                                         message: Some(common::menu_client_message::Message::ListLobbies(
                                             ListLobbiesRequest {}
                                         )),
@@ -194,7 +190,6 @@ pub async fn grpc_client_task(
     }
 
     let _ = tx.send(MenuClientMessage {
-        client_id: client_id.clone(),
         message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
     }).await;
 

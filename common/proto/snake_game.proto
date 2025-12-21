@@ -17,16 +17,15 @@ service GameService {
 // === Menu Messages ===
 
 message MenuClientMessage {
-    string client_id = 1;
     oneof message {
-        ConnectRequest connect = 2;
-        DisconnectRequest disconnect = 3;
-        ListLobbiesRequest list_lobbies = 4;
-        CreateLobbyRequest create_lobby = 5;
-        JoinLobbyRequest join_lobby = 6;
-        LeaveLobbyRequest leave_lobby = 7;
-        MarkReadyRequest mark_ready = 8;
-        StartGameRequest start_game = 9;
+        ConnectRequest connect = 1;
+        DisconnectRequest disconnect = 2;
+        ListLobbiesRequest list_lobbies = 3;
+        CreateLobbyRequest create_lobby = 4;
+        JoinLobbyRequest join_lobby = 5;
+        LeaveLobbyRequest leave_lobby = 6;
+        MarkReadyRequest mark_ready = 7;
+        StartGameRequest start_game = 8;
     }
 }
 
@@ -45,7 +44,9 @@ message MenuServerMessage {
     }
 }
 
-message ConnectRequest {}
+message ConnectRequest {
+    string client_id = 1;
+}
 
 message DisconnectRequest {}
 
