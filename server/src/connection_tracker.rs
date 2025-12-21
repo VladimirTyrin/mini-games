@@ -43,14 +43,14 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_add_menu_client() {
+    async fn test_add_menu_client_new_client_true_returned() {
         let tracker = ConnectionTracker::new();
         let result = tracker.add_menu_client(&ClientId::new("client1".to_string())).await;
         assert!(result);
     }
 
     #[tokio::test]
-    async fn test_add_duplicate_menu_client() {
+    async fn test_add_menu_client_duplicate_false_returned() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         let result1 = tracker.add_menu_client(&client_id).await;
@@ -60,7 +60,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_menu_client() {
+    async fn test_add_menu_client_after_removal_true_returned() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         tracker.add_menu_client(&client_id).await;
@@ -70,14 +70,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_game_client() {
+    async fn test_add_game_client_new_client_true_returned() {
         let tracker = ConnectionTracker::new();
         let result = tracker.add_game_client(&ClientId::new("client1".to_string())).await;
         assert!(result);
     }
 
     #[tokio::test]
-    async fn test_add_duplicate_game_client() {
+    async fn test_add_game_client_duplicate_false_returned() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         let result1 = tracker.add_game_client(&client_id).await;
@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_game_client() {
+    async fn test_add_game_client_after_removal_true_returned() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         tracker.add_game_client(&client_id).await;
@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_menu_and_game_clients_independent() {
+    async fn test_add_client_menu_and_game_both_true_returned() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         let menu_result = tracker.add_menu_client(&client_id).await;
@@ -107,7 +107,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_multiple_clients() {
+    async fn test_add_menu_client_multiple_different_all_true_returned() {
         let tracker = ConnectionTracker::new();
         let result1 = tracker.add_menu_client(&ClientId::new("client1".to_string())).await;
         let result2 = tracker.add_menu_client(&ClientId::new("client2".to_string())).await;
@@ -118,7 +118,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_nonexistent_client() {
+    async fn test_remove_menu_client_nonexistent_no_error() {
         let tracker = ConnectionTracker::new();
         let client_id = ClientId::new("client1".to_string());
         tracker.remove_menu_client(&client_id).await;
@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_concurrent_access() {
+    async fn test_add_menu_client_different_concurrent_both_true_returned() {
         let tracker = ConnectionTracker::new();
         let tracker_clone1 = tracker.clone();
         let tracker_clone2 = tracker.clone();

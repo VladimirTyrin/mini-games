@@ -14,17 +14,20 @@ pub struct Lobby {
     pub in_game: bool,
 }
 
+#[derive(Debug)]
 pub enum LobbyStateAfterLeave {
     LobbyStillActive { updated_details: LobbyDetails },
     LobbyEmpty,
     HostLeft { kicked_players: Vec<ClientId> },
 }
 
+#[derive(Debug)]
 pub struct LeaveLobbyDetails {
     pub lobby_id: LobbyId,
     pub state: LobbyStateAfterLeave,
 }
 
+#[derive(Debug)]
 pub struct StartGameResult {
     pub lobby_id: LobbyId,
     pub player_ids: Vec<ClientId>,
@@ -255,5 +258,421 @@ impl LobbyManager {
             lobby_id: lobby_id.clone(),
             player_ids,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_create_lobby_new_lobby_details_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        let result = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await;
+
+        assert!(result.is_ok());
+        let details = result.unwrap();
+        assert_eq!(details.lobby_name, "Test Lobby");
+        assert_eq!(details.max_players, 4);
+        assert_eq!(details.players.len(), 1);
+        assert_eq!(details.creator_id, creator_id.to_string());
+        assert!(details.players[0].ready);
+    }
+
+    #[tokio::test]
+    async fn test_create_lobby_already_in_lobby_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        manager.create_lobby(
+            "First Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let result = manager.create_lobby(
+            "Second Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id,
+        ).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Already in a lobby");
+    }
+
+    #[tokio::test]
+    async fn test_list_lobbies_empty_empty_list_returned() {
+        let manager = LobbyManager::new();
+        let lobbies = manager.list_lobbies().await;
+        assert_eq!(lobbies.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_lobbies_active_lobbies_lobbies_returned() {
+        let manager = LobbyManager::new();
+
+        manager.create_lobby(
+            "Lobby 1".to_string(),
+            4,
+            LobbySettings {},
+            ClientId::new("creator1".to_string()),
+        ).await.unwrap();
+
+        manager.create_lobby(
+            "Lobby 2".to_string(),
+            2,
+            LobbySettings {},
+            ClientId::new("creator2".to_string()),
+        ).await.unwrap();
+
+        let lobbies = manager.list_lobbies().await;
+        assert_eq!(lobbies.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_lobbies_filters_in_game_only_active_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        manager.create_lobby(
+            "Active Lobby".to_string(),
+            4,
+            LobbySettings {},
+            ClientId::new("creator1".to_string()),
+        ).await.unwrap();
+
+        manager.create_lobby(
+            "Game Lobby".to_string(),
+            1,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        manager.start_game(&creator_id).await.unwrap();
+
+        let lobbies = manager.list_lobbies().await;
+        assert_eq!(lobbies.len(), 1);
+        assert_eq!(lobbies[0].lobby_name, "Active Lobby");
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_valid_lobby_details_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id,
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id.clone());
+        let result = manager.join_lobby(lobby_id, joiner_id).await;
+
+        assert!(result.is_ok());
+        let details = result.unwrap();
+        assert_eq!(details.players.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_already_in_lobby_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        let result = manager.join_lobby(lobby_id, creator_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Already in a lobby");
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_nonexistent_error_returned() {
+        let manager = LobbyManager::new();
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let result = manager.join_lobby(
+            LobbyId::new("nonexistent".to_string()),
+            joiner_id,
+        ).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Lobby not found");
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_game_started_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+
+        manager.start_game(&creator_id).await.unwrap();
+
+        let result = manager.join_lobby(lobby_id, joiner_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Cannot join: Game already started");
+    }
+
+    #[tokio::test]
+    async fn test_join_lobby_full_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            2,
+            LobbySettings {},
+            creator_id,
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+
+        manager.join_lobby(lobby_id.clone(), ClientId::new("player1".to_string())).await.unwrap();
+
+        let result = manager.join_lobby(lobby_id, ClientId::new("player2".to_string())).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Lobby is full or already joined");
+    }
+
+    #[tokio::test]
+    async fn test_leave_lobby_non_host_with_others_lobby_still_active() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id,
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id.clone()).await.unwrap();
+
+        let result = manager.leave_lobby(&joiner_id).await;
+
+        assert!(result.is_ok());
+        let leave_details = result.unwrap();
+        assert!(matches!(leave_details.state, LobbyStateAfterLeave::LobbyStillActive { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_leave_lobby_after_host_left_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id.clone()).await.unwrap();
+
+        manager.leave_lobby(&creator_id).await.unwrap();
+        let result = manager.leave_lobby(&joiner_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Not in a lobby");
+    }
+
+    #[tokio::test]
+    async fn test_leave_lobby_host_players_kicked() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id).await.unwrap();
+
+        let result = manager.leave_lobby(&creator_id).await;
+
+        assert!(result.is_ok());
+        let leave_details = result.unwrap();
+        match leave_details.state {
+            LobbyStateAfterLeave::HostLeft { kicked_players } => {
+                assert_eq!(kicked_players.len(), 1);
+            },
+            _ => panic!("Expected HostLeft state"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_leave_lobby_not_in_lobby_error_returned() {
+        let manager = LobbyManager::new();
+        let client_id = ClientId::new("client".to_string());
+
+        let result = manager.leave_lobby(&client_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Not in a lobby");
+    }
+
+    #[tokio::test]
+    async fn test_mark_ready_in_lobby_details_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id,
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id.clone()).await.unwrap();
+
+        let result = manager.mark_ready(&joiner_id, true).await;
+
+        assert!(result.is_ok());
+        let details = result.unwrap();
+        assert!(details.players.iter().any(|p| p.client_id == joiner_id.to_string() && p.ready));
+    }
+
+    #[tokio::test]
+    async fn test_mark_ready_not_in_lobby_error_returned() {
+        let manager = LobbyManager::new();
+        let client_id = ClientId::new("client".to_string());
+
+        let result = manager.mark_ready(&client_id, true).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Not in a lobby");
+    }
+
+    #[tokio::test]
+    async fn test_start_game_host_all_ready_success() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let result = manager.start_game(&creator_id).await;
+
+        assert!(result.is_ok());
+        let start_result = result.unwrap();
+        assert_eq!(start_result.player_ids.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_start_game_non_host_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id,
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id.clone()).await.unwrap();
+        manager.mark_ready(&joiner_id, true).await.unwrap();
+
+        let result = manager.start_game(&joiner_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Only the host can start the game");
+    }
+
+    #[tokio::test]
+    async fn test_start_game_not_all_ready_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+        let joiner_id = ClientId::new("joiner".to_string());
+
+        let details = manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        let lobby_id = LobbyId::new(details.lobby_id);
+        manager.join_lobby(lobby_id, joiner_id).await.unwrap();
+
+        let result = manager.start_game(&creator_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Not all players are ready");
+    }
+
+    #[tokio::test]
+    async fn test_start_game_already_started_error_returned() {
+        let manager = LobbyManager::new();
+        let creator_id = ClientId::new("creator".to_string());
+
+        manager.create_lobby(
+            "Test Lobby".to_string(),
+            4,
+            LobbySettings {},
+            creator_id.clone(),
+        ).await.unwrap();
+
+        manager.start_game(&creator_id).await.unwrap();
+        let result = manager.start_game(&creator_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Game already started");
+    }
+
+    #[tokio::test]
+    async fn test_start_game_not_in_lobby_error_returned() {
+        let manager = LobbyManager::new();
+        let client_id = ClientId::new("client".to_string());
+
+        let result = manager.start_game(&client_id).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Not in a lobby");
     }
 }
