@@ -145,11 +145,10 @@ message ErrorResponse {
 // === Game Messages ===
 
 message GameClientMessage {
-    string client_id = 1;
     oneof message {
-        ConnectRequest connect = 2;
-        DisconnectRequest disconnect = 3;
-        TurnCommand turn = 4;
+        ConnectRequest connect = 1;
+        DisconnectRequest disconnect = 2;
+        TurnCommand turn = 3;
     }
 }
 
@@ -157,6 +156,7 @@ message GameServerMessage {
     oneof message {
         GameStateUpdate state = 1;
         GameOverNotification game_over = 2;
+        ErrorResponse error = 3;
     }
 }
 

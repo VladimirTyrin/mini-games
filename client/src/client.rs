@@ -1,7 +1,8 @@
 use common::menu_service_client::MenuServiceClient;
-use common::{MenuClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, WallCollisionMode, log};
+use common::game_service_client::GameServiceClient;
+use common::{MenuClientMessage, GameClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, log, TurnCommand};
 use tokio::sync::mpsc;
-use crate::state::{ClientCommand, SharedState, AppState};
+use crate::state::{MenuCommand, GameCommand, SharedState, AppState};
 
 #[derive(Clone)]
 pub struct GrpcLoggingSender<T> {
@@ -26,9 +27,9 @@ pub async fn grpc_client_task(
     client_id: String,
     server_address: String,
     shared_state: SharedState,
-    mut command_rx: mpsc::UnboundedReceiver<ClientCommand>,
+    mut command_rx: mpsc::UnboundedReceiver<MenuCommand>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut menu_client = MenuServiceClient::connect(server_address).await?;
+    let mut menu_client = MenuServiceClient::connect(server_address.clone()).await?;
 
     let (tx_raw, rx) = mpsc::channel(128);
     let tx = GrpcLoggingSender::new(tx_raw);
@@ -54,33 +55,33 @@ pub async fn grpc_client_task(
         tokio::select! {
             Some(command) = command_rx.recv() => {
                 let message = match command {
-                    ClientCommand::ListLobbies => {
+                    MenuCommand::ListLobbies => {
                         Some(common::menu_client_message::Message::ListLobbies(ListLobbiesRequest {}))
                     }
-                    ClientCommand::CreateLobby { name, max_players } => {
+                    MenuCommand::CreateLobby { name, max_players } => {
                         Some(common::menu_client_message::Message::CreateLobby(CreateLobbyRequest {
                             lobby_name: name,
                             max_players,
                             settings: Some(LobbySettings::default_settings()),
                         }))
                     }
-                    ClientCommand::JoinLobby { lobby_id } => {
+                    MenuCommand::JoinLobby { lobby_id } => {
                         Some(common::menu_client_message::Message::JoinLobby(JoinLobbyRequest {
                             lobby_id,
                         }))
                     }
-                    ClientCommand::LeaveLobby => {
+                    MenuCommand::LeaveLobby => {
                         Some(common::menu_client_message::Message::LeaveLobby(LeaveLobbyRequest {}))
                     }
-                    ClientCommand::MarkReady { ready } => {
+                    MenuCommand::MarkReady { ready } => {
                         Some(common::menu_client_message::Message::MarkReady(MarkReadyRequest {
                             ready,
                         }))
                     }
-                    ClientCommand::StartGame => {
+                    MenuCommand::StartGame => {
                         Some(common::menu_client_message::Message::StartGame(StartGameRequest {}))
                     }
-                    ClientCommand::Disconnect => {
+                    MenuCommand::Disconnect => {
                         let _ = tx.send(MenuClientMessage {
                             message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
                         }).await;
@@ -173,7 +174,26 @@ pub async fn grpc_client_task(
                                 }
                                 common::menu_server_message::Message::GameStarting(notification) => {
                                     log!("Game starting! Session ID: {}", notification.session_id);
-                                    // TODO: Transition to game state
+                                    shared_state.set_state(AppState::InGame {
+                                        session_id: notification.session_id.clone(),
+                                        game_state: None,
+                                    });
+
+                                    let session_id = notification.session_id.clone();
+                                    let server_addr = server_address.clone();
+                                    let shared_state_clone = shared_state.clone();
+                                    let client_id_clone = client_id.clone();
+
+                                    tokio::spawn(async move {
+                                        if let Err(e) = game_client_task(
+                                            client_id_clone,
+                                            session_id,
+                                            server_addr,
+                                            shared_state_clone,
+                                        ).await {
+                                            log!("Game client error: {}", e);
+                                        }
+                                    });
                                 }
                             }
                         }
@@ -193,5 +213,93 @@ pub async fn grpc_client_task(
         message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
     }).await;
 
+    Ok(())
+}
+
+async fn game_client_task(
+    client_id: String,
+    session_id: String,
+    server_address: String,
+    shared_state: SharedState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut game_client = GameServiceClient::connect(server_address).await?;
+
+    let (tx_raw, rx) = mpsc::channel(128);
+    let tx = GrpcLoggingSender::new(tx_raw);
+
+    let (game_command_tx, mut game_command_rx) = mpsc::unbounded_channel::<GameCommand>();
+    shared_state.set_game_command_tx(game_command_tx);
+
+    let game_stream = game_client
+        .game_stream(tokio_stream::wrappers::ReceiverStream::new(rx))
+        .await?;
+    let mut response_stream = game_stream.into_inner();
+
+    tx.send(GameClientMessage {
+        message: Some(common::game_client_message::Message::Connect(ConnectRequest {
+            client_id: client_id.clone(),
+        })),
+    })
+    .await?;
+
+    loop {
+        tokio::select! {
+            Some(command) = game_command_rx.recv() => {
+                match command {
+                    GameCommand::SendTurn { direction } => {
+                        if tx.send(GameClientMessage {
+                            message: Some(common::game_client_message::Message::Turn(TurnCommand {
+                                direction: direction as i32,
+                            })),
+                        }).await.is_err() {
+                            break;
+                        }
+                    }
+                    GameCommand::Disconnect => {
+                        break;
+                    }
+                }
+            }
+
+            result = response_stream.message() => {
+                match result {
+                    Ok(Some(server_msg)) => {
+                        log!("Game: Received: {:?}", server_msg);
+
+                        if let Some(msg) = server_msg.message {
+                            match msg {
+                                common::game_server_message::Message::State(state) => {
+                                    shared_state.update_game_state(state);
+                                }
+                                common::game_server_message::Message::GameOver(game_over) => {
+                                    log!("Game over! Winner: {}", game_over.winner_id);
+                                    shared_state.set_state(AppState::GameOver {
+                                        session_id: session_id.clone(),
+                                        scores: game_over.scores,
+                                        winner_id: game_over.winner_id,
+                                    });
+                                    break;
+                                }
+                                common::game_server_message::Message::Error(err) => {
+                                    log!("Game error: {}", err.message);
+                                    shared_state.set_error(err.message);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(e) => {
+                        log!("Game connection error: {}", e);
+                        shared_state.set_error(format!("Game connection error: {}", e));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    log!("Game client task ending");
+    shared_state.clear_game_command_tx();
     Ok(())
 }

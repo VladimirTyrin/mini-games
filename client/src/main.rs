@@ -2,6 +2,8 @@ mod state;
 mod client;
 mod ui;
 mod settings;
+mod game_render;
+mod game_ui;
 
 use clap::Parser;
 use common::id_generator::generate_client_id;
