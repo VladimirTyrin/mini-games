@@ -185,14 +185,8 @@ impl GameSessionManager {
         Point::new(x.min(width - 1), y)
     }
 
-    fn calculate_start_direction(index: usize, total: usize) -> Direction {
-        if total == 1 {
-            Direction::Right
-        } else if index < total / 2 {
-            Direction::Right
-        } else {
-            Direction::Left
-        }
+    fn calculate_start_direction(_index: usize, _total: usize) -> Direction {
+        Direction::Up
     }
 }
 

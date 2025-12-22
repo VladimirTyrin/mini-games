@@ -14,6 +14,7 @@ pub struct MenuApp {
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
+    window_resized_for_game: bool,
 }
 
 impl MenuApp {
@@ -33,6 +34,7 @@ impl MenuApp {
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
+            window_resized_for_game: false,
         }
     }
 
@@ -268,8 +270,27 @@ impl eframe::App for MenuApp {
             self.render_create_lobby_dialog(ctx);
         }
 
+        let current_state = self.shared_state.get_state();
+
+        if let AppState::InGame { game_state: Some(ref state), .. } = current_state {
+            if !self.window_resized_for_game {
+                let pixels_per_cell = 64.0;
+                let game_width = state.field_width as f32 * pixels_per_cell;
+                let game_height = state.field_height as f32 * pixels_per_cell;
+
+                let padding = 100.0;
+                let window_width = game_width + padding;
+                let window_height = game_height + padding + 100.0;
+
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(window_width, window_height)));
+                self.window_resized_for_game = true;
+            }
+        } else {
+            self.window_resized_for_game = false;
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
-            match self.shared_state.get_state() {
+            match current_state {
                 AppState::LobbyList { lobbies } => {
                     self.render_lobby_list(ui, &lobbies);
                 }

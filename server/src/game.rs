@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use common::ClientId;
+use common::{log, ClientId};
 use rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -51,12 +51,37 @@ pub struct Snake {
 }
 
 impl Snake {
-    pub fn new(start_pos: Point, direction: Direction) -> Self {
+    pub fn new(start_pos: Point, direction: Direction, field_size: &FieldSize) -> Self {
         let mut body = VecDeque::new();
         let mut body_set = HashSet::new();
 
-        body.push_back(start_pos);
-        body_set.insert(start_pos);
+        let (dx, dy) = match direction {
+            Direction::Up => (0i32, 1i32),
+            Direction::Down => (0i32, -1i32),
+            Direction::Left => (1i32, 0i32),
+            Direction::Right => (-1i32, 0i32),
+        };
+
+        let width = field_size.width as i32;
+        let height = field_size.height as i32;
+
+        let segment1 = start_pos;
+        let segment2 = Point::new(
+            ((start_pos.x as i32 + dx + width) % width) as usize,
+            ((start_pos.y as i32 + dy + height) % height) as usize,
+        );
+        let segment3 = Point::new(
+            ((segment2.x as i32 + dx + width) % width) as usize,
+            ((segment2.y as i32 + dy + height) % height) as usize,
+        );
+
+        body.push_back(segment1);
+        body.push_back(segment2);
+        body.push_back(segment3);
+
+        body_set.insert(segment1);
+        body_set.insert(segment2);
+        body_set.insert(segment3);
 
         Self {
             body,
@@ -100,8 +125,8 @@ impl GameState {
             food_set: HashSet::new(),
             field_size,
             wall_collision_mode,
-            max_food_count: 5,
-            food_spawn_probability: 0.05,
+            max_food_count: 1,
+            food_spawn_probability: 1f32,
         }
     }
 
@@ -122,7 +147,7 @@ impl GameState {
     }
 
     pub fn add_snake(&mut self, client_id: ClientId, start_pos: Point, direction: Direction) {
-        let snake = Snake::new(start_pos, direction);
+        let snake = Snake::new(start_pos, direction, &self.field_size);
         self.snakes.insert(client_id, snake);
     }
 
@@ -183,6 +208,7 @@ impl GameState {
         if self.food_set.contains(&next_head) {
             self.food_set.remove(&next_head);
             snake.score += 1;
+            log!("[{}] ate food at ({}, {}). Score: {}", client_id, next_head.x, next_head.y, snake.score);
         } else {
             let tail = snake.body.pop_back().unwrap();
             snake.body_set.remove(&tail);
@@ -277,6 +303,7 @@ impl GameState {
 
             if !occupied {
                 self.food_set.insert(pos);
+                log!("Food spawned at ({}, {})", pos.x, pos.y);
                 return;
             }
         }

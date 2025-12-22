@@ -121,7 +121,7 @@ impl GameUi {
 
                     let sprite = if i == 0 {
                         let direction = if segments.len() > 1 {
-                            Self::get_direction(&segments[0], &segments[1], field_width, field_height)
+                            Self::get_direction(&segments[1], &segments[0], field_width, field_height)
                         } else {
                             Direction::Up
                         };
