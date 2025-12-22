@@ -270,6 +270,20 @@ impl LobbyManager {
             settings,
         })
     }
+
+    pub async fn end_game(&self, lobby_id: &LobbyId) -> Result<Vec<ClientId>, String> {
+        let mut lobbies = self.lobbies.lock().await;
+        let mut client_to_lobby = self.client_to_lobby.lock().await;
+
+        let lobby = lobbies.remove(lobby_id).ok_or("Lobby not found")?;
+        let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
+
+        for player_id in &player_ids {
+            client_to_lobby.remove(player_id);
+        }
+
+        Ok(player_ids)
+    }
 }
 
 #[cfg(test)]

@@ -6,17 +6,19 @@ use common::{
     game_service_server::GameService,
     GameClientMessage, GameServerMessage, GameStateUpdate, GameOverNotification,
     ScoreEntry, Position, ErrorResponse,
-    ClientId,
+    ClientId, LobbyId,
     log,
 };
 use crate::connection_tracker::ConnectionTracker;
 use crate::game_session_manager::{GameSessionManager, SessionId};
 use crate::game::Direction as GameDirection;
+use crate::lobby_manager::LobbyManager;
 
 #[derive(Clone, Debug)]
 struct GameServiceDependencies {
     tracker: ConnectionTracker,
     session_manager: GameSessionManager,
+    lobby_manager: LobbyManager,
 }
 
 #[derive(Debug)]
@@ -25,11 +27,12 @@ pub struct GameServiceImpl {
 }
 
 impl GameServiceImpl {
-    pub fn new(tracker: ConnectionTracker, session_manager: GameSessionManager) -> Self {
+    pub fn new(tracker: ConnectionTracker, session_manager: GameSessionManager, lobby_manager: LobbyManager) -> Self {
         Self {
             dependencies: GameServiceDependencies {
                 tracker,
                 session_manager,
+                lobby_manager,
             }
         }
     }
@@ -67,6 +70,7 @@ impl GameServiceImpl {
                 let tx_clone = tx.clone();
                 let session_id_clone = found_session_id.clone();
                 let session_manager = dependencies.session_manager.clone();
+                let lobby_manager = dependencies.lobby_manager.clone();
 
                 tokio::spawn(async move {
                     let mut broadcast_interval = interval(Duration::from_millis(100));
@@ -138,6 +142,18 @@ impl GameServiceImpl {
                             }
                         } else {
                             break;
+                        }
+                    }
+
+                    session_manager.remove_session(&session_id_clone).await;
+
+                    let lobby_id = LobbyId::new(session_id_clone.clone());
+                    match lobby_manager.end_game(&lobby_id).await {
+                        Ok(player_ids) => {
+                            log!("Game ended for lobby {}, removed {} players from lobby", lobby_id, player_ids.len());
+                        }
+                        Err(e) => {
+                            log!("Failed to end game for lobby {}: {}", lobby_id, e);
                         }
                     }
                 });

@@ -47,8 +47,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broadcaster = ClientBroadcaster::new();
     let session_manager = GameSessionManager::new();
 
-    let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager, broadcaster.clone(), session_manager.clone());
-    let game_service = GameServiceImpl::new(tracker, session_manager);
+    let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
+    let game_service = GameServiceImpl::new(tracker, session_manager, lobby_manager);
 
     log!("Snake Game Server listening on {}", addr);
 
