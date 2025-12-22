@@ -183,48 +183,219 @@ impl GameUi {
     pub fn render_game_over(
         &mut self,
         ui: &mut egui::Ui,
+        ctx: &egui::Context,
         scores: &[ScoreEntry],
         winner_id: &str,
         client_id: &str,
+        last_game_state: &Option<GameStateUpdate>,
         menu_command_tx: &mpsc::UnboundedSender<MenuCommand>,
     ) {
-        ui.heading("Game Over!");
-        ui.separator();
+        if let Some(state) = last_game_state {
+            let field_width = state.field_width;
+            let field_height = state.field_height;
 
-        ui.label(format!("Winner: {}", winner_id));
-        if winner_id == client_id {
-            ui.label("🎉 Congratulations! You won! 🎉");
-        }
+            let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
+            let canvas_width = field_width as f32 * pixels_per_cell;
+            let canvas_height = field_height as f32 * pixels_per_cell;
 
-        ui.separator();
-        ui.heading("Final Scores:");
+            ui.heading("Game Over!");
+            ui.separator();
 
-        let mut sorted_scores: Vec<_> = scores.iter().collect();
-        sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
+            let (response, painter) =
+                ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
-        for (rank, entry) in sorted_scores.iter().enumerate() {
-            let is_you = entry.client_id == client_id;
-            let you_marker = if is_you { " (You)" } else { "" };
-            let medal = match rank {
-                0 => "🥇",
-                1 => "🥈",
-                2 => "🥉",
-                _ => "  ",
-            };
-            ui.label(format!(
-                "{} {}. {}{}: {} points",
-                medal,
-                rank + 1,
-                entry.client_id,
-                you_marker,
-                entry.score
-            ));
-        }
+            let rect = response.rect;
+            let background_color = egui::Color32::from_rgb(0x88, 0xFF, 0x88);
+            painter.rect_filled(rect, 0.0, background_color);
 
-        ui.separator();
-        if ui.button("Back to Lobby List").clicked() {
-            self.shared_state.clear_game_command_tx();
-            let _ = menu_command_tx.send(MenuCommand::ListLobbies);
+            for food in &state.food {
+                self.render_sprite_at(
+                    &painter,
+                    ctx,
+                    &self.sprites.get_apple_sprite(),
+                    food.x,
+                    food.y,
+                    rect.min,
+                    pixels_per_cell,
+                    "apple",
+                    Color { r: 255, g: 255, b: 255 },
+                );
+            }
+
+            for snake in &state.snakes {
+                let segments = &snake.segments;
+                if segments.is_empty() {
+                    continue;
+                }
+
+                let color = if snake.alive {
+                    generate_color_from_client_id(&snake.client_id)
+                } else {
+                    Color { r: 128, g: 128, b: 128 }
+                };
+
+                for (i, segment) in segments.iter().enumerate() {
+                    let sprite_name = format!("snake_{}_seg_{}_final", snake.client_id, i);
+
+                    let sprite = if i == 0 {
+                        let direction = if segments.len() > 1 {
+                            Self::get_direction(&segments[1], &segments[0], field_width, field_height)
+                        } else {
+                            Direction::Up
+                        };
+                        self.sprites.get_head_sprite(direction)
+                    } else if i == segments.len() - 1 {
+                        let prev = &segments[i - 1];
+                        self.sprites.get_tail_sprite(
+                            prev.x,
+                            prev.y,
+                            segment.x,
+                            segment.y,
+                            field_width,
+                            field_height,
+                        )
+                    } else {
+                        let prev = &segments[i - 1];
+                        let next = &segments[i + 1];
+                        self.sprites.get_body_sprite(
+                            prev.x,
+                            prev.y,
+                            segment.x,
+                            segment.y,
+                            next.x,
+                            next.y,
+                            field_width,
+                            field_height,
+                        )
+                    };
+
+                    self.render_sprite_at(
+                        &painter,
+                        ctx,
+                        sprite,
+                        segment.x,
+                        segment.y,
+                        rect.min,
+                        pixels_per_cell,
+                        &sprite_name,
+                        color,
+                    );
+                }
+            }
+
+            let overlay_color = egui::Color32::from_black_alpha(200);
+            painter.rect_filled(rect, 0.0, overlay_color);
+
+            let center = rect.center();
+            let overlay_width = canvas_width * 0.8;
+            let overlay_height = canvas_height * 0.6;
+            let overlay_rect = egui::Rect::from_center_size(
+                center,
+                egui::vec2(overlay_width, overlay_height),
+            );
+
+            painter.rect_filled(
+                overlay_rect,
+                8.0,
+                egui::Color32::from_rgba_premultiplied(40, 40, 40, 240),
+            );
+            painter.rect_stroke(
+                overlay_rect,
+                8.0,
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 200, 200)),
+                egui::epaint::StrokeKind::Outside,
+            );
+
+            ui.scope_builder(egui::UiBuilder::new().max_rect(overlay_rect.shrink(20.0)), |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(10.0);
+                    ui.heading(egui::RichText::new("🏁 Game Over! 🏁").size(24.0).color(egui::Color32::WHITE));
+                    ui.add_space(10.0);
+
+                    ui.label(egui::RichText::new(format!("Winner: {}", winner_id)).size(18.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                    if winner_id == client_id {
+                        ui.label(egui::RichText::new("🎉 Congratulations! You won! 🎉").size(16.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                    }
+
+                    ui.add_space(10.0);
+                    ui.separator();
+                    ui.add_space(5.0);
+
+                    ui.label(egui::RichText::new("Final Scores:").size(16.0).color(egui::Color32::WHITE));
+                    ui.add_space(5.0);
+
+                    let mut sorted_scores: Vec<_> = scores.iter().collect();
+                    sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
+
+                    for (rank, entry) in sorted_scores.iter().enumerate() {
+                        let is_you = entry.client_id == client_id;
+                        let you_marker = if is_you { " (You)" } else { "" };
+                        let medal = match rank {
+                            0 => "🥇",
+                            1 => "🥈",
+                            2 => "🥉",
+                            _ => "  ",
+                        };
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} {}. {}{}: {} points",
+                                medal,
+                                rank + 1,
+                                entry.client_id,
+                                you_marker,
+                                entry.score
+                            ))
+                            .size(14.0)
+                            .color(if is_you { egui::Color32::from_rgb(255, 255, 100) } else { egui::Color32::WHITE })
+                        );
+                    }
+
+                    ui.add_space(10.0);
+                    if ui.button(egui::RichText::new("Back to Lobby List").size(14.0)).clicked() {
+                        self.shared_state.clear_game_command_tx();
+                        let _ = menu_command_tx.send(MenuCommand::ListLobbies);
+                    }
+                });
+            });
+        } else {
+            ui.heading("Game Over!");
+            ui.separator();
+
+            ui.label(format!("Winner: {}", winner_id));
+            if winner_id == client_id {
+                ui.label("🎉 Congratulations! You won! 🎉");
+            }
+
+            ui.separator();
+            ui.heading("Final Scores:");
+
+            let mut sorted_scores: Vec<_> = scores.iter().collect();
+            sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
+
+            for (rank, entry) in sorted_scores.iter().enumerate() {
+                let is_you = entry.client_id == client_id;
+                let you_marker = if is_you { " (You)" } else { "" };
+                let medal = match rank {
+                    0 => "🥇",
+                    1 => "🥈",
+                    2 => "🥉",
+                    _ => "  ",
+                };
+                ui.label(format!(
+                    "{} {}. {}{}: {} points",
+                    medal,
+                    rank + 1,
+                    entry.client_id,
+                    you_marker,
+                    entry.score
+                ));
+            }
+
+            ui.separator();
+            if ui.button("Back to Lobby List").clicked() {
+                self.shared_state.clear_game_command_tx();
+                let _ = menu_command_tx.send(MenuCommand::ListLobbies);
+            }
         }
     }
 

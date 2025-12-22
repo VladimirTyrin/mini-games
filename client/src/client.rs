@@ -273,9 +273,16 @@ async fn game_client_task(
                                 }
                                 common::game_server_message::Message::GameOver(game_over) => {
                                     log!("Game over! Winner: {}", game_over.winner_id);
+
+                                    let last_game_state = match shared_state.get_state() {
+                                        AppState::InGame { game_state, .. } => game_state,
+                                        _ => None,
+                                    };
+
                                     shared_state.set_state(AppState::GameOver {
                                         scores: game_over.scores,
                                         winner_id: game_over.winner_id,
+                                        last_game_state,
                                     });
                                     break;
                                 }

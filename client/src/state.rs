@@ -35,6 +35,7 @@ pub enum AppState {
     GameOver {
         scores: Vec<ScoreEntry>,
         winner_id: String,
+        last_game_state: Option<GameStateUpdate>,
     },
 }
 
