@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "Building all projects..."
 cargo build --release
