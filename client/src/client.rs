@@ -61,11 +61,7 @@ pub async fn grpc_client_task(
                         Some(common::menu_client_message::Message::CreateLobby(CreateLobbyRequest {
                             lobby_name: name,
                             max_players,
-                            settings: Some(LobbySettings {
-                                field_width: 15,
-                                field_height: 15,
-                                wall_collision_mode: WallCollisionMode::WrapAround.into(),
-                            }),
+                            settings: Some(LobbySettings::default_settings()),
                         }))
                     }
                     ClientCommand::JoinLobby { lobby_id } => {

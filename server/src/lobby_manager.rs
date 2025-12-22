@@ -284,7 +284,7 @@ mod tests {
         let result = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await;
 
@@ -305,14 +305,14 @@ mod tests {
         manager.create_lobby(
             "First Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
         let result = manager.create_lobby(
             "Second Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await;
 
@@ -334,14 +334,14 @@ mod tests {
         manager.create_lobby(
             "Lobby 1".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             ClientId::new("creator1".to_string()),
         ).await.unwrap();
 
         manager.create_lobby(
             "Lobby 2".to_string(),
             2,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             ClientId::new("creator2".to_string()),
         ).await.unwrap();
 
@@ -357,14 +357,14 @@ mod tests {
         manager.create_lobby(
             "Active Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             ClientId::new("creator1".to_string()),
         ).await.unwrap();
 
         manager.create_lobby(
             "Game Lobby".to_string(),
             1,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -384,7 +384,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await.unwrap();
 
@@ -404,7 +404,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -438,7 +438,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -460,7 +460,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             2,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await.unwrap();
 
@@ -483,7 +483,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await.unwrap();
 
@@ -506,7 +506,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -529,7 +529,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -568,7 +568,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await.unwrap();
 
@@ -601,7 +601,7 @@ mod tests {
         manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -621,7 +621,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id,
         ).await.unwrap();
 
@@ -644,7 +644,7 @@ mod tests {
         let details = manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
@@ -665,7 +665,7 @@ mod tests {
         manager.create_lobby(
             "Test Lobby".to_string(),
             4,
-            LobbySettings {},
+            LobbySettings::default_settings(),
             creator_id.clone(),
         ).await.unwrap();
 
