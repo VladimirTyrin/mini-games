@@ -47,7 +47,6 @@ fn generate_color_from_client_id(client_id: &str) -> Color {
 
 pub struct GameUi {
     sprites: Sprites,
-    sprite_textures_loaded: bool,
     last_input_direction: Option<Direction>,
     shared_state: SharedState,
 }
@@ -56,7 +55,6 @@ impl GameUi {
     pub fn new(shared_state: SharedState) -> Self {
         Self {
             sprites: Sprites::load(),
-            sprite_textures_loaded: false,
             last_input_direction: None,
             shared_state,
         }

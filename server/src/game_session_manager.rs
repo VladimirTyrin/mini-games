@@ -70,7 +70,7 @@ impl GameSessionManager {
         let state_broadcast_tx_clone = state_broadcast_tx.clone();
 
         let game_loop_handle = tokio::spawn(async move {
-            let mut tick_interval = interval(Duration::from_millis(100));
+            let mut tick_interval = interval(Duration::from_millis(200));
 
             loop {
                 tokio::select! {
@@ -83,8 +83,6 @@ impl GameSessionManager {
 
                         drop(state);
                         drop(tick_value);
-
-                        let _ = state_broadcast_tx_clone.try_send(());
                     }
                     _ = state_broadcast_rx.recv() => {
                         break;
