@@ -305,7 +305,7 @@ impl eframe::App for MenuApp {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id);
                     }
                 }
-                AppState::GameOver { session_id: _, scores, winner_id } => {
+                AppState::GameOver { scores, winner_id } => {
                     if self.game_ui.is_none() {
                         self.game_ui = Some(GameUi::new(self.shared_state.clone()));
                     }

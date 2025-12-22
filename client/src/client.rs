@@ -274,7 +274,6 @@ async fn game_client_task(
                                 common::game_server_message::Message::GameOver(game_over) => {
                                     log!("Game over! Winner: {}", game_over.winner_id);
                                     shared_state.set_state(AppState::GameOver {
-                                        session_id: session_id.clone(),
                                         scores: game_over.scores,
                                         winner_id: game_over.winner_id,
                                     });
