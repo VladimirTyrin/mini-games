@@ -32,7 +32,7 @@ pub struct Sprites {
 }
 
 impl Sprites {
-    const PIXELS_PER_CELL: usize = 64;
+    pub const PIXELS_PER_CELL: usize = 64;
 
     pub fn load() -> Self {
         let sprite_sheet = image::load_from_memory_with_format(

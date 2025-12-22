@@ -41,66 +41,17 @@ impl Direction {
 }
 
 #[derive(Clone, Debug)]
-pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl Color {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-}
-
-pub fn generate_color_from_client_id(client_id: &ClientId) -> Color {
-    let id_str = client_id.as_str();
-    let hash = id_str.bytes().fold(0u32, |acc, b| {
-        acc.wrapping_mul(31).wrapping_add(b as u32)
-    });
-
-    let hue = (hash % 360) as f32;
-    let saturation = 0.7_f32;
-    let lightness = 0.5_f32;
-
-    let c = (1.0_f32 - (2.0_f32 * lightness - 1.0_f32).abs()) * saturation;
-    let x = c * (1.0_f32 - ((hue / 60.0_f32) % 2.0_f32 - 1.0_f32).abs());
-    let m = lightness - c / 2.0;
-
-    let (r, g, b) = if hue < 60.0 {
-        (c, x, 0.0)
-    } else if hue < 120.0 {
-        (x, c, 0.0)
-    } else if hue < 180.0 {
-        (0.0, c, x)
-    } else if hue < 240.0 {
-        (0.0, x, c)
-    } else if hue < 300.0 {
-        (x, 0.0, c)
-    } else {
-        (c, 0.0, x)
-    };
-
-    Color::new(
-        ((r + m) * 255.0) as u8,
-        ((g + m) * 255.0) as u8,
-        ((b + m) * 255.0) as u8,
-    )
-}
-
-#[derive(Clone, Debug)]
 pub struct Snake {
     pub body: VecDeque<Point>,
     pub body_set: HashSet<Point>,
     pub direction: Direction,
     pub pending_direction: Option<Direction>,
-    pub color: Color,
     pub alive: bool,
     pub score: u32,
 }
 
 impl Snake {
-    pub fn new(start_pos: Point, direction: Direction, color: Color) -> Self {
+    pub fn new(start_pos: Point, direction: Direction) -> Self {
         let mut body = VecDeque::new();
         let mut body_set = HashSet::new();
 
@@ -112,7 +63,6 @@ impl Snake {
             body_set,
             direction,
             pending_direction: None,
-            color,
             alive: true,
             score: 0,
         }
@@ -172,8 +122,7 @@ impl GameState {
     }
 
     pub fn add_snake(&mut self, client_id: ClientId, start_pos: Point, direction: Direction) {
-        let color = generate_color_from_client_id(&client_id);
-        let snake = Snake::new(start_pos, direction, color);
+        let snake = Snake::new(start_pos, direction);
         self.snakes.insert(client_id, snake);
     }
 

@@ -4,6 +4,47 @@ use tokio::sync::mpsc;
 use crate::state::{GameCommand, MenuCommand, SharedState};
 use crate::game_render::Sprites;
 
+#[derive(Clone, Copy, Debug)]
+struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+fn generate_color_from_client_id(client_id: &str) -> Color {
+    let hash = client_id.bytes().fold(0u32, |acc, b| {
+        acc.wrapping_mul(31).wrapping_add(b as u32)
+    });
+
+    let hue = (hash % 360) as f32;
+    let saturation = 0.7_f32;
+    let lightness = 0.5_f32;
+
+    let c = (1.0_f32 - (2.0_f32 * lightness - 1.0_f32).abs()) * saturation;
+    let x = c * (1.0_f32 - ((hue / 60.0_f32) % 2.0_f32 - 1.0_f32).abs());
+    let m = lightness - c / 2.0;
+
+    let (r, g, b) = if hue < 60.0 {
+        (c, x, 0.0)
+    } else if hue < 120.0 {
+        (x, c, 0.0)
+    } else if hue < 180.0 {
+        (0.0, c, x)
+    } else if hue < 240.0 {
+        (0.0, x, c)
+    } else if hue < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+
+    Color {
+        r: ((r + m) * 255.0) as u8,
+        g: ((g + m) * 255.0) as u8,
+        b: ((b + m) * 255.0) as u8,
+    }
+}
+
 pub struct GameUi {
     sprites: Sprites,
     sprite_textures_loaded: bool,
@@ -35,7 +76,7 @@ impl GameUi {
             let field_width = state.field_width;
             let field_height = state.field_height;
 
-            let pixels_per_cell = 64.0;
+            let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
             let canvas_width = field_width as f32 * pixels_per_cell;
             let canvas_height = field_height as f32 * pixels_per_cell;
 
@@ -59,6 +100,7 @@ impl GameUi {
                     rect.min,
                     pixels_per_cell,
                     "apple",
+                    Color { r: 255, g: 255, b: 255 },
                 );
             }
 
@@ -71,6 +113,8 @@ impl GameUi {
                 if segments.is_empty() {
                     continue;
                 }
+
+                let color = generate_color_from_client_id(&snake.client_id);
 
                 for (i, segment) in segments.iter().enumerate() {
                     let sprite_name = format!("snake_{}_seg_{}", snake.client_id, i);
@@ -116,6 +160,7 @@ impl GameUi {
                         rect.min,
                         pixels_per_cell,
                         &sprite_name,
+                        color,
                     );
                 }
             }
@@ -222,6 +267,7 @@ impl GameUi {
         canvas_min: egui::Pos2,
         pixels_per_cell: f32,
         sprite_name: &str,
+        tint: Color,
     ) {
         let texture = sprite.to_egui_texture(ctx, sprite_name);
 
@@ -237,7 +283,7 @@ impl GameUi {
             texture.id(),
             rect,
             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
+            egui::Color32::from_rgb(tint.r, tint.g, tint.b),
         );
     }
 
