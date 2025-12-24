@@ -16,3 +16,6 @@ eframe = "0.33.3"
 egui = "0.33.3"
 prost = "0.14.1"
 image = "0.25"
+serde = { version = "1.0.228", features = ["derive"] }
+rand = "0.9.2"
+
