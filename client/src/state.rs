@@ -16,8 +16,7 @@ pub enum MenuCommand {
 #[derive(Debug, Clone)]
 pub enum GameCommand {
     SendTurn { direction: Direction },
-    Disconnect,
-}
+    }
 
 #[derive(Debug, Clone)]
 pub enum AppState {

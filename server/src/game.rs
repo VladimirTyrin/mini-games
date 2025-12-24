@@ -151,10 +151,6 @@ impl GameState {
         self.snakes.insert(client_id, snake);
     }
 
-    pub fn remove_snake(&mut self, client_id: &ClientId) {
-        self.snakes.remove(client_id);
-    }
-
     pub fn set_snake_direction(&mut self, client_id: &ClientId, direction: Direction) {
         if let Some(snake) = self.snakes.get_mut(client_id) {
             if snake.alive && !direction.is_opposite(&snake.direction) {

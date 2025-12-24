@@ -1,6 +1,6 @@
+use common::Direction;
 use eframe::egui;
 use image::{ImageFormat, RgbaImage};
-use common::{GameStateUpdate, Snake, Position, Direction};
 
 #[derive(Clone)]
 pub struct Sprite {

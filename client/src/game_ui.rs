@@ -1,8 +1,8 @@
-use eframe::egui;
-use common::{GameStateUpdate, Snake, Position, Direction, ScoreEntry};
-use tokio::sync::mpsc;
-use crate::state::{GameCommand, MenuCommand, SharedState};
 use crate::game_render::Sprites;
+use crate::state::{GameCommand, MenuCommand, SharedState};
+use common::{Direction, GameStateUpdate, Position, ScoreEntry};
+use eframe::egui;
+use tokio::sync::mpsc;
 
 #[derive(Clone, Copy, Debug)]
 struct Color {

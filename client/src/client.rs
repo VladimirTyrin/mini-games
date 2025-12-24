@@ -179,7 +179,6 @@ pub async fn grpc_client_task(
                                         game_state: None,
                                     });
 
-                                    let session_id = notification.session_id.clone();
                                     let server_addr = server_address.clone();
                                     let shared_state_clone = shared_state.clone();
                                     let client_id_clone = client_id.clone();
@@ -187,7 +186,6 @@ pub async fn grpc_client_task(
                                     tokio::spawn(async move {
                                         if let Err(e) = game_client_task(
                                             client_id_clone,
-                                            session_id,
                                             server_addr,
                                             shared_state_clone,
                                         ).await {
@@ -218,7 +216,6 @@ pub async fn grpc_client_task(
 
 async fn game_client_task(
     client_id: String,
-    session_id: String,
     server_address: String,
     shared_state: SharedState,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -254,9 +251,6 @@ async fn game_client_task(
                         }).await.is_err() {
                             break;
                         }
-                    }
-                    GameCommand::Disconnect => {
-                        break;
                     }
                 }
             }

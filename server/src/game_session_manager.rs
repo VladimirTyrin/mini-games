@@ -16,9 +16,7 @@ pub struct GameSessionManager {
 #[derive(Debug)]
 struct GameSession {
     state: Arc<Mutex<GameState>>,
-    tick: Arc<Mutex<u64>>,
-    _game_loop_handle: tokio::task::JoinHandle<()>,
-    state_broadcast_tx: mpsc::Sender<()>,
+    tick: Arc<Mutex<u64>>
 }
 
 impl GameSessionManager {
@@ -62,14 +60,13 @@ impl GameSessionManager {
 
         let state = Arc::new(Mutex::new(game_state));
         let tick = Arc::new(Mutex::new(0u64));
-        let (state_broadcast_tx, mut state_broadcast_rx) = mpsc::channel::<()>(1);
+        let (_, mut state_broadcast_rx) = mpsc::channel::<()>(1);
 
         let state_clone = state.clone();
         let tick_clone = tick.clone();
         let session_id_clone = session_id.clone();
-        let state_broadcast_tx_clone = state_broadcast_tx.clone();
 
-        let game_loop_handle = tokio::spawn(async move {
+        let _ = tokio::spawn(async move {
             let mut tick_interval = interval(Duration::from_millis(200));
 
             loop {
@@ -95,9 +92,7 @@ impl GameSessionManager {
 
         let session = GameSession {
             state,
-            tick,
-            _game_loop_handle: game_loop_handle,
-            state_broadcast_tx,
+            tick
         };
 
         sessions.insert(session_id.clone(), session);
