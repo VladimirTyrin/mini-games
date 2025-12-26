@@ -58,10 +58,10 @@ pub async fn grpc_client_task(
                     MenuCommand::ListLobbies => {
                         Some(common::menu_client_message::Message::ListLobbies(ListLobbiesRequest {}))
                     }
-                    MenuCommand::CreateLobby { name, max_players } => {
+                    MenuCommand::CreateLobby { name, config } => {
                         Some(common::menu_client_message::Message::CreateLobby(CreateLobbyRequest {
                             lobby_name: name,
-                            max_players,
+                            max_players: config.max_players as u32,
                             settings: Some(LobbySettings::default_settings()),
                         }))
                     }

@@ -1,6 +1,6 @@
 
 
-use common::config::{ConfigContentProvider, ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
+pub(crate) use common::config::{ConfigContentProvider, ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
 use common::WallCollisionMode;
 use serde::{Deserialize, Serialize};
 
@@ -12,9 +12,9 @@ pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, 
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
-    server: ServerConfig,
-    lobby: LobbyConfig,
-    client_id: Option<String>,
+    pub server: ServerConfig,
+    pub lobby: LobbyConfig,
+    pub client_id: Option<String>,
 }
 
 impl Validate for Config {
@@ -45,9 +45,9 @@ impl Validate for ServerConfig {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct LobbyConfig {
-    pub max_players: usize,
-    pub field_width: usize,
-    pub field_height: usize,
+    pub max_players: u32,
+    pub field_width: u32,
+    pub field_height: u32,
     pub wall_collision_mode: WallCollisionMode,
 }
 
@@ -55,6 +55,9 @@ impl Validate for LobbyConfig {
     fn validate(&self) -> Result<(), String> {
         if self.max_players == 0 {
             return Err("max_players must be greater than 0".to_string());
+        }
+        if self.max_players > 8 {
+            return Err("max_players must not exceed 8".to_string());
         }
         if self.field_width < 5 || self.field_height < 5 {
             return Err("field dimensions must be at least 5x5".to_string());
@@ -84,20 +87,20 @@ impl Default for Config {
     }
 }
 
-fn get_temp_file_path() -> String {
-    use std::env;
-    let mut path = env::temp_dir();
-    let random_number: u32 = rand::random();
-    let file_name = format!("temp_snake_game_client_config_{}.yaml", random_number);
-    path.push(file_name);
-    path.to_str().unwrap().to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use common::config::{ConfigSerializer, YamlConfigSerializer};
     use common::id_generator::generate_client_id;
+
+    fn get_temp_file_path() -> String {
+        use std::env;
+        let mut path = env::temp_dir();
+        let random_number: u32 = rand::random();
+        let file_name = format!("temp_snake_game_client_config_{}.yaml", random_number);
+        path.push(file_name);
+        path.to_str().unwrap().to_string()
+    }
 
     #[test]
     fn test_default_config_can_be_serialized_and_deserialized_string() {

@@ -16,6 +16,7 @@ use common::logger::init_logger;
 use settings::ClientSettings;
 use state::SharedState;
 use ui::MenuApp;
+use crate::config::get_config_manager;
 
 #[derive(Parser)]
 #[command(name = "snake_game_client")]
@@ -26,7 +27,10 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = ClientSettings::default();
-    let client_id = generate_client_id();
+    let config_manager = get_config_manager();
+    let config = config_manager.get_config()?;
+
+    let client_id = config.client_id.unwrap_or_else(|| generate_client_id());
 
     let args = Args::parse();
 
@@ -74,6 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shared_state,
                 command_tx,
                 settings.disconnect_timeout,
+                config_manager
             )))
         }),
     )?;

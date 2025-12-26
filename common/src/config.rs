@@ -71,7 +71,7 @@ impl ConfigContentProvider for FileContentConfigProvider {
 pub struct ConfigManager<TConfigContentProvider, TConfig, TConfigSerializer = YamlConfigSerializer>
 where
     TConfigContentProvider: ConfigContentProvider,
-    TConfig: Clone + for<'de> Deserialize<'de> + Serialize,
+    TConfig: Clone + for<'de> Deserialize<'de> + Serialize + Validate + Default,
     TConfigSerializer: ConfigSerializer<TConfig>,
 {
     config_serializer: TConfigSerializer,
@@ -81,7 +81,7 @@ where
 
 impl<TConfig> ConfigManager<FileContentConfigProvider, TConfig, YamlConfigSerializer>
 where
-    TConfig: Clone + for<'de> Deserialize<'de> + Serialize,
+    TConfig: Clone + for<'de> Deserialize<'de> + Serialize + Validate + Default,
 {
     pub fn new(
         config_content_provider: FileContentConfigProvider,

@@ -1,8 +1,13 @@
-use eframe::egui;
-use common::{LobbyInfo, LobbyDetails};
-use tokio::sync::mpsc;
-use crate::state::{MenuCommand, SharedState, AppState};
+use crate::config::{Config, LobbyConfig};
 use crate::game_ui::GameUi;
+use crate::state::{AppState, MenuCommand, SharedState};
+use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
+use common::WallCollisionMode;
+use common::{LobbyDetails, LobbyInfo};
+use eframe::egui;
+use tokio::sync::mpsc;
+
+type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
 
 pub struct MenuApp {
     client_id: String,
@@ -11,10 +16,13 @@ pub struct MenuApp {
     create_lobby_dialog: bool,
     lobby_name_input: String,
     max_players_input: String,
+    field_width_input: String,
+    field_height_input: String,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
     window_resized_for_game: bool,
+    config_manager: ClientConfigManager
 }
 
 impl MenuApp {
@@ -22,19 +30,25 @@ impl MenuApp {
         client_id: String,
         shared_state: SharedState,
         menu_command_tx: mpsc::UnboundedSender<MenuCommand>,
-        disconnect_timeout: std::time::Duration
+        disconnect_timeout: std::time::Duration,
+        config_manager: ClientConfigManager
     ) -> Self {
+        let config = config_manager.get_config().unwrap();
+
         Self {
             client_id,
             shared_state,
             menu_command_tx,
             create_lobby_dialog: false,
             lobby_name_input: String::new(),
-            max_players_input: "4".to_string(),
+            max_players_input: config.lobby.max_players.to_string(),
+            field_width_input: config.lobby.field_width.to_string(),
+            field_height_input: config.lobby.field_height.to_string(),
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
             window_resized_for_game: false,
+            config_manager
         }
     }
 
@@ -123,22 +137,61 @@ impl MenuApp {
                 ui.label("Max Players:");
                 ui.text_edit_singleline(&mut self.max_players_input);
 
+                ui.label("Field Width:");
+                ui.text_edit_singleline(&mut self.field_width_input);
+
+                ui.label("Field Height:");
+                ui.text_edit_singleline(&mut self.field_height_input);
+
                 ui.horizontal(|ui| {
                     if ui.button("Create").clicked() {
-                        if let Ok(max_players) = self.max_players_input.parse::<u32>() {
-                            if !self.lobby_name_input.is_empty() && max_players >= 2 && max_players <= 10 {
+                        let field_width = match self.field_width_input.parse::<u32>() {
+                            Ok(width) => width,
+                            _ => {
+                                self.shared_state.set_error("Field width must be a number".to_string());
+                                return;
+                            }
+                        };
+
+                        let field_height = match self.field_height_input.parse::<u32>() {
+                            Ok(height) => height,
+                            _ => {
+                                self.shared_state.set_error("Field height must be a number".to_string());
+                                return;
+                            }
+                        };
+
+                        let max_players = match self.max_players_input.parse::<u32>() {
+                            Ok(max) => max,
+                            _ => {
+                                self.shared_state.set_error("Max players must be a number".to_string());
+                                return;
+                            }
+                        };
+
+                        let lobby_config = LobbyConfig {
+                            max_players,
+                            field_width,
+                            field_height,
+                            wall_collision_mode: WallCollisionMode::WrapAround,
+                        };
+
+                        let mut config = self.config_manager.get_config().unwrap();
+                        config.lobby = lobby_config.clone();
+
+                        // This also validates the config
+                        match self.config_manager.set_config(&config) {
+                            Ok(_) => {
                                 let _ = self.menu_command_tx.send(MenuCommand::CreateLobby {
                                     name: self.lobby_name_input.clone(),
-                                    max_players,
+                                    config: lobby_config
                                 });
                                 close_dialog = true;
-                            } else {
-                                self.shared_state.set_error(
-                                    "Invalid input: Name required, 2-10 players".to_string()
-                                );
                             }
-                        } else {
-                            self.shared_state.set_error("Invalid max players number".to_string());
+                            Err(error) => {
+                                self.shared_state.set_error(error);
+                                return;
+                            }
                         }
                     }
 

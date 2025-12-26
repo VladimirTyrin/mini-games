@@ -1,11 +1,12 @@
 use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction};
+use crate::config::LobbyConfig;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum MenuCommand {
     ListLobbies,
-    CreateLobby { name: String, max_players: u32 },
+    CreateLobby { name: String, config: LobbyConfig },
     JoinLobby { lobby_id: String },
     LeaveLobby,
     MarkReady { ready: bool },
