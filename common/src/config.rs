@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::io::ErrorKind;
 use std::sync::{Arc, Mutex};
 
 pub trait ConfigSerializer<TConfig> {
@@ -7,7 +8,7 @@ pub trait ConfigSerializer<TConfig> {
 }
 
 pub trait ConfigContentProvider {
-    fn get_config_content(&self) -> Result<String, String>;
+    fn get_config_content(&self) -> Result<Option<String>, String>;
     fn set_config_content(&self, content: &str) -> Result<(), String>;
 }
 
@@ -47,8 +48,18 @@ impl FileContentConfigProvider {
 }
 
 impl ConfigContentProvider for FileContentConfigProvider {
-    fn get_config_content(&self) -> Result<String, String> {
-        std::fs::read_to_string(self.file_path.as_str()).map_err(|e| format!("Failed to read config file: {}", e))
+    fn get_config_content(&self) -> Result<Option<String>, String> {
+        let read_result = std::fs::read_to_string(self.file_path.as_str());
+
+        match read_result {
+            Ok(content) => { Ok(Some(content))}
+            Err(err) => {
+                match err.kind() {
+                    ErrorKind::NotFound => { Ok(None) }
+                    _ => { Err(format!("Failed to read config file: {}", err)) }
+                }
+            }
+        }
     }
 
     fn set_config_content(&self, content: &str) -> Result<(), String> {
@@ -94,7 +105,7 @@ where
 impl<TConfigContentProvider, TConfig, TConfigSerializer> ConfigManager<TConfigContentProvider, TConfig, TConfigSerializer>
 where
     TConfigContentProvider: ConfigContentProvider,
-    TConfig: Clone + for<'de> Deserialize<'de> + Serialize + Validate,
+    TConfig: Clone + for<'de> Deserialize<'de> + Serialize + Validate + Default,
     TConfigSerializer: ConfigSerializer<TConfig>,
 {
     pub fn get_config(&self) -> Result<TConfig, String> {
@@ -104,14 +115,17 @@ where
             return Ok(config.clone());
         }
 
-        let config_data = self.config_content_provider.get_config_content()?;
+        let config_data_result = self.config_content_provider.get_config_content()?;
+        if let Some(config_data) = config_data_result {
+            let config = self.config_serializer.deserialize(&config_data)?;
 
-        let config = self.config_serializer.deserialize(&config_data)?;
+            config.validate().map_err(|e| format!("Config validation error: {}", e))?;
 
-        config.validate().map_err(|e| format!("Config validation error: {}", e))?;
+            *current = Some(config.clone());
+            return Ok(config)
+        }
 
-        *current = Some(config.clone());
-        Ok(config)
+        Ok(TConfig::default())
     }
 
     pub fn set_config(&self, config: &TConfig) -> Result<(), String> {

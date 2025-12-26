@@ -1,3 +1,5 @@
+
+
 use common::config::{ConfigContentProvider, ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
 use common::WallCollisionMode;
 use serde::{Deserialize, Serialize};
@@ -95,6 +97,7 @@ fn get_temp_file_path() -> String {
 mod tests {
     use super::*;
     use common::config::{ConfigSerializer, YamlConfigSerializer};
+    use common::id_generator::generate_client_id;
 
     #[test]
     fn test_default_config_can_be_serialized_and_deserialized_string() {
@@ -126,7 +129,7 @@ mod tests {
 
         let read_result = content_provider.get_config_content();
         assert!(read_result.is_ok());
-        let read_string = read_result.unwrap();
+        let read_string = read_result.unwrap().unwrap();
 
         let deserialize_result = serializer.deserialize(&read_string);
         assert!(deserialize_result.is_ok());
@@ -136,25 +139,38 @@ mod tests {
 
     #[test]
     fn test_default_config_can_be_serialized_and_deserialized_manager() {
-        let default_config = Config::default();
+        let config = Config { client_id: Some(generate_client_id()), ..Config::default() };
         let serializer = YamlConfigSerializer::new();
         let file_path = get_temp_file_path();
         dbg!(&file_path);
         let content_provider = FileContentConfigProvider::new(file_path);
         let manager = ConfigManager::new(content_provider, serializer);
 
-        let save_result = manager.set_config(&default_config);
+        let save_result = manager.set_config(&config);
         assert!(save_result.is_ok());
 
         let get_result = manager.get_config();
         assert!(get_result.is_ok());
         let loaded_config = get_result.unwrap();
-        assert_eq!(default_config, loaded_config);
+        assert_eq!(config, loaded_config);
 
         let get_again_result = manager.get_config();
         assert!(get_again_result.is_ok());
         let loaded_config_again = get_again_result.unwrap();
-        assert_eq!(default_config, loaded_config_again);
+        assert_eq!(config, loaded_config_again);
+    }
+
+    #[test]
+    fn test_config_file_does_not_exist_returns_default_config() {
+        let serializer = YamlConfigSerializer::new();
+
+        let file_path = "this_file_does_not_exist.yaml".to_string();
+        let content_provider = FileContentConfigProvider::new(file_path);
+        let manager: ConfigManager<_, Config, _> = ConfigManager::new(content_provider, serializer);
+        let get_result = manager.get_config();
+        assert!(get_result.is_ok());
+        let loaded_config = get_result.unwrap();
+        assert_eq!(Config::default(), loaded_config);
     }
 
     #[test]
@@ -166,7 +182,7 @@ mod tests {
             lobby:
               max_players: 4
               field_width: 5
-              field_height: 5
+              field_height: 5 
               wall_collision_mode: WrapAround
         "#;
 
