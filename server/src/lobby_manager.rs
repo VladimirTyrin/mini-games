@@ -340,6 +340,7 @@ impl LobbyManager {
         }
 
         lobby.play_again_votes.insert(client_id.clone());
+        lobby.set_ready(client_id, true);
 
         let ready_player_ids: Vec<String> = lobby.play_again_votes.iter().map(|id| id.to_string()).collect();
         let pending_player_ids: Vec<String> = lobby.get_pending_for_play_again();

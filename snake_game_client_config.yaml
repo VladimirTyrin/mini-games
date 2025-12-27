@@ -1,5 +1,5 @@
 server:
-  address: http://[::1]:5001
+  address: http://localhost:5001
   disconnect_timeout_ms: 200
 lobby:
   max_players: 4

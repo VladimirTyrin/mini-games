@@ -50,6 +50,17 @@ impl GameSessionManager {
         mapping.get(client_id).cloned()
     }
 
+    pub async fn remove_session(&self, session_id: &SessionId) {
+        let mut sessions = self.sessions.lock().await;
+        sessions.remove(session_id);
+        drop(sessions);
+
+        let mut mapping = self.client_to_session.lock().await;
+        mapping.retain(|_, sid| sid != session_id);
+
+        log!("Game session removed: {}", session_id);
+    }
+
     pub async fn create_session(
         &self,
         session_id: SessionId,
@@ -86,6 +97,7 @@ impl GameSessionManager {
         let broadcaster_clone = self.broadcaster.clone();
         let menu_broadcaster_clone = self.menu_broadcaster.clone();
         let lobby_manager_clone = self.lobby_manager.clone();
+        let session_manager_clone = self.clone();
 
         let _ = tokio::spawn(async move {
             let mut tick_interval_timer = interval(tick_interval);
@@ -222,6 +234,8 @@ impl GameSessionManager {
                 drop(state);
                 drop(tick_value);
             }
+
+            session_manager_clone.remove_session(&session_id_clone).await;
         });
 
         let session = GameSession {
