@@ -47,6 +47,7 @@ pub struct LobbyConfig {
     pub field_width: u32,
     pub field_height: u32,
     pub wall_collision_mode: WallCollisionMode,
+    pub tick_interval_ms: u32,
 }
 
 impl Validate for LobbyConfig {
@@ -62,6 +63,12 @@ impl Validate for LobbyConfig {
         }
         if self.field_width > 25 || self.field_height > 25 {
             return Err("field dimensions must not exceed 25x25".to_string());
+        }
+        if self.tick_interval_ms < 50 {
+            return Err("tick_interval_ms must be at least 50".to_string());
+        }
+        if self.tick_interval_ms > 1000 {
+            return Err("tick_interval_ms must not exceed 1000".to_string());
         }
         Ok(())
     }
@@ -79,6 +86,7 @@ impl Default for Config {
                 field_width: 15,
                 field_height: 15,
                 wall_collision_mode: WallCollisionMode::WrapAround,
+                tick_interval_ms: 200,
             },
             client_id: None,
         }

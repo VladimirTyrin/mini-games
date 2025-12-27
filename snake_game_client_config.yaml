@@ -6,4 +6,5 @@ lobby:
   field_width: 15
   field_height: 15
   wall_collision_mode: WrapAround
+  tick_interval_ms: 200
 client_id: null

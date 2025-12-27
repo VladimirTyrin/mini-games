@@ -61,8 +61,13 @@ pub async fn grpc_client_task(
                     MenuCommand::CreateLobby { name, config } => {
                         Some(common::menu_client_message::Message::CreateLobby(CreateLobbyRequest {
                             lobby_name: name,
-                            max_players: config.max_players as u32,
-                            settings: Some(LobbySettings::default_settings()),
+                            max_players: config.max_players,
+                            settings: Some(LobbySettings {
+                                field_width: config.field_width,
+                                field_height: config.field_height,
+                                wall_collision_mode: config.wall_collision_mode.into(),
+                                tick_interval_ms: config.tick_interval_ms,
+                            }),
                         }))
                     }
                     MenuCommand::JoinLobby { lobby_id } => {

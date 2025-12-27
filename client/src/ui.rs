@@ -18,6 +18,7 @@ pub struct MenuApp {
     max_players_input: String,
     field_width_input: String,
     field_height_input: String,
+    tick_interval_input: String,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -44,6 +45,7 @@ impl MenuApp {
             max_players_input: config.lobby.max_players.to_string(),
             field_width_input: config.lobby.field_width.to_string(),
             field_height_input: config.lobby.field_height.to_string(),
+            tick_interval_input: config.lobby.tick_interval_ms.to_string(),
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -143,6 +145,9 @@ impl MenuApp {
                 ui.label("Field Height:");
                 ui.text_edit_singleline(&mut self.field_height_input);
 
+                ui.label("Tick Interval (ms):");
+                ui.text_edit_singleline(&mut self.tick_interval_input);
+
                 ui.horizontal(|ui| {
                     if ui.button("Create").clicked() {
                         let field_width = match self.field_width_input.parse::<u32>() {
@@ -169,11 +174,20 @@ impl MenuApp {
                             }
                         };
 
+                        let tick_interval_ms = match self.tick_interval_input.parse::<u32>() {
+                            Ok(tick) => tick,
+                            _ => {
+                                self.shared_state.set_error("Tick interval must be a number".to_string());
+                                return;
+                            }
+                        };
+
                         let lobby_config = LobbyConfig {
                             max_players,
                             field_width,
                             field_height,
                             wall_collision_mode: WallCollisionMode::WrapAround,
+                            tick_interval_ms,
                         };
 
                         let mut config = self.config_manager.get_config().unwrap();

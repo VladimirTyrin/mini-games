@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Mutex, mpsc};
-use tokio::time::{interval, Duration};
+use tokio::time::interval;
 use common::{ClientId, log};
 use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point};
 
@@ -49,6 +50,7 @@ impl GameSessionManager {
         field_width: usize,
         field_height: usize,
         wall_collision_mode: WallCollisionMode,
+        tick_interval: Duration,
     ) -> Result<(), String> {
         let mut sessions = self.sessions.lock().await;
 
@@ -77,11 +79,11 @@ impl GameSessionManager {
         let session_id_clone = session_id.clone();
 
         let _ = tokio::spawn(async move {
-            let mut tick_interval = interval(Duration::from_millis(200));
+            let mut tick_interval_timer = interval(tick_interval);
 
             loop {
                 tokio::select! {
-                    _ = tick_interval.tick() => {
+                    _ = tick_interval_timer.tick() => {
                         let mut state = state_clone.lock().await;
                         state.update();
 

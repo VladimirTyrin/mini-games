@@ -103,6 +103,7 @@ message LobbySettings {
     uint32 field_width = 1;
     uint32 field_height = 2;
     WallCollisionMode wall_collision_mode = 3;
+    uint32 tick_interval_ms = 4;
 }
 
 enum WallCollisionMode {

@@ -193,6 +193,7 @@ impl MenuServiceImpl {
             start_result.settings.field_width as usize,
             start_result.settings.field_height as usize,
             wall_mode,
+            std::time::Duration::from_millis(start_result.settings.tick_interval_ms as u64),
         ).await {
             log!("Failed to create game session: {}", e);
             return;
