@@ -45,6 +45,8 @@ pub struct SharedState {
     error: Arc<Mutex<Option<String>>>,
     should_close: Arc<Mutex<bool>>,
     game_command_tx: Arc<Mutex<Option<mpsc::UnboundedSender<GameCommand>>>>,
+    connection_failed: Arc<Mutex<bool>>,
+    retry_server_address: Arc<Mutex<Option<String>>>,
 }
 
 impl SharedState {
@@ -54,6 +56,8 @@ impl SharedState {
             error: Arc::new(Mutex::new(None)),
             should_close: Arc::new(Mutex::new(false)),
             game_command_tx: Arc::new(Mutex::new(None)),
+            connection_failed: Arc::new(Mutex::new(false)),
+            retry_server_address: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -110,6 +114,22 @@ impl SharedState {
     pub fn clear_game_command_tx(&self) {
         *self.game_command_tx.lock().unwrap() = None;
     }
+
+    pub fn set_connection_failed(&self, failed: bool) {
+        *self.connection_failed.lock().unwrap() = failed;
+    }
+
+    pub fn get_connection_failed(&self) -> bool {
+        *self.connection_failed.lock().unwrap()
+    }
+
+    pub fn set_retry_server_address(&self, address: Option<String>) {
+        *self.retry_server_address.lock().unwrap() = address;
+    }
+
+    pub fn take_retry_server_address(&self) -> Option<String> {
+        self.retry_server_address.lock().unwrap().take()
+    }
 }
 
 impl Clone for SharedState {
@@ -119,6 +139,8 @@ impl Clone for SharedState {
             error: Arc::clone(&self.error),
             should_close: Arc::clone(&self.should_close),
             game_command_tx: Arc::clone(&self.game_command_tx),
+            connection_failed: Arc::clone(&self.connection_failed),
+            retry_server_address: Arc::clone(&self.retry_server_address),
         }
     }
 }

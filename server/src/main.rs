@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     logger::init_logger(prefix);
 
-    let addr = "[::1]:5001".parse()?;
+    let addr = "0.0.0.0:5001".parse()?;
     let tracker = ConnectionTracker::new();
     let lobby_manager = LobbyManager::new();
     let broadcaster = ClientBroadcaster::new();

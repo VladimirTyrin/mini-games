@@ -3,6 +3,7 @@ use common::game_service_client::GameServiceClient;
 use common::{MenuClientMessage, GameClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, log, TurnCommand};
 use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, SharedState, AppState};
+use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
 
 #[derive(Clone)]
 pub struct GrpcLoggingSender<T> {
@@ -25,11 +26,39 @@ where
 
 pub async fn grpc_client_task(
     client_id: String,
-    server_address: String,
+    mut server_address: String,
     shared_state: SharedState,
     mut command_rx: mpsc::UnboundedReceiver<MenuCommand>,
+    config_manager: ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut menu_client = MenuServiceClient::connect(server_address.clone()).await?;
+    loop {
+        let mut menu_client = match MenuServiceClient::connect(server_address.clone()).await {
+            Ok(client) => {
+                let mut config = config_manager.get_config().unwrap_or_default();
+                config.server.address = server_address.clone();
+                let _ = config_manager.set_config(&config);
+                shared_state.set_connection_failed(false);
+                client
+            },
+            Err(e) => {
+                shared_state.set_connection_failed(true);
+                shared_state.set_error(format!("Failed to connect to server at {}: {}", server_address, e));
+
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+                    if let Some(new_address) = shared_state.take_retry_server_address() {
+                        server_address = new_address;
+                        break;
+                    }
+
+                    if shared_state.should_close() {
+                        return Err(e.into());
+                    }
+                }
+                continue;
+            }
+        };
 
     let (tx_raw, rx) = mpsc::channel(128);
     let tx = GrpcLoggingSender::new(tx_raw);
@@ -215,6 +244,9 @@ pub async fn grpc_client_task(
     let _ = tx.send(MenuClientMessage {
         message: Some(common::menu_client_message::Message::Disconnect(DisconnectRequest {})),
     }).await;
+
+    break;
+    }
 
     Ok(())
 }

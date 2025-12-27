@@ -34,7 +34,8 @@ pub struct MenuApp {
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
     window_resized_for_game: bool,
-    config_manager: ClientConfigManager
+    config_manager: ClientConfigManager,
+    server_address_input: String,
 }
 
 impl MenuApp {
@@ -62,7 +63,8 @@ impl MenuApp {
             disconnect_timeout,
             game_ui: None,
             window_resized_for_game: false,
-            config_manager
+            config_manager,
+            server_address_input: String::new(),
         }
     }
 
@@ -322,17 +324,47 @@ impl eframe::App for MenuApp {
         }
 
         if let Some(error) = self.shared_state.get_error() {
-            egui::Window::new("Error")
-                .collapsible(false)
-                .show(ctx, |ui| {
-                    ui.label(&error);
-                    if ui.button("OK").clicked() {
-                        self.shared_state.clear_error();
-                        if self.shared_state.should_close() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            if self.shared_state.get_connection_failed() {
+                egui::Window::new("Connection Failed")
+                    .collapsible(false)
+                    .show(ctx, |ui| {
+                        ui.label(&error);
+                        ui.add_space(10.0);
+                        ui.label("Enter server address:");
+                        ui.text_edit_singleline(&mut self.server_address_input);
+                        ui.add_space(5.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Retry").clicked() {
+                                let address = if self.server_address_input.trim().is_empty() {
+                                    "http://localhost:5001".to_string()
+                                } else {
+                                    self.server_address_input.clone()
+                                };
+
+                                self.shared_state.set_retry_server_address(Some(address));
+                                self.shared_state.clear_error();
+                                self.shared_state.set_connection_failed(false);
+                            }
+
+                            if ui.button("Quit").clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        });
+                    });
+            } else {
+                egui::Window::new("Error")
+                    .collapsible(false)
+                    .show(ctx, |ui| {
+                        ui.label(&error);
+                        if ui.button("OK").clicked() {
+                            self.shared_state.clear_error();
+                            if self.shared_state.should_close() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
-                    }
-                });
+                    });
+            }
         }
 
         if self.create_lobby_dialog {
