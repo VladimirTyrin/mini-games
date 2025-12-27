@@ -188,6 +188,11 @@ impl GameSessionManager {
                         Ok(player_ids) => {
                             log!("Game ended for lobby {}, {} players in lobby", lobby_id, player_ids.len());
 
+                            // TODO: Refactor to avoid race condition between GameOverNotification (sent on game stream)
+                            // and PlayAgainStatusNotification (sent on menu stream). Clients might receive them out of order.
+                            // Consider: sending PlayAgainStatusNotification on game stream, or using a single unified stream.
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+
                             if let Some(lobby_details) = lobby_manager_clone.get_lobby_details(&lobby_id).await {
                                 match lobby_manager_clone.get_play_again_status(&lobby_id).await {
                                     Ok(status) => {
