@@ -258,7 +258,7 @@ async fn game_client_task(
             result = response_stream.message() => {
                 match result {
                     Ok(Some(server_msg)) => {
-                        // log!("Game: Received: {:?}", server_msg);
+                        log!("Game: Received: {:?}", server_msg);
 
                         if let Some(msg) = server_msg.message {
                             match msg {

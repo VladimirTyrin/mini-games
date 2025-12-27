@@ -1,6 +1,4 @@
-
-
-pub(crate) use common::config::{ConfigContentProvider, ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
+pub(crate) use common::config::{ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
 use common::WallCollisionMode;
 use serde::{Deserialize, Serialize};
 
@@ -90,7 +88,7 @@ impl Default for Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::config::{ConfigSerializer, YamlConfigSerializer};
+    use common::config::{ConfigContentProvider, ConfigSerializer, YamlConfigSerializer};
     use common::id_generator::generate_client_id;
 
     fn get_temp_file_path() -> String {

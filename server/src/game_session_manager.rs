@@ -13,10 +13,20 @@ pub struct GameSessionManager {
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
 }
 
-#[derive(Debug)]
 struct GameSession {
     state: Arc<Mutex<GameState>>,
-    tick: Arc<Mutex<u64>>
+    tick: Arc<Mutex<u64>>,
+    shutdown_tx: mpsc::Sender<()>,
+}
+
+impl std::fmt::Debug for GameSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GameSession")
+            .field("state", &self.state)
+            .field("tick", &self.tick)
+            .field("shutdown_tx", &"<Sender>")
+            .finish()
+    }
 }
 
 impl GameSessionManager {
@@ -60,7 +70,7 @@ impl GameSessionManager {
 
         let state = Arc::new(Mutex::new(game_state));
         let tick = Arc::new(Mutex::new(0u64));
-        let (_, mut state_broadcast_rx) = mpsc::channel::<()>(1);
+        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
         let state_clone = state.clone();
         let tick_clone = tick.clone();
@@ -81,18 +91,18 @@ impl GameSessionManager {
                         drop(state);
                         drop(tick_value);
                     }
-                    _ = state_broadcast_rx.recv() => {
+                    _ = shutdown_rx.recv() => {
+                        log!("Game loop shutting down for session: {}", session_id_clone);
                         break;
                     }
                 }
             }
-
-            log!("Game loop ended for session: {}", session_id_clone);
         });
 
         let session = GameSession {
             state,
-            tick
+            tick,
+            shutdown_tx,
         };
 
         sessions.insert(session_id.clone(), session);
@@ -139,7 +149,11 @@ impl GameSessionManager {
 
     pub async fn remove_session(&self, session_id: &SessionId) {
         let mut sessions = self.sessions.lock().await;
-        sessions.remove(session_id);
+
+        if let Some(session) = sessions.remove(session_id) {
+            let _ = session.shutdown_tx.send(()).await;
+        }
+
         drop(sessions);
 
         let mut mapping = self.client_to_session.lock().await;

@@ -1,0 +1,9 @@
+server:
+  address: http://[::1]:5001
+  disconnect_timeout_ms: 200
+lobby:
+  max_players: 4
+  field_width: 15
+  field_height: 15
+  wall_collision_mode: WrapAround
+client_id: null
