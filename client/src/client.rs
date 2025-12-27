@@ -278,10 +278,14 @@ async fn game_client_task(
                                         _ => None,
                                     };
 
+                                    let reason = common::GameEndReason::try_from(game_over.reason)
+                                        .unwrap_or(common::GameEndReason::Unspecified);
+
                                     shared_state.set_state(AppState::GameOver {
                                         scores: game_over.scores,
                                         winner_id: game_over.winner_id,
                                         last_game_state,
+                                        reason,
                                     });
                                     break;
                                 }

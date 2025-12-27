@@ -1,24 +1,22 @@
 use tonic::{Request, Response, Status};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tokio::time::{interval, Duration};
 use common::{
     game_service_server::GameService,
-    GameClientMessage, GameServerMessage, GameStateUpdate, GameOverNotification,
-    ScoreEntry, Position, ErrorResponse,
-    ClientId, LobbyId,
+    GameClientMessage, GameServerMessage, ErrorResponse,
+    ClientId,
     log,
 };
 use crate::connection_tracker::ConnectionTracker;
 use crate::game_session_manager::{GameSessionManager, SessionId};
-use crate::game::Direction as GameDirection;
-use crate::lobby_manager::LobbyManager;
+use crate::game::{Direction as GameDirection, DeathReason};
+use crate::game_broadcaster::GameBroadcaster;
 
 #[derive(Clone, Debug)]
 struct GameServiceDependencies {
     tracker: ConnectionTracker,
     session_manager: GameSessionManager,
-    lobby_manager: LobbyManager,
+    broadcaster: GameBroadcaster,
 }
 
 #[derive(Debug)]
@@ -27,12 +25,12 @@ pub struct GameServiceImpl {
 }
 
 impl GameServiceImpl {
-    pub fn new(tracker: ConnectionTracker, session_manager: GameSessionManager, lobby_manager: LobbyManager) -> Self {
+    pub fn new(tracker: ConnectionTracker, session_manager: GameSessionManager, broadcaster: GameBroadcaster) -> Self {
         Self {
             dependencies: GameServiceDependencies {
                 tracker,
                 session_manager,
-                lobby_manager,
+                broadcaster,
             }
         }
     }
@@ -61,102 +59,13 @@ impl GameServiceImpl {
     async fn handle_connect_message(
         dependencies: &GameServiceDependencies,
         client_id: &ClientId,
-        tx: &tokio::sync::mpsc::Sender<Result<GameServerMessage, Status>>,
+        tx: tokio::sync::mpsc::Sender<Result<GameServerMessage, Status>>,
     ) -> Option<SessionId> {
         if dependencies.tracker.add_game_client(client_id).await {
             if let Some(found_session_id) = dependencies.session_manager.get_session_for_client(client_id).await {
                 log!("Game client connected: {} to session {}", client_id, found_session_id);
 
-                let tx_clone = tx.clone();
-                let session_id_clone = found_session_id.clone();
-                let session_manager = dependencies.session_manager.clone();
-                let lobby_manager = dependencies.lobby_manager.clone();
-
-                tokio::spawn(async move {
-                    let mut broadcast_interval = interval(Duration::from_millis(100));
-
-                    loop {
-                        broadcast_interval.tick().await;
-
-                        if let Some((state, tick)) = session_manager.get_state(&session_id_clone).await {
-                            let mut snakes = vec![];
-                            for (id, snake) in &state.snakes {
-                                let segments = snake.body.iter().map(|p| Position {
-                                    x: p.x as i32,
-                                    y: p.y as i32,
-                                }).collect();
-
-                                snakes.push(common::Snake {
-                                    client_id: id.to_string(),
-                                    segments,
-                                    alive: snake.alive,
-                                    score: snake.score,
-                                });
-                            }
-
-                            let food: Vec<Position> = state.food_set.iter().map(|p| Position {
-                                x: p.x as i32,
-                                y: p.y as i32,
-                            }).collect();
-
-                            let game_state_msg = GameServerMessage {
-                                message: Some(common::game_server_message::Message::State(
-                                    GameStateUpdate {
-                                        tick,
-                                        snakes,
-                                        food,
-                                        field_width: state.field_size.width as u32,
-                                        field_height: state.field_size.height as u32,
-                                    }
-                                )),
-                            };
-
-                            if tx_clone.send(Ok(game_state_msg)).await.is_err() {
-                                break;
-                            }
-
-                            if session_manager.is_game_over(&session_id_clone).await {
-                                let scores: Vec<ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
-                                    ScoreEntry {
-                                        client_id: id.to_string(),
-                                        score: snake.score,
-                                    }
-                                }).collect();
-
-                                let winner_id = scores.iter()
-                                    .max_by_key(|s| s.score)
-                                    .map(|s| s.client_id.clone())
-                                    .unwrap_or_default();
-
-                                let game_over_msg = GameServerMessage {
-                                    message: Some(common::game_server_message::Message::GameOver(
-                                        GameOverNotification {
-                                            scores,
-                                            winner_id,
-                                        }
-                                    )),
-                                };
-
-                                let _ = tx_clone.send(Ok(game_over_msg)).await;
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-
-                    session_manager.remove_session(&session_id_clone).await;
-
-                    let lobby_id = LobbyId::new(session_id_clone.clone());
-                    match lobby_manager.end_game(&lobby_id).await {
-                        Ok(player_ids) => {
-                            log!("Game ended for lobby {}, removed {} players from lobby", lobby_id, player_ids.len());
-                        }
-                        Err(e) => {
-                            log!("Failed to end game for lobby {}: {}", lobby_id, e);
-                        }
-                    }
-                });
+                dependencies.broadcaster.register(found_session_id.clone(), client_id.clone(), tx).await;
 
                 Some(found_session_id)
             } else {
@@ -213,7 +122,7 @@ impl GameService for GameServiceImpl {
                                     }
 
                                     let new_client_id = ClientId::new(req.client_id);
-                                    if let Some(sess_id) = Self::handle_connect_message(&dependencies, &new_client_id, &tx).await {
+                                    if let Some(sess_id) = Self::handle_connect_message(&dependencies, &new_client_id, tx.clone()).await {
                                         client_id = Some(new_client_id);
                                         session_id = Some(sess_id);
                                     } else {
@@ -222,6 +131,10 @@ impl GameService for GameServiceImpl {
                                 }
                                 common::game_client_message::Message::Disconnect(_) => {
                                     if let Some(id) = &client_id {
+                                        if let Some(sess_id) = &session_id {
+                                            let _ = dependencies.session_manager.kill_snake(sess_id, id, DeathReason::PlayerDisconnected).await;
+                                            dependencies.broadcaster.unregister(sess_id, id).await;
+                                        }
                                         dependencies.tracker.remove_game_client(id).await;
                                         log!("Game client disconnected: {}", id);
                                         client_id = None;
@@ -250,8 +163,12 @@ impl GameService for GameServiceImpl {
             }
 
             if let Some(id) = client_id {
+                if let Some(sess_id) = session_id {
+                    let _ = dependencies.session_manager.kill_snake(&sess_id, &id, DeathReason::PlayerDisconnected).await;
+                    dependencies.broadcaster.unregister(&sess_id, &id).await;
+                    log!("Game client disconnected (stream ended): {} - snake marked as dead", id);
+                }
                 dependencies.tracker.remove_game_client(&id).await;
-                log!("Game client disconnected (stream ended): {}", id);
             }
         });
 

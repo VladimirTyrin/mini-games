@@ -3,8 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, mpsc};
 use tokio::time::interval;
-use common::{ClientId, log};
-use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point};
+use common::{ClientId, LobbyId, log, GameServerMessage, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
+use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point, DeathReason};
+use crate::game_broadcaster::GameBroadcaster;
+use crate::lobby_manager::LobbyManager;
 
 pub type SessionId = String;
 
@@ -12,6 +14,8 @@ pub type SessionId = String;
 pub struct GameSessionManager {
     sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
+    broadcaster: GameBroadcaster,
+    lobby_manager: LobbyManager,
 }
 
 struct GameSession {
@@ -31,10 +35,12 @@ impl std::fmt::Debug for GameSession {
 }
 
 impl GameSessionManager {
-    pub fn new() -> Self {
+    pub fn new(broadcaster: GameBroadcaster, lobby_manager: LobbyManager) -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             client_to_session: Arc::new(Mutex::new(HashMap::new())),
+            broadcaster,
+            lobby_manager,
         }
     }
 
@@ -77,6 +83,8 @@ impl GameSessionManager {
         let state_clone = state.clone();
         let tick_clone = tick.clone();
         let session_id_clone = session_id.clone();
+        let broadcaster_clone = self.broadcaster.clone();
+        let lobby_manager_clone = self.lobby_manager.clone();
 
         let _ = tokio::spawn(async move {
             let mut tick_interval_timer = interval(tick_interval);
@@ -89,6 +97,90 @@ impl GameSessionManager {
 
                         let mut tick_value = tick_clone.lock().await;
                         *tick_value += 1;
+
+                        let mut snakes = vec![];
+                        for (id, snake) in &state.snakes {
+                            let segments = snake.body.iter().map(|p| Position {
+                                x: p.x as i32,
+                                y: p.y as i32,
+                            }).collect();
+
+                            snakes.push(common::Snake {
+                                client_id: id.to_string(),
+                                segments,
+                                alive: snake.is_alive(),
+                                score: snake.score,
+                            });
+                        }
+
+                        let food: Vec<Position> = state.food_set.iter().map(|p| Position {
+                            x: p.x as i32,
+                            y: p.y as i32,
+                        }).collect();
+
+                        let game_state_msg = GameServerMessage {
+                            message: Some(common::game_server_message::Message::State(
+                                GameStateUpdate {
+                                    tick: *tick_value,
+                                    snakes,
+                                    food,
+                                    field_width: state.field_size.width as u32,
+                                    field_height: state.field_size.height as u32,
+                                }
+                            )),
+                        };
+
+                        broadcaster_clone.broadcast_to_session(&session_id_clone, game_state_msg).await;
+
+                        let alive_count = state.snakes.values().filter(|s| s.is_alive()).count();
+                        if alive_count <= 1 {
+                            let scores: Vec<ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
+                                ScoreEntry {
+                                    client_id: id.to_string(),
+                                    score: snake.score,
+                                }
+                            }).collect();
+
+                            let winner_id = state.snakes.iter()
+                                .find(|(_, snake)| snake.is_alive())
+                                .map(|(id, _)| id.to_string())
+                                .unwrap_or_default();
+
+                            let game_end_reason = state.game_end_reason
+                                .map(|r| match r {
+                                    DeathReason::WallCollision => GameEndReason::WallCollision as i32,
+                                    DeathReason::SelfCollision => GameEndReason::SelfCollision as i32,
+                                    DeathReason::OtherSnakeCollision => GameEndReason::SnakeCollision as i32,
+                                    DeathReason::PlayerDisconnected => GameEndReason::PlayerDisconnected as i32,
+                                })
+                                .unwrap_or(GameEndReason::GameCompleted as i32);
+
+                            let game_over_msg = GameServerMessage {
+                                message: Some(common::game_server_message::Message::GameOver(
+                                    GameOverNotification {
+                                        scores,
+                                        winner_id,
+                                        reason: game_end_reason,
+                                    }
+                                )),
+                            };
+
+                            broadcaster_clone.broadcast_to_session(&session_id_clone, game_over_msg).await;
+
+                            drop(state);
+                            drop(tick_value);
+
+                            let lobby_id = LobbyId::new(session_id_clone.clone());
+                            match lobby_manager_clone.end_game(&lobby_id).await {
+                                Ok(player_ids) => {
+                                    log!("Game ended for lobby {}, removed {} players from lobby", lobby_id, player_ids.len());
+                                }
+                                Err(e) => {
+                                    log!("Failed to end game for lobby {}: {}", lobby_id, e);
+                                }
+                            }
+                            break;
+                        }
 
                         drop(state);
                         drop(tick_value);
@@ -137,16 +229,21 @@ impl GameSessionManager {
         Ok(())
     }
 
-    pub async fn get_state(&self, session_id: &SessionId) -> Option<(GameState, u64)> {
+    pub async fn kill_snake(
+        &self,
+        session_id: &SessionId,
+        client_id: &ClientId,
+        reason: crate::game::DeathReason,
+    ) -> Result<(), String> {
         let sessions = self.sessions.lock().await;
 
-        if let Some(session) = sessions.get(session_id) {
-            let state = session.state.lock().await;
-            let tick = session.tick.lock().await;
-            Some((state.clone(), *tick))
-        } else {
-            None
-        }
+        let session = sessions.get(session_id)
+            .ok_or_else(|| "Session not found".to_string())?;
+
+        let mut state = session.state.lock().await;
+        state.kill_snake(client_id, reason);
+
+        Ok(())
     }
 
     pub async fn remove_session(&self, session_id: &SessionId) {
@@ -162,18 +259,6 @@ impl GameSessionManager {
         mapping.retain(|_, sid| sid != session_id);
 
         log!("Game session removed: {}", session_id);
-    }
-
-    pub async fn is_game_over(&self, session_id: &SessionId) -> bool {
-        let sessions = self.sessions.lock().await;
-
-        if let Some(session) = sessions.get(session_id) {
-            let state = session.state.lock().await;
-            let alive_count = state.snakes.values().filter(|s| s.alive).count();
-            alive_count <= 1
-        } else {
-            true
-        }
     }
 
     fn calculate_start_position(index: usize, total: usize, width: usize, height: usize) -> Point {
@@ -204,6 +289,8 @@ impl Clone for GameSessionManager {
         Self {
             sessions: self.sessions.clone(),
             client_to_session: self.client_to_session.clone(),
+            broadcaster: self.broadcaster.clone(),
+            lobby_manager: self.lobby_manager.clone(),
         }
     }
 }

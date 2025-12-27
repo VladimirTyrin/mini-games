@@ -9,6 +9,16 @@ use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
 
+fn parse_u32_input(input: &str, field_name: &str, shared_state: &SharedState) -> Option<u32> {
+    match input.parse::<u32>() {
+        Ok(value) => Some(value),
+        Err(_) => {
+            shared_state.set_error(format!("{} must be a number", field_name));
+            None
+        }
+    }
+}
+
 pub struct MenuApp {
     client_id: String,
     shared_state: SharedState,
@@ -19,6 +29,7 @@ pub struct MenuApp {
     field_width_input: String,
     field_height_input: String,
     tick_interval_input: String,
+    wall_collision_mode: WallCollisionMode,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -46,6 +57,7 @@ impl MenuApp {
             field_width_input: config.lobby.field_width.to_string(),
             field_height_input: config.lobby.field_height.to_string(),
             tick_interval_input: config.lobby.tick_interval_ms.to_string(),
+            wall_collision_mode: config.lobby.wall_collision_mode,
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -148,45 +160,35 @@ impl MenuApp {
                 ui.label("Tick Interval (ms):");
                 ui.text_edit_singleline(&mut self.tick_interval_input);
 
+                ui.label("Wall Collision Mode:");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::WrapAround, "Wrap Around");
+                    ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::Death, "Death");
+                });
+
                 ui.horizontal(|ui| {
                     if ui.button("Create").clicked() {
-                        let field_width = match self.field_width_input.parse::<u32>() {
-                            Ok(width) => width,
-                            _ => {
-                                self.shared_state.set_error("Field width must be a number".to_string());
-                                return;
-                            }
+                        let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
+                            return;
                         };
 
-                        let field_height = match self.field_height_input.parse::<u32>() {
-                            Ok(height) => height,
-                            _ => {
-                                self.shared_state.set_error("Field height must be a number".to_string());
-                                return;
-                            }
+                        let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
+                            return;
                         };
 
-                        let max_players = match self.max_players_input.parse::<u32>() {
-                            Ok(max) => max,
-                            _ => {
-                                self.shared_state.set_error("Max players must be a number".to_string());
-                                return;
-                            }
+                        let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
+                            return;
                         };
 
-                        let tick_interval_ms = match self.tick_interval_input.parse::<u32>() {
-                            Ok(tick) => tick,
-                            _ => {
-                                self.shared_state.set_error("Tick interval must be a number".to_string());
-                                return;
-                            }
+                        let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
+                            return;
                         };
 
                         let lobby_config = LobbyConfig {
                             max_players,
                             field_width,
                             field_height,
-                            wall_collision_mode: WallCollisionMode::WrapAround,
+                            wall_collision_mode: self.wall_collision_mode,
                             tick_interval_ms,
                         };
 
@@ -372,12 +374,12 @@ impl eframe::App for MenuApp {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id);
                     }
                 }
-                AppState::GameOver { scores, winner_id, last_game_state } => {
+                AppState::GameOver { scores, winner_id, last_game_state, reason } => {
                     if self.game_ui.is_none() {
                         self.game_ui = Some(GameUi::new(self.shared_state.clone()));
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &self.menu_command_tx);
+                        game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &reason, &self.menu_command_tx);
                     }
                 }
             }

@@ -3,6 +3,7 @@ mod menu_service;
 mod game_service;
 mod lobby_manager;
 mod broadcaster;
+mod game_broadcaster;
 mod game;
 mod game_session_manager;
 
@@ -21,6 +22,7 @@ use menu_service::MenuServiceImpl;
 use game_service::GameServiceImpl;
 use lobby_manager::LobbyManager;
 use broadcaster::ClientBroadcaster;
+use game_broadcaster::GameBroadcaster;
 use game_session_manager::GameSessionManager;
 
 #[derive(Parser)]
@@ -45,10 +47,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tracker = ConnectionTracker::new();
     let lobby_manager = LobbyManager::new();
     let broadcaster = ClientBroadcaster::new();
-    let session_manager = GameSessionManager::new();
+    let game_broadcaster = GameBroadcaster::new();
+    let session_manager = GameSessionManager::new(game_broadcaster.clone(), lobby_manager.clone());
 
     let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
-    let game_service = GameServiceImpl::new(tracker, session_manager, lobby_manager);
+    let game_service = GameServiceImpl::new(tracker, session_manager, game_broadcaster);
 
     log!("Snake Game Server listening on {}", addr);
 

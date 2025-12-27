@@ -36,6 +36,7 @@ pub enum AppState {
         scores: Vec<ScoreEntry>,
         winner_id: String,
         last_game_state: Option<GameStateUpdate>,
+        reason: common::GameEndReason,
     },
 }
 

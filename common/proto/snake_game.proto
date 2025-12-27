@@ -196,9 +196,19 @@ message Position {
 message GameOverNotification {
     repeated ScoreEntry scores = 1;
     string winner_id = 2;
+    GameEndReason reason = 3;
 }
 
 message ScoreEntry {
     string client_id = 1;
     uint32 score = 2;
+}
+
+enum GameEndReason {
+    GAME_END_REASON_UNSPECIFIED = 0;
+    GAME_END_REASON_WALL_COLLISION = 1;
+    GAME_END_REASON_SELF_COLLISION = 2;
+    GAME_END_REASON_SNAKE_COLLISION = 3;
+    GAME_END_REASON_PLAYER_DISCONNECTED = 4;
+    GAME_END_REASON_GAME_COMPLETED = 5;
 }

@@ -85,83 +85,7 @@ impl GameUi {
                 ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
             let rect = response.rect;
-            let background_color = egui::Color32::from_rgb(0x88, 0xFF, 0x88);
-            painter.rect_filled(rect, 0.0, background_color);
-
-            for food in &state.food {
-                self.render_sprite_at(
-                    &painter,
-                    ctx,
-                    &self.sprites.get_apple_sprite(),
-                    food.x,
-                    food.y,
-                    rect.min,
-                    pixels_per_cell,
-                    "apple",
-                    Color { r: 255, g: 255, b: 255 },
-                );
-            }
-
-            for snake in &state.snakes {
-                if !snake.alive {
-                    continue;
-                }
-
-                let segments = &snake.segments;
-                if segments.is_empty() {
-                    continue;
-                }
-
-                let color = generate_color_from_client_id(&snake.client_id);
-
-                for (i, segment) in segments.iter().enumerate() {
-                    let sprite_name = format!("snake_{}_seg_{}", snake.client_id, i);
-
-                    let sprite = if i == 0 {
-                        let direction = if segments.len() > 1 {
-                            Self::get_direction(&segments[1], &segments[0], field_width, field_height)
-                        } else {
-                            Direction::Up
-                        };
-                        self.sprites.get_head_sprite(direction)
-                    } else if i == segments.len() - 1 {
-                        let prev = &segments[i - 1];
-                        self.sprites.get_tail_sprite(
-                            prev.x,
-                            prev.y,
-                            segment.x,
-                            segment.y,
-                            field_width,
-                            field_height,
-                        )
-                    } else {
-                        let prev = &segments[i - 1];
-                        let next = &segments[i + 1];
-                        self.sprites.get_body_sprite(
-                            prev.x,
-                            prev.y,
-                            segment.x,
-                            segment.y,
-                            next.x,
-                            next.y,
-                            field_width,
-                            field_height,
-                        )
-                    };
-
-                    self.render_sprite_at(
-                        &painter,
-                        ctx,
-                        sprite,
-                        segment.x,
-                        segment.y,
-                        rect.min,
-                        pixels_per_cell,
-                        &sprite_name,
-                        color,
-                    );
-                }
-            }
+            self.render_game_field(&painter, ctx, rect, state, false);
 
             ui.separator();
             ui.heading("Scores:");
@@ -188,6 +112,7 @@ impl GameUi {
         winner_id: &str,
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
+        reason: &common::GameEndReason,
         menu_command_tx: &mpsc::UnboundedSender<MenuCommand>,
     ) {
         if let Some(state) = last_game_state {
@@ -205,83 +130,7 @@ impl GameUi {
                 ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
             let rect = response.rect;
-            let background_color = egui::Color32::from_rgb(0x88, 0xFF, 0x88);
-            painter.rect_filled(rect, 0.0, background_color);
-
-            for food in &state.food {
-                self.render_sprite_at(
-                    &painter,
-                    ctx,
-                    &self.sprites.get_apple_sprite(),
-                    food.x,
-                    food.y,
-                    rect.min,
-                    pixels_per_cell,
-                    "apple",
-                    Color { r: 255, g: 255, b: 255 },
-                );
-            }
-
-            for snake in &state.snakes {
-                let segments = &snake.segments;
-                if segments.is_empty() {
-                    continue;
-                }
-
-                let color = if snake.alive {
-                    generate_color_from_client_id(&snake.client_id)
-                } else {
-                    Color { r: 128, g: 128, b: 128 }
-                };
-
-                for (i, segment) in segments.iter().enumerate() {
-                    let sprite_name = format!("snake_{}_seg_{}_final", snake.client_id, i);
-
-                    let sprite = if i == 0 {
-                        let direction = if segments.len() > 1 {
-                            Self::get_direction(&segments[1], &segments[0], field_width, field_height)
-                        } else {
-                            Direction::Up
-                        };
-                        self.sprites.get_head_sprite(direction)
-                    } else if i == segments.len() - 1 {
-                        let prev = &segments[i - 1];
-                        self.sprites.get_tail_sprite(
-                            prev.x,
-                            prev.y,
-                            segment.x,
-                            segment.y,
-                            field_width,
-                            field_height,
-                        )
-                    } else {
-                        let prev = &segments[i - 1];
-                        let next = &segments[i + 1];
-                        self.sprites.get_body_sprite(
-                            prev.x,
-                            prev.y,
-                            segment.x,
-                            segment.y,
-                            next.x,
-                            next.y,
-                            field_width,
-                            field_height,
-                        )
-                    };
-
-                    self.render_sprite_at(
-                        &painter,
-                        ctx,
-                        sprite,
-                        segment.x,
-                        segment.y,
-                        rect.min,
-                        pixels_per_cell,
-                        &sprite_name,
-                        color,
-                    );
-                }
-            }
+            self.render_game_field(&painter, ctx, rect, state, true);
 
             let overlay_color = egui::Color32::from_black_alpha(200);
             painter.rect_filled(rect, 0.0, overlay_color);
@@ -317,6 +166,17 @@ impl GameUi {
                         ui.label(egui::RichText::new("🎉 Congratulations! You won! 🎉").size(16.0).color(egui::Color32::from_rgb(255, 215, 0)));
                     }
 
+                    ui.add_space(5.0);
+                    let reason_text = match reason {
+                        common::GameEndReason::WallCollision => "💥 Game ended: Wall collision",
+                        common::GameEndReason::SelfCollision => "🐍 Game ended: Self collision",
+                        common::GameEndReason::SnakeCollision => "💥 Game ended: Snake collision",
+                        common::GameEndReason::PlayerDisconnected => "📡 Game ended: Player disconnected",
+                        common::GameEndReason::GameCompleted => "✅ Game completed",
+                        _ => "Game ended",
+                    };
+                    ui.label(egui::RichText::new(reason_text).size(14.0).color(egui::Color32::from_rgb(200, 200, 200)));
+
                     ui.add_space(10.0);
                     ui.separator();
                     ui.add_space(5.0);
@@ -329,24 +189,25 @@ impl GameUi {
 
                     for (rank, entry) in sorted_scores.iter().enumerate() {
                         let is_you = entry.client_id == client_id;
+                        let is_winner = &entry.client_id == winner_id;
                         let you_marker = if is_you { " (You)" } else { "" };
-                        let medal = match rank {
-                            0 => "🥇",
-                            1 => "🥈",
-                            2 => "🥉",
-                            _ => "  ",
+                        let text_color = if is_winner {
+                            egui::Color32::from_rgb(255, 215, 0)
+                        } else if is_you {
+                            egui::Color32::from_rgb(255, 255, 100)
+                        } else {
+                            egui::Color32::WHITE
                         };
                         ui.label(
                             egui::RichText::new(format!(
-                                "{} {}. {}{}: {} points",
-                                medal,
+                                "{}. {}{}: {} points",
                                 rank + 1,
                                 entry.client_id,
                                 you_marker,
                                 entry.score
                             ))
                             .size(14.0)
-                            .color(if is_you { egui::Color32::from_rgb(255, 255, 100) } else { egui::Color32::WHITE })
+                            .color(text_color)
                         );
                     }
 
@@ -454,6 +315,105 @@ impl GameUi {
             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
             egui::Color32::from_rgb(tint.r, tint.g, tint.b),
         );
+    }
+
+    fn render_game_field(
+        &mut self,
+        painter: &egui::Painter,
+        ctx: &egui::Context,
+        rect: egui::Rect,
+        state: &GameStateUpdate,
+        show_dead_snakes: bool,
+    ) {
+        let field_width = state.field_width;
+        let field_height = state.field_height;
+        let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
+
+        let background_color = egui::Color32::from_rgb(0x88, 0xFF, 0x88);
+        painter.rect_filled(rect, 0.0, background_color);
+
+        for food in &state.food {
+            self.render_sprite_at(
+                painter,
+                ctx,
+                &self.sprites.get_apple_sprite(),
+                food.x,
+                food.y,
+                rect.min,
+                pixels_per_cell,
+                "apple",
+                Color { r: 255, g: 255, b: 255 },
+            );
+        }
+
+        for snake in &state.snakes {
+            if !show_dead_snakes && !snake.alive {
+                continue;
+            }
+
+            let segments = &snake.segments;
+            if segments.is_empty() {
+                continue;
+            }
+
+            let color = if snake.alive {
+                generate_color_from_client_id(&snake.client_id)
+            } else {
+                Color { r: 128, g: 128, b: 128 }
+            };
+
+            for (i, segment) in segments.iter().enumerate() {
+                let sprite_name = if show_dead_snakes {
+                    format!("snake_{}_seg_{}_final", snake.client_id, i)
+                } else {
+                    format!("snake_{}_seg_{}", snake.client_id, i)
+                };
+
+                let sprite = if i == 0 {
+                    let direction = if segments.len() > 1 {
+                        Self::get_direction(&segments[1], &segments[0], field_width, field_height)
+                    } else {
+                        Direction::Up
+                    };
+                    self.sprites.get_head_sprite(direction)
+                } else if i == segments.len() - 1 {
+                    let prev = &segments[i - 1];
+                    self.sprites.get_tail_sprite(
+                        prev.x,
+                        prev.y,
+                        segment.x,
+                        segment.y,
+                        field_width,
+                        field_height,
+                    )
+                } else {
+                    let prev = &segments[i - 1];
+                    let next = &segments[i + 1];
+                    self.sprites.get_body_sprite(
+                        prev.x,
+                        prev.y,
+                        segment.x,
+                        segment.y,
+                        next.x,
+                        next.y,
+                        field_width,
+                        field_height,
+                    )
+                };
+
+                self.render_sprite_at(
+                    painter,
+                    ctx,
+                    sprite,
+                    segment.x,
+                    segment.y,
+                    rect.min,
+                    pixels_per_cell,
+                    &sprite_name,
+                    color,
+                );
+            }
+        }
     }
 
     fn get_direction(from: &Position, to: &Position, field_width: u32, field_height: u32) -> Direction {

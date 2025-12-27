@@ -28,6 +28,14 @@ pub enum WallCollisionMode {
     WrapAround,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeathReason {
+    WallCollision,
+    SelfCollision,
+    OtherSnakeCollision,
+    PlayerDisconnected,
+}
+
 impl Direction {
     pub fn is_opposite(&self, other: &Direction) -> bool {
         matches!(
@@ -46,7 +54,7 @@ pub struct Snake {
     pub body_set: HashSet<Point>,
     pub direction: Direction,
     pub pending_direction: Option<Direction>,
-    pub alive: bool,
+    pub death_reason: Option<DeathReason>,
     pub score: u32,
 }
 
@@ -88,9 +96,13 @@ impl Snake {
             body_set,
             direction,
             pending_direction: None,
-            alive: true,
+            death_reason: None,
             score: 0,
         }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.death_reason.is_none()
     }
 
     pub fn head(&self) -> Point {
@@ -116,6 +128,7 @@ pub struct GameState {
     pub wall_collision_mode: WallCollisionMode,
     pub max_food_count: usize,
     pub food_spawn_probability: f32,
+    pub game_end_reason: Option<DeathReason>,
 }
 
 impl GameState {
@@ -127,6 +140,7 @@ impl GameState {
             wall_collision_mode,
             max_food_count: 1,
             food_spawn_probability: 1f32,
+            game_end_reason: None,
         }
     }
 
@@ -151,9 +165,18 @@ impl GameState {
         self.snakes.insert(client_id, snake);
     }
 
+    pub fn kill_snake(&mut self, client_id: &ClientId, reason: DeathReason) {
+        if let Some(snake) = self.snakes.get_mut(client_id) {
+            if snake.is_alive() {
+                snake.death_reason = Some(reason);
+                self.game_end_reason = Some(reason);
+            }
+        }
+    }
+
     pub fn set_snake_direction(&mut self, client_id: &ClientId, direction: Direction) {
         if let Some(snake) = self.snakes.get_mut(client_id) {
-            if snake.alive && !direction.is_opposite(&snake.direction) {
+            if snake.is_alive() && !direction.is_opposite(&snake.direction) {
                 snake.pending_direction = Some(direction);
             }
         }
@@ -163,7 +186,7 @@ impl GameState {
         self.try_spawn_food();
 
         for snake in self.snakes.values_mut() {
-            if !snake.alive {
+            if !snake.is_alive() {
                 continue;
             }
 
@@ -177,21 +200,22 @@ impl GameState {
 
         for client_id in client_ids {
             let snake = self.snakes.get_mut(&client_id).unwrap();
-            if !snake.alive {
+            if !snake.is_alive() {
                 continue;
             }
 
             match self.try_move_snake_for_client(&client_id) {
                 Ok(_) => {},
-                Err(_) => {
+                Err(reason) => {
                     let snake = self.snakes.get_mut(&client_id).unwrap();
-                    snake.alive = false;
+                    snake.death_reason = Some(reason);
+                    self.game_end_reason = Some(reason);
                 }
             }
         }
     }
 
-    fn try_move_snake_for_client(&mut self, client_id: &ClientId) -> Result<(), String> {
+    fn try_move_snake_for_client(&mut self, client_id: &ClientId) -> Result<(), DeathReason> {
         let next_head = {
             let snake = self.snakes.get(client_id).unwrap();
             self.calculate_next_head_position_for_client(client_id, snake)?
@@ -213,7 +237,7 @@ impl GameState {
         Ok(())
     }
 
-    fn calculate_next_head_position_for_client(&self, _client_id: &ClientId, snake: &Snake) -> Result<Point, String> {
+    fn calculate_next_head_position_for_client(&self, _client_id: &ClientId, snake: &Snake) -> Result<Point, DeathReason> {
         let head = snake.head();
         let direction = &snake.direction;
 
@@ -222,25 +246,25 @@ impl GameState {
                 match direction {
                     Direction::Up => {
                         if head.y == 0 {
-                            return Err("Wall collision".to_string());
+                            return Err(DeathReason::WallCollision);
                         }
                         Point::new(head.x, head.y - 1)
                     }
                     Direction::Down => {
                         if head.y >= self.field_size.height - 1 {
-                            return Err("Wall collision".to_string());
+                            return Err(DeathReason::WallCollision);
                         }
                         Point::new(head.x, head.y + 1)
                     }
                     Direction::Left => {
                         if head.x == 0 {
-                            return Err("Wall collision".to_string());
+                            return Err(DeathReason::WallCollision);
                         }
                         Point::new(head.x - 1, head.y)
                     }
                     Direction::Right => {
                         if head.x >= self.field_size.width - 1 {
-                            return Err("Wall collision".to_string());
+                            return Err(DeathReason::WallCollision);
                         }
                         Point::new(head.x + 1, head.y)
                     }
@@ -257,16 +281,16 @@ impl GameState {
         };
 
         if snake.body_set.contains(&next_head) && next_head != snake.tail() {
-            return Err("Self collision".to_string());
+            return Err(DeathReason::SelfCollision);
         }
 
         for (_other_id, other_snake) in &self.snakes {
-            if !other_snake.alive {
+            if !other_snake.is_alive() {
                 continue;
             }
 
             if other_snake.body_set.contains(&next_head) {
-                return Err("Collision with another snake".to_string());
+                return Err(DeathReason::OtherSnakeCollision);
             }
         }
 
