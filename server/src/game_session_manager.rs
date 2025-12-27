@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
-use common::{ClientId, LobbyId, log, GameServerMessage, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
+use common::{ClientId, LobbyId, log, GameServerMessage, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason, MenuServerMessage};
 use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point, DeathReason};
 use crate::game_broadcaster::GameBroadcaster;
 use crate::lobby_manager::LobbyManager;
+use crate::broadcaster::ClientBroadcaster;
 
 pub type SessionId = String;
 
@@ -15,6 +16,7 @@ pub struct GameSessionManager {
     sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
     broadcaster: GameBroadcaster,
+    menu_broadcaster: ClientBroadcaster,
     lobby_manager: LobbyManager,
 }
 
@@ -33,11 +35,12 @@ impl std::fmt::Debug for GameSession {
 }
 
 impl GameSessionManager {
-    pub fn new(broadcaster: GameBroadcaster, lobby_manager: LobbyManager) -> Self {
+    pub fn new(broadcaster: GameBroadcaster, menu_broadcaster: ClientBroadcaster, lobby_manager: LobbyManager) -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             client_to_session: Arc::new(Mutex::new(HashMap::new())),
             broadcaster,
+            menu_broadcaster,
             lobby_manager,
         }
     }
@@ -81,6 +84,7 @@ impl GameSessionManager {
         let tick_clone = tick.clone();
         let session_id_clone = session_id.clone();
         let broadcaster_clone = self.broadcaster.clone();
+        let menu_broadcaster_clone = self.menu_broadcaster.clone();
         let lobby_manager_clone = self.lobby_manager.clone();
 
         let _ = tokio::spawn(async move {
@@ -170,7 +174,43 @@ impl GameSessionManager {
                     let lobby_id = LobbyId::new(session_id_clone.clone());
                     match lobby_manager_clone.end_game(&lobby_id).await {
                         Ok(player_ids) => {
-                            log!("Game ended for lobby {}, removed {} players from lobby", lobby_id, player_ids.len());
+                            log!("Game ended for lobby {}, {} players in lobby", lobby_id, player_ids.len());
+
+                            if let Some(lobby_details) = lobby_manager_clone.get_lobby_details(&lobby_id).await {
+                                match lobby_manager_clone.get_play_again_status(&lobby_id).await {
+                                    Ok(status) => {
+                                        let proto_status = match status {
+                                            crate::lobby_manager::PlayAgainStatus::NotAvailable => {
+                                                common::play_again_status_notification::Status::NotAvailable(
+                                                    common::PlayAgainNotAvailable {}
+                                                )
+                                            }
+                                            crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids, .. } => {
+                                                common::play_again_status_notification::Status::Available(
+                                                    common::PlayAgainAvailable {
+                                                        ready_player_ids,
+                                                        pending_player_ids,
+                                                    }
+                                                )
+                                            }
+                                        };
+
+                                        menu_broadcaster_clone.broadcast_to_lobby(
+                                            &lobby_details,
+                                            MenuServerMessage {
+                                                message: Some(common::menu_server_message::Message::PlayAgainStatus(
+                                                    common::PlayAgainStatusNotification {
+                                                        status: Some(proto_status),
+                                                    }
+                                                )),
+                                            },
+                                        ).await;
+                                    }
+                                    Err(e) => {
+                                        log!("Failed to get play again status: {}", e);
+                                    }
+                                }
+                            }
                         }
                         Err(e) => {
                             log!("Failed to end game for lobby {}: {}", lobby_id, e);
@@ -265,6 +305,7 @@ impl Clone for GameSessionManager {
             sessions: self.sessions.clone(),
             client_to_session: self.client_to_session.clone(),
             broadcaster: self.broadcaster.clone(),
+            menu_broadcaster: self.menu_broadcaster.clone(),
             lobby_manager: self.lobby_manager.clone(),
         }
     }

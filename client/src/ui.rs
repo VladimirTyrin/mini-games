@@ -406,12 +406,12 @@ impl eframe::App for MenuApp {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id);
                     }
                 }
-                AppState::GameOver { scores, winner_id, last_game_state, reason } => {
+                AppState::GameOver { scores, winner_id, last_game_state, reason, play_again_status } => {
                     if self.game_ui.is_none() {
                         self.game_ui = Some(GameUi::new(self.shared_state.clone()));
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &reason, &self.menu_command_tx);
+                        game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);
                     }
                 }
             }

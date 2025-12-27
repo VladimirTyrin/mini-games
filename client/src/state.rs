@@ -11,6 +11,7 @@ pub enum MenuCommand {
     LeaveLobby,
     MarkReady { ready: bool },
     StartGame,
+    PlayAgain,
     Disconnect,
 }
 
@@ -18,6 +19,15 @@ pub enum MenuCommand {
 pub enum GameCommand {
     SendTurn { direction: Direction },
     }
+
+#[derive(Debug, Clone)]
+pub enum PlayAgainStatus {
+    NotAvailable,
+    Available {
+        ready_player_ids: Vec<String>,
+        pending_player_ids: Vec<String>,
+    },
+}
 
 #[derive(Debug, Clone)]
 pub enum AppState {
@@ -37,6 +47,7 @@ pub enum AppState {
         winner_id: String,
         last_game_state: Option<GameStateUpdate>,
         reason: common::GameEndReason,
+        play_again_status: PlayAgainStatus,
     },
 }
 
@@ -129,6 +140,13 @@ impl SharedState {
 
     pub fn take_retry_server_address(&self) -> Option<String> {
         self.retry_server_address.lock().unwrap().take()
+    }
+
+    pub fn update_play_again_status(&self, play_again_status: PlayAgainStatus) {
+        let mut state = self.state.lock().unwrap();
+        if let AppState::GameOver { play_again_status: current_status, .. } = &mut *state {
+            *current_status = play_again_status;
+        }
     }
 }
 

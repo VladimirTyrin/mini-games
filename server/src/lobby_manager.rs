@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use common::{LobbyInfo, LobbyDetails, PlayerInfo, LobbySettings, ClientId, LobbyId};
@@ -12,6 +12,10 @@ pub struct Lobby {
     pub settings: LobbySettings,
     pub players: HashMap<ClientId, bool>,
     pub in_game: bool,
+    pub play_again_votes: HashSet<ClientId>,
+    /// Players who were in the lobby when the last game started.
+    /// Used to determine if "play again" is available (only if all original players are still in lobby).
+    pub original_game_players: HashSet<ClientId>,
 }
 
 #[derive(Debug)]
@@ -34,6 +38,15 @@ pub struct StartGameResult {
     pub settings: LobbySettings,
 }
 
+#[derive(Debug)]
+pub enum PlayAgainStatus {
+    NotAvailable,
+    Available {
+        ready_player_ids: Vec<String>,
+        pending_player_ids: Vec<String>,
+    },
+}
+
 impl Lobby {
     fn new(id: LobbyId, name: String, creator_id: ClientId, max_players: u32, settings: LobbySettings) -> Self {
         Self {
@@ -44,6 +57,8 @@ impl Lobby {
             settings,
             players: HashMap::new(),
             in_game: false,
+            play_again_votes: HashSet::new(),
+            original_game_players: HashSet::new(),
         }
     }
 
@@ -96,6 +111,13 @@ impl Lobby {
         } else {
             false
         }
+    }
+
+    fn get_pending_for_play_again(&self) -> Vec<String> {
+        self.original_game_players.iter()
+            .filter(|id| !self.play_again_votes.contains(id))
+            .map(|id| id.to_string())
+            .collect()
     }
 }
 
@@ -154,6 +176,11 @@ impl LobbyManager {
             .filter(|lobby| !lobby.in_game)
             .map(|lobby| lobby.to_info())
             .collect()
+    }
+
+    pub async fn get_lobby_details(&self, lobby_id: &LobbyId) -> Option<LobbyDetails> {
+        let lobbies = self.lobbies.lock().await;
+        lobbies.get(lobby_id).map(|lobby| lobby.to_details())
     }
 
     pub async fn join_lobby(&self, lobby_id: LobbyId, client_id: ClientId) -> Result<LobbyDetails, String> {
@@ -260,8 +287,10 @@ impl LobbyManager {
         }
 
         lobby.in_game = true;
+        lobby.play_again_votes.clear();
 
         let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
+        lobby.original_game_players = player_ids.iter().cloned().collect();
         let settings = lobby.settings.clone();
 
         Ok(StartGameResult {
@@ -273,16 +302,72 @@ impl LobbyManager {
 
     pub async fn end_game(&self, lobby_id: &LobbyId) -> Result<Vec<ClientId>, String> {
         let mut lobbies = self.lobbies.lock().await;
-        let mut client_to_lobby = self.client_to_lobby.lock().await;
 
-        let lobby = lobbies.remove(lobby_id).ok_or("Lobby not found")?;
+        let lobby = lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
         let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
 
-        for player_id in &player_ids {
-            client_to_lobby.remove(player_id);
+        lobby.in_game = false;
+
+        for ready in lobby.players.values_mut() {
+            *ready = false;
         }
 
         Ok(player_ids)
+    }
+
+    pub async fn vote_play_again(&self, client_id: &ClientId) -> Result<(LobbyId, PlayAgainStatus), String> {
+        let client_to_lobby = self.client_to_lobby.lock().await;
+        let lobby_id = client_to_lobby.get(client_id).ok_or("Not in a lobby")?.clone();
+
+        let mut lobbies = self.lobbies.lock().await;
+        let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        if lobby.in_game {
+            return Err("Game is still in progress".to_string());
+        }
+
+        if !lobby.original_game_players.contains(client_id) {
+            return Err("Player was not in the original game".to_string());
+        }
+
+        if !lobby.players.contains_key(client_id) {
+            return Err("Player is no longer in the lobby".to_string());
+        }
+
+        let play_again_available = lobby.players.len() == lobby.original_game_players.len();
+        if !play_again_available {
+            return Ok((lobby_id, PlayAgainStatus::NotAvailable));
+        }
+
+        lobby.play_again_votes.insert(client_id.clone());
+
+        let ready_player_ids: Vec<String> = lobby.play_again_votes.iter().map(|id| id.to_string()).collect();
+        let pending_player_ids: Vec<String> = lobby.get_pending_for_play_again();
+
+        Ok((lobby_id, PlayAgainStatus::Available {
+            ready_player_ids,
+            pending_player_ids
+        }))
+    }
+
+    pub async fn get_play_again_status(&self, lobby_id: &LobbyId) -> Result<PlayAgainStatus, String> {
+        let lobbies = self.lobbies.lock().await;
+        let lobby = lobbies.get(lobby_id).ok_or("Lobby not found")?;
+
+        let play_again_available = !lobby.original_game_players.is_empty()
+            && lobby.players.len() == lobby.original_game_players.len();
+
+        if !play_again_available {
+            return Ok(PlayAgainStatus::NotAvailable);
+        }
+
+        let ready_player_ids: Vec<String> = lobby.play_again_votes.iter().map(|id| id.to_string()).collect();
+        let pending_player_ids: Vec<String> = lobby.get_pending_for_play_again();
+
+        Ok(PlayAgainStatus::Available {
+            ready_player_ids,
+            pending_player_ids
+        })
     }
 }
 

@@ -48,7 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lobby_manager = LobbyManager::new();
     let broadcaster = ClientBroadcaster::new();
     let game_broadcaster = GameBroadcaster::new();
-    let session_manager = GameSessionManager::new(game_broadcaster.clone(), lobby_manager.clone());
+    let session_manager = GameSessionManager::new(game_broadcaster.clone(), broadcaster.clone(), lobby_manager.clone());
 
     let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
     let game_service = GameServiceImpl::new(tracker, session_manager, game_broadcaster);

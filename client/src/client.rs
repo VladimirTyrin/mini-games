@@ -2,7 +2,7 @@ use common::menu_service_client::MenuServiceClient;
 use common::game_service_client::GameServiceClient;
 use common::{MenuClientMessage, GameClientMessage, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, LobbySettings, log, TurnCommand};
 use tokio::sync::mpsc;
-use crate::state::{MenuCommand, GameCommand, SharedState, AppState};
+use crate::state::{MenuCommand, GameCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
 
 #[derive(Clone)]
@@ -114,6 +114,9 @@ pub async fn grpc_client_task(
                     }
                     MenuCommand::StartGame => {
                         Some(common::menu_client_message::Message::StartGame(StartGameRequest {}))
+                    }
+                    MenuCommand::PlayAgain => {
+                        Some(common::menu_client_message::Message::PlayAgain(common::PlayAgainRequest {}))
                     }
                     MenuCommand::Disconnect => {
                         let _ = tx.send(MenuClientMessage {
@@ -227,6 +230,22 @@ pub async fn grpc_client_task(
                                         }
                                     });
                                 }
+                                common::menu_server_message::Message::PlayAgainStatus(notification) => {
+                                    if let Some(status) = notification.status {
+                                        let play_again_status = match status {
+                                            common::play_again_status_notification::Status::NotAvailable(_) => {
+                                                PlayAgainStatus::NotAvailable
+                                            }
+                                            common::play_again_status_notification::Status::Available(available) => {
+                                                PlayAgainStatus::Available {
+                                                    ready_player_ids: available.ready_player_ids,
+                                                    pending_player_ids: available.pending_player_ids,
+                                                }
+                                            }
+                                        };
+                                        shared_state.update_play_again_status(play_again_status);
+                                    }
+                                }
                             }
                         }
                     }
@@ -318,6 +337,7 @@ async fn game_client_task(
                                         winner_id: game_over.winner_id,
                                         last_game_state,
                                         reason,
+                                        play_again_status: PlayAgainStatus::NotAvailable,
                                     });
                                     break;
                                 }

@@ -1,5 +1,5 @@
 use crate::game_render::Sprites;
-use crate::state::{GameCommand, MenuCommand, SharedState};
+use crate::state::{GameCommand, MenuCommand, SharedState, PlayAgainStatus};
 use common::{Direction, GameStateUpdate, Position, ScoreEntry};
 use eframe::egui;
 use tokio::sync::mpsc;
@@ -113,6 +113,7 @@ impl GameUi {
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
         reason: &common::GameEndReason,
+        play_again_status: &PlayAgainStatus,
         menu_command_tx: &mpsc::UnboundedSender<MenuCommand>,
     ) {
         if let Some(state) = last_game_state {
@@ -212,6 +213,43 @@ impl GameUi {
                     }
 
                     ui.add_space(10.0);
+
+                    match play_again_status {
+                        PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
+                            if pending_player_ids.is_empty() {
+                                ui.label(egui::RichText::new("Starting new game...").size(14.0).color(egui::Color32::from_rgb(100, 255, 100)));
+                            } else {
+                                if ready_player_ids.contains(&client_id.to_string()) {
+                                    ui.label(egui::RichText::new("Waiting for other players...").size(14.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                                } else if ui.button(egui::RichText::new("Play Again").size(16.0)).clicked() {
+                                    let _ = menu_command_tx.send(MenuCommand::PlayAgain);
+                                }
+
+                                ui.add_space(5.0);
+                                ui.label(egui::RichText::new("Players ready:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
+                                for ready_id in ready_player_ids {
+                                    let is_you = ready_id == client_id;
+                                    let you_marker = if is_you { " (You)" } else { "" };
+                                    ui.label(egui::RichText::new(format!("✓ {}{}", ready_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(100, 255, 100)));
+                                }
+                                if !pending_player_ids.is_empty() {
+                                    ui.label(egui::RichText::new("Waiting for:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
+                                    for pending_id in pending_player_ids {
+                                        let is_you = pending_id == client_id;
+                                        let you_marker = if is_you { " (You)" } else { "" };
+                                        ui.label(egui::RichText::new(format!("⏳ {}{}", pending_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                                    }
+                                }
+                                ui.add_space(5.0);
+                            }
+                        }
+                        PlayAgainStatus::NotAvailable => {
+                            ui.label(egui::RichText::new("Play again not available").size(12.0).color(egui::Color32::from_rgb(150, 150, 150)));
+                            ui.label(egui::RichText::new("(A player left the lobby)").size(10.0).color(egui::Color32::from_rgb(150, 150, 150)));
+                            ui.add_space(5.0);
+                        }
+                    }
+
                     if ui.button(egui::RichText::new("Back to Lobby List").size(14.0)).clicked() {
                         self.shared_state.clear_game_command_tx();
                         let _ = menu_command_tx.send(MenuCommand::ListLobbies);
@@ -250,6 +288,40 @@ impl GameUi {
                     you_marker,
                     entry.score
                 ));
+            }
+
+            ui.separator();
+
+            match play_again_status {
+                PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
+                    if pending_player_ids.is_empty() {
+                        ui.label("Starting new game...");
+                    } else {
+                        if ready_player_ids.contains(&client_id.to_string()) {
+                            ui.label("Waiting for other players...");
+                        } else if ui.button("Play Again").clicked() {
+                            let _ = menu_command_tx.send(MenuCommand::PlayAgain);
+                        }
+
+                        ui.label("Players ready:");
+                        for ready_id in ready_player_ids {
+                            let is_you = ready_id == client_id;
+                            let you_marker = if is_you { " (You)" } else { "" };
+                            ui.label(format!("✓ {}{}", ready_id, you_marker));
+                        }
+                        if !pending_player_ids.is_empty() {
+                            ui.label("Waiting for:");
+                            for pending_id in pending_player_ids {
+                                let is_you = pending_id == client_id;
+                                let you_marker = if is_you { " (You)" } else { "" };
+                                ui.label(format!("⏳ {}{}", pending_id, you_marker));
+                            }
+                        }
+                    }
+                }
+                PlayAgainStatus::NotAvailable => {
+                    ui.label("Play again not available (A player left the lobby)");
+                }
             }
 
             ui.separator();

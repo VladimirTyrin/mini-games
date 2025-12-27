@@ -388,6 +388,68 @@ impl MenuServiceImpl {
         }
     }
 
+    async fn handle_play_again_message(
+        dependencies: &MenuServiceDependencies,
+        client_id: &ClientId,
+    ) {
+        match dependencies.lobby_manager.vote_play_again(client_id).await {
+            Ok((lobby_id, status)) => {
+                log!("[{}] {} voted play again", lobby_id, client_id);
+
+                let lobby_details = match dependencies.lobby_manager.get_lobby_details(&lobby_id).await {
+                    Some(details) => details,
+                    None => {
+                        log!("[{}] Lobby not found after play again vote", lobby_id);
+                        return;
+                    }
+                };
+
+                let proto_status = match &status {
+                    crate::lobby_manager::PlayAgainStatus::NotAvailable => {
+                        common::play_again_status_notification::Status::NotAvailable(
+                            common::PlayAgainNotAvailable {}
+                        )
+                    }
+                    crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
+                        common::play_again_status_notification::Status::Available(
+                            common::PlayAgainAvailable {
+                                ready_player_ids: ready_player_ids.clone(),
+                                pending_player_ids: pending_player_ids.clone(),
+                            }
+                        )
+                    }
+                };
+
+                dependencies.broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    MenuServerMessage {
+                        message: Some(common::menu_server_message::Message::PlayAgainStatus(
+                            common::PlayAgainStatusNotification {
+                                status: Some(proto_status),
+                            }
+                        )),
+                    },
+                ).await;
+
+                if let crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids: _ready_player_ids, pending_player_ids} = status && pending_player_ids.len() == 0 {
+                    log!("[{}] All players ready, starting new game", lobby_id);
+                    let host_id = ClientId::new(lobby_details.creator_id.clone());
+                    match dependencies.lobby_manager.start_game(&host_id).await {
+                        Ok(start_result) => {
+                            Self::notify_after_start_game(dependencies, &host_id, &start_result).await;
+                        }
+                        Err(e) => {
+                            log!("[{}] Failed to start game after play again: {}", lobby_id, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log!("Play again vote failed for {}: {}", client_id, e);
+            }
+        }
+    }
+
     async fn handle_client_disconnected(dependencies: &MenuServiceDependencies, id: ClientId) {
         dependencies.tracker.remove_menu_client(&id).await;
         dependencies.broadcaster.unregister(&id).await;
@@ -483,6 +545,13 @@ impl MenuService for MenuServiceImpl {
                                         Self::handle_start_game_message(&dependencies, id, &tx).await;
                                     } else {
                                         Self::send_not_connected_error(&tx, "start game").await;
+                                    }
+                                }
+                                common::menu_client_message::Message::PlayAgain(_) => {
+                                    if let Some(id) = &client_id {
+                                        Self::handle_play_again_message(&dependencies, id).await;
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "play again").await;
                                     }
                                 }
                             }

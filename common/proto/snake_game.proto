@@ -26,6 +26,7 @@ message MenuClientMessage {
         LeaveLobbyRequest leave_lobby = 6;
         MarkReadyRequest mark_ready = 7;
         StartGameRequest start_game = 8;
+        PlayAgainRequest play_again = 9;
     }
 }
 
@@ -41,6 +42,7 @@ message MenuServerMessage {
         LobbyListUpdateNotification lobby_list_update = 8;
         ServerShuttingDownNotification server_shutting_down = 9;
         LobbyClosedNotification lobby_closed = 10;
+        PlayAgainStatusNotification play_again_status = 11;
     }
 }
 
@@ -69,6 +71,8 @@ message MarkReadyRequest {
 }
 
 message StartGameRequest {}
+
+message PlayAgainRequest {}
 
 message LobbyListResponse {
     repeated LobbyInfo lobbies = 1;
@@ -137,6 +141,20 @@ message ServerShuttingDownNotification {
 
 message LobbyClosedNotification {
     string message = 1;
+}
+
+message PlayAgainStatusNotification {
+    oneof status {
+        PlayAgainNotAvailable not_available = 1;
+        PlayAgainAvailable available = 2;
+    }
+}
+
+message PlayAgainNotAvailable {}
+
+message PlayAgainAvailable {
+    repeated string ready_player_ids = 1;
+    repeated string pending_player_ids = 2;
 }
 
 message ErrorResponse {
