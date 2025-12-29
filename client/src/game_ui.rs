@@ -1,5 +1,5 @@
 use crate::game_render::Sprites;
-use crate::state::{GameCommand, MenuCommand, SharedState, PlayAgainStatus};
+use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use common::{Direction, GameStateUpdate, Position, ScoreEntry};
 use eframe::egui;
 use tokio::sync::mpsc;
@@ -48,15 +48,13 @@ fn generate_color_from_client_id(client_id: &str) -> Color {
 pub struct GameUi {
     sprites: Sprites,
     last_input_direction: Option<Direction>,
-    shared_state: SharedState,
 }
 
 impl GameUi {
-    pub fn new(shared_state: SharedState) -> Self {
+    pub fn new() -> Self {
         Self {
             sprites: Sprites::load(),
             last_input_direction: None,
-            shared_state,
         }
     }
 
@@ -67,9 +65,10 @@ impl GameUi {
         session_id: &str,
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
+        command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         if let Some(state) = game_state {
-            self.handle_input(ctx);
+            self.handle_input(ctx, command_tx);
 
             let field_width = state.field_width;
             let field_height = state.field_height;
@@ -114,7 +113,7 @@ impl GameUi {
         last_game_state: &Option<GameStateUpdate>,
         reason: &common::GameEndReason,
         play_again_status: &PlayAgainStatus,
-        menu_command_tx: &mpsc::UnboundedSender<MenuCommand>,
+        command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         if let Some(state) = last_game_state {
             let field_width = state.field_width;
@@ -222,7 +221,7 @@ impl GameUi {
                                 if ready_player_ids.contains(&client_id.to_string()) {
                                     ui.label(egui::RichText::new("Waiting for other players...").size(14.0).color(egui::Color32::from_rgb(255, 215, 0)));
                                 } else if ui.button(egui::RichText::new("Play Again").size(16.0)).clicked() {
-                                    let _ = menu_command_tx.send(MenuCommand::PlayAgain);
+                                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                 }
 
                                 ui.add_space(5.0);
@@ -251,8 +250,7 @@ impl GameUi {
                     }
 
                     if ui.button(egui::RichText::new("Back to Lobby List").size(14.0)).clicked() {
-                        self.shared_state.clear_game_command_tx();
-                        let _ = menu_command_tx.send(MenuCommand::ListLobbies);
+                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
                     }
                 });
             });
@@ -300,7 +298,7 @@ impl GameUi {
                         if ready_player_ids.contains(&client_id.to_string()) {
                             ui.label("Waiting for other players...");
                         } else if ui.button("Play Again").clicked() {
-                            let _ = menu_command_tx.send(MenuCommand::PlayAgain);
+                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                         }
 
                         ui.label("Players ready:");
@@ -326,13 +324,12 @@ impl GameUi {
 
             ui.separator();
             if ui.button("Back to Lobby List").clicked() {
-                self.shared_state.clear_game_command_tx();
-                let _ = menu_command_tx.send(MenuCommand::ListLobbies);
+                let _ = command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
             }
         }
     }
 
-    fn handle_input(&mut self, ctx: &egui::Context) {
+    fn handle_input(&mut self, ctx: &egui::Context, command_tx: &mpsc::UnboundedSender<ClientCommand>) {
         ctx.input(|i| {
             let mut new_direction = None;
 
@@ -348,10 +345,8 @@ impl GameUi {
 
             if let Some(direction) = new_direction {
                 if Some(direction) != self.last_input_direction {
-                    if let Some(game_command_tx) = self.shared_state.get_game_command_tx() {
-                        let _ = game_command_tx.send(GameCommand::SendTurn { direction });
-                        self.last_input_direction = Some(direction);
-                    }
+                    let _ = command_tx.send(ClientCommand::Game(GameCommand::SendTurn { direction }));
+                    self.last_input_direction = Some(direction);
                 }
             }
         });

@@ -1,0 +1,15 @@
+[Unit]
+Description=Snake Game Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/snake-game-server
+ExecStart=/opt/snake-game-server/snake_game_server
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

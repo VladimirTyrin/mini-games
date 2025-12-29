@@ -1,7 +1,6 @@
 use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction};
 use crate::config::LobbyConfig;
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum MenuCommand {
@@ -18,7 +17,13 @@ pub enum MenuCommand {
 #[derive(Debug, Clone)]
 pub enum GameCommand {
     SendTurn { direction: Direction },
-    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ClientCommand {
+    Menu(MenuCommand),
+    Game(GameCommand),
+}
 
 #[derive(Debug, Clone)]
 pub enum PlayAgainStatus {
@@ -55,7 +60,6 @@ pub struct SharedState {
     state: Arc<Mutex<AppState>>,
     error: Arc<Mutex<Option<String>>>,
     should_close: Arc<Mutex<bool>>,
-    game_command_tx: Arc<Mutex<Option<mpsc::UnboundedSender<GameCommand>>>>,
     connection_failed: Arc<Mutex<bool>>,
     retry_server_address: Arc<Mutex<Option<String>>>,
 }
@@ -66,7 +70,6 @@ impl SharedState {
             state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![] })),
             error: Arc::new(Mutex::new(None)),
             should_close: Arc::new(Mutex::new(false)),
-            game_command_tx: Arc::new(Mutex::new(None)),
             connection_failed: Arc::new(Mutex::new(false)),
             retry_server_address: Arc::new(Mutex::new(None)),
         }
@@ -85,6 +88,10 @@ impl SharedState {
         if let AppState::InLobby { event_log, .. } = &mut *state {
             event_log.push(event);
         }
+    }
+
+    pub fn add_event_log(&self, event: String) {
+        self.add_event(event);
     }
 
     pub fn update_game_state(&self, game_state: GameStateUpdate) {
@@ -112,18 +119,6 @@ impl SharedState {
 
     pub fn should_close(&self) -> bool {
         *self.should_close.lock().unwrap()
-    }
-
-    pub fn set_game_command_tx(&self, tx: mpsc::UnboundedSender<GameCommand>) {
-        *self.game_command_tx.lock().unwrap() = Some(tx);
-    }
-
-    pub fn get_game_command_tx(&self) -> Option<mpsc::UnboundedSender<GameCommand>> {
-        self.game_command_tx.lock().unwrap().clone()
-    }
-
-    pub fn clear_game_command_tx(&self) {
-        *self.game_command_tx.lock().unwrap() = None;
     }
 
     pub fn set_connection_failed(&self, failed: bool) {
@@ -156,7 +151,6 @@ impl Clone for SharedState {
             state: Arc::clone(&self.state),
             error: Arc::clone(&self.error),
             should_close: Arc::clone(&self.should_close),
-            game_command_tx: Arc::clone(&self.game_command_tx),
             connection_failed: Arc::clone(&self.connection_failed),
             retry_server_address: Arc::clone(&self.retry_server_address),
         }

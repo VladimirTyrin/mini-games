@@ -121,20 +121,50 @@ impl Lobby {
     }
 }
 
+#[derive(Debug)]
+struct LobbyManagerState {
+    lobbies: HashMap<LobbyId, Lobby>,
+    client_to_lobby: HashMap<ClientId, LobbyId>,
+    clients_not_in_lobby: HashSet<ClientId>,
+    next_lobby_id: u64,
+}
+
 #[derive(Debug, Clone)]
 pub struct LobbyManager {
-    lobbies: Arc<Mutex<HashMap<LobbyId, Lobby>>>,
-    client_to_lobby: Arc<Mutex<HashMap<ClientId, LobbyId>>>,
-    next_lobby_id: Arc<Mutex<u64>>,
+    state: Arc<Mutex<LobbyManagerState>>,
 }
 
 impl LobbyManager {
     pub fn new() -> Self {
         Self {
-            lobbies: Arc::new(Mutex::new(HashMap::new())),
-            client_to_lobby: Arc::new(Mutex::new(HashMap::new())),
-            next_lobby_id: Arc::new(Mutex::new(1)),
+            state: Arc::new(Mutex::new(LobbyManagerState {
+                lobbies: HashMap::new(),
+                client_to_lobby: HashMap::new(),
+                clients_not_in_lobby: HashSet::new(),
+                next_lobby_id: 1,
+            })),
         }
+    }
+
+    pub async fn add_client(&self, client_id: &ClientId) -> bool {
+        let mut state = self.state.lock().await;
+
+        if state.client_to_lobby.contains_key(client_id) || state.clients_not_in_lobby.contains(client_id) {
+            return false;
+        }
+
+        state.clients_not_in_lobby.insert(client_id.clone());
+        true
+    }
+
+    pub async fn remove_client(&self, client_id: &ClientId) {
+        let mut state = self.state.lock().await;
+        state.clients_not_in_lobby.remove(client_id);
+    }
+
+    pub async fn get_clients_not_in_lobbies(&self) -> Vec<ClientId> {
+        let state = self.state.lock().await;
+        state.clients_not_in_lobby.iter().cloned().collect()
     }
 
     pub async fn create_lobby(&self, name: String, max_players: u32, settings: LobbySettings, creator_id: ClientId) -> Result<LobbyDetails, String> {
@@ -146,16 +176,14 @@ impl LobbyManager {
             return Err("Field height must be between 5 and 30".to_string());
         }
 
-        let mut client_to_lobby = self.client_to_lobby.lock().await;
+        let mut state = self.state.lock().await;
 
-        if client_to_lobby.contains_key(&creator_id) {
+        if state.client_to_lobby.contains_key(&creator_id) {
             return Err("Already in a lobby".to_string());
         }
 
-        let mut next_id = self.next_lobby_id.lock().await;
-        let lobby_id = LobbyId::new(format!("lobby_{}", *next_id));
-        *next_id += 1;
-        drop(next_id);
+        let lobby_id = LobbyId::new(format!("lobby_{}", state.next_lobby_id));
+        state.next_lobby_id += 1;
 
         let mut lobby = Lobby::new(lobby_id.clone(), name, creator_id.clone(), max_players, settings);
         lobby.add_player(creator_id.clone());
@@ -163,36 +191,34 @@ impl LobbyManager {
 
         let details = lobby.to_details();
 
-        let mut lobbies = self.lobbies.lock().await;
-        lobbies.insert(lobby_id.clone(), lobby);
-        client_to_lobby.insert(creator_id, lobby_id);
+        state.lobbies.insert(lobby_id.clone(), lobby);
+        state.client_to_lobby.insert(creator_id.clone(), lobby_id);
+        state.clients_not_in_lobby.remove(&creator_id);
 
         Ok(details)
     }
 
     pub async fn list_lobbies(&self) -> Vec<LobbyInfo> {
-        let lobbies = self.lobbies.lock().await;
-        lobbies.values()
+        let state = self.state.lock().await;
+        state.lobbies.values()
             .filter(|lobby| !lobby.in_game)
             .map(|lobby| lobby.to_info())
             .collect()
     }
 
     pub async fn get_lobby_details(&self, lobby_id: &LobbyId) -> Option<LobbyDetails> {
-        let lobbies = self.lobbies.lock().await;
-        lobbies.get(lobby_id).map(|lobby| lobby.to_details())
+        let state = self.state.lock().await;
+        state.lobbies.get(lobby_id).map(|lobby| lobby.to_details())
     }
 
     pub async fn join_lobby(&self, lobby_id: LobbyId, client_id: ClientId) -> Result<LobbyDetails, String> {
-        let mut client_to_lobby = self.client_to_lobby.lock().await;
+        let mut state = self.state.lock().await;
 
-        if client_to_lobby.contains_key(&client_id) {
+        if state.client_to_lobby.contains_key(&client_id) {
             return Err("Already in a lobby".to_string());
         }
 
-        let mut lobbies = self.lobbies.lock().await;
-
-        let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
 
         if lobby.in_game {
             return Err("Cannot join: Game already started".to_string());
@@ -202,38 +228,59 @@ impl LobbyManager {
             return Err("Lobby is full or already joined".to_string());
         }
 
-        client_to_lobby.insert(client_id, lobby_id);
-        Ok(lobby.to_details())
+        let lobby_details = lobby.to_details();
+
+        state.client_to_lobby.insert(client_id.clone(), lobby_id);
+        state.clients_not_in_lobby.remove(&client_id);
+
+        Ok(lobby_details)
     }
 
     pub async fn leave_lobby(&self, client_id: &ClientId) -> Result<LeaveLobbyDetails, String> {
-        let mut client_to_lobby = self.client_to_lobby.lock().await;
+        let mut state = self.state.lock().await;
 
-        let lobby_id = client_to_lobby.remove(client_id).ok_or("Not in a lobby")?;
+        let lobby_id = state.client_to_lobby.remove(client_id).ok_or("Not in a lobby")?;
 
-        let mut lobbies = self.lobbies.lock().await;
+        let (is_host, kicked_players_or_empty, lobby_details) = {
+            let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+            let is_host = &lobby.creator_id == client_id;
+            lobby.remove_player(client_id);
 
-        let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+            let result = if is_host {
+                Some(lobby.players.keys().cloned().collect())
+            } else if lobby.players.is_empty() {
+                Some(Vec::new())
+            } else {
+                None
+            };
 
-        let is_host = &lobby.creator_id == client_id;
+            let details = if !is_host && !lobby.players.is_empty() {
+                Some(lobby.to_details())
+            } else {
+                None
+            };
 
-        lobby.remove_player(client_id);
+            (is_host, result, details)
+        };
+
+        state.clients_not_in_lobby.insert(client_id.clone());
 
         if is_host {
-            let kicked_players: Vec<ClientId> = lobby.players.keys().cloned().collect();
+            let kicked_players = kicked_players_or_empty.unwrap();
 
             for player in &kicked_players {
-                client_to_lobby.remove(player);
+                state.client_to_lobby.remove(player);
+                state.clients_not_in_lobby.insert(player.clone());
             }
 
-            lobbies.remove(&lobby_id);
+            state.lobbies.remove(&lobby_id);
 
             Ok(LeaveLobbyDetails {
                 lobby_id,
                 state: LobbyStateAfterLeave::HostLeft { kicked_players },
             })
-        } else if lobby.players.is_empty() {
-            lobbies.remove(&lobby_id);
+        } else if kicked_players_or_empty.is_some() {
+            state.lobbies.remove(&lobby_id);
             Ok(LeaveLobbyDetails {
                 lobby_id,
                 state: LobbyStateAfterLeave::LobbyEmpty,
@@ -242,20 +289,18 @@ impl LobbyManager {
             Ok(LeaveLobbyDetails {
                 lobby_id,
                 state: LobbyStateAfterLeave::LobbyStillActive {
-                    updated_details: lobby.to_details(),
+                    updated_details: lobby_details.unwrap(),
                 },
             })
         }
     }
 
     pub async fn mark_ready(&self, client_id: &ClientId, ready: bool) -> Result<LobbyDetails, String> {
-        let client_to_lobby = self.client_to_lobby.lock().await;
+        let mut state = self.state.lock().await;
 
-        let lobby_id = client_to_lobby.get(client_id).ok_or("Not in a lobby")?;
+        let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
 
-        let mut lobbies = self.lobbies.lock().await;
-
-        let lobby = lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
 
         if !lobby.set_ready(client_id, ready) {
             return Err("Player not in lobby".to_string());
@@ -265,13 +310,11 @@ impl LobbyManager {
     }
 
     pub async fn start_game(&self, client_id: &ClientId) -> Result<StartGameResult, String> {
-        let client_to_lobby = self.client_to_lobby.lock().await;
+        let mut state = self.state.lock().await;
 
-        let lobby_id = client_to_lobby.get(client_id).ok_or("Not in a lobby")?;
+        let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
 
-        let mut lobbies = self.lobbies.lock().await;
-
-        let lobby = lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
 
         if &lobby.creator_id != client_id {
             return Err("Only the host can start the game".to_string());
@@ -294,16 +337,16 @@ impl LobbyManager {
         let settings = lobby.settings.clone();
 
         Ok(StartGameResult {
-            lobby_id: lobby_id.clone(),
+            lobby_id,
             player_ids,
             settings,
         })
     }
 
     pub async fn end_game(&self, lobby_id: &LobbyId) -> Result<Vec<ClientId>, String> {
-        let mut lobbies = self.lobbies.lock().await;
+        let mut state = self.state.lock().await;
 
-        let lobby = lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
+        let lobby = state.lobbies.get_mut(lobby_id).ok_or("Lobby not found")?;
         let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
 
         lobby.in_game = false;
@@ -316,11 +359,10 @@ impl LobbyManager {
     }
 
     pub async fn vote_play_again(&self, client_id: &ClientId) -> Result<(LobbyId, PlayAgainStatus), String> {
-        let client_to_lobby = self.client_to_lobby.lock().await;
-        let lobby_id = client_to_lobby.get(client_id).ok_or("Not in a lobby")?.clone();
+        let mut state = self.state.lock().await;
+        let lobby_id = state.client_to_lobby.get(client_id).ok_or("Not in a lobby")?.clone();
 
-        let mut lobbies = self.lobbies.lock().await;
-        let lobby = lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
 
         if lobby.in_game {
             return Err("Game is still in progress".to_string());
@@ -351,9 +393,14 @@ impl LobbyManager {
         }))
     }
 
+    pub async fn get_clients_in_lobbies(&self) -> Vec<ClientId> {
+        let state = self.state.lock().await;
+        state.client_to_lobby.keys().cloned().collect()
+    }
+
     pub async fn get_play_again_status(&self, lobby_id: &LobbyId) -> Result<PlayAgainStatus, String> {
-        let lobbies = self.lobbies.lock().await;
-        let lobby = lobbies.get(lobby_id).ok_or("Lobby not found")?;
+        let state = self.state.lock().await;
+        let lobby = state.lobbies.get(lobby_id).ok_or("Lobby not found")?;
 
         let play_again_available = !lobby.original_game_players.is_empty()
             && lobby.players.len() == lobby.original_game_players.len();

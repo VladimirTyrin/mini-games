@@ -1,28 +1,21 @@
-mod connection_tracker;
-mod menu_service;
-mod game_service;
 mod lobby_manager;
 mod broadcaster;
-mod game_broadcaster;
+mod service;
 mod game;
 mod game_session_manager;
 
 use tonic::transport::Server;
 use common::{
-    menu_service_server::MenuServiceServer,
-    game_service_server::GameServiceServer,
+    snake_game_service_server::SnakeGameServiceServer,
     logger,
     log,
-    MenuServerMessage,
+    ServerMessage, server_message,
     ServerShuttingDownNotification,
 };
 use clap::Parser;
-use connection_tracker::ConnectionTracker;
-use menu_service::MenuServiceImpl;
-use game_service::GameServiceImpl;
+use service::SnakeGameServiceImpl;
 use lobby_manager::LobbyManager;
-use broadcaster::ClientBroadcaster;
-use game_broadcaster::GameBroadcaster;
+use broadcaster::Broadcaster;
 use game_session_manager::GameSessionManager;
 
 #[derive(Parser)]
@@ -44,14 +37,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     logger::init_logger(prefix);
 
     let addr = "0.0.0.0:5001".parse()?;
-    let tracker = ConnectionTracker::new();
     let lobby_manager = LobbyManager::new();
-    let broadcaster = ClientBroadcaster::new();
-    let game_broadcaster = GameBroadcaster::new();
-    let session_manager = GameSessionManager::new(game_broadcaster.clone(), broadcaster.clone(), lobby_manager.clone());
+    let broadcaster = Broadcaster::new();
+    let session_manager = GameSessionManager::new(broadcaster.clone(), lobby_manager.clone());
 
-    let menu_service = MenuServiceImpl::new(tracker.clone(), lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
-    let game_service = GameServiceImpl::new(tracker, session_manager, game_broadcaster);
+    let service = SnakeGameServiceImpl::new(lobby_manager, broadcaster.clone(), session_manager);
 
     log!("Snake Game Server listening on {}", addr);
 
@@ -63,8 +53,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         log!("Shutdown signal received, notifying clients...");
 
-        let shutdown_msg = MenuServerMessage {
-            message: Some(common::menu_server_message::Message::ServerShuttingDown(
+        let shutdown_msg = ServerMessage {
+            message: Some(server_message::Message::ServerShuttingDown(
                 ServerShuttingDownNotification {
                     message: "Server is shutting down".to_string(),
                 }
@@ -77,8 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Server::builder()
-        .add_service(MenuServiceServer::new(menu_service))
-        .add_service(GameServiceServer::new(game_service))
+        .add_service(SnakeGameServiceServer::new(service))
         .serve_with_shutdown(addr, shutdown_signal)
         .await?;
 

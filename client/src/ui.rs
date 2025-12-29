@@ -1,6 +1,6 @@
 use crate::config::{Config, LobbyConfig};
 use crate::game_ui::GameUi;
-use crate::state::{AppState, MenuCommand, SharedState};
+use crate::state::{AppState, MenuCommand, ClientCommand, SharedState};
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
 use common::WallCollisionMode;
 use common::{LobbyDetails, LobbyInfo};
@@ -22,7 +22,7 @@ fn parse_u32_input(input: &str, field_name: &str, shared_state: &SharedState) ->
 pub struct MenuApp {
     client_id: String,
     shared_state: SharedState,
-    menu_command_tx: mpsc::UnboundedSender<MenuCommand>,
+    menu_command_tx: mpsc::UnboundedSender<ClientCommand>,
     create_lobby_dialog: bool,
     lobby_name_input: String,
     max_players_input: String,
@@ -42,7 +42,7 @@ impl MenuApp {
     pub fn new(
         client_id: String,
         shared_state: SharedState,
-        menu_command_tx: mpsc::UnboundedSender<MenuCommand>,
+        menu_command_tx: mpsc::UnboundedSender<ClientCommand>,
         disconnect_timeout: std::time::Duration,
         config_manager: ClientConfigManager
     ) -> Self {
@@ -74,7 +74,7 @@ impl MenuApp {
 
         ui.horizontal(|ui| {
             if ui.button("🔄 Update").clicked() {
-                let _ = self.menu_command_tx.send(MenuCommand::ListLobbies);
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
             }
 
             if ui.button("➕ Create Lobby").clicked() {
@@ -131,9 +131,9 @@ impl MenuApp {
                     let double_clicked = inner_response.double_clicked() && can_join;
 
                     if button_clicked || double_clicked {
-                        let _ = self.menu_command_tx.send(MenuCommand::JoinLobby {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::JoinLobby {
                             lobby_id: lobby.lobby_id.clone(),
-                        });
+                        }));
                     }
                 }
             });
@@ -200,10 +200,10 @@ impl MenuApp {
                         // This also validates the config
                         match self.config_manager.set_config(&config) {
                             Ok(_) => {
-                                let _ = self.menu_command_tx.send(MenuCommand::CreateLobby {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
                                     name: self.lobby_name_input.clone(),
                                     config: lobby_config
-                                });
+                                }));
                                 close_dialog = true;
                             }
                             Err(error) => {
@@ -270,18 +270,18 @@ impl MenuApp {
         ui.horizontal(|ui| {
             let button_text = if current_ready { "Mark Not Ready" } else { "Mark Ready" };
             if ui.button(button_text).clicked() {
-                let _ = self.menu_command_tx.send(MenuCommand::MarkReady {
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
                     ready: !current_ready,
-                });
+                }));
             }
 
             if ui.button("🚪 Leave Lobby").clicked() {
-                let _ = self.menu_command_tx.send(MenuCommand::LeaveLobby);
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
 
             if is_host && all_ready {
                 if ui.button("▶ Start Game").clicked() {
-                    let _ = self.menu_command_tx.send(MenuCommand::StartGame);
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
                 }
             }
         });
@@ -312,7 +312,7 @@ impl eframe::App for MenuApp {
                 }
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                let _ = self.menu_command_tx.send(MenuCommand::Disconnect);
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::Disconnect));
                 self.disconnecting = Some(std::time::Instant::now());
             }
         }
@@ -400,15 +400,15 @@ impl eframe::App for MenuApp {
                 }
                 AppState::InGame { session_id, game_state } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new(self.shared_state.clone()));
+                        self.game_ui = Some(GameUi::new());
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id);
+                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
                     }
                 }
                 AppState::GameOver { scores, winner_id, last_game_state, reason, play_again_status } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new(self.shared_state.clone()));
+                        self.game_ui = Some(GameUi::new());
                     }
                     if let Some(game_ui) = &mut self.game_ui {
                         game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);

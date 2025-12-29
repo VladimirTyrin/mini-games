@@ -2,21 +2,11 @@ syntax = "proto3";
 
 package snake_game;
 
-// Menu Service - handles lobby management
-service MenuService {
-    // Bidirectional streaming for menu interactions
-    rpc MenuStream(stream MenuClientMessage) returns (stream MenuServerMessage);
+service SnakeGameService {
+    rpc GameStream(stream ClientMessage) returns (stream ServerMessage);
 }
 
-// Game Service - handles active game sessions
-service GameService {
-    // Bidirectional streaming for game session
-    rpc GameStream(stream GameClientMessage) returns (stream GameServerMessage);
-}
-
-// === Menu Messages ===
-
-message MenuClientMessage {
+message ClientMessage {
     oneof message {
         ConnectRequest connect = 1;
         DisconnectRequest disconnect = 2;
@@ -27,10 +17,11 @@ message MenuClientMessage {
         MarkReadyRequest mark_ready = 7;
         StartGameRequest start_game = 8;
         PlayAgainRequest play_again = 9;
+        TurnCommand turn = 10;
     }
 }
 
-message MenuServerMessage {
+message ServerMessage {
     oneof message {
         LobbyListResponse lobby_list = 1;
         LobbyUpdateNotification lobby_update = 2;
@@ -38,11 +29,13 @@ message MenuServerMessage {
         PlayerLeftNotification player_left = 4;
         PlayerReadyNotification player_ready = 5;
         GameStartingNotification game_starting = 6;
-        ErrorResponse error = 7;
-        LobbyListUpdateNotification lobby_list_update = 8;
-        ServerShuttingDownNotification server_shutting_down = 9;
-        LobbyClosedNotification lobby_closed = 10;
-        PlayAgainStatusNotification play_again_status = 11;
+        LobbyListUpdateNotification lobby_list_update = 7;
+        LobbyClosedNotification lobby_closed = 8;
+        PlayAgainStatusNotification play_again_status = 9;
+        GameStateUpdate state = 10;
+        GameOverNotification game_over = 11;
+        ErrorResponse error = 12;
+        ServerShuttingDownNotification server_shutting_down = 13;
     }
 }
 
@@ -159,24 +152,6 @@ message PlayAgainAvailable {
 
 message ErrorResponse {
     string message = 1;
-}
-
-// === Game Messages ===
-
-message GameClientMessage {
-    oneof message {
-        ConnectRequest connect = 1;
-        DisconnectRequest disconnect = 2;
-        TurnCommand turn = 3;
-    }
-}
-
-message GameServerMessage {
-    oneof message {
-        GameStateUpdate state = 1;
-        GameOverNotification game_over = 2;
-        ErrorResponse error = 3;
-    }
 }
 
 message TurnCommand {

@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
-use common::{ClientId, LobbyId, log, GameServerMessage, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason, MenuServerMessage};
+use common::{ClientId, LobbyId, log, ServerMessage, server_message, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
 use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point, DeathReason};
-use crate::game_broadcaster::GameBroadcaster;
+use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::LobbyManager;
-use crate::broadcaster::ClientBroadcaster;
 
 pub type SessionId = String;
 
@@ -15,8 +14,7 @@ pub type SessionId = String;
 pub struct GameSessionManager {
     sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
-    broadcaster: GameBroadcaster,
-    menu_broadcaster: ClientBroadcaster,
+    broadcaster: Broadcaster,
     lobby_manager: LobbyManager,
 }
 
@@ -35,12 +33,11 @@ impl std::fmt::Debug for GameSession {
 }
 
 impl GameSessionManager {
-    pub fn new(broadcaster: GameBroadcaster, menu_broadcaster: ClientBroadcaster, lobby_manager: LobbyManager) -> Self {
+    pub fn new(broadcaster: Broadcaster, lobby_manager: LobbyManager) -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             client_to_session: Arc::new(Mutex::new(HashMap::new())),
             broadcaster,
-            menu_broadcaster,
             lobby_manager,
         }
     }
@@ -64,17 +61,23 @@ impl GameSessionManager {
     pub async fn create_session(
         &self,
         session_id: SessionId,
-        player_ids: Vec<ClientId>,
-        field_width: usize,
-        field_height: usize,
-        wall_collision_mode: WallCollisionMode,
-        tick_interval: Duration,
-    ) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().await;
+        lobby_details: common::LobbyDetails,
+    ) {
+        let player_ids: Vec<ClientId> = lobby_details.players.iter()
+            .map(|p| ClientId::new(p.client_id.clone()))
+            .collect();
 
-        if sessions.contains_key(&session_id) {
-            return Err("Session already exists".to_string());
-        }
+        let settings = lobby_details.settings.unwrap_or_default();
+        let field_width = settings.field_width as usize;
+        let field_height = settings.field_height as usize;
+        let wall_collision_mode = match common::WallCollisionMode::try_from(settings.wall_collision_mode) {
+            Ok(common::WallCollisionMode::Death) |
+            Ok(common::WallCollisionMode::Unspecified) => WallCollisionMode::Death,
+            Ok(common::WallCollisionMode::WrapAround) => WallCollisionMode::WrapAround,
+            _ => WallCollisionMode::Death,
+        };
+        let tick_interval = Duration::from_millis(settings.tick_interval_ms as u64);
+        let mut sessions = self.sessions.lock().await;
 
         let field_size = FieldSize {
             width: field_width,
@@ -95,9 +98,9 @@ impl GameSessionManager {
         let tick_clone = tick.clone();
         let session_id_clone = session_id.clone();
         let broadcaster_clone = self.broadcaster.clone();
-        let menu_broadcaster_clone = self.menu_broadcaster.clone();
         let lobby_manager_clone = self.lobby_manager.clone();
         let session_manager_clone = self.clone();
+        let player_ids_clone = player_ids.clone();
 
         let _ = tokio::spawn(async move {
             let mut tick_interval_timer = interval(tick_interval);
@@ -131,8 +134,8 @@ impl GameSessionManager {
                     y: p.y as i32,
                 }).collect();
 
-                let game_state_msg = GameServerMessage {
-                    message: Some(common::game_server_message::Message::State(
+                let game_state_msg = ServerMessage {
+                    message: Some(server_message::Message::State(
                         GameStateUpdate {
                             tick: *tick_value,
                             snakes,
@@ -143,7 +146,7 @@ impl GameSessionManager {
                     )),
                 };
 
-                broadcaster_clone.broadcast_to_session(&session_id_clone, game_state_msg).await;
+                broadcaster_clone.broadcast_to_clients(&player_ids_clone, game_state_msg).await;
 
                 let alive_count = state.snakes.values().filter(|s| s.is_alive()).count();
                 if alive_count <= 1 {
@@ -168,8 +171,8 @@ impl GameSessionManager {
                         })
                         .unwrap_or(GameEndReason::GameCompleted as i32);
 
-                    let game_over_msg = GameServerMessage {
-                        message: Some(common::game_server_message::Message::GameOver(
+                    let game_over_msg = ServerMessage {
+                        message: Some(server_message::Message::GameOver(
                             GameOverNotification {
                                 scores,
                                 winner_id,
@@ -178,22 +181,17 @@ impl GameSessionManager {
                         )),
                     };
 
-                    broadcaster_clone.broadcast_to_session(&session_id_clone, game_over_msg).await;
+                    broadcaster_clone.broadcast_to_clients(&player_ids_clone, game_over_msg).await;
 
                     drop(state);
                     drop(tick_value);
 
                     let lobby_id = LobbyId::new(session_id_clone.clone());
                     match lobby_manager_clone.end_game(&lobby_id).await {
-                        Ok(player_ids) => {
-                            log!("Game ended for lobby {}, {} players in lobby", lobby_id, player_ids.len());
+                        Ok(_player_ids) => {
+                            log!("Game ended for lobby {}, {} players in lobby", lobby_id, _player_ids.len());
 
-                            // TODO: Refactor to avoid race condition between GameOverNotification (sent on game stream)
-                            // and PlayAgainStatusNotification (sent on menu stream). Clients might receive them out of order.
-                            // Consider: sending PlayAgainStatusNotification on game stream, or using a single unified stream.
-                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-
-                            if let Some(lobby_details) = lobby_manager_clone.get_lobby_details(&lobby_id).await {
+                            if let Some(_lobby_details) = lobby_manager_clone.get_lobby_details(&lobby_id).await {
                                 match lobby_manager_clone.get_play_again_status(&lobby_id).await {
                                     Ok(status) => {
                                         let proto_status = match status {
@@ -212,16 +210,15 @@ impl GameSessionManager {
                                             }
                                         };
 
-                                        menu_broadcaster_clone.broadcast_to_lobby(
-                                            &lobby_details,
-                                            MenuServerMessage {
-                                                message: Some(common::menu_server_message::Message::PlayAgainStatus(
-                                                    common::PlayAgainStatusNotification {
-                                                        status: Some(proto_status),
-                                                    }
-                                                )),
-                                            },
-                                        ).await;
+                                        let play_again_msg = ServerMessage {
+                                            message: Some(server_message::Message::PlayAgainStatus(
+                                                common::PlayAgainStatusNotification {
+                                                    status: Some(proto_status),
+                                                }
+                                            )),
+                                        };
+
+                                        broadcaster_clone.broadcast_to_clients(&player_ids_clone, play_again_msg).await;
                                     }
                                     Err(e) => {
                                         log!("Failed to get play again status: {}", e);
@@ -257,42 +254,36 @@ impl GameSessionManager {
         }
 
         log!("Game session created: {} with {} players", session_id, player_ids.len());
-
-        Ok(())
     }
 
     pub async fn set_direction(
         &self,
-        session_id: &SessionId,
         client_id: &ClientId,
         direction: Direction,
-    ) -> Result<(), String> {
-        let sessions = self.sessions.lock().await;
-
-        let session = sessions.get(session_id)
-            .ok_or_else(|| "Session not found".to_string())?;
-
-        let mut state = session.state.lock().await;
-        state.set_snake_direction(client_id, direction);
-
-        Ok(())
+    ) {
+        let mapping = self.client_to_session.lock().await;
+        if let Some(session_id) = mapping.get(client_id) {
+            let sessions = self.sessions.lock().await;
+            if let Some(session) = sessions.get(session_id) {
+                let mut state = session.state.lock().await;
+                state.set_snake_direction(client_id, direction);
+            }
+        }
     }
 
     pub async fn kill_snake(
         &self,
-        session_id: &SessionId,
         client_id: &ClientId,
         reason: crate::game::DeathReason,
-    ) -> Result<(), String> {
-        let sessions = self.sessions.lock().await;
-
-        let session = sessions.get(session_id)
-            .ok_or_else(|| "Session not found".to_string())?;
-
-        let mut state = session.state.lock().await;
-        state.kill_snake(client_id, reason);
-
-        Ok(())
+    ) {
+        let mapping = self.client_to_session.lock().await;
+        if let Some(session_id) = mapping.get(client_id) {
+            let sessions = self.sessions.lock().await;
+            if let Some(session) = sessions.get(session_id) {
+                let mut state = session.state.lock().await;
+                state.kill_snake(client_id, reason);
+            }
+        }
     }
 
     fn calculate_start_position(index: usize, total: usize, width: usize, height: usize) -> Point {
@@ -324,7 +315,6 @@ impl Clone for GameSessionManager {
             sessions: self.sessions.clone(),
             client_to_session: self.client_to_session.clone(),
             broadcaster: self.broadcaster.clone(),
-            menu_broadcaster: self.menu_broadcaster.clone(),
             lobby_manager: self.lobby_manager.clone(),
         }
     }
