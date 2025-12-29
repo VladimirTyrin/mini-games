@@ -195,13 +195,15 @@ pub async fn grpc_client_task(
                                     break;
                                 }
                                 common::server_message::Message::LobbyClosed(notification) => {
-                                    shared_state.set_error(notification.message);
-                                    if tx.send(ClientMessage {
-                                        message: Some(client_message::Message::ListLobbies(
-                                            ListLobbiesRequest {}
-                                        )),
-                                    }).await.is_err() {
-                                        break;
+                                    if matches!(shared_state.get_state(), AppState::InLobby { .. }) {
+                                        shared_state.set_error(notification.message);
+                                        if tx.send(ClientMessage {
+                                            message: Some(client_message::Message::ListLobbies(
+                                                ListLobbiesRequest {}
+                                            )),
+                                        }).await.is_err() {
+                                            break;
+                                        }
                                     }
                                 }
                                 common::server_message::Message::GameStarting(notification) => {
