@@ -241,12 +241,7 @@ impl SnakeGameServiceImpl {
                 };
                 let _ = tx.send(Ok(response)).await;
 
-                broadcaster.broadcast_to_all_except(
-                    ServerMessage {
-                        message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                    },
-                    client_id,
-                ).await;
+                Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
                 let error_msg = ServerMessage {
@@ -277,12 +272,7 @@ impl SnakeGameServiceImpl {
                 };
                 let _ = tx.send(Ok(response)).await;
 
-                broadcaster.broadcast_to_all_except(
-                    ServerMessage {
-                        message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                    },
-                    client_id,
-                ).await;
+                Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
 
                 broadcaster.broadcast_to_lobby_except(
                     &lobby_details,
@@ -321,7 +311,7 @@ impl SnakeGameServiceImpl {
         client_id: &ClientId,
     ) {
         match lobby_manager.leave_lobby(client_id).await {
-            Ok(leave_details) => {
+            Ok(leave_state) => {
                 use crate::lobby_manager::LobbyStateAfterLeave;
 
                 let response = ServerMessage {
@@ -331,7 +321,7 @@ impl SnakeGameServiceImpl {
                 };
                 let _ = tx.send(Ok(response)).await;
 
-                match leave_details.state {
+                match leave_state {
                     LobbyStateAfterLeave::HostLeft { kicked_players } => {
                         broadcaster.broadcast_to_clients(
                             &kicked_players,
@@ -341,18 +331,10 @@ impl SnakeGameServiceImpl {
                                 })),
                             },
                         ).await;
-                        broadcaster.broadcast_to_all(
-                            ServerMessage {
-                                message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                            },
-                        ).await;
+                        Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                     }
                     LobbyStateAfterLeave::LobbyEmpty => {
-                        broadcaster.broadcast_to_all(
-                            ServerMessage {
-                                message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                            },
-                        ).await;
+                        Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                     }
                     LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
                         broadcaster.broadcast_to_lobby(
@@ -373,11 +355,7 @@ impl SnakeGameServiceImpl {
                             },
                         ).await;
 
-                        broadcaster.broadcast_to_all(
-                            ServerMessage {
-                                message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                            },
-                        ).await;
+                        Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                     }
                 }
             }
@@ -439,10 +417,10 @@ impl SnakeGameServiceImpl {
         client_id: &ClientId,
     ) {
         match lobby_manager.start_game(client_id).await {
-            Ok(start_result) => {
-                let session_id = start_result.lobby_id.to_string();
+            Ok(lobby_id) => {
+                let session_id = lobby_id.to_string();
 
-                if let Some(lobby_details) = lobby_manager.get_lobby_details(&start_result.lobby_id).await {
+                if let Some(lobby_details) = lobby_manager.get_lobby_details(&lobby_id).await {
                     session_manager.create_session(session_id.clone(), lobby_details.clone()).await;
 
                     broadcaster.broadcast_to_lobby(
@@ -453,6 +431,8 @@ impl SnakeGameServiceImpl {
                             })),
                         },
                     ).await;
+
+                    Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
             }
             Err(e) => {
@@ -509,10 +489,10 @@ impl SnakeGameServiceImpl {
                 if let crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids: _, pending_player_ids } = status {
                     if pending_player_ids.is_empty() {
                         let host_id = ClientId::new(lobby_details.creator_id.clone());
-                        if let Ok(start_result) = lobby_manager.start_game(&host_id).await {
-                            let session_id = start_result.lobby_id.to_string();
+                        if let Ok(lobby_id) = lobby_manager.start_game(&host_id).await {
+                            let session_id = lobby_id.to_string();
 
-                            if let Some(updated_lobby_details) = lobby_manager.get_lobby_details(&start_result.lobby_id).await {
+                            if let Some(updated_lobby_details) = lobby_manager.get_lobby_details(&lobby_id).await {
                                 session_manager.create_session(session_id.clone(), updated_lobby_details.clone()).await;
 
                                 broadcaster.broadcast_to_lobby(
@@ -523,6 +503,8 @@ impl SnakeGameServiceImpl {
                                         })),
                                     },
                                 ).await;
+
+                                Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                             }
                         }
                     }
@@ -568,10 +550,10 @@ impl SnakeGameServiceImpl {
 
         session_manager.kill_snake(client_id, crate::game::DeathReason::PlayerDisconnected).await;
 
-        if let Ok(leave_details) = lobby_manager.leave_lobby(client_id).await {
+        if let Ok(leave_state) = lobby_manager.leave_lobby(client_id).await {
             use crate::lobby_manager::LobbyStateAfterLeave;
 
-            match leave_details.state {
+            match leave_state {
                 LobbyStateAfterLeave::HostLeft { kicked_players } => {
                     broadcaster.broadcast_to_clients(
                         &kicked_players,
@@ -581,18 +563,10 @@ impl SnakeGameServiceImpl {
                             })),
                         },
                     ).await;
-                    broadcaster.broadcast_to_all(
-                        ServerMessage {
-                            message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                        },
-                    ).await;
+                    Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
                 LobbyStateAfterLeave::LobbyEmpty => {
-                    broadcaster.broadcast_to_all(
-                        ServerMessage {
-                            message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                        },
-                    ).await;
+                    Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
                 LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
                     broadcaster.broadcast_to_lobby(
@@ -613,11 +587,7 @@ impl SnakeGameServiceImpl {
                         },
                     ).await;
 
-                    broadcaster.broadcast_to_all(
-                        ServerMessage {
-                            message: Some(server_message::Message::LobbyListUpdate(common::LobbyListUpdateNotification {})),
-                        },
-                    ).await;
+                    Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
             }
         }

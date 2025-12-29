@@ -42,11 +42,6 @@ impl GameSessionManager {
         }
     }
 
-    pub async fn get_session_for_client(&self, client_id: &ClientId) -> Option<SessionId> {
-        let mapping = self.client_to_session.lock().await;
-        mapping.get(client_id).cloned()
-    }
-
     pub async fn remove_session(&self, session_id: &SessionId) {
         let mut sessions = self.sessions.lock().await;
         sessions.remove(session_id);

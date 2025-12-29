@@ -250,7 +250,7 @@ impl GameUi {
                     }
 
                     if ui.button(egui::RichText::new("Back to Lobby List").size(14.0)).clicked() {
-                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
                 });
             });
@@ -324,7 +324,7 @@ impl GameUi {
 
             ui.separator();
             if ui.button("Back to Lobby List").clicked() {
-                let _ = command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
         }
     }

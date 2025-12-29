@@ -150,13 +150,9 @@ pub async fn grpc_client_task(
                         if let Some(msg) = server_msg.message {
                             match msg {
                                 common::server_message::Message::LobbyList(lobby_list) => {
-                                    // Only update lobby list if we're currently in the lobby list state
-                                    // Don't transition if we're in a lobby, game, or game over
-                                    if matches!(shared_state.get_state(), AppState::LobbyList { .. }) {
-                                        shared_state.set_state(AppState::LobbyList {
-                                            lobbies: lobby_list.lobbies,
-                                        });
-                                    }
+                                    shared_state.set_state(AppState::LobbyList {
+                                        lobbies: lobby_list.lobbies,
+                                    });
                                 }
                                 common::server_message::Message::LobbyUpdate(update) => {
                                     if let Some(lobby) = update.lobby {

@@ -25,18 +25,6 @@ pub enum LobbyStateAfterLeave {
     HostLeft { kicked_players: Vec<ClientId> },
 }
 
-#[derive(Debug)]
-pub struct LeaveLobbyDetails {
-    pub lobby_id: LobbyId,
-    pub state: LobbyStateAfterLeave,
-}
-
-#[derive(Debug)]
-pub struct StartGameResult {
-    pub lobby_id: LobbyId,
-    pub player_ids: Vec<ClientId>,
-    pub settings: LobbySettings,
-}
 
 #[derive(Debug)]
 pub enum PlayAgainStatus {
@@ -111,6 +99,10 @@ impl Lobby {
         } else {
             false
         }
+    }
+
+    fn has_ever_started(&self) -> bool {
+        !self.original_game_players.is_empty()
     }
 
     fn get_pending_for_play_again(&self) -> Vec<String> {
@@ -201,7 +193,7 @@ impl LobbyManager {
     pub async fn list_lobbies(&self) -> Vec<LobbyInfo> {
         let state = self.state.lock().await;
         state.lobbies.values()
-            .filter(|lobby| !lobby.in_game)
+            .filter(|lobby| !lobby.has_ever_started())
             .map(|lobby| lobby.to_info())
             .collect()
     }
@@ -220,8 +212,8 @@ impl LobbyManager {
 
         let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
 
-        if lobby.in_game {
-            return Err("Cannot join: Game already started".to_string());
+        if lobby.has_ever_started() {
+            return Err("Cannot join: Lobby no longer accepting new players".to_string());
         }
 
         if !lobby.add_player(client_id.clone()) {
@@ -236,63 +228,46 @@ impl LobbyManager {
         Ok(lobby_details)
     }
 
-    pub async fn leave_lobby(&self, client_id: &ClientId) -> Result<LeaveLobbyDetails, String> {
+    pub async fn leave_lobby(&self, client_id: &ClientId) -> Result<LobbyStateAfterLeave, String> {
         let mut state = self.state.lock().await;
 
         let lobby_id = state.client_to_lobby.remove(client_id).ok_or("Not in a lobby")?;
 
-        let (is_host, kicked_players_or_empty, lobby_details) = {
+        let result = {
             let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
             let is_host = &lobby.creator_id == client_id;
             lobby.remove_player(client_id);
 
-            let result = if is_host {
-                Some(lobby.players.keys().cloned().collect())
+            if is_host {
+                LobbyStateAfterLeave::HostLeft {
+                    kicked_players: lobby.players.keys().cloned().collect(),
+                }
             } else if lobby.players.is_empty() {
-                Some(Vec::new())
+                LobbyStateAfterLeave::LobbyEmpty
             } else {
-                None
-            };
-
-            let details = if !is_host && !lobby.players.is_empty() {
-                Some(lobby.to_details())
-            } else {
-                None
-            };
-
-            (is_host, result, details)
+                LobbyStateAfterLeave::LobbyStillActive {
+                    updated_details: lobby.to_details(),
+                }
+            }
         };
 
         state.clients_not_in_lobby.insert(client_id.clone());
 
-        if is_host {
-            let kicked_players = kicked_players_or_empty.unwrap();
-
-            for player in &kicked_players {
-                state.client_to_lobby.remove(player);
-                state.clients_not_in_lobby.insert(player.clone());
+        match &result {
+            LobbyStateAfterLeave::HostLeft { kicked_players } => {
+                for player in kicked_players {
+                    state.client_to_lobby.remove(player);
+                    state.clients_not_in_lobby.insert(player.clone());
+                }
+                state.lobbies.remove(&lobby_id);
             }
-
-            state.lobbies.remove(&lobby_id);
-
-            Ok(LeaveLobbyDetails {
-                lobby_id,
-                state: LobbyStateAfterLeave::HostLeft { kicked_players },
-            })
-        } else if kicked_players_or_empty.is_some() {
-            state.lobbies.remove(&lobby_id);
-            Ok(LeaveLobbyDetails {
-                lobby_id,
-                state: LobbyStateAfterLeave::LobbyEmpty,
-            })
-        } else {
-            Ok(LeaveLobbyDetails {
-                lobby_id,
-                state: LobbyStateAfterLeave::LobbyStillActive {
-                    updated_details: lobby_details.unwrap(),
-                },
-            })
+            LobbyStateAfterLeave::LobbyEmpty => {
+                state.lobbies.remove(&lobby_id);
+            }
+            LobbyStateAfterLeave::LobbyStillActive { .. } => {}
         }
+
+        Ok(result)
     }
 
     pub async fn mark_ready(&self, client_id: &ClientId, ready: bool) -> Result<LobbyDetails, String> {
@@ -309,7 +284,7 @@ impl LobbyManager {
         Ok(lobby.to_details())
     }
 
-    pub async fn start_game(&self, client_id: &ClientId) -> Result<StartGameResult, String> {
+    pub async fn start_game(&self, client_id: &ClientId) -> Result<LobbyId, String> {
         let mut state = self.state.lock().await;
 
         let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
@@ -332,15 +307,9 @@ impl LobbyManager {
         lobby.in_game = true;
         lobby.play_again_votes.clear();
 
-        let player_ids: Vec<ClientId> = lobby.players.keys().cloned().collect();
-        lobby.original_game_players = player_ids.iter().cloned().collect();
-        let settings = lobby.settings.clone();
+        lobby.original_game_players = lobby.players.keys().cloned().collect();
 
-        Ok(StartGameResult {
-            lobby_id,
-            player_ids,
-            settings,
-        })
+        Ok(lobby_id)
     }
 
     pub async fn end_game(&self, lobby_id: &LobbyId) -> Result<Vec<ClientId>, String> {
@@ -391,11 +360,6 @@ impl LobbyManager {
             ready_player_ids,
             pending_player_ids
         }))
-    }
-
-    pub async fn get_clients_in_lobbies(&self) -> Vec<ClientId> {
-        let state = self.state.lock().await;
-        state.client_to_lobby.keys().cloned().collect()
     }
 
     pub async fn get_play_again_status(&self, lobby_id: &LobbyId) -> Result<PlayAgainStatus, String> {
@@ -605,7 +569,7 @@ mod tests {
         let result = manager.join_lobby(lobby_id, joiner_id).await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Cannot join: Game already started");
+        assert_eq!(result.unwrap_err(), "Cannot join: Lobby no longer accepting new players");
     }
 
     #[tokio::test]
@@ -649,8 +613,8 @@ mod tests {
         let result = manager.leave_lobby(&joiner_id).await;
 
         assert!(result.is_ok());
-        let leave_details = result.unwrap();
-        assert!(matches!(leave_details.state, LobbyStateAfterLeave::LobbyStillActive { .. }));
+        let leave_state = result.unwrap();
+        assert!(matches!(leave_state, LobbyStateAfterLeave::LobbyStillActive { .. }));
     }
 
     #[tokio::test]
@@ -695,8 +659,8 @@ mod tests {
         let result = manager.leave_lobby(&creator_id).await;
 
         assert!(result.is_ok());
-        let leave_details = result.unwrap();
-        match leave_details.state {
+        let leave_state = result.unwrap();
+        match leave_state {
             LobbyStateAfterLeave::HostLeft { kicked_players } => {
                 assert_eq!(kicked_players.len(), 1);
             },
@@ -764,8 +728,6 @@ mod tests {
         let result = manager.start_game(&creator_id).await;
 
         assert!(result.is_ok());
-        let start_result = result.unwrap();
-        assert_eq!(start_result.player_ids.len(), 1);
     }
 
     #[tokio::test]

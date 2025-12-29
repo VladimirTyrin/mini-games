@@ -59,15 +59,6 @@ impl Broadcaster {
         }
     }
 
-    pub async fn broadcast_to_all_except(&self, message: ServerMessage, except: &ClientId) {
-        let clients = self.clients.lock().await;
-        for (client_id, sender) in clients.iter() {
-            if client_id != except {
-                let _ = sender.send(Ok(message.clone())).await;
-            }
-        }
-    }
-
     pub async fn broadcast_to_all(&self, message: ServerMessage) {
         let clients = self.clients.lock().await;
         for (_, sender) in clients.iter() {
