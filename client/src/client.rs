@@ -156,10 +156,15 @@ pub async fn grpc_client_task(
                                 }
                                 common::server_message::Message::LobbyUpdate(update) => {
                                     if let Some(lobby) = update.lobby {
-                                        shared_state.set_state(AppState::InLobby {
-                                            details: lobby,
-                                            event_log: Vec::new(),
-                                        });
+                                        match shared_state.get_state() {
+                                            AppState::InLobby { .. } | AppState::LobbyList { .. } => {
+                                                shared_state.set_state(AppState::InLobby {
+                                                    details: lobby,
+                                                    event_log: Vec::new(),
+                                                });
+                                            }
+                                            _ => {}
+                                        }
                                     }
                                 }
                                 common::server_message::Message::PlayerJoined(notification) => {
