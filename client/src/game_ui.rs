@@ -1,6 +1,6 @@
 use crate::game_render::Sprites;
 use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
-use common::{Direction, GameStateUpdate, Position, ScoreEntry};
+use common::{Direction, GameStateUpdate, Position, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
 
@@ -89,12 +89,19 @@ impl GameUi {
             ui.separator();
             ui.heading("Scores:");
             for snake in &state.snakes {
-                let is_you = snake.client_id == client_id;
+                let player_id = snake.identity.as_ref()
+                    .map(|i| i.player_id.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                let is_bot = snake.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                let bot_marker = if is_bot { " [BOT]" } else { "" };
+
+                let is_you = !is_bot && player_id == client_id;
                 let status = if snake.alive { "🟢" } else { "💀" };
                 let you_marker = if is_you { " (You)" } else { "" };
                 ui.label(format!(
-                    "{} {}{}: {} points",
-                    status, snake.client_id, you_marker, snake.score
+                    "{} {}{}{}: {} points",
+                    status, player_id, bot_marker, you_marker, snake.score
                 ));
             }
         } else {
@@ -108,7 +115,7 @@ impl GameUi {
         ui: &mut egui::Ui,
         ctx: &egui::Context,
         scores: &[ScoreEntry],
-        winner_id: &str,
+        winner: &Option<PlayerIdentity>,
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
         reason: &common::GameEndReason,
@@ -161,8 +168,11 @@ impl GameUi {
                     ui.heading(egui::RichText::new("🏁 Game Over! 🏁").size(24.0).color(egui::Color32::WHITE));
                     ui.add_space(10.0);
 
-                    ui.label(egui::RichText::new(format!("Winner: {}", winner_id)).size(18.0).color(egui::Color32::from_rgb(255, 215, 0)));
-                    if winner_id == client_id {
+                    let winner_name = winner.as_ref()
+                        .map(|w| w.player_id.clone())
+                        .unwrap_or_else(|| "None".to_string());
+                    ui.label(egui::RichText::new(format!("Winner: {}", winner_name)).size(18.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                    if winner_name == client_id {
                         ui.label(egui::RichText::new("🎉 Congratulations! You won! 🎉").size(16.0).color(egui::Color32::from_rgb(255, 215, 0)));
                     }
 
@@ -188,8 +198,15 @@ impl GameUi {
                     sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
 
                     for (rank, entry) in sorted_scores.iter().enumerate() {
-                        let is_you = entry.client_id == client_id;
-                        let is_winner = &entry.client_id == winner_id;
+                        let player_id = entry.identity.as_ref()
+                            .map(|i| i.player_id.clone())
+                            .unwrap_or_else(|| "Unknown".to_string());
+
+                        let is_bot = entry.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                        let bot_marker = if is_bot { " [BOT]" } else { "" };
+
+                        let is_you = !is_bot && player_id == client_id;
+                        let is_winner = winner.as_ref().map(|w| w.player_id == player_id).unwrap_or(false);
                         let you_marker = if is_you { " (You)" } else { "" };
                         let text_color = if is_winner {
                             egui::Color32::from_rgb(255, 215, 0)
@@ -200,9 +217,10 @@ impl GameUi {
                         };
                         ui.label(
                             egui::RichText::new(format!(
-                                "{}. {}{}: {} points",
+                                "{}. {}{}{}: {} points",
                                 rank + 1,
-                                entry.client_id,
+                                player_id,
+                                bot_marker,
                                 you_marker,
                                 entry.score
                             ))
@@ -214,11 +232,12 @@ impl GameUi {
                     ui.add_space(10.0);
 
                     match play_again_status {
-                        PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
-                            if pending_player_ids.is_empty() {
+                        PlayAgainStatus::Available { ready_players, pending_players } => {
+                            if pending_players.is_empty() {
                                 ui.label(egui::RichText::new("Starting new game...").size(14.0).color(egui::Color32::from_rgb(100, 255, 100)));
                             } else {
-                                if ready_player_ids.contains(&client_id.to_string()) {
+                                let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
+                                if is_ready {
                                     ui.label(egui::RichText::new("Waiting for other players...").size(14.0).color(egui::Color32::from_rgb(255, 215, 0)));
                                 } else if ui.button(egui::RichText::new("Play Again").size(16.0)).clicked() {
                                     let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
@@ -226,17 +245,17 @@ impl GameUi {
 
                                 ui.add_space(5.0);
                                 ui.label(egui::RichText::new("Players ready:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
-                                for ready_id in ready_player_ids {
-                                    let is_you = ready_id == client_id;
+                                for ready_player in ready_players {
+                                    let is_you = ready_player.player_id == client_id;
                                     let you_marker = if is_you { " (You)" } else { "" };
-                                    ui.label(egui::RichText::new(format!("✓ {}{}", ready_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(100, 255, 100)));
+                                    ui.label(egui::RichText::new(format!("✓ {}{}", ready_player.player_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(100, 255, 100)));
                                 }
-                                if !pending_player_ids.is_empty() {
+                                if !pending_players.is_empty() {
                                     ui.label(egui::RichText::new("Waiting for:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
-                                    for pending_id in pending_player_ids {
-                                        let is_you = pending_id == client_id;
+                                    for pending_player in pending_players {
+                                        let is_you = pending_player.player_id == client_id;
                                         let you_marker = if is_you { " (You)" } else { "" };
-                                        ui.label(egui::RichText::new(format!("⏳ {}{}", pending_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                                        ui.label(egui::RichText::new(format!("⏳ {}{}", pending_player.player_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(255, 215, 0)));
                                     }
                                 }
                                 ui.add_space(5.0);
@@ -258,8 +277,11 @@ impl GameUi {
             ui.heading("Game Over!");
             ui.separator();
 
-            ui.label(format!("Winner: {}", winner_id));
-            if winner_id == client_id {
+            let winner_name = winner.as_ref()
+                .map(|w| w.player_id.clone())
+                .unwrap_or_else(|| "None".to_string());
+            ui.label(format!("Winner: {}", winner_name));
+            if winner_name == client_id {
                 ui.label("🎉 Congratulations! You won! 🎉");
             }
 
@@ -270,7 +292,14 @@ impl GameUi {
             sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
 
             for (rank, entry) in sorted_scores.iter().enumerate() {
-                let is_you = entry.client_id == client_id;
+                let player_id = entry.identity.as_ref()
+                    .map(|i| i.player_id.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                let is_bot = entry.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                let bot_marker = if is_bot { " [BOT]" } else { "" };
+
+                let is_you = !is_bot && player_id == client_id;
                 let you_marker = if is_you { " (You)" } else { "" };
                 let medal = match rank {
                     0 => "🥇",
@@ -279,10 +308,11 @@ impl GameUi {
                     _ => "  ",
                 };
                 ui.label(format!(
-                    "{} {}. {}{}: {} points",
+                    "{} {}. {}{}{}: {} points",
                     medal,
                     rank + 1,
-                    entry.client_id,
+                    player_id,
+                    bot_marker,
                     you_marker,
                     entry.score
                 ));
@@ -291,28 +321,29 @@ impl GameUi {
             ui.separator();
 
             match play_again_status {
-                PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
-                    if pending_player_ids.is_empty() {
+                PlayAgainStatus::Available { ready_players, pending_players } => {
+                    if pending_players.is_empty() {
                         ui.label("Starting new game...");
                     } else {
-                        if ready_player_ids.contains(&client_id.to_string()) {
+                        let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
+                        if is_ready {
                             ui.label("Waiting for other players...");
                         } else if ui.button("Play Again").clicked() {
                             let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                         }
 
                         ui.label("Players ready:");
-                        for ready_id in ready_player_ids {
-                            let is_you = ready_id == client_id;
+                        for ready_player in ready_players {
+                            let is_you = ready_player.player_id == client_id;
                             let you_marker = if is_you { " (You)" } else { "" };
-                            ui.label(format!("✓ {}{}", ready_id, you_marker));
+                            ui.label(format!("✓ {}{}", ready_player.player_id, you_marker));
                         }
-                        if !pending_player_ids.is_empty() {
+                        if !pending_players.is_empty() {
                             ui.label("Waiting for:");
-                            for pending_id in pending_player_ids {
-                                let is_you = pending_id == client_id;
+                            for pending_player in pending_players {
+                                let is_you = pending_player.player_id == client_id;
                                 let you_marker = if is_you { " (You)" } else { "" };
-                                ui.label(format!("⏳ {}{}", pending_id, you_marker));
+                                ui.label(format!("⏳ {}{}", pending_player.player_id, you_marker));
                             }
                         }
                     }
@@ -423,17 +454,21 @@ impl GameUi {
                 continue;
             }
 
+            let player_id = snake.identity.as_ref()
+                .map(|i| i.player_id.clone())
+                .unwrap_or_else(|| "Unknown".to_string());
+
             let color = if snake.alive {
-                generate_color_from_client_id(&snake.client_id)
+                generate_color_from_client_id(&player_id)
             } else {
                 Color { r: 128, g: 128, b: 128 }
             };
 
             for (i, segment) in segments.iter().enumerate() {
                 let sprite_name = if show_dead_snakes {
-                    format!("snake_{}_seg_{}_final", snake.client_id, i)
+                    format!("snake_{}_seg_{}_final", player_id, i)
                 } else {
-                    format!("snake_{}_seg_{}", snake.client_id, i)
+                    format!("snake_{}_seg_{}", player_id, i)
                 };
 
                 let sprite = if i == 0 {

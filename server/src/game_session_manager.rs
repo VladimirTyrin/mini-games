@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
-use common::{ClientId, LobbyId, log, ServerMessage, server_message, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
+use common::{ClientId, LobbyId, PlayerId, BotId, BotType, log, ServerMessage, server_message, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
 use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point, DeathReason};
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::LobbyManager;
+use crate::bot::BotController;
 
 pub type SessionId = String;
 
@@ -21,6 +22,7 @@ pub struct GameSessionManager {
 struct GameSession {
     state: Arc<Mutex<GameState>>,
     tick: Arc<Mutex<u64>>,
+    bots: Arc<Mutex<HashMap<BotId, BotType>>>,
 }
 
 impl std::fmt::Debug for GameSession {
@@ -28,6 +30,7 @@ impl std::fmt::Debug for GameSession {
         f.debug_struct("GameSession")
             .field("state", &self.state)
             .field("tick", &self.tick)
+            .field("bots", &self.bots)
             .finish()
     }
 }
@@ -58,9 +61,22 @@ impl GameSessionManager {
         session_id: SessionId,
         lobby_details: common::LobbyDetails,
     ) {
-        let player_ids: Vec<ClientId> = lobby_details.players.iter()
-            .map(|p| ClientId::new(p.client_id.clone()))
-            .collect();
+        let mut human_players: Vec<PlayerId> = Vec::new();
+        let mut bots: HashMap<BotId, BotType> = HashMap::new();
+
+        for player_info in &lobby_details.players {
+            if let Some(identity) = &player_info.identity {
+                if identity.is_bot {
+                    let bot_id = BotId::new(identity.player_id.clone());
+                    let bot_type = common::BotType::try_from(identity.bot_type)
+                        .unwrap_or(common::BotType::Unspecified);
+                    bots.insert(bot_id, bot_type);
+                } else {
+                    let player_id = PlayerId::new(identity.player_id.clone());
+                    human_players.push(player_id);
+                }
+            }
+        }
 
         let settings = lobby_details.settings.unwrap_or_default();
         let field_width = settings.field_width as usize;
@@ -80,22 +96,36 @@ impl GameSessionManager {
         };
         let mut game_state = GameState::new(field_size, wall_collision_mode);
 
-        for (i, player_id) in player_ids.iter().enumerate() {
-            let start_pos = Self::calculate_start_position(i, player_ids.len(), field_width, field_height);
-            let direction = Self::calculate_start_direction(i, player_ids.len());
+        let total_players = human_players.len() + bots.len();
+        let mut idx = 0;
+
+        for player_id in &human_players {
+            let start_pos = Self::calculate_start_position(idx, total_players, field_width, field_height);
+            let direction = Self::calculate_start_direction(idx, total_players);
             game_state.add_snake(player_id.clone(), start_pos, direction);
+            idx += 1;
+        }
+
+        for (bot_id, _) in &bots {
+            let start_pos = Self::calculate_start_position(idx, total_players, field_width, field_height);
+            let direction = Self::calculate_start_direction(idx, total_players);
+            game_state.add_snake(bot_id.to_player_id(), start_pos, direction);
+            idx += 1;
         }
 
         let state = Arc::new(Mutex::new(game_state));
         let tick = Arc::new(Mutex::new(0u64));
+        let bot_count = bots.len();
+        let bots_arc = Arc::new(Mutex::new(bots));
 
         let state_clone = state.clone();
         let tick_clone = tick.clone();
+        let bots_clone = bots_arc.clone();
         let session_id_clone = session_id.clone();
         let broadcaster_clone = self.broadcaster.clone();
         let lobby_manager_clone = self.lobby_manager.clone();
         let session_manager_clone = self.clone();
-        let player_ids_clone = player_ids.clone();
+        let human_players_clone = human_players.clone();
 
         let _ = tokio::spawn(async move {
             let mut tick_interval_timer = interval(tick_interval);
@@ -104,25 +134,51 @@ impl GameSessionManager {
                 tick_interval_timer.tick().await;
 
                 let mut state = state_clone.lock().await;
+
+                let bots_map = bots_clone.lock().await;
+                for (bot_id, bot_type) in bots_map.iter() {
+                    let player_id = bot_id.to_player_id();
+                    if let Some(direction) = BotController::calculate_move(*bot_type, &player_id, &state) {
+                        state.set_snake_direction(&player_id, direction);
+                    }
+                }
+                drop(bots_map);
+
                 state.update();
 
                 let mut tick_value = tick_clone.lock().await;
                 *tick_value += 1;
 
                 let mut snakes = vec![];
+                let bots_ref = bots_clone.lock().await;
                 for (id, snake) in &state.snakes {
                     let segments = snake.body.iter().map(|p| Position {
                         x: p.x as i32,
                         y: p.y as i32,
                     }).collect();
 
+                    let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
+                    let bot_type = if is_bot {
+                        bots_ref.iter()
+                            .find(|(bot_id, _)| bot_id.to_player_id() == *id)
+                            .map(|(_, bt)| *bt as i32)
+                            .unwrap_or(common::BotType::Unspecified as i32)
+                    } else {
+                        common::BotType::Unspecified as i32
+                    };
+
                     snakes.push(common::Snake {
-                        client_id: id.to_string(),
+                        identity: Some(common::PlayerIdentity {
+                            player_id: id.to_string(),
+                            is_bot,
+                            bot_type,
+                        }),
                         segments,
                         alive: snake.is_alive(),
                         score: snake.score,
                     });
                 }
+                drop(bots_ref);
 
                 let food: Vec<Position> = state.food_set.iter().map(|p| Position {
                     x: p.x as i32,
@@ -141,21 +197,54 @@ impl GameSessionManager {
                     )),
                 };
 
-                broadcaster_clone.broadcast_to_clients(&player_ids_clone, game_state_msg).await;
+                let client_ids: Vec<ClientId> = human_players_clone.iter()
+                    .map(|p| ClientId::new(p.to_string()))
+                    .collect();
+                broadcaster_clone.broadcast_to_clients(&client_ids, game_state_msg).await;
 
                 let alive_count = state.snakes.values().filter(|s| s.is_alive()).count();
                 if alive_count <= 1 {
+                    let bots_ref = bots_clone.lock().await;
                     let scores: Vec<ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
+                        let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
+                        let bot_type = if is_bot {
+                            bots_ref.iter()
+                                .find(|(bot_id, _)| bot_id.to_player_id() == *id)
+                                .map(|(_, bt)| *bt as i32)
+                                .unwrap_or(common::BotType::Unspecified as i32)
+                        } else {
+                            common::BotType::Unspecified as i32
+                        };
+
                         ScoreEntry {
-                            client_id: id.to_string(),
+                            identity: Some(common::PlayerIdentity {
+                                player_id: id.to_string(),
+                                is_bot,
+                                bot_type,
+                            }),
                             score: snake.score,
                         }
                     }).collect();
 
-                    let winner_id = state.snakes.iter()
+                    let winner = state.snakes.iter()
                         .find(|(_, snake)| snake.is_alive())
-                        .map(|(id, _)| id.to_string())
-                        .unwrap_or_default();
+                        .map(|(id, _)| {
+                            let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
+                            let bot_type = if is_bot {
+                                bots_ref.iter()
+                                    .find(|(bot_id, _)| bot_id.to_player_id() == *id)
+                                    .map(|(_, bt)| *bt as i32)
+                                    .unwrap_or(common::BotType::Unspecified as i32)
+                            } else {
+                                common::BotType::Unspecified as i32
+                            };
+                            common::PlayerIdentity {
+                                player_id: id.to_string(),
+                                is_bot,
+                                bot_type,
+                            }
+                        });
+                    drop(bots_ref);
 
                     let game_end_reason = state.game_end_reason
                         .map(|r| match r {
@@ -170,13 +259,13 @@ impl GameSessionManager {
                         message: Some(server_message::Message::GameOver(
                             GameOverNotification {
                                 scores,
-                                winner_id,
+                                winner,
                                 reason: game_end_reason,
                             }
                         )),
                     };
 
-                    broadcaster_clone.broadcast_to_clients(&player_ids_clone, game_over_msg).await;
+                    broadcaster_clone.broadcast_to_clients(&client_ids, game_over_msg).await;
 
                     drop(state);
                     drop(tick_value);
@@ -195,11 +284,19 @@ impl GameSessionManager {
                                                     common::PlayAgainNotAvailable {}
                                                 )
                                             }
-                                            crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids, .. } => {
+                                            crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
                                                 common::play_again_status_notification::Status::Available(
                                                     common::PlayAgainAvailable {
-                                                        ready_player_ids,
-                                                        pending_player_ids,
+                                                        ready_players: ready_player_ids.iter().map(|id| common::PlayerIdentity {
+                                                            player_id: id.clone(),
+                                                            is_bot: false,
+                                                            bot_type: common::BotType::Unspecified as i32,
+                                                        }).collect(),
+                                                        pending_players: pending_player_ids.iter().map(|id| common::PlayerIdentity {
+                                                            player_id: id.clone(),
+                                                            is_bot: false,
+                                                            bot_type: common::BotType::Unspecified as i32,
+                                                        }).collect(),
                                                     }
                                                 )
                                             }
@@ -213,7 +310,7 @@ impl GameSessionManager {
                                             )),
                                         };
 
-                                        broadcaster_clone.broadcast_to_clients(&player_ids_clone, play_again_msg).await;
+                                        broadcaster_clone.broadcast_to_clients(&client_ids, play_again_msg).await;
                                     }
                                     Err(e) => {
                                         log!("Failed to get play again status: {}", e);
@@ -238,17 +335,18 @@ impl GameSessionManager {
         let session = GameSession {
             state,
             tick,
+            bots: bots_arc,
         };
 
         sessions.insert(session_id.clone(), session);
         drop(sessions);
 
         let mut mapping = self.client_to_session.lock().await;
-        for player_id in &player_ids {
-            mapping.insert(player_id.clone(), session_id.clone());
+        for player_id in &human_players {
+            mapping.insert(ClientId::new(player_id.to_string()), session_id.clone());
         }
 
-        log!("Game session created: {} with {} players", session_id, player_ids.len());
+        log!("Game session created: {} with {} players ({} humans, {} bots)", session_id, human_players.len() + bot_count, human_players.len(), bot_count);
     }
 
     pub async fn set_direction(
@@ -261,7 +359,8 @@ impl GameSessionManager {
             let sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get(session_id) {
                 let mut state = session.state.lock().await;
-                state.set_snake_direction(client_id, direction);
+                let player_id = PlayerId::new(client_id.to_string());
+                state.set_snake_direction(&player_id, direction);
             }
         }
     }
@@ -276,7 +375,8 @@ impl GameSessionManager {
             let sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get(session_id) {
                 let mut state = session.state.lock().await;
-                state.kill_snake(client_id, reason);
+                let player_id = PlayerId::new(client_id.to_string());
+                state.kill_snake(&player_id, reason);
             }
         }
     }

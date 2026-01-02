@@ -1,4 +1,4 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction, BotType, PlayerIdentity};
 use crate::config::LobbyConfig;
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +11,8 @@ pub enum MenuCommand {
     MarkReady { ready: bool },
     StartGame,
     PlayAgain,
+    AddBot { bot_type: BotType },
+    KickFromLobby { player_id: String },
     Disconnect,
 }
 
@@ -29,8 +31,8 @@ pub enum ClientCommand {
 pub enum PlayAgainStatus {
     NotAvailable,
     Available {
-        ready_player_ids: Vec<String>,
-        pending_player_ids: Vec<String>,
+        ready_players: Vec<PlayerIdentity>,
+        pending_players: Vec<PlayerIdentity>,
     },
 }
 
@@ -49,7 +51,7 @@ pub enum AppState {
     },
     GameOver {
         scores: Vec<ScoreEntry>,
-        winner_id: String,
+        winner: Option<PlayerIdentity>,
         last_game_state: Option<GameStateUpdate>,
         reason: common::GameEndReason,
         play_again_status: PlayAgainStatus,

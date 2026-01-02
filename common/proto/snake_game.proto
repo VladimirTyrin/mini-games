@@ -18,6 +18,8 @@ message ClientMessage {
         StartGameRequest start_game = 8;
         PlayAgainRequest play_again = 9;
         TurnCommand turn = 10;
+        AddBotRequest add_bot = 11;
+        KickFromLobbyRequest kick_from_lobby = 12;
     }
 }
 
@@ -67,6 +69,14 @@ message StartGameRequest {}
 
 message PlayAgainRequest {}
 
+message AddBotRequest {
+    BotType bot_type = 1;
+}
+
+message KickFromLobbyRequest {
+    string player_id = 1;
+}
+
 message LobbyListResponse {
     repeated LobbyInfo lobbies = 1;
 }
@@ -88,11 +98,11 @@ message LobbyDetails {
     repeated PlayerInfo players = 3;
     uint32 max_players = 4;
     LobbySettings settings = 5;
-    string creator_id = 6;
+    PlayerIdentity creator = 6;
 }
 
 message PlayerInfo {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
     bool ready = 2;
 }
 
@@ -109,16 +119,28 @@ enum WallCollisionMode {
     WALL_COLLISION_MODE_WRAP_AROUND = 2;
 }
 
+enum BotType {
+    BOT_TYPE_UNSPECIFIED = 0;
+    BOT_TYPE_EFFICIENT = 1;
+    BOT_TYPE_RANDOM = 2;
+}
+
+message PlayerIdentity {
+    string player_id = 1;
+    bool is_bot = 2;
+    BotType bot_type = 3;
+}
+
 message PlayerJoinedNotification {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
 }
 
 message PlayerLeftNotification {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
 }
 
 message PlayerReadyNotification {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
     bool ready = 2;
 }
 
@@ -146,8 +168,8 @@ message PlayAgainStatusNotification {
 message PlayAgainNotAvailable {}
 
 message PlayAgainAvailable {
-    repeated string ready_player_ids = 1;
-    repeated string pending_player_ids = 2;
+    repeated PlayerIdentity ready_players = 1;
+    repeated PlayerIdentity pending_players = 2;
 }
 
 message ErrorResponse {
@@ -175,7 +197,7 @@ message GameStateUpdate {
 }
 
 message Snake {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
     repeated Position segments = 2;
     bool alive = 3;
     uint32 score = 4;
@@ -188,12 +210,12 @@ message Position {
 
 message GameOverNotification {
     repeated ScoreEntry scores = 1;
-    string winner_id = 2;
+    PlayerIdentity winner = 2;
     GameEndReason reason = 3;
 }
 
 message ScoreEntry {
-    string client_id = 1;
+    PlayerIdentity identity = 1;
     uint32 score = 2;
 }
 

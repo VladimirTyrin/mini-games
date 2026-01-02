@@ -3,6 +3,7 @@ mod broadcaster;
 mod service;
 mod game;
 mod game_session_manager;
+mod bot;
 
 use tonic::transport::Server;
 use common::{

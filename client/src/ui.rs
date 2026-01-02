@@ -234,16 +234,39 @@ impl MenuApp {
         ui.separator();
         ui.heading("Players:");
 
+        let creator_id = details.creator.as_ref()
+            .map(|c| c.player_id.clone())
+            .unwrap_or_else(|| "Unknown".to_string());
+        let is_host = self.client_id == creator_id;
+
         for player in &details.players {
             ui.horizontal(|ui| {
-                let is_self = player.client_id == self.client_id;
-                let is_host = player.client_id == details.creator_id;
+                let player_id = player.identity.as_ref()
+                    .map(|i| i.player_id.clone())
+                    .unwrap_or_else(|| "Unknown".to_string());
 
-                let player_display = match (is_self, is_host) {
-                    (true, true) => format!("👤 {} (You, Host)", player.client_id),
-                    (true, false) => format!("👤 {} (You)", player.client_id),
-                    (false, true) => format!("👤 {} (Host)", player.client_id),
-                    (false, false) => format!("👤 {}", player.client_id),
+                let is_bot = player.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                let bot_type_suffix = if is_bot {
+                    let bot_type = player.identity.as_ref()
+                        .and_then(|i| common::BotType::try_from(i.bot_type).ok())
+                        .unwrap_or(common::BotType::Unspecified);
+                    match bot_type {
+                        common::BotType::Efficient => " (Bot - Efficient)",
+                        common::BotType::Random => " (Bot - Random)",
+                        _ => " (Bot)",
+                    }
+                } else {
+                    ""
+                };
+
+                let is_self = !is_bot && player_id == self.client_id;
+                let is_player_host = player_id == creator_id;
+
+                let player_display = match (is_self, is_player_host) {
+                    (true, true) => format!("👤 {} (You, Host)", player_id),
+                    (true, false) => format!("👤 {} (You)", player_id),
+                    (false, true) => format!("👤 {} (Host){}", player_id, bot_type_suffix),
+                    (false, false) => format!("👤 {}{}", player_id, bot_type_suffix),
                 };
 
                 ui.label(player_display);
@@ -253,6 +276,14 @@ impl MenuApp {
                 } else {
                     ui.label("⏳ Not Ready");
                 }
+
+                if is_host && !is_self {
+                    if ui.button("❌ Kick").clicked() {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
+                            player_id: player_id.clone(),
+                        }));
+                    }
+                }
             });
         }
 
@@ -260,11 +291,14 @@ impl MenuApp {
 
         let current_ready = details.players
             .iter()
-            .find(|p| p.client_id == self.client_id)
+            .find(|p| {
+                p.identity.as_ref()
+                    .map(|i| !i.is_bot && i.player_id == self.client_id)
+                    .unwrap_or(false)
+            })
             .map(|p| p.ready)
             .unwrap_or(false);
 
-        let is_host = self.client_id == details.creator_id;
         let all_ready = details.players.iter().all(|p| p.ready);
 
         ui.horizontal(|ui| {
@@ -285,6 +319,21 @@ impl MenuApp {
                 }
             }
         });
+
+        if is_host {
+            ui.horizontal(|ui| {
+                if ui.button("🤖 Add Efficient Bot").clicked() {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                        bot_type: common::BotType::Efficient,
+                    }));
+                }
+                if ui.button("🎲 Add Random Bot").clicked() {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                        bot_type: common::BotType::Random,
+                    }));
+                }
+            });
+        }
 
         ui.separator();
         ui.heading("Events:");
@@ -406,12 +455,12 @@ impl eframe::App for MenuApp {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
                     }
                 }
-                AppState::GameOver { scores, winner_id, last_game_state, reason, play_again_status } => {
+                AppState::GameOver { scores, winner, last_game_state, reason, play_again_status } => {
                     if self.game_ui.is_none() {
                         self.game_ui = Some(GameUi::new());
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game_over(ui, ctx, &scores, &winner_id, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);
+                        game_ui.render_game_over(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);
                     }
                 }
             }

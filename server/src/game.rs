@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use common::{log, ClientId};
+use common::{log, PlayerId};
 use rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -122,7 +122,7 @@ pub struct FieldSize {
 
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub snakes: HashMap<ClientId, Snake>,
+    pub snakes: HashMap<PlayerId, Snake>,
     pub food_set: HashSet<Point>,
     pub field_size: FieldSize,
     pub wall_collision_mode: WallCollisionMode,
@@ -144,7 +144,7 @@ impl GameState {
         }
     }
 
-    fn wrapping_inc(value: usize, max: usize) -> usize {
+    pub fn wrapping_inc(value: usize, max: usize) -> usize {
         if value + 1 >= max {
             0
         } else {
@@ -152,7 +152,7 @@ impl GameState {
         }
     }
 
-    fn wrapping_dec(value: usize, max: usize) -> usize {
+    pub fn wrapping_dec(value: usize, max: usize) -> usize {
         if value == 0 {
             max - 1
         } else {
@@ -160,13 +160,13 @@ impl GameState {
         }
     }
 
-    pub fn add_snake(&mut self, client_id: ClientId, start_pos: Point, direction: Direction) {
+    pub fn add_snake(&mut self, player_id: PlayerId, start_pos: Point, direction: Direction) {
         let snake = Snake::new(start_pos, direction, &self.field_size);
-        self.snakes.insert(client_id, snake);
+        self.snakes.insert(player_id, snake);
     }
 
-    pub fn kill_snake(&mut self, client_id: &ClientId, reason: DeathReason) {
-        if let Some(snake) = self.snakes.get_mut(client_id) {
+    pub fn kill_snake(&mut self, player_id: &PlayerId, reason: DeathReason) {
+        if let Some(snake) = self.snakes.get_mut(player_id) {
             if snake.is_alive() {
                 snake.death_reason = Some(reason);
                 self.game_end_reason = Some(reason);
@@ -174,8 +174,8 @@ impl GameState {
         }
     }
 
-    pub fn set_snake_direction(&mut self, client_id: &ClientId, direction: Direction) {
-        if let Some(snake) = self.snakes.get_mut(client_id) {
+    pub fn set_snake_direction(&mut self, player_id: &PlayerId, direction: Direction) {
+        if let Some(snake) = self.snakes.get_mut(player_id) {
             if snake.is_alive() && !direction.is_opposite(&snake.direction) {
                 snake.pending_direction = Some(direction);
             }
@@ -196,18 +196,18 @@ impl GameState {
             }
         }
 
-        let client_ids: Vec<ClientId> = self.snakes.keys().cloned().collect();
+        let player_ids: Vec<PlayerId> = self.snakes.keys().cloned().collect();
 
-        for client_id in client_ids {
-            let snake = self.snakes.get_mut(&client_id).unwrap();
+        for player_id in player_ids {
+            let snake = self.snakes.get_mut(&player_id).unwrap();
             if !snake.is_alive() {
                 continue;
             }
 
-            match self.try_move_snake_for_client(&client_id) {
+            match self.try_move_snake_for_player(&player_id) {
                 Ok(_) => {},
                 Err(reason) => {
-                    let snake = self.snakes.get_mut(&client_id).unwrap();
+                    let snake = self.snakes.get_mut(&player_id).unwrap();
                     snake.death_reason = Some(reason);
                     self.game_end_reason = Some(reason);
                 }
@@ -215,20 +215,20 @@ impl GameState {
         }
     }
 
-    fn try_move_snake_for_client(&mut self, client_id: &ClientId) -> Result<(), DeathReason> {
+    fn try_move_snake_for_player(&mut self, player_id: &PlayerId) -> Result<(), DeathReason> {
         let next_head = {
-            let snake = self.snakes.get(client_id).unwrap();
-            self.calculate_next_head_position_for_client(client_id, snake)?
+            let snake = self.snakes.get(player_id).unwrap();
+            self.calculate_next_head_position_for_player(player_id, snake)?
         };
 
-        let snake = self.snakes.get_mut(client_id).unwrap();
+        let snake = self.snakes.get_mut(player_id).unwrap();
         snake.body.push_front(next_head);
         snake.body_set.insert(next_head);
 
         if self.food_set.contains(&next_head) {
             self.food_set.remove(&next_head);
             snake.score += 1;
-            log!("[{}] ate food at ({}, {}). Score: {}", client_id, next_head.x, next_head.y, snake.score);
+            log!("[{}] ate food at ({}, {}). Score: {}", player_id, next_head.x, next_head.y, snake.score);
         } else {
             let tail = snake.body.pop_back().unwrap();
             snake.body_set.remove(&tail);
@@ -237,7 +237,7 @@ impl GameState {
         Ok(())
     }
 
-    fn calculate_next_head_position_for_client(&self, _client_id: &ClientId, snake: &Snake) -> Result<Point, DeathReason> {
+    fn calculate_next_head_position_for_player(&self, _player_id: &PlayerId, snake: &Snake) -> Result<Point, DeathReason> {
         let head = snake.head();
         let direction = &snake.direction;
 

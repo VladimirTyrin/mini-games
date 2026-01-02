@@ -1,5 +1,5 @@
 use common::snake_game_service_client::SnakeGameServiceClient;
-use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, LobbySettings, log, TurnCommand};
+use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, LobbySettings, log, TurnCommand};
 use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, ClientCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
@@ -119,6 +119,16 @@ pub async fn grpc_client_task(
                             MenuCommand::PlayAgain => {
                                 Some(client_message::Message::PlayAgain(PlayAgainRequest {}))
                             }
+                            MenuCommand::AddBot { bot_type } => {
+                                Some(client_message::Message::AddBot(AddBotRequest {
+                                    bot_type: bot_type as i32,
+                                }))
+                            }
+                            MenuCommand::KickFromLobby { player_id } => {
+                                Some(client_message::Message::KickFromLobby(KickFromLobbyRequest {
+                                    player_id,
+                                }))
+                            }
                             MenuCommand::Disconnect => {
                                 Some(client_message::Message::Disconnect(DisconnectRequest {}))
                             }
@@ -168,14 +178,23 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerJoined(notification) => {
-                                    shared_state.add_event_log(format!("{} joined", notification.client_id));
+                                    let player_name = notification.identity.as_ref()
+                                        .map(|i| i.player_id.clone())
+                                        .unwrap_or_else(|| "Unknown".to_string());
+                                    shared_state.add_event_log(format!("{} joined", player_name));
                                 }
                                 common::server_message::Message::PlayerLeft(notification) => {
-                                    shared_state.add_event_log(format!("{} left", notification.client_id));
+                                    let player_name = notification.identity.as_ref()
+                                        .map(|i| i.player_id.clone())
+                                        .unwrap_or_else(|| "Unknown".to_string());
+                                    shared_state.add_event_log(format!("{} left", player_name));
                                 }
                                 common::server_message::Message::PlayerReady(notification) => {
+                                    let player_name = notification.identity.as_ref()
+                                        .map(|i| i.player_id.clone())
+                                        .unwrap_or_else(|| "Unknown".to_string());
                                     let status = if notification.ready { "ready" } else { "not ready" };
-                                    shared_state.add_event_log(format!("{} is {}", notification.client_id, status));
+                                    shared_state.add_event_log(format!("{} is {}", player_name, status));
                                 }
                                 common::server_message::Message::Error(err) => {
                                     shared_state.set_error(err.message);
@@ -217,7 +236,10 @@ pub async fn grpc_client_task(
                                     shared_state.update_game_state(state);
                                 }
                                 common::server_message::Message::GameOver(game_over) => {
-                                    log!("Game over! Winner: {}", game_over.winner_id);
+                                    let winner_name = game_over.winner.as_ref()
+                                        .map(|w| w.player_id.clone())
+                                        .unwrap_or_else(|| "None".to_string());
+                                    log!("Game over! Winner: {}", winner_name);
 
                                     let last_game_state = match shared_state.get_state() {
                                         AppState::InGame { game_state, .. } => game_state,
@@ -229,7 +251,7 @@ pub async fn grpc_client_task(
 
                                     shared_state.set_state(AppState::GameOver {
                                         scores: game_over.scores,
-                                        winner_id: game_over.winner_id,
+                                        winner: game_over.winner,
                                         last_game_state,
                                         reason,
                                         play_again_status: PlayAgainStatus::NotAvailable,
@@ -243,8 +265,8 @@ pub async fn grpc_client_task(
                                             }
                                             common::play_again_status_notification::Status::Available(available) => {
                                                 PlayAgainStatus::Available {
-                                                    ready_player_ids: available.ready_player_ids,
-                                                    pending_player_ids: available.pending_player_ids,
+                                                    ready_players: available.ready_players,
+                                                    pending_players: available.pending_players,
                                                 }
                                             }
                                         };
