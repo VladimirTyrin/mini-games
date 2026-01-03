@@ -230,12 +230,12 @@ impl LobbyManager {
     }
 
     pub async fn create_lobby(&self, name: String, max_players: u32, settings: LobbySettings, creator_id: ClientId) -> Result<LobbyDetails, String> {
-        if settings.field_width < 5 || settings.field_width > 30 {
-            return Err("Field width must be between 5 and 30".to_string());
+        if settings.field_width < 5 || settings.field_width > 50 {
+            return Err("Field width must be between 5 and 50".to_string());
         }
 
-        if settings.field_height < 5 || settings.field_height > 30 {
-            return Err("Field height must be between 5 and 30".to_string());
+        if settings.field_height < 5 || settings.field_height > 50 {
+            return Err("Field height must be between 5 and 50".to_string());
         }
 
         let mut state = self.state.lock().await;
