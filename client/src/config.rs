@@ -58,14 +58,14 @@ impl Validate for LobbyConfig {
         if self.max_players == 0 {
             return Err("max_players must be greater than 0".to_string());
         }
-        if self.max_players > 8 {
-            return Err("max_players must not exceed 8".to_string());
+        if self.max_players > 16 {
+            return Err("max_players must not exceed 16".to_string());
         }
         if self.field_width < 5 || self.field_height < 5 {
             return Err("field dimensions must be at least 5x5".to_string());
         }
-        if self.field_width > 25 || self.field_height > 25 {
-            return Err("field dimensions must not exceed 25x25".to_string());
+        if self.field_width > 50 || self.field_height > 50 {
+            return Err("field dimensions must not exceed 50x50".to_string());
         }
         if self.tick_interval_ms < 50 {
             return Err("tick_interval_ms must be at least 50".to_string());
