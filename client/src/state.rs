@@ -1,5 +1,6 @@
 use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction, BotType, PlayerIdentity};
 use crate::config::LobbyConfig;
+use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
@@ -74,7 +75,7 @@ pub struct SharedState {
 impl SharedState {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![], chat_messages: AllocRingBuffer::new(20) })),
+            state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![], chat_messages: AllocRingBuffer::new(CHAT_BUFFER_SIZE) })),
             error: Arc::new(Mutex::new(None)),
             should_close: Arc::new(Mutex::new(false)),
             connection_failed: Arc::new(Mutex::new(false)),

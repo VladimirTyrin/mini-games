@@ -8,7 +8,7 @@ use common::{
     ClientId,
     log,
 };
-use crate::lobby_manager::{LobbyManager, PlayerIdentity};
+use crate::lobby_manager::LobbyManager;
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
 

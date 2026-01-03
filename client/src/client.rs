@@ -4,6 +4,7 @@ use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, L
 use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, ClientCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
+use crate::constants::CHAT_BUFFER_SIZE;
 
 fn new_client_message(message: client_message::Message) -> ClientMessage {
     ClientMessage {
@@ -202,9 +203,13 @@ pub async fn grpc_client_task(
                         if let Some(msg) = server_msg.message {
                             match msg {
                                 common::server_message::Message::LobbyList(lobby_list) => {
+                                    let chat_messages = match shared_state.get_state() {
+                                        AppState::LobbyList { chat_messages, .. } => chat_messages,
+                                        _ => AllocRingBuffer::new(CHAT_BUFFER_SIZE),
+                                    };
                                     shared_state.set_state(AppState::LobbyList {
                                         lobbies: lobby_list.lobbies,
-                                        chat_messages: AllocRingBuffer::new(20),
+                                        chat_messages,
                                     });
                                 }
                                 common::server_message::Message::LobbyUpdate(update) => {
@@ -219,7 +224,7 @@ pub async fn grpc_client_task(
                                             AppState::LobbyList { .. } => {
                                                 shared_state.set_state(AppState::InLobby {
                                                     details: lobby,
-                                                    event_log: AllocRingBuffer::new(20),
+                                                    event_log: AllocRingBuffer::new(CHAT_BUFFER_SIZE),
                                                 });
                                             }
                                             _ => {}

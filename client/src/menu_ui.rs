@@ -8,7 +8,7 @@ use common::{Direction, WallCollisionMode};
 use common::{LobbyDetails, LobbyInfo};
 use eframe::egui;
 use egui::{Align, Layout};
-use ringbuffer::AllocRingBuffer;
+use ringbuffer::{AllocRingBuffer, RingBuffer};
 use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
@@ -94,109 +94,156 @@ impl MenuApp {
         }
     }
 
-    fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo], chat_messages: &AllocRingBuffer<String>) {
-        ui.heading("Snake Game - Lobby List");
+    fn render_chat_widget(&mut self, ui: &mut egui::Ui, chat_messages: &AllocRingBuffer<String>, is_lobby_list: bool) {
         ui.separator();
+        ui.heading("Chat");
 
-        ui.horizontal(|ui| {
-            if ui.button("🔄 Update (F5)").clicked() {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
-            }
+        let available_height = ui.available_height();
+        let input_height = 30.0;
+        let messages_height = available_height - input_height - 10.0;
 
-            if ui.button("➕ Create Lobby (Ctrl+N)").clicked() {
-                self.create_lobby_dialog = true;
-                self.lobby_name_input = self.client_id.clone();
-                let config = self.config_manager.get_config().unwrap();
-                self.max_players_input = config.lobby.max_players.to_string();
-            }
-        });
-
-        ctx.input(|i| {
-            if i.key_pressed(egui::Key::F5) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
-            }
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
-                self.create_lobby_dialog = true;
-                self.lobby_name_input = self.client_id.clone();
-                let config = self.config_manager.get_config().unwrap();
-                self.max_players_input = config.lobby.max_players.to_string();
-            }
-        });
-
-        ui.separator();
-
-        if lobbies.is_empty() {
-            ui.label("No lobbies available. Create one!");
-        } else {
-            egui::ScrollArea::vertical()
-                .id_salt("lobby_list_scroll")
-                .show(ui, |ui| {
-                for lobby in lobbies {
-                    let can_join = lobby.current_players < lobby.max_players;
-
-                    let (rect, inner_response) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width(), 60.0),
-                        egui::Sense::click(),
-                    );
-
-                    let button_clicked = ui.scope_builder(
-                        egui::UiBuilder::new().max_rect(rect),
-                        |ui| {
-                            ui.group(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.vertical(|ui| {
-                                        let full_message = if lobby.current_players == lobby.max_players {
-                                            " (Full)"
-                                        } else {
-                                            ""
-                                        };
-                                        ui.label(format!("📋 {}", lobby.lobby_name));
-                                        ui.label(format!(
-                                            "👥 Players: {}/{} {}",
-                                            lobby.current_players, lobby.max_players, full_message
-                                        ));
-                                    });
-
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        ui.add_enabled_ui(can_join, |ui| {
-                                            ui.button("Join").clicked()
-                                        })
-                                    })
-                                })
-                            })
-                        }
-                    ).inner.inner.inner.inner.inner;
-
-                    let double_clicked = inner_response.double_clicked() && can_join;
-
-                    if button_clicked || double_clicked {
-                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::JoinLobby {
-                            lobby_id: lobby.lobby_id.clone(),
-                        }));
+        egui::ScrollArea::vertical()
+            .id_salt(if is_lobby_list { "lobby_list_chat_scroll" } else { "in_lobby_chat_scroll" })
+            .stick_to_bottom(true)
+            .max_height(messages_height)
+            .show(ui, |ui| {
+                if chat_messages.is_empty() {
+                    ui.label(egui::RichText::new("No messages yet...").italics().color(egui::Color32::GRAY));
+                } else {
+                    for message in chat_messages {
+                        ui.label(message);
                     }
                 }
             });
-        }
 
+        ui.add_space(5.0);
 
-        for message in chat_messages {
-            ui.label(message);
-        }
+        let response = ui.add_sized(
+            egui::vec2(ui.available_width(), input_height),
+            egui::TextEdit::singleline(&mut self.chat_input)
+                .hint_text("Type message and press Enter...")
+        );
 
-        ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-            ui.label("Chat:");
-            let response =ui.text_edit_singleline(&mut self.chat_input);
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                let message = self.chat_input.trim();
-                if !message.is_empty() {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
+        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            let message = self.chat_input.trim();
+            if !message.is_empty() {
+                let command = if is_lobby_list {
+                    ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
                         message: message.to_string(),
-                    }));
-                    self.chat_input.clear();
+                    })
+                } else {
+                    ClientCommand::Menu(MenuCommand::InLobbyChatMessage {
+                        message: message.to_string(),
+                    })
+                };
+                let _ = self.menu_command_tx.send(command);
+                self.chat_input.clear();
+                response.request_focus();
+            }
+        }
+    }
+
+    fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo], chat_messages: &AllocRingBuffer<String>) {
+        let available_height = ui.available_height();
+        let chat_height = 200.0;
+        let main_content_height = available_height - chat_height;
+
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), main_content_height),
+            Layout::top_down(Align::LEFT),
+            |ui| {
+                ui.heading("Snake Game - Lobby List");
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    if ui.button("🔄 Update (F5)").clicked() {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                    }
+
+                    if ui.button("➕ Create Lobby (Ctrl+N)").clicked() {
+                        self.create_lobby_dialog = true;
+                        self.lobby_name_input = self.client_id.clone();
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = config.lobby.max_players.to_string();
+                    }
+                });
+
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::F5) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                    }
+                    if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
+                        self.create_lobby_dialog = true;
+                        self.lobby_name_input = self.client_id.clone();
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = config.lobby.max_players.to_string();
+                    }
+                });
+
+                ui.separator();
+
+                if lobbies.is_empty() {
+                    ui.label("No lobbies available. Create one!");
+                } else {
+                    egui::ScrollArea::vertical()
+                        .id_salt("lobby_list_scroll")
+                        .show(ui, |ui| {
+                        for lobby in lobbies {
+                            let can_join = lobby.current_players < lobby.max_players;
+
+                            let (rect, inner_response) = ui.allocate_exact_size(
+                                egui::vec2(ui.available_width(), 60.0),
+                                egui::Sense::click(),
+                            );
+
+                            let button_clicked = ui.scope_builder(
+                                egui::UiBuilder::new().max_rect(rect),
+                                |ui| {
+                                    ui.group(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.vertical(|ui| {
+                                                let full_message = if lobby.current_players == lobby.max_players {
+                                                    " (Full)"
+                                                } else {
+                                                    ""
+                                                };
+                                                ui.label(format!("📋 {}", lobby.lobby_name));
+                                                ui.label(format!(
+                                                    "👥 Players: {}/{} {}",
+                                                    lobby.current_players, lobby.max_players, full_message
+                                                ));
+                                            });
+
+                                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                                ui.add_enabled_ui(can_join, |ui| {
+                                                    ui.button("Join").clicked()
+                                                })
+                                            })
+                                        })
+                                    })
+                                }
+                            ).inner.inner.inner.inner.inner;
+
+                            let double_clicked = inner_response.double_clicked() && can_join;
+
+                            if button_clicked || double_clicked {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::JoinLobby {
+                                    lobby_id: lobby.lobby_id.clone(),
+                                }));
+                            }
+                        }
+                    });
                 }
             }
-        });
+        );
 
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), chat_height),
+            Layout::top_down(Align::LEFT),
+            |ui| {
+                self.render_chat_widget(ui, chat_messages, true);
+            }
+        );
     }
 
     fn render_create_lobby_dialog(&mut self, ctx: &egui::Context) {
@@ -320,173 +367,178 @@ impl MenuApp {
     }
 
     fn render_in_lobby(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, details: &LobbyDetails, event_log: &AllocRingBuffer<String>) {
-        ui.heading(format!("Lobby: {}", details.lobby_name));
-        ui.separator();
+        let available_height = ui.available_height();
+        let chat_height = 200.0;
+        let main_content_height = available_height - chat_height;
 
-        ui.label(format!("Lobby ID: {}", details.lobby_id));
-        ui.label(format!("Players: {}/{}", details.players.len(), details.max_players));
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), main_content_height),
+            Layout::top_down(Align::LEFT),
+            |ui| {
+                ui.heading(format!("Lobby: {}", details.lobby_name));
+                ui.separator();
 
-        ui.separator();
-        ui.heading("Players:");
+                ui.label(format!("Lobby ID: {}", details.lobby_id));
+                ui.label(format!("Players: {}/{}", details.players.len(), details.max_players));
 
-        let creator_id = details.creator.as_ref()
-            .map(|c| c.player_id.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-        let is_host = self.client_id == creator_id;
+                ui.separator();
+                ui.heading("Players:");
 
-        for player in &details.players {
-            ui.horizontal(|ui| {
-                let player_id = player.identity.as_ref()
-                    .map(|i| i.player_id.clone())
+                let creator_id = details.creator.as_ref()
+                    .map(|c| c.player_id.clone())
                     .unwrap_or_else(|| "Unknown".to_string());
+                let is_host = self.client_id == creator_id;
 
-                let is_bot = player.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
-                let bot_type_suffix = if is_bot {
-                    let bot_type = player.identity.as_ref()
-                        .and_then(|i| common::BotType::try_from(i.bot_type).ok())
-                        .unwrap_or(common::BotType::Unspecified);
-                    match bot_type {
-                        common::BotType::Efficient => " (Bot - Efficient)",
-                        common::BotType::Random => " (Bot - Random)",
-                        _ => " (Bot)",
-                    }
-                } else {
-                    ""
-                };
+                for player in &details.players {
+                    ui.horizontal(|ui| {
+                        let player_id = player.identity.as_ref()
+                            .map(|i| i.player_id.clone())
+                            .unwrap_or_else(|| "Unknown".to_string());
 
-                let is_self = !is_bot && player_id == self.client_id;
-                let is_player_host = player_id == creator_id;
+                        let is_bot = player.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                        let bot_type_suffix = if is_bot {
+                            let bot_type = player.identity.as_ref()
+                                .and_then(|i| common::BotType::try_from(i.bot_type).ok())
+                                .unwrap_or(common::BotType::Unspecified);
+                            match bot_type {
+                                common::BotType::Efficient => " (Bot - Efficient)",
+                                common::BotType::Random => " (Bot - Random)",
+                                _ => " (Bot)",
+                            }
+                        } else {
+                            ""
+                        };
 
-                let player_display = match (is_self, is_player_host) {
-                    (true, true) => format!("👤 {} (You, Host)", player_id),
-                    (true, false) => format!("👤 {} (You)", player_id),
-                    (false, true) => format!("👤 {} (Host){}", player_id, bot_type_suffix),
-                    (false, false) => format!("👤 {}{}", player_id, bot_type_suffix),
-                };
+                        let is_self = !is_bot && player_id == self.client_id;
+                        let is_player_host = player_id == creator_id;
 
-                let color = generate_color_from_client_id(&player_id);
-                let head_sprite = self.sprites.get_head_sprite(Direction::Right);
-                let texture = head_sprite.to_egui_texture(ctx, &format!("lobby_head_{}", player_id));
+                        let player_display = match (is_self, is_player_host) {
+                            (true, true) => format!("👤 {} (You, Host)", player_id),
+                            (true, false) => format!("👤 {} (You)", player_id),
+                            (false, true) => format!("👤 {} (Host){}", player_id, bot_type_suffix),
+                            (false, false) => format!("👤 {}{}", player_id, bot_type_suffix),
+                        };
 
-                let icon_size = 20.0;
-                let (rect, _response) = ui.allocate_exact_size(
-                    egui::vec2(icon_size, icon_size),
-                    egui::Sense::hover()
-                );
+                        let color = generate_color_from_client_id(&player_id);
+                        let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                        let texture = head_sprite.to_egui_texture(ctx, &format!("lobby_head_{}", player_id));
 
-                ui.painter().image(
-                    texture.id(),
-                    rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                    color,
-                );
+                        let icon_size = 20.0;
+                        let (rect, _response) = ui.allocate_exact_size(
+                            egui::vec2(icon_size, icon_size),
+                            egui::Sense::hover()
+                        );
 
-                ui.label(player_display);
+                        ui.painter().image(
+                            texture.id(),
+                            rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            color,
+                        );
 
-                if player.ready {
-                    ui.label("✅ Ready");
-                } else {
-                    ui.label("⏳ Not Ready");
+                        ui.label(player_display);
+
+                        if player.ready {
+                            ui.label("✅ Ready");
+                        } else {
+                            ui.label("⏳ Not Ready");
+                        }
+
+                        if is_host && !is_self {
+                            if ui.button("❌ Kick").clicked() {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
+                                    player_id: player_id.clone(),
+                                }));
+                            }
+                        }
+                    });
                 }
 
-                if is_host && !is_self {
-                    if ui.button("❌ Kick").clicked() {
-                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
-                            player_id: player_id.clone(),
+                ui.separator();
+
+                let current_ready = details.players
+                    .iter()
+                    .find(|p| {
+                        p.identity.as_ref()
+                            .map(|i| !i.is_bot && i.player_id == self.client_id)
+                            .unwrap_or(false)
+                    })
+                    .map(|p| p.ready)
+                    .unwrap_or(false);
+
+                let all_ready = details.players.iter().all(|p| p.ready);
+
+                ui.horizontal(|ui| {
+                    let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
+                    if ui.button(button_text).clicked() {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                            ready: !current_ready,
                         }));
                     }
-                }
-            });
-        }
 
-        ui.separator();
+                    if ui.button("🚪 Leave Lobby (Esc)").clicked() {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    }
 
-        let current_ready = details.players
-            .iter()
-            .find(|p| {
-                p.identity.as_ref()
-                    .map(|i| !i.is_bot && i.player_id == self.client_id)
-                    .unwrap_or(false)
-            })
-            .map(|p| p.ready)
-            .unwrap_or(false);
+                    if is_host && all_ready {
+                        if ui.button("▶ Start Game (Ctrl+S)").clicked() {
+                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+                        }
+                    }
+                });
 
-        let all_ready = details.players.iter().all(|p| p.ready);
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::Escape) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    }
+                    if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                            ready: !current_ready,
+                        }));
+                    }
+                    if is_host && all_ready && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+                    }
+                });
 
-        ui.horizontal(|ui| {
-            let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
-            if ui.button(button_text).clicked() {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
-                    ready: !current_ready,
-                }));
-            }
+                if is_host {
+                    ui.horizontal(|ui| {
+                        egui::ComboBox::from_label("Bot Type")
+                            .selected_text(match self.selected_bot_type {
+                                common::BotType::Efficient => "Efficient",
+                                common::BotType::Random => "Random",
+                                _ => "Unknown",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.selected_bot_type, common::BotType::Efficient, "Efficient");
+                                ui.selectable_value(&mut self.selected_bot_type, common::BotType::Random, "Random");
+                            });
 
-            if ui.button("🚪 Leave Lobby (Esc)").clicked() {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
-            }
-
-            if is_host && all_ready {
-                if ui.button("▶ Start Game (Ctrl+S)").clicked() {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
-                }
-            }
-        });
-
-        ctx.input(|i| {
-            if i.key_pressed(egui::Key::Escape) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
-            }
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
-                    ready: !current_ready,
-                }));
-            }
-            if is_host && all_ready && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
-            }
-        });
-
-        if is_host {
-            ui.horizontal(|ui| {
-                egui::ComboBox::from_label("Bot Type")
-                    .selected_text(match self.selected_bot_type {
-                        common::BotType::Efficient => "Efficient",
-                        common::BotType::Random => "Random",
-                        _ => "Unknown",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selected_bot_type, common::BotType::Efficient, "Efficient");
-                        ui.selectable_value(&mut self.selected_bot_type, common::BotType::Random, "Random");
+                        if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
+                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                bot_type: self.selected_bot_type,
+                            }));
+                        }
                     });
 
-                if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: self.selected_bot_type,
-                    }));
+                    ctx.input(|i| {
+                        if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
+                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                bot_type: self.selected_bot_type,
+                            }));
+                        }
+                    });
                 }
-            });
+            }
+        );
 
-            ctx.input(|i| {
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: self.selected_bot_type,
-                    }));
-                }
-            });
-        }
-
-        ui.separator();
-        ui.heading("Events:");
-
-        egui::ScrollArea::vertical()
-            .id_salt("events_scroll")
-            .stick_to_bottom(true)
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                for event in event_log {
-                    ui.label(event);
-                }
-            });
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), chat_height),
+            Layout::top_down(Align::LEFT),
+            |ui| {
+                self.render_chat_widget(ui, event_log, false);
+            }
+        );
     }
 }
 

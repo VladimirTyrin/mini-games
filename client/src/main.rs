@@ -5,6 +5,7 @@ mod sprites;
 mod game_ui;
 mod config;
 mod colors;
+mod constants;
 
 use clap::Parser;
 use common::id_generator::generate_client_id;
