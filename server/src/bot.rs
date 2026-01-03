@@ -36,7 +36,7 @@ impl BotController {
         for dir in valid_directions {
             if let Some(next_pos) = Self::calculate_next_position(head, dir, state) {
                 if Self::is_safe_position(next_pos, player_id, state) {
-                    let distance = Self::manhattan_distance(next_pos, nearest_food);
+                    let distance = Self::manhattan_distance(next_pos, nearest_food, state);
                     if distance < best_distance {
                         best_distance = distance;
                         best_dir = Some(dir);
@@ -87,12 +87,29 @@ impl BotController {
 
     fn find_nearest_food(from: Point, state: &GameState) -> Option<Point> {
         state.food_set.iter()
-            .min_by_key(|food| Self::manhattan_distance(from, **food) as i32)
+            .min_by_key(|food| Self::manhattan_distance(from, **food, state) as i32)
             .copied()
     }
 
-    fn manhattan_distance(a: Point, b: Point) -> f32 {
-        ((a.x as i32 - b.x as i32).abs() + (a.y as i32 - b.y as i32).abs()) as f32
+    fn manhattan_distance(a: Point, b: Point, state: &GameState) -> f32 {
+        let dx = (a.x as i32 - b.x as i32).abs();
+        let dy = (a.y as i32 - b.y as i32).abs();
+
+        match state.wall_collision_mode {
+            WallCollisionMode::Death => (dx + dy) as f32,
+            WallCollisionMode::WrapAround => {
+                let width = state.field_size.width as i32;
+                let height = state.field_size.height as i32;
+
+                let wrapped_dx = width - dx;
+                let wrapped_dy = height - dy;
+
+                let min_dx = dx.min(wrapped_dx);
+                let min_dy = dy.min(wrapped_dy);
+
+                (min_dx + min_dy) as f32
+            }
+        }
     }
 
     fn calculate_next_position(
