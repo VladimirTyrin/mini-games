@@ -55,6 +55,21 @@ impl SnakeGameService for SnakeGameServiceImpl {
             while let Some(result) = in_stream.next().await {
                 match result {
                     Ok(client_message) => {
+                        let server_version = common::version::get_version();
+                        if client_message.version != server_version {
+                            let error_msg = ServerMessage {
+                                message: Some(server_message::Message::Error(common::ErrorResponse {
+                                    message: format!(
+                                        "Version mismatch: client version '{}', server version '{}'. Please download the latest client from https://github.com/VladimirTyrin/mini-games/releases",
+                                        client_message.version,
+                                        server_version
+                                    ),
+                                })),
+                            };
+                            let _ = tx.send(Ok(error_msg)).await;
+                            break;
+                        }
+
                         if let Some(message) = client_message.message {
                             match message {
                                 client_message::Message::Connect(connect_req) => {

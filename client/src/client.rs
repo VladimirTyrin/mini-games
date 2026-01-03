@@ -4,6 +4,13 @@ use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, ClientCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
 
+fn new_client_message(message: client_message::Message) -> ClientMessage {
+    ClientMessage {
+        version: common::version::get_version().to_string(),
+        message: Some(message),
+    }
+}
+
 #[derive(Clone)]
 pub struct GrpcLoggingSender<T> {
     inner: mpsc::Sender<T>,
@@ -67,16 +74,12 @@ pub async fn grpc_client_task(
         .await?;
     let mut response_stream = stream.into_inner();
 
-    tx.send(ClientMessage {
-        message: Some(client_message::Message::Connect(ConnectRequest {
-            client_id: client_id.clone(),
-        })),
-    })
+    tx.send(new_client_message(client_message::Message::Connect(ConnectRequest {
+        client_id: client_id.clone(),
+    })))
     .await?;
 
-    tx.send(ClientMessage {
-        message: Some(client_message::Message::ListLobbies(ListLobbiesRequest {})),
-    })
+    tx.send(new_client_message(client_message::Message::ListLobbies(ListLobbiesRequest {})))
     .await?;
 
     let mut ping_interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
@@ -92,12 +95,10 @@ pub async fn grpc_client_task(
                     .unwrap()
                     .as_millis() as u64;
 
-                let ping_msg = ClientMessage {
-                    message: Some(client_message::Message::Ping(common::PingRequest {
-                        ping_id: ping_counter,
-                        client_timestamp_ms: now,
-                    })),
-                };
+                let ping_msg = new_client_message(client_message::Message::Ping(common::PingRequest {
+                    ping_id: ping_counter,
+                    client_timestamp_ms: now,
+                }));
                 if tx.send(ping_msg).await.is_ok() {
                     last_ping_id = Some(ping_counter);
                 } else {
@@ -172,7 +173,7 @@ pub async fn grpc_client_task(
                 };
 
                 if let Some(msg) = message {
-                    if tx.send(ClientMessage { message: Some(msg) }).await.is_err() {
+                    if tx.send(new_client_message(msg)).await.is_err() {
                         break;
                     }
                 }
@@ -272,11 +273,9 @@ pub async fn grpc_client_task(
                                     shared_state.set_error(err.message);
                                 }
                                 common::server_message::Message::LobbyListUpdate(_) => {
-                                    if tx.send(ClientMessage {
-                                        message: Some(client_message::Message::ListLobbies(
-                                            ListLobbiesRequest {}
-                                        )),
-                                    }).await.is_err() {
+                                    if tx.send(new_client_message(
+                                        client_message::Message::ListLobbies(ListLobbiesRequest {})
+                                    )).await.is_err() {
                                         break;
                                     }
                                 }
@@ -288,11 +287,9 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::LobbyClosed(notification) => {
                                     if matches!(shared_state.get_state(), AppState::InLobby { .. }) {
                                         shared_state.set_error(notification.message);
-                                        if tx.send(ClientMessage {
-                                            message: Some(client_message::Message::ListLobbies(
-                                                ListLobbiesRequest {}
-                                            )),
-                                        }).await.is_err() {
+                                        if tx.send(new_client_message(
+                                            client_message::Message::ListLobbies(ListLobbiesRequest {})
+                                        )).await.is_err() {
                                             break;
                                         }
                                     }
@@ -369,9 +366,9 @@ pub async fn grpc_client_task(
         }
     }
 
-    let _ = tx.send(ClientMessage {
-        message: Some(client_message::Message::Disconnect(DisconnectRequest {})),
-    }).await;
+    let _ = tx.send(new_client_message(
+        client_message::Message::Disconnect(DisconnectRequest {})
+    )).await;
 
     break;
     }

@@ -6,6 +6,7 @@ pub mod id_generator;
 pub mod logger;
 pub mod identifiers;
 pub mod config;
+pub mod version;
 
 pub use proto::*;
 pub use identifiers::*;

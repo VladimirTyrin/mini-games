@@ -7,6 +7,7 @@ service SnakeGameService {
 }
 
 message ClientMessage {
+    string version = 1;
     oneof message {
         ConnectRequest connect = 10;
         DisconnectRequest disconnect = 11;
