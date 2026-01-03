@@ -1,3 +1,4 @@
+use ringbuffer::{AllocRingBuffer, RingBuffer};
 use common::snake_game_service_client::SnakeGameServiceClient;
 use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, LobbySettings, log, TurnCommand};
 use tokio::sync::mpsc;
@@ -160,6 +161,16 @@ pub async fn grpc_client_task(
                             MenuCommand::Disconnect => {
                                 Some(client_message::Message::Disconnect(DisconnectRequest {}))
                             }
+                            MenuCommand::InLobbyChatMessage { message } => {
+                                Some(client_message::Message::InLobbyChat(common::InLobbyChatMessageRequest {
+                                    message,
+                                }))
+                            },
+                            MenuCommand::LobbyListChatMessage { message } => {
+                                Some(client_message::Message::LobbyListChat(common::LobbyListChatMessageRequest {
+                                    message,
+                                }))
+                            }
                         }
                     }
                     ClientCommand::Game(game_cmd) => {
@@ -193,6 +204,7 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::LobbyList(lobby_list) => {
                                     shared_state.set_state(AppState::LobbyList {
                                         lobbies: lobby_list.lobbies,
+                                        chat_messages: AllocRingBuffer::new(20),
                                     });
                                 }
                                 common::server_message::Message::LobbyUpdate(update) => {
@@ -207,7 +219,7 @@ pub async fn grpc_client_task(
                                             AppState::LobbyList { .. } => {
                                                 shared_state.set_state(AppState::InLobby {
                                                     details: lobby,
-                                                    event_log: Vec::new(),
+                                                    event_log: AllocRingBuffer::new(20),
                                                 });
                                             }
                                             _ => {}
@@ -351,6 +363,37 @@ pub async fn grpc_client_task(
                                             .as_millis() as u64;
                                         let rtt = now.saturating_sub(pong.client_timestamp_ms);
                                         shared_state.set_ping(rtt);
+                                    }
+                                },
+                                common::server_message::Message::LobbyListChat(notification) => {
+                                    if let Some(sender) = &notification.sender {
+                                        let mut state = shared_state.get_state_mut();
+
+                                        let you_message = if sender.player_id == client_id {
+                                            " (You)".to_string()
+                                        } else {
+                                            "".to_string()
+                                        };
+
+                                        if let AppState::LobbyList { chat_messages, .. } = &mut *state {
+                                            chat_messages.enqueue(format!("{}{}: {}", sender.player_id, you_message, notification.message));
+                                        }
+                                    }
+                                },
+                                common::server_message::Message::InLobbyChat(notification) => {
+                                    if let Some(sender) = &notification.sender {
+
+                                        let mut state = shared_state.get_state_mut();
+
+                                        let you_message = if sender.player_id == client_id {
+                                            " (You)".to_string()
+                                        } else {
+                                            "".to_string()
+                                        };
+
+                                        if let AppState::InLobby { event_log, .. } = &mut *state {
+                                            event_log.enqueue(format!("{}{}: {}", sender.player_id, you_message, notification.message));
+                                        }
                                     }
                                 }
                             }

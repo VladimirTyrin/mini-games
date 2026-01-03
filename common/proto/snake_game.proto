@@ -22,6 +22,8 @@ message ClientMessage {
         AddBotRequest add_bot = 20;
         KickFromLobbyRequest kick_from_lobby = 21;
         PingRequest ping = 22;
+        InLobbyChatMessageRequest in_lobby_chat = 23;
+        LobbyListChatMessageRequest lobby_list_chat = 24;
     }
 }
 
@@ -41,6 +43,8 @@ message ServerMessage {
         ErrorResponse error = 21;
         ServerShuttingDownNotification server_shutting_down = 22;
         PongResponse pong = 23;
+        InLobbyChatMessageNotification in_lobby_chat = 24;
+        LobbyListChatMessageNotification lobby_list_chat = 25;
     }
 }
 
@@ -250,3 +254,23 @@ enum GameEndReason {
     GAME_END_REASON_PLAYER_DISCONNECTED = 4;
     GAME_END_REASON_GAME_COMPLETED = 5;
 }
+
+message InLobbyChatMessageRequest {
+    string message = 1;
+}
+
+message InLobbyChatMessageNotification {
+    PlayerIdentity sender = 1;
+    string message = 2;
+}
+
+message LobbyListChatMessageRequest {
+    string message = 1;
+}
+
+message LobbyListChatMessageNotification {
+    PlayerIdentity sender = 1;
+    string message = 2;
+}
+
+

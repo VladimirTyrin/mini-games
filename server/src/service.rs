@@ -8,7 +8,7 @@ use common::{
     ClientId,
     log,
 };
-use crate::lobby_manager::LobbyManager;
+use crate::lobby_manager::{LobbyManager, PlayerIdentity};
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
 
@@ -189,6 +189,50 @@ impl SnakeGameService for SnakeGameServiceImpl {
                                         })),
                                     };
                                     let _ = tx.send(Ok(pong)).await;
+                                }
+                                client_message::Message::LobbyListChat(req) => {
+                                    if let Some(client_id) = &client_id_opt {
+                                        let clients = lobby_manager.get_clients_not_in_lobbies().await;
+
+                                        broadcaster.broadcast_to_clients(
+                                            &clients,
+                                            ServerMessage {
+                                                message: Some(server_message::Message::LobbyListChat(common::LobbyListChatMessageNotification {
+                                                    sender: Some(common::PlayerIdentity {
+                                                        player_id: client_id.to_string(),
+                                                        is_bot: false,
+                                                        bot_type: common::BotType::Unspecified.into(),
+                                                    }),
+                                                    message: req.message,
+                                                })),
+                                            }
+                                        ).await;
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "send lobby list chat message").await;
+                                    }
+                                }
+                                client_message::Message::InLobbyChat(req) => {
+                                    if let Some(client_id) = &client_id_opt {
+                                        if let Some(lobby_details) = lobby_manager.get_client_lobby(client_id).await {
+                                            broadcaster.broadcast_to_lobby(
+                                                &lobby_details,
+                                                ServerMessage {
+                                                    message: Some(server_message::Message::InLobbyChat(common::InLobbyChatMessageNotification {
+                                                        sender: Some(common::PlayerIdentity {
+                                                            player_id: client_id.to_string(),
+                                                            is_bot: false,
+                                                            bot_type: common::BotType::Unspecified.into(),
+                                                        }),
+                                                        message: req.message,
+                                                    })),
+                                                }
+                                            ).await;
+                                        } else {
+                                            Self::send_not_connected_error(&tx, "send in-lobby chat message").await;
+                                        }
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "send in-lobby chat message").await;
+                                    }
                                 }
                             }
                         }

@@ -1,6 +1,7 @@
 use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction, BotType, PlayerIdentity};
 use crate::config::LobbyConfig;
 use std::sync::{Arc, Mutex};
+use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 #[derive(Debug, Clone)]
 pub enum MenuCommand {
@@ -14,6 +15,8 @@ pub enum MenuCommand {
     AddBot { bot_type: BotType },
     KickFromLobby { player_id: String },
     Disconnect,
+    InLobbyChatMessage { message: String },
+    LobbyListChatMessage { message: String },
 }
 
 #[derive(Debug, Clone)]
@@ -40,10 +43,11 @@ pub enum PlayAgainStatus {
 pub enum AppState {
     LobbyList {
         lobbies: Vec<LobbyInfo>,
+        chat_messages: AllocRingBuffer<String>
     },
     InLobby {
         details: LobbyDetails,
-        event_log: Vec<String>,
+        event_log: AllocRingBuffer<String>,
     },
     InGame {
         session_id: String,
@@ -70,7 +74,7 @@ pub struct SharedState {
 impl SharedState {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![] })),
+            state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![], chat_messages: AllocRingBuffer::new(20) })),
             error: Arc::new(Mutex::new(None)),
             should_close: Arc::new(Mutex::new(false)),
             connection_failed: Arc::new(Mutex::new(false)),
@@ -87,10 +91,14 @@ impl SharedState {
         self.state.lock().unwrap().clone()
     }
 
+    pub fn get_state_mut(&self) -> std::sync::MutexGuard<'_, AppState> {
+        self.state.lock().unwrap()
+    }
+
     pub fn add_event(&self, event: String) {
         let mut state = self.state.lock().unwrap();
         if let AppState::InLobby { event_log, .. } = &mut *state {
-            event_log.push(event);
+            event_log.enqueue(event);
         }
     }
 

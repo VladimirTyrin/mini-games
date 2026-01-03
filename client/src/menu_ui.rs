@@ -7,6 +7,8 @@ use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSeriali
 use common::{Direction, WallCollisionMode};
 use common::{LobbyDetails, LobbyInfo};
 use eframe::egui;
+use egui::{Align, Layout};
+use ringbuffer::AllocRingBuffer;
 use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
@@ -53,6 +55,7 @@ pub struct MenuApp {
     config_manager: ClientConfigManager,
     server_address_input: String,
     sprites: Sprites,
+    chat_input: String,
 }
 
 impl MenuApp {
@@ -87,10 +90,11 @@ impl MenuApp {
             config_manager,
             server_address_input: String::new(),
             sprites: Sprites::load(),
+            chat_input: String::new(),
         }
     }
 
-    fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo]) {
+    fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo], chat_messages: &AllocRingBuffer<String>) {
         ui.heading("Snake Game - Lobby List");
         ui.separator();
 
@@ -153,7 +157,7 @@ impl MenuApp {
                                         ));
                                     });
 
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                         ui.add_enabled_ui(can_join, |ui| {
                                             ui.button("Join").clicked()
                                         })
@@ -173,6 +177,26 @@ impl MenuApp {
                 }
             });
         }
+
+
+        for message in chat_messages {
+            ui.label(message);
+        }
+
+        ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+            ui.label("Chat:");
+            let response =ui.text_edit_singleline(&mut self.chat_input);
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                let message = self.chat_input.trim();
+                if !message.is_empty() {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
+                        message: message.to_string(),
+                    }));
+                    self.chat_input.clear();
+                }
+            }
+        });
+
     }
 
     fn render_create_lobby_dialog(&mut self, ctx: &egui::Context) {
@@ -295,7 +319,7 @@ impl MenuApp {
         }
     }
 
-    fn render_in_lobby(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, details: &LobbyDetails, event_log: &[String]) {
+    fn render_in_lobby(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, details: &LobbyDetails, event_log: &AllocRingBuffer<String>) {
         ui.heading(format!("Lobby: {}", details.lobby_name));
         ui.separator();
 
@@ -564,8 +588,8 @@ impl eframe::App for MenuApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             match current_state {
-                AppState::LobbyList { lobbies } => {
-                    self.render_lobby_list(ui, ctx, &lobbies);
+                AppState::LobbyList { lobbies, chat_messages } => {
+                    self.render_lobby_list(ui, ctx, &lobbies, &chat_messages);
                 }
                 AppState::InLobby { details, event_log } => {
                     self.render_in_lobby(ui, ctx, &details, &event_log);

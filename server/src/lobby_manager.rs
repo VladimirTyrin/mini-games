@@ -522,6 +522,17 @@ impl LobbyManager {
             pending_player_ids
         })
     }
+    
+    pub async fn get_client_lobby(&self, client_id: &ClientId) -> Option<LobbyDetails> {
+        let state = self.state.lock().await;
+        let lobby_id = state.client_to_lobby.get(client_id);
+        
+        if let Some(lobby_id) = lobby_id {
+            state.lobbies.get(&lobby_id).map(|lobby| lobby.to_details())
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
