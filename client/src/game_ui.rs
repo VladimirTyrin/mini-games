@@ -1,5 +1,6 @@
 use crate::game_render::Sprites;
 use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
+use crate::colors::generate_color_from_client_id;
 use common::{Direction, GameStateUpdate, Position, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
@@ -9,40 +10,6 @@ struct Color {
     r: u8,
     g: u8,
     b: u8,
-}
-
-fn generate_color_from_client_id(client_id: &str) -> Color {
-    let hash = client_id.bytes().fold(0u32, |acc, b| {
-        acc.wrapping_mul(31).wrapping_add(b as u32)
-    });
-
-    let hue = (hash % 360) as f32;
-    let saturation = 0.7_f32;
-    let lightness = 0.5_f32;
-
-    let c = (1.0_f32 - (2.0_f32 * lightness - 1.0_f32).abs()) * saturation;
-    let x = c * (1.0_f32 - ((hue / 60.0_f32) % 2.0_f32 - 1.0_f32).abs());
-    let m = lightness - c / 2.0;
-
-    let (r, g, b) = if hue < 60.0 {
-        (c, x, 0.0)
-    } else if hue < 120.0 {
-        (x, c, 0.0)
-    } else if hue < 180.0 {
-        (0.0, c, x)
-    } else if hue < 240.0 {
-        (0.0, x, c)
-    } else if hue < 300.0 {
-        (x, 0.0, c)
-    } else {
-        (c, 0.0, x)
-    };
-
-    Color {
-        r: ((r + m) * 255.0) as u8,
-        g: ((g + m) * 255.0) as u8,
-        b: ((b + m) * 255.0) as u8,
-    }
 }
 
 pub struct GameUi {
@@ -215,18 +182,38 @@ impl GameUi {
                         } else {
                             egui::Color32::WHITE
                         };
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{}. {}{}{}: {} points",
-                                rank + 1,
-                                player_id,
-                                bot_marker,
-                                you_marker,
-                                entry.score
-                            ))
-                            .size(14.0)
-                            .color(text_color)
-                        );
+
+                        ui.horizontal(|ui| {
+                            let color = generate_color_from_client_id(&player_id);
+                            let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                            let texture = head_sprite.to_egui_texture(ctx, &format!("score_head_{}", player_id));
+
+                            let icon_size = 20.0;
+                            let (rect, _response) = ui.allocate_exact_size(
+                                egui::vec2(icon_size, icon_size),
+                                egui::Sense::hover()
+                            );
+
+                            ui.painter().image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                color,
+                            );
+
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{}. {}{}{}: {} points",
+                                    rank + 1,
+                                    player_id,
+                                    bot_marker,
+                                    you_marker,
+                                    entry.score
+                                ))
+                                .size(14.0)
+                                .color(text_color)
+                            );
+                        });
                     }
 
                     ui.add_space(10.0);
@@ -320,15 +307,35 @@ impl GameUi {
                     2 => "🥉",
                     _ => "  ",
                 };
-                ui.label(format!(
-                    "{} {}. {}{}{}: {} points",
-                    medal,
-                    rank + 1,
-                    player_id,
-                    bot_marker,
-                    you_marker,
-                    entry.score
-                ));
+
+                ui.horizontal(|ui| {
+                    let color = generate_color_from_client_id(&player_id);
+                    let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                    let texture = head_sprite.to_egui_texture(ctx, &format!("score_fallback_head_{}", player_id));
+
+                    let icon_size = 20.0;
+                    let (rect, _response) = ui.allocate_exact_size(
+                        egui::vec2(icon_size, icon_size),
+                        egui::Sense::hover()
+                    );
+
+                    ui.painter().image(
+                        texture.id(),
+                        rect,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        color,
+                    );
+
+                    ui.label(format!(
+                        "{} {}. {}{}{}: {} points",
+                        medal,
+                        rank + 1,
+                        player_id,
+                        bot_marker,
+                        you_marker,
+                        entry.score
+                    ));
+                });
             }
 
             ui.separator();
@@ -478,7 +485,12 @@ impl GameUi {
                 .unwrap_or_else(|| "Unknown".to_string());
 
             let color = if snake.alive {
-                generate_color_from_client_id(&player_id)
+                let egui_color = generate_color_from_client_id(&player_id);
+                Color {
+                    r: egui_color.r(),
+                    g: egui_color.g(),
+                    b: egui_color.b(),
+                }
             } else {
                 Color { r: 128, g: 128, b: 128 }
             };

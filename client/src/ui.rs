@@ -1,8 +1,10 @@
 use crate::config::{Config, LobbyConfig};
 use crate::game_ui::GameUi;
+use crate::game_render::Sprites;
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState};
+use crate::colors::generate_color_from_client_id;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
-use common::WallCollisionMode;
+use common::{Direction, WallCollisionMode};
 use common::{LobbyDetails, LobbyInfo};
 use eframe::egui;
 use tokio::sync::mpsc;
@@ -30,12 +32,14 @@ pub struct MenuApp {
     field_height_input: String,
     tick_interval_input: String,
     wall_collision_mode: WallCollisionMode,
+    selected_bot_type: common::BotType,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
     window_resized_for_game: bool,
     config_manager: ClientConfigManager,
     server_address_input: String,
+    sprites: Sprites,
 }
 
 impl MenuApp {
@@ -59,12 +63,14 @@ impl MenuApp {
             field_height_input: config.lobby.field_height.to_string(),
             tick_interval_input: config.lobby.tick_interval_ms.to_string(),
             wall_collision_mode: config.lobby.wall_collision_mode,
+            selected_bot_type: common::BotType::Efficient,
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
             window_resized_for_game: false,
             config_manager,
             server_address_input: String::new(),
+            sprites: Sprites::load(),
         }
     }
 
@@ -295,6 +301,23 @@ impl MenuApp {
                     (false, false) => format!("👤 {}{}", player_id, bot_type_suffix),
                 };
 
+                let color = generate_color_from_client_id(&player_id);
+                let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                let texture = head_sprite.to_egui_texture(ctx, &format!("lobby_head_{}", player_id));
+
+                let icon_size = 20.0;
+                let (rect, _response) = ui.allocate_exact_size(
+                    egui::vec2(icon_size, icon_size),
+                    egui::Sense::hover()
+                );
+
+                ui.painter().image(
+                    texture.id(),
+                    rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    color,
+                );
+
                 ui.label(player_display);
 
                 if player.ready {
@@ -328,47 +351,62 @@ impl MenuApp {
         let all_ready = details.players.iter().all(|p| p.ready);
 
         ui.horizontal(|ui| {
-            let button_text = if current_ready { "Mark Not Ready" } else { "Mark Ready" };
+            let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
             if ui.button(button_text).clicked() {
                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
                     ready: !current_ready,
                 }));
             }
 
-            if ui.button("🚪 Leave Lobby").clicked() {
+            if ui.button("🚪 Leave Lobby (Esc)").clicked() {
                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
 
             if is_host && all_ready {
-                if ui.button("▶ Start Game").clicked() {
+                if ui.button("▶ Start Game (Ctrl+S)").clicked() {
                     let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
                 }
             }
         });
 
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+            }
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                    ready: !current_ready,
+                }));
+            }
+            if is_host && all_ready && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+            }
+        });
+
         if is_host {
             ui.horizontal(|ui| {
-                if ui.button("🤖 Add Efficient Bot (Ctrl+E)").clicked() {
+                egui::ComboBox::from_label("Bot Type")
+                    .selected_text(match self.selected_bot_type {
+                        common::BotType::Efficient => "Efficient",
+                        common::BotType::Random => "Random",
+                        _ => "Unknown",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.selected_bot_type, common::BotType::Efficient, "Efficient");
+                        ui.selectable_value(&mut self.selected_bot_type, common::BotType::Random, "Random");
+                    });
+
+                if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
                     let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: common::BotType::Efficient,
-                    }));
-                }
-                if ui.button("🎲 Add Random Bot (Ctrl+R)").clicked() {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: common::BotType::Random,
+                        bot_type: self.selected_bot_type,
                     }));
                 }
             });
 
             ctx.input(|i| {
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::E) {
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
                     let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: common::BotType::Efficient,
-                    }));
-                }
-                if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                        bot_type: common::BotType::Random,
+                        bot_type: self.selected_bot_type,
                     }));
                 }
             });
