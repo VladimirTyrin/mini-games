@@ -9,16 +9,16 @@ pub struct GrpcLoggingSender<T> {
     inner: mpsc::Sender<T>,
 }
 
-impl<T> GrpcLoggingSender<T>
-where
-    T: std::fmt::Debug + prost::Message
-{
-    pub fn new(inner: mpsc::Sender<T>) -> Self {
+impl GrpcLoggingSender<ClientMessage> {
+    pub fn new(inner: mpsc::Sender<ClientMessage>) -> Self {
         Self { inner }
     }
 
-    pub async fn send(&self, value: T) -> Result<(), mpsc::error::SendError<T>> {
-        log!("Sending: {:?}", value);
+    pub async fn send(&self, value: ClientMessage) -> Result<(), mpsc::error::SendError<ClientMessage>> {
+        let is_ping = matches!(&value.message, Some(client_message::Message::Ping(_)));
+        if !is_ping {
+            log!("Sending: {:?}", value);
+        }
         self.inner.send(value).await
     }
 }
@@ -79,8 +79,32 @@ pub async fn grpc_client_task(
     })
     .await?;
 
+    let mut ping_interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
+    let mut ping_counter: u64 = 0;
+    let mut last_ping_id: Option<u64> = None;
+
     loop {
         tokio::select! {
+            _ = ping_interval.tick() => {
+                ping_counter += 1;
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+
+                let ping_msg = ClientMessage {
+                    message: Some(client_message::Message::Ping(common::PingRequest {
+                        ping_id: ping_counter,
+                        client_timestamp_ms: now,
+                    })),
+                };
+                if tx.send(ping_msg).await.is_ok() {
+                    last_ping_id = Some(ping_counter);
+                } else {
+                    break;
+                }
+            }
+
             Some(command) = command_rx.recv() => {
                 let message = match command {
                     ClientCommand::Menu(menu_cmd) => {
@@ -155,7 +179,10 @@ pub async fn grpc_client_task(
             result = response_stream.message() => {
                 match result {
                     Ok(Some(server_msg)) => {
-                        log!("Received: {:?}", server_msg);
+                        let is_pong = matches!(&server_msg.message, Some(common::server_message::Message::Pong(_)));
+                        if !is_pong {
+                            log!("Received: {:?}", server_msg);
+                        }
 
                         if let Some(msg) = server_msg.message {
                             match msg {
@@ -314,6 +341,16 @@ pub async fn grpc_client_task(
                                             }
                                         };
                                         shared_state.update_play_again_status(play_again_status);
+                                    }
+                                }
+                                common::server_message::Message::Pong(pong) => {
+                                    if last_ping_id == Some(pong.ping_id) {
+                                        let now = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_millis() as u64;
+                                        let rtt = now.saturating_sub(pong.client_timestamp_ms);
+                                        shared_state.set_ping(rtt);
                                     }
                                 }
                             }

@@ -64,6 +64,7 @@ pub struct SharedState {
     should_close: Arc<Mutex<bool>>,
     connection_failed: Arc<Mutex<bool>>,
     retry_server_address: Arc<Mutex<Option<String>>>,
+    ping_ms: Arc<Mutex<Option<u64>>>,
 }
 
 impl SharedState {
@@ -74,6 +75,7 @@ impl SharedState {
             should_close: Arc::new(Mutex::new(false)),
             connection_failed: Arc::new(Mutex::new(false)),
             retry_server_address: Arc::new(Mutex::new(None)),
+            ping_ms: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -145,6 +147,14 @@ impl SharedState {
             *current_status = play_again_status;
         }
     }
+
+    pub fn set_ping(&self, ping_ms: u64) {
+        *self.ping_ms.lock().unwrap() = Some(ping_ms);
+    }
+
+    pub fn get_ping(&self) -> Option<u64> {
+        *self.ping_ms.lock().unwrap()
+    }
 }
 
 impl Clone for SharedState {
@@ -155,6 +165,7 @@ impl Clone for SharedState {
             should_close: Arc::clone(&self.should_close),
             connection_failed: Arc::clone(&self.connection_failed),
             retry_server_address: Arc::clone(&self.retry_server_address),
+            ping_ms: Arc::clone(&self.ping_ms),
         }
     }
 }

@@ -411,6 +411,13 @@ impl eframe::App for MenuApp {
             }
         }
 
+        let title = if let Some(ping) = self.shared_state.get_ping() {
+            format!("Snake Game - Ping: {}ms", ping)
+        } else {
+            "Snake Game".to_string()
+        };
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+
         if let Some(error) = self.shared_state.get_error() {
             if self.shared_state.get_connection_failed() {
                 egui::Window::new("Connection Failed")

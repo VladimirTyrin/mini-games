@@ -20,6 +20,7 @@ message ClientMessage {
         TurnCommand turn = 19;
         AddBotRequest add_bot = 20;
         KickFromLobbyRequest kick_from_lobby = 21;
+        PingRequest ping = 22;
     }
 }
 
@@ -38,6 +39,7 @@ message ServerMessage {
         GameOverNotification game_over = 20;
         ErrorResponse error = 21;
         ServerShuttingDownNotification server_shutting_down = 22;
+        PongResponse pong = 23;
     }
 }
 
@@ -75,6 +77,16 @@ message AddBotRequest {
 
 message KickFromLobbyRequest {
     string player_id = 1;
+}
+
+message PingRequest {
+    uint64 ping_id = 1;
+    uint64 client_timestamp_ms = 2;
+}
+
+message PongResponse {
+    uint64 ping_id = 1;
+    uint64 client_timestamp_ms = 2;
 }
 
 message LobbyListResponse {

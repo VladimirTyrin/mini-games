@@ -166,6 +166,15 @@ impl SnakeGameService for SnakeGameServiceImpl {
                                         Self::send_not_connected_error(&tx, "kick from lobby").await;
                                     }
                                 }
+                                client_message::Message::Ping(req) => {
+                                    let pong = ServerMessage {
+                                        message: Some(server_message::Message::Pong(common::PongResponse {
+                                            ping_id: req.ping_id,
+                                            client_timestamp_ms: req.client_timestamp_ms,
+                                        })),
+                                    };
+                                    let _ = tx.send(Ok(pong)).await;
+                                }
                             }
                         }
                     }
