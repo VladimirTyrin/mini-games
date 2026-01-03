@@ -1,4 +1,4 @@
-use crate::game_render::Sprites;
+use crate::sprites::Sprites;
 use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use crate::colors::generate_color_from_client_id;
 use common::{Direction, GameStateUpdate, Position, ScoreEntry, PlayerIdentity};
@@ -66,10 +66,30 @@ impl GameUi {
                 let is_you = !is_bot && player_id == client_id;
                 let status = if snake.alive { "🟢" } else { "💀" };
                 let you_marker = if is_you { " (You)" } else { "" };
-                ui.label(format!(
-                    "{} {}{}{}: {} points",
-                    status, player_id, bot_marker, you_marker, snake.score
-                ));
+
+                ui.horizontal(|ui| {
+                    let color = generate_color_from_client_id(&player_id);
+                    let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                    let texture = head_sprite.to_egui_texture(ctx, &format!("game_head_{}", player_id));
+
+                    let icon_size = 20.0;
+                    let (rect, _response) = ui.allocate_exact_size(
+                        egui::vec2(icon_size, icon_size),
+                        egui::Sense::hover()
+                    );
+
+                    ui.painter().image(
+                        texture.id(),
+                        rect,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        color,
+                    );
+
+                    ui.label(format!(
+                        "{} {}{}{}: {} points",
+                        status, player_id, bot_marker, you_marker, snake.score
+                    ));
+                });
             }
         } else {
             ui.heading("Waiting for game to start...");
@@ -415,7 +435,7 @@ impl GameUi {
         &self,
         painter: &egui::Painter,
         ctx: &egui::Context,
-        sprite: &crate::game_render::Sprite,
+        sprite: &crate::sprites::Sprite,
         grid_x: i32,
         grid_y: i32,
         canvas_min: egui::Pos2,

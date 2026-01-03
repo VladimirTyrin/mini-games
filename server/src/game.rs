@@ -132,14 +132,14 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(field_size: FieldSize, wall_collision_mode: WallCollisionMode) -> Self {
+    pub fn new(field_size: FieldSize, wall_collision_mode: WallCollisionMode, max_food_count: usize, food_spawn_probability: f32) -> Self {
         Self {
             snakes: HashMap::new(),
             food_set: HashSet::new(),
             field_size,
             wall_collision_mode,
-            max_food_count: 2,
-            food_spawn_probability: 1f32,
+            max_food_count,
+            food_spawn_probability,
             game_end_reason: None,
         }
     }

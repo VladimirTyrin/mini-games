@@ -1,7 +1,7 @@
 mod state;
 mod client;
-mod ui;
-mod game_render;
+mod menu_ui;
+mod sprites;
 mod game_ui;
 mod config;
 mod colors;
@@ -15,7 +15,7 @@ use std::time::Duration;
 use client::grpc_client_task;
 use common::logger::init_logger;
 use state::SharedState;
-use ui::MenuApp;
+use menu_ui::MenuApp;
 use crate::config::get_config_manager;
 
 #[derive(Parser)]

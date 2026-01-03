@@ -48,6 +48,8 @@ pub struct LobbyConfig {
     pub field_height: u32,
     pub wall_collision_mode: WallCollisionMode,
     pub tick_interval_ms: u32,
+    pub max_food_count: u32,
+    pub food_spawn_probability: f32,
 }
 
 impl Validate for LobbyConfig {
@@ -70,6 +72,12 @@ impl Validate for LobbyConfig {
         if self.tick_interval_ms > 1000 {
             return Err("tick_interval_ms must not exceed 1000".to_string());
         }
+        if self.max_food_count < 1 {
+            return Err("max_food_count must be at least 1".to_string());
+        }
+        if self.food_spawn_probability <= 0.0 || self.food_spawn_probability > 1.0 {
+            return Err("food_spawn_probability must be greater than 0 and at most 1".to_string());
+        }
         Ok(())
     }
 }
@@ -87,6 +95,8 @@ impl Default for Config {
                 field_height: 15,
                 wall_collision_mode: WallCollisionMode::WrapAround,
                 tick_interval_ms: 200,
+                max_food_count: 1,
+                food_spawn_probability: 1.0,
             },
             client_id: None,
         }

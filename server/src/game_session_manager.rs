@@ -23,6 +23,7 @@ struct GameSession {
     state: Arc<Mutex<GameState>>,
     tick: Arc<Mutex<u64>>,
     bots: Arc<Mutex<HashMap<BotId, BotType>>>,
+    initial_player_count: usize,
 }
 
 impl std::fmt::Debug for GameSession {
@@ -31,6 +32,7 @@ impl std::fmt::Debug for GameSession {
             .field("state", &self.state)
             .field("tick", &self.tick)
             .field("bots", &self.bots)
+            .field("initial_player_count", &self.initial_player_count)
             .finish()
     }
 }
@@ -88,13 +90,15 @@ impl GameSessionManager {
             _ => WallCollisionMode::Death,
         };
         let tick_interval = Duration::from_millis(settings.tick_interval_ms as u64);
+        let max_food_count = settings.max_food_count.max(1) as usize;
+        let food_spawn_probability = settings.food_spawn_probability.clamp(0.001, 1.0);
         let mut sessions = self.sessions.lock().await;
 
         let field_size = FieldSize {
             width: field_width,
             height: field_height,
         };
-        let mut game_state = GameState::new(field_size, wall_collision_mode);
+        let mut game_state = GameState::new(field_size, wall_collision_mode, max_food_count, food_spawn_probability);
 
         let total_players = human_players.len() + bots.len();
         let mut idx = 0;
@@ -118,6 +122,7 @@ impl GameSessionManager {
         let bot_count = bots.len();
         let bots_arc = Arc::new(Mutex::new(bots));
 
+        let initial_player_count = human_players.len() + bot_count;
         let state_clone = state.clone();
         let tick_clone = tick.clone();
         let bots_clone = bots_arc.clone();
@@ -203,7 +208,12 @@ impl GameSessionManager {
                 broadcaster_clone.broadcast_to_clients(&client_ids, game_state_msg).await;
 
                 let alive_count = state.snakes.values().filter(|s| s.is_alive()).count();
-                if alive_count <= 1 {
+                let game_over = if initial_player_count == 1 {
+                    alive_count == 0
+                } else {
+                    alive_count <= 1
+                };
+                if game_over {
                     let bots_ref = bots_clone.lock().await;
                     let scores: Vec<ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
                         let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
@@ -336,6 +346,7 @@ impl GameSessionManager {
             state,
             tick,
             bots: bots_arc,
+            initial_player_count,
         };
 
         sessions.insert(session_id.clone(), session);

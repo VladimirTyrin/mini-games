@@ -1,6 +1,6 @@
 use crate::config::{Config, LobbyConfig};
 use crate::game_ui::GameUi;
-use crate::game_render::Sprites;
+use crate::sprites::Sprites;
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState};
 use crate::colors::generate_color_from_client_id;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
@@ -21,6 +21,16 @@ fn parse_u32_input(input: &str, field_name: &str, shared_state: &SharedState) ->
     }
 }
 
+fn parse_f32_input(input: &str, field_name: &str, shared_state: &SharedState) -> Option<f32> {
+    match input.parse::<f32>() {
+        Ok(value) => Some(value),
+        Err(_) => {
+            shared_state.set_error(format!("{} must be a number", field_name));
+            None
+        }
+    }
+}
+
 pub struct MenuApp {
     client_id: String,
     shared_state: SharedState,
@@ -31,6 +41,8 @@ pub struct MenuApp {
     field_width_input: String,
     field_height_input: String,
     tick_interval_input: String,
+    max_food_count_input: String,
+    food_spawn_probability_input: String,
     wall_collision_mode: WallCollisionMode,
     selected_bot_type: common::BotType,
     disconnect_timeout: std::time::Duration,
@@ -62,6 +74,8 @@ impl MenuApp {
             field_width_input: config.lobby.field_width.to_string(),
             field_height_input: config.lobby.field_height.to_string(),
             tick_interval_input: config.lobby.tick_interval_ms.to_string(),
+            max_food_count_input: config.lobby.max_food_count.to_string(),
+            food_spawn_probability_input: config.lobby.food_spawn_probability.to_string(),
             wall_collision_mode: config.lobby.wall_collision_mode,
             selected_bot_type: common::BotType::Efficient,
             disconnecting: None,
@@ -182,6 +196,12 @@ impl MenuApp {
                 ui.label("Tick Interval (ms):");
                 ui.text_edit_singleline(&mut self.tick_interval_input);
 
+                ui.label("Max Food Count:");
+                ui.text_edit_singleline(&mut self.max_food_count_input);
+
+                ui.label("Food Spawn Probability:");
+                ui.text_edit_singleline(&mut self.food_spawn_probability_input);
+
                 ui.label("Wall Collision Mode:");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::WrapAround, "Wrap Around");
@@ -225,12 +245,22 @@ impl MenuApp {
                 return;
             };
 
+            let Some(max_food_count) = parse_u32_input(&self.max_food_count_input, "Max food count", &self.shared_state) else {
+                return;
+            };
+
+            let Some(food_spawn_probability) = parse_f32_input(&self.food_spawn_probability_input, "Food spawn probability", &self.shared_state) else {
+                return;
+            };
+
             let lobby_config = LobbyConfig {
                 max_players,
                 field_width,
                 field_height,
                 wall_collision_mode: self.wall_collision_mode,
                 tick_interval_ms,
+                max_food_count,
+                food_spawn_probability,
             };
 
             let mut config = self.config_manager.get_config().unwrap();

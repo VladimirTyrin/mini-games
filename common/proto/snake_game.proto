@@ -123,6 +123,8 @@ message LobbySettings {
     uint32 field_height = 2;
     WallCollisionMode wall_collision_mode = 3;
     uint32 tick_interval_ms = 4;
+    uint32 max_food_count = 5;
+    float food_spawn_probability = 6;
 }
 
 enum WallCollisionMode {

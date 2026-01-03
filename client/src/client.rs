@@ -121,6 +121,8 @@ pub async fn grpc_client_task(
                                         field_height: config.field_height,
                                         wall_collision_mode: config.wall_collision_mode.into(),
                                         tick_interval_ms: config.tick_interval_ms,
+                                        max_food_count: config.max_food_count,
+                                        food_spawn_probability: config.food_spawn_probability,
                                     }),
                                 }))
                             }
