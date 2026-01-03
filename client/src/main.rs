@@ -23,6 +23,9 @@ use crate::config::get_config_manager;
 struct Args {
     #[arg(long)]
     use_log_prefix: bool,
+
+    #[arg(long)]
+    server_address:  Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
 
     let client_id_clone = client_id.clone();
-    let server_address = config.server.address.clone();
+    let server_address = args.server_address.unwrap_or_else(|| config.server.address.clone());
     let shared_state_clone = shared_state.clone();
 
     std::thread::spawn(move || {

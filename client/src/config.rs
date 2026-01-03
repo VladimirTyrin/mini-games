@@ -86,7 +86,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             server: ServerConfig {
-                address: "http://localhost:5001".to_string(),
+                address: "http://185.157.212.124:5001".to_string(),
                 disconnect_timeout_ms: 200,
             },
             lobby: LobbyConfig {
