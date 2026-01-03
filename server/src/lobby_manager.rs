@@ -534,6 +534,8 @@ mod tests {
             field_height: 15,
             wall_collision_mode: common::WallCollisionMode::WrapAround.into(),
             tick_interval_ms: 200,
+            max_food_count: 5,
+            food_spawn_probability: 0.5,
         }
     }
 
@@ -554,7 +556,7 @@ mod tests {
         assert_eq!(details.lobby_name, "Test Lobby");
         assert_eq!(details.max_players, 4);
         assert_eq!(details.players.len(), 1);
-        assert_eq!(details.creator_id, creator_id.to_string());
+        assert_eq!(details.creator.as_ref().unwrap().player_id, creator_id.to_string());
         assert!(details.players[0].ready);
     }
 
@@ -840,7 +842,7 @@ mod tests {
 
         assert!(result.is_ok());
         let details = result.unwrap();
-        assert!(details.players.iter().any(|p| p.identity.unwrap().player_id == joiner_id.to_string() && p.ready));
+        assert!(details.players.iter().any(|p| p.identity.as_ref().unwrap().player_id == joiner_id.to_string() && p.ready));
     }
 
     #[tokio::test]
