@@ -4,6 +4,7 @@ use crate::colors::generate_color_from_client_id;
 use common::{Direction, GameStateUpdate, Position, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
 struct Color {
@@ -14,13 +15,63 @@ struct Color {
 
 pub struct GameUi {
     sprites: Sprites,
+    texture_cache: HashMap<String, egui::TextureHandle>,
+    cached_cell_size: f32,
 }
 
 impl GameUi {
+    const STATS_AREA_HEIGHT: f32 = 200.0;
+    const MIN_CELL_SIZE: f32 = 16.0;
+    const MAX_CELL_SIZE: f32 = 128.0;
+    const PADDING: f32 = 20.0;
+
     pub fn new() -> Self {
         Self {
             sprites: Sprites::load(),
+            texture_cache: HashMap::new(),
+            cached_cell_size: 64.0,
         }
+    }
+
+    fn check_and_invalidate_cache(&mut self, new_cell_size: f32) {
+        const RESIZE_THRESHOLD: f32 = 1.0;
+
+        if (new_cell_size - self.cached_cell_size).abs() > RESIZE_THRESHOLD {
+            self.texture_cache.clear();
+            self.cached_cell_size = new_cell_size;
+        }
+    }
+
+    fn get_or_create_texture(
+        &mut self,
+        ctx: &egui::Context,
+        sprite: crate::sprites::Sprite,
+        cache_key: String,
+    ) -> egui::TextureHandle {
+        if let Some(texture) = self.texture_cache.get(&cache_key) {
+            return texture.clone();
+        }
+
+        let texture = sprite.to_egui_texture(ctx, &cache_key);
+        self.texture_cache.insert(cache_key.clone(), texture.clone());
+        texture
+    }
+
+    fn calculate_cell_size(
+        available_width: f32,
+        available_height: f32,
+        field_width: u32,
+        field_height: u32,
+    ) -> f32 {
+        let available_field_height = available_height - Self::STATS_AREA_HEIGHT;
+        let available_field_width = available_width - (Self::PADDING * 2.0);
+
+        let cell_width = available_field_width / field_width as f32;
+        let cell_height = available_field_height / field_height as f32;
+
+        let cell_size = cell_width.min(cell_height);
+
+        cell_size.clamp(Self::MIN_CELL_SIZE, Self::MAX_CELL_SIZE)
     }
 
     pub fn render_game(
@@ -35,12 +86,20 @@ impl GameUi {
         if let Some(state) = game_state {
             self.handle_input(ctx, command_tx);
 
-            let field_width = state.field_width;
-            let field_height = state.field_height;
+            let available_width = ui.available_width();
+            let available_height = ui.available_height();
 
-            let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
-            let canvas_width = field_width as f32 * pixels_per_cell;
-            let canvas_height = field_height as f32 * pixels_per_cell;
+            let pixels_per_cell = Self::calculate_cell_size(
+                available_width,
+                available_height,
+                state.field_width,
+                state.field_height,
+            );
+
+            self.check_and_invalidate_cache(pixels_per_cell);
+
+            let canvas_width = state.field_width as f32 * pixels_per_cell;
+            let canvas_height = state.field_height as f32 * pixels_per_cell;
 
             ui.heading(format!("Game Session: {}", session_id));
             ui.separator();
@@ -53,46 +112,52 @@ impl GameUi {
                 common::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
                 Ok(common::DeadSnakeBehavior::StayOnField)
             );
-            self.render_game_field(&painter, ctx, rect, state, show_dead_snakes);
+            self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, show_dead_snakes);
 
             ui.separator();
             ui.heading("Scores:");
-            for snake in &state.snakes {
-                let player_id = snake.identity.as_ref()
-                    .map(|i| i.player_id.clone())
-                    .unwrap_or_else(|| "Unknown".to_string());
 
-                let is_bot = snake.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
-                let bot_marker = if is_bot { " [BOT]" } else { "" };
+            egui::ScrollArea::vertical()
+                .max_height(ui.available_height())
+                .show(ui, |ui| {
+                    for snake in &state.snakes {
+                        let player_id = snake.identity.as_ref()
+                            .map(|i| i.player_id.clone())
+                            .unwrap_or_else(|| "Unknown".to_string());
 
-                let is_you = !is_bot && player_id == client_id;
-                let status = if snake.alive { "🟢" } else { "💀" };
-                let you_marker = if is_you { " (You)" } else { "" };
+                        let is_bot = snake.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                        let bot_marker = if is_bot { " [BOT]" } else { "" };
 
-                ui.horizontal(|ui| {
-                    let color = generate_color_from_client_id(&player_id);
-                    let head_sprite = self.sprites.get_head_sprite(Direction::Right);
-                    let texture = head_sprite.to_egui_texture(ctx, &format!("game_head_{}", player_id));
+                        let is_you = !is_bot && player_id == client_id;
+                        let status = if snake.alive { "🟢" } else { "💀" };
+                        let you_marker = if is_you { " (You)" } else { "" };
 
-                    let icon_size = 20.0;
-                    let (rect, _response) = ui.allocate_exact_size(
-                        egui::vec2(icon_size, icon_size),
-                        egui::Sense::hover()
-                    );
+                        ui.horizontal(|ui| {
+                            let color = generate_color_from_client_id(&player_id);
+                            let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
+                            let cache_key = format!("game_score_head_{}", player_id);
+                            let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
 
-                    ui.painter().image(
-                        texture.id(),
-                        rect,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        color,
-                    );
+                            let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
+                            let (rect, _response) = ui.allocate_exact_size(
+                                egui::vec2(icon_size, icon_size),
+                                egui::Sense::hover()
+                            );
 
-                    ui.label(format!(
-                        "{} {}{}{}: {} points",
-                        status, player_id, bot_marker, you_marker, snake.score
-                    ));
+                            ui.painter().image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                color,
+                            );
+
+                            ui.label(format!(
+                                "{} {}{}{}: {} points",
+                                status, player_id, bot_marker, you_marker, snake.score
+                            ));
+                        });
+                    }
                 });
-            }
         } else {
             ui.heading("Waiting for game to start...");
             ui.spinner();
@@ -112,12 +177,20 @@ impl GameUi {
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         if let Some(state) = last_game_state {
-            let field_width = state.field_width;
-            let field_height = state.field_height;
+            let available_width = ui.available_width();
+            let available_height = ui.available_height();
 
-            let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
-            let canvas_width = field_width as f32 * pixels_per_cell;
-            let canvas_height = field_height as f32 * pixels_per_cell;
+            let pixels_per_cell = Self::calculate_cell_size(
+                available_width,
+                available_height,
+                state.field_width,
+                state.field_height,
+            );
+
+            self.check_and_invalidate_cache(pixels_per_cell);
+
+            let canvas_width = state.field_width as f32 * pixels_per_cell;
+            let canvas_height = state.field_height as f32 * pixels_per_cell;
 
             ui.heading("Game Over!");
             ui.separator();
@@ -126,7 +199,7 @@ impl GameUi {
                 ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
             let rect = response.rect;
-            self.render_game_field(&painter, ctx, rect, state, true);
+            self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, true);
 
             let overlay_color = egui::Color32::from_black_alpha(100);
             painter.rect_filled(rect, 0.0, overlay_color);
@@ -207,10 +280,11 @@ impl GameUi {
 
                         ui.horizontal(|ui| {
                             let color = generate_color_from_client_id(&player_id);
-                            let head_sprite = self.sprites.get_head_sprite(Direction::Right);
-                            let texture = head_sprite.to_egui_texture(ctx, &format!("score_head_{}", player_id));
+                            let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
+                            let cache_key = format!("gameover_score_head_{}", player_id);
+                            let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
 
-                            let icon_size = 20.0;
+                            let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
                             let (rect, _response) = ui.allocate_exact_size(
                                 egui::vec2(icon_size, icon_size),
                                 egui::Sense::hover()
@@ -431,18 +505,18 @@ impl GameUi {
     }
 
     fn render_sprite_at(
-        &self,
+        &mut self,
         painter: &egui::Painter,
         ctx: &egui::Context,
-        sprite: &crate::sprites::Sprite,
+        sprite: crate::sprites::Sprite,
         grid_x: i32,
         grid_y: i32,
         canvas_min: egui::Pos2,
         pixels_per_cell: f32,
-        sprite_name: &str,
+        cache_key: String,
         tint: Color,
     ) {
-        let texture = sprite.to_egui_texture(ctx, sprite_name);
+        let texture = self.get_or_create_texture(ctx, sprite, cache_key);
 
         let pos_x = canvas_min.x + grid_x as f32 * pixels_per_cell;
         let pos_y = canvas_min.y + grid_y as f32 * pixels_per_cell;
@@ -466,11 +540,11 @@ impl GameUi {
         ctx: &egui::Context,
         rect: egui::Rect,
         state: &GameStateUpdate,
+        pixels_per_cell: f32,
         show_dead_snakes: bool,
     ) {
         let field_width = state.field_width;
         let field_height = state.field_height;
-        let pixels_per_cell = Sprites::PIXELS_PER_CELL as f32;
 
         let background_color = egui::Color32::from_rgb(0x88, 0xFF, 0x88);
         painter.rect_filled(rect, 0.0, background_color);
@@ -479,12 +553,12 @@ impl GameUi {
             self.render_sprite_at(
                 painter,
                 ctx,
-                &self.sprites.get_apple_sprite(),
+                self.sprites.get_apple_sprite().clone(),
                 food.x,
                 food.y,
                 rect.min,
                 pixels_per_cell,
-                "apple",
+                format!("apple_{}_{}", food.x, food.y),
                 Color { r: 255, g: 255, b: 255 },
             );
         }
@@ -515,12 +589,6 @@ impl GameUi {
             };
 
             for (i, segment) in segments.iter().enumerate() {
-                let sprite_name = if show_dead_snakes {
-                    format!("snake_{}_seg_{}_final", player_id, i)
-                } else {
-                    format!("snake_{}_seg_{}", player_id, i)
-                };
-
                 let sprite = if i == 0 {
                     let direction = if segments.len() > 1 {
                         Self::get_direction(&segments[1], &segments[0], field_width, field_height)
@@ -553,15 +621,21 @@ impl GameUi {
                     )
                 };
 
+                let cache_key = if show_dead_snakes {
+                    format!("{}_{}_final", player_id, sprite.name())
+                } else {
+                    format!("{}_{}", player_id, sprite.name())
+                };
+
                 self.render_sprite_at(
                     painter,
                     ctx,
-                    sprite,
+                    sprite.clone(),
                     segment.x,
                     segment.y,
                     rect.min,
                     pixels_per_cell,
-                    &sprite_name,
+                    cache_key,
                     color,
                 );
             }

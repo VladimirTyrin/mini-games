@@ -70,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 700.0])
+            .with_min_inner_size([400.0, 500.0])
             .with_title(format!("Snake Game - {}", client_id)),
         ..Default::default()
     };

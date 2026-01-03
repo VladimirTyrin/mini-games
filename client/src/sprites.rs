@@ -7,6 +7,7 @@ pub struct Sprite {
     pixels: Vec<u8>,
     width: usize,
     height: usize,
+    name: String,
 }
 
 pub struct Sprites {
@@ -42,24 +43,24 @@ impl Sprites {
         .expect("invalid sprite PNG")
         .to_rgba8();
 
-        let head_right = Self::extract_sprite(&sprite_sheet, 4, 0);
-        let head_left = Self::extract_sprite(&sprite_sheet, 3, 1);
-        let head_down = Self::extract_sprite(&sprite_sheet, 4, 1);
-        let head_up = Self::extract_sprite(&sprite_sheet, 3, 0);
-        let apple = Self::extract_sprite(&sprite_sheet, 0, 3);
+        let head_right = Self::extract_sprite(&sprite_sheet, 4, 0, "head_right");
+        let head_left = Self::extract_sprite(&sprite_sheet, 3, 1, "head_left");
+        let head_down = Self::extract_sprite(&sprite_sheet, 4, 1, "head_down");
+        let head_up = Self::extract_sprite(&sprite_sheet, 3, 0, "head_up");
+        let apple = Self::extract_sprite(&sprite_sheet, 0, 3, "apple");
 
-        let body_horizontal = Self::extract_sprite(&sprite_sheet, 1, 0);
-        let body_vertical = Self::extract_sprite(&sprite_sheet, 2, 1);
+        let body_horizontal = Self::extract_sprite(&sprite_sheet, 1, 0, "body_horizontal");
+        let body_vertical = Self::extract_sprite(&sprite_sheet, 2, 1, "body_vertical");
 
-        let tail_left = Self::extract_sprite(&sprite_sheet, 3, 3);
-        let tail_right = Self::extract_sprite(&sprite_sheet, 4, 2);
-        let tail_down = Self::extract_sprite(&sprite_sheet, 4, 3);
-        let tail_up = Self::extract_sprite(&sprite_sheet, 3, 2);
+        let tail_left = Self::extract_sprite(&sprite_sheet, 3, 3, "tail_left");
+        let tail_right = Self::extract_sprite(&sprite_sheet, 4, 2, "tail_right");
+        let tail_down = Self::extract_sprite(&sprite_sheet, 4, 3, "tail_down");
+        let tail_up = Self::extract_sprite(&sprite_sheet, 3, 2, "tail_up");
 
-        let turn_ul = Self::extract_sprite(&sprite_sheet, 2, 0);
-        let turn_ur = Self::extract_sprite(&sprite_sheet, 0, 0);
-        let turn_dl = Self::extract_sprite(&sprite_sheet, 2, 2);
-        let turn_dr = Self::extract_sprite(&sprite_sheet, 0, 1);
+        let turn_ul = Self::extract_sprite(&sprite_sheet, 2, 0, "turn_ul");
+        let turn_ur = Self::extract_sprite(&sprite_sheet, 0, 0, "turn_ur");
+        let turn_dl = Self::extract_sprite(&sprite_sheet, 2, 2, "turn_dl");
+        let turn_dr = Self::extract_sprite(&sprite_sheet, 0, 1, "turn_dr");
 
         Sprites {
             head_right,
@@ -80,7 +81,7 @@ impl Sprites {
         }
     }
 
-    fn extract_sprite(sheet: &RgbaImage, col: u32, row: u32) -> Sprite {
+    fn extract_sprite(sheet: &RgbaImage, col: u32, row: u32, name: &str) -> Sprite {
         let mut pixels = Vec::with_capacity(Self::PIXELS_PER_CELL * Self::PIXELS_PER_CELL * 4);
 
         let ppc: u32 = Self::PIXELS_PER_CELL as u32;
@@ -99,6 +100,7 @@ impl Sprites {
             pixels,
             width: Self::PIXELS_PER_CELL,
             height: Self::PIXELS_PER_CELL,
+            name: name.to_string(),
         }
     }
 
@@ -186,6 +188,10 @@ impl Sprites {
 }
 
 impl Sprite {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn to_egui_texture(
         &self,
         ctx: &egui::Context,

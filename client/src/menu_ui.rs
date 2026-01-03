@@ -13,6 +13,25 @@ use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppStateType {
+    LobbyList,
+    InLobby,
+    InGame,
+    GameOver,
+}
+
+impl AppStateType {
+    fn from(state: &AppState) -> Self {
+        match state {
+            AppState::LobbyList { .. } => Self::LobbyList,
+            AppState::InLobby { .. } => Self::InLobby,
+            AppState::InGame { .. } => Self::InGame,
+            AppState::GameOver { .. } => Self::GameOver,
+        }
+    }
+}
+
 fn parse_u32_input(input: &str, field_name: &str, shared_state: &SharedState) -> Option<u32> {
     match input.parse::<u32>() {
         Ok(value) => Some(value),
@@ -51,11 +70,12 @@ pub struct MenuApp {
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
-    window_resized_for_game: bool,
     config_manager: ClientConfigManager,
     server_address_input: String,
     sprites: Sprites,
     chat_input: String,
+    normal_window_size: Option<egui::Vec2>,
+    previous_app_state: Option<AppStateType>,
 }
 
 impl MenuApp {
@@ -86,11 +106,41 @@ impl MenuApp {
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
-            window_resized_for_game: false,
             config_manager,
             server_address_input: String::new(),
             sprites: Sprites::load(),
             chat_input: String::new(),
+            normal_window_size: None,
+            previous_app_state: None,
+        }
+    }
+
+    fn handle_state_transition(
+        &mut self,
+        from: &Option<AppStateType>,
+        to: &AppStateType,
+        ctx: &egui::Context,
+    ) {
+        match (from, to) {
+            (_, AppStateType::InGame) => {
+                if self.normal_window_size.is_none() {
+                    self.normal_window_size = Some(
+                        ctx.input(|i| i.viewport().inner_rect)
+                            .map(|r| r.size())
+                            .unwrap_or(egui::vec2(600.0, 700.0))
+                    );
+                }
+                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            }
+
+            (Some(AppStateType::GameOver), AppStateType::LobbyList) => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+                if let Some(size) = self.normal_window_size {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+                }
+            }
+
+            _ => {}
         }
     }
 
@@ -620,22 +670,16 @@ impl eframe::App for MenuApp {
         }
 
         let current_state = self.shared_state.get_state();
+        let current_app_state_type = AppStateType::from(&current_state);
 
-        if let AppState::InGame { game_state: Some(ref state), .. } = current_state {
-            if !self.window_resized_for_game {
-                let pixels_per_cell = 64.0;
-                let game_width = state.field_width as f32 * pixels_per_cell;
-                let game_height = state.field_height as f32 * pixels_per_cell;
-
-                let padding = 100.0;
-                let window_width = game_width + padding;
-                let window_height = game_height + padding + 100.0;
-
-                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(window_width, window_height)));
-                self.window_resized_for_game = true;
-            }
-        } else {
-            self.window_resized_for_game = false;
+        if self.previous_app_state.as_ref() != Some(&current_app_state_type) {
+            let previous = self.previous_app_state;
+            self.handle_state_transition(
+                &previous,
+                &current_app_state_type,
+                ctx
+            );
+            self.previous_app_state = Some(current_app_state_type);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
