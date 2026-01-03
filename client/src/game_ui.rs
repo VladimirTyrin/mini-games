@@ -14,14 +14,12 @@ struct Color {
 
 pub struct GameUi {
     sprites: Sprites,
-    last_input_direction: Option<Direction>,
 }
 
 impl GameUi {
     pub fn new() -> Self {
         Self {
             sprites: Sprites::load(),
-            last_input_direction: None,
         }
     }
 
@@ -421,10 +419,7 @@ impl GameUi {
             }
 
             if let Some(direction) = new_direction {
-                if Some(direction) != self.last_input_direction {
-                    let _ = command_tx.send(ClientCommand::Game(GameCommand::SendTurn { direction }));
-                    self.last_input_direction = Some(direction);
-                }
+                let _ = command_tx.send(ClientCommand::Game(GameCommand::SendTurn { direction }));
             }
         });
 
