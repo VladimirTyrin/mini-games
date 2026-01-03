@@ -20,7 +20,7 @@ pub struct GameUi {
 }
 
 impl GameUi {
-    const STATS_AREA_HEIGHT: f32 = 200.0;
+    const SCORES_AREA_WIDTH: f32 = 150.0;
     const MIN_CELL_SIZE: f32 = 16.0;
     const MAX_CELL_SIZE: f32 = 128.0;
     const PADDING: f32 = 20.0;
@@ -63,8 +63,8 @@ impl GameUi {
         field_width: u32,
         field_height: u32,
     ) -> f32 {
-        let available_field_height = available_height - Self::STATS_AREA_HEIGHT;
-        let available_field_width = available_width - (Self::PADDING * 2.0);
+        let available_field_width = available_width - Self::SCORES_AREA_WIDTH - (Self::PADDING * 2.0);
+        let available_field_height = available_height - (Self::PADDING * 2.0);
 
         let cell_width = available_field_width / field_width as f32;
         let cell_height = available_field_height / field_height as f32;
@@ -104,60 +104,66 @@ impl GameUi {
             ui.heading(format!("Game Session: {}", session_id));
             ui.separator();
 
-            let (response, painter) =
-                ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
+            ui.horizontal(|ui| {
+                let (response, painter) =
+                    ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
-            let rect = response.rect;
-            let show_dead_snakes = matches!(
-                common::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
-                Ok(common::DeadSnakeBehavior::StayOnField)
-            );
-            self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, show_dead_snakes);
+                let rect = response.rect;
+                let show_dead_snakes = matches!(
+                    common::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
+                    Ok(common::DeadSnakeBehavior::StayOnField)
+                );
+                self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, show_dead_snakes);
 
-            ui.separator();
-            ui.heading("Scores:");
+                ui.add_space(Self::PADDING);
 
-            egui::ScrollArea::vertical()
-                .max_height(ui.available_height())
-                .show(ui, |ui| {
-                    for snake in &state.snakes {
-                        let player_id = snake.identity.as_ref()
-                            .map(|i| i.player_id.clone())
-                            .unwrap_or_else(|| "Unknown".to_string());
+                ui.vertical(|ui| {
+                    ui.heading("Scores:");
+                    ui.separator();
 
-                        let is_bot = snake.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
-                        let bot_marker = if is_bot { " [BOT]" } else { "" };
+                    egui::ScrollArea::vertical()
+                        .max_height(canvas_height)
+                        .show(ui, |ui| {
+                            for snake in &state.snakes {
+                                let player_id = snake.identity.as_ref()
+                                    .map(|i| i.player_id.clone())
+                                    .unwrap_or_else(|| "Unknown".to_string());
 
-                        let is_you = !is_bot && player_id == client_id;
-                        let status = if snake.alive { "🟢" } else { "💀" };
-                        let you_marker = if is_you { " (You)" } else { "" };
+                                let is_bot = snake.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                                let bot_marker = if is_bot { " [BOT]" } else { "" };
 
-                        ui.horizontal(|ui| {
-                            let color = generate_color_from_client_id(&player_id);
-                            let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
-                            let cache_key = format!("game_score_head_{}", player_id);
-                            let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
+                                let is_you = !is_bot && player_id == client_id;
+                                let status = if snake.alive { "🟢" } else { "💀" };
+                                let you_marker = if is_you { " (You)" } else { "" };
 
-                            let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
-                            let (rect, _response) = ui.allocate_exact_size(
-                                egui::vec2(icon_size, icon_size),
-                                egui::Sense::hover()
-                            );
+                                ui.horizontal(|ui| {
+                                    let color = generate_color_from_client_id(&player_id);
+                                    let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
+                                    let cache_key = format!("game_score_head_{}", player_id);
+                                    let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
 
-                            ui.painter().image(
-                                texture.id(),
-                                rect,
-                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                                color,
-                            );
+                                    let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
+                                    let (rect, _response) = ui.allocate_exact_size(
+                                        egui::vec2(icon_size, icon_size),
+                                        egui::Sense::hover()
+                                    );
 
-                            ui.label(format!(
-                                "{} {}{}{}: {} points",
-                                status, player_id, bot_marker, you_marker, snake.score
-                            ));
+                                    ui.painter().image(
+                                        texture.id(),
+                                        rect,
+                                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                        color,
+                                    );
+
+                                    ui.label(format!(
+                                        "{} {}{}{}: {} points",
+                                        status, player_id, bot_marker, you_marker, snake.score
+                                    ));
+                                });
+                            }
                         });
-                    }
                 });
+            });
         } else {
             ui.heading("Waiting for game to start...");
             ui.spinner();
@@ -195,47 +201,25 @@ impl GameUi {
             ui.heading("Game Over!");
             ui.separator();
 
-            let (response, painter) =
-                ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
+            ui.horizontal(|ui| {
+                let (response, painter) =
+                    ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
-            let rect = response.rect;
-            self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, true);
+                let rect = response.rect;
+                self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, true);
 
-            let overlay_color = egui::Color32::from_black_alpha(100);
-            painter.rect_filled(rect, 0.0, overlay_color);
+                ui.add_space(Self::PADDING);
 
-            let center = rect.center();
-            let overlay_width = canvas_width * 0.8;
-            let overlay_height = canvas_height * 0.6;
-            let overlay_rect = egui::Rect::from_center_size(
-                center,
-                egui::vec2(overlay_width, overlay_height),
-            );
-
-            painter.rect_filled(
-                overlay_rect,
-                8.0,
-                egui::Color32::from_rgba_premultiplied(40, 40, 40, 200),
-            );
-            painter.rect_stroke(
-                overlay_rect,
-                8.0,
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(200, 200, 200)),
-                egui::epaint::StrokeKind::Outside,
-            );
-
-            ui.scope_builder(egui::UiBuilder::new().max_rect(overlay_rect.shrink(20.0)), |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.add_space(10.0);
-                    ui.heading(egui::RichText::new("🏁 Game Over! 🏁").size(24.0).color(egui::Color32::WHITE));
-                    ui.add_space(10.0);
+                ui.vertical(|ui| {
+                    ui.heading(egui::RichText::new("🏁 Game Over! 🏁").size(20.0));
+                    ui.separator();
 
                     let winner_name = winner.as_ref()
                         .map(|w| w.player_id.clone())
                         .unwrap_or_else(|| "None".to_string());
-                    ui.label(egui::RichText::new(format!("Winner: {}", winner_name)).size(18.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                    ui.label(egui::RichText::new(format!("Winner: {}", winner_name)).size(16.0).strong());
                     if winner_name == client_id {
-                        ui.label(egui::RichText::new("🎉 Congratulations! You won! 🎉").size(16.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                        ui.label(egui::RichText::new("🎉 Congratulations! You won! 🎉").size(14.0));
                     }
 
                     ui.add_space(5.0);
@@ -247,83 +231,86 @@ impl GameUi {
                         common::GameEndReason::GameCompleted => "✅ Game completed",
                         _ => "Game ended",
                     };
-                    ui.label(egui::RichText::new(reason_text).size(14.0).color(egui::Color32::from_rgb(200, 200, 200)));
+                    ui.label(reason_text);
 
                     ui.add_space(10.0);
                     ui.separator();
-                    ui.add_space(5.0);
+                    ui.heading("Final Scores:");
 
-                    ui.label(egui::RichText::new("Final Scores:").size(16.0).color(egui::Color32::WHITE));
-                    ui.add_space(5.0);
+                    egui::ScrollArea::vertical()
+                        .max_height(canvas_height - 300.0)
+                        .show(ui, |ui| {
+                            let mut sorted_scores: Vec<_> = scores.iter().collect();
+                            sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
 
-                    let mut sorted_scores: Vec<_> = scores.iter().collect();
-                    sorted_scores.sort_by(|a, b| b.score.cmp(&a.score));
+                            for (rank, entry) in sorted_scores.iter().enumerate() {
+                                let player_id = entry.identity.as_ref()
+                                    .map(|i| i.player_id.clone())
+                                    .unwrap_or_else(|| "Unknown".to_string());
 
-                    for (rank, entry) in sorted_scores.iter().enumerate() {
-                        let player_id = entry.identity.as_ref()
-                            .map(|i| i.player_id.clone())
-                            .unwrap_or_else(|| "Unknown".to_string());
+                                let is_bot = entry.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
+                                let bot_marker = if is_bot { " [BOT]" } else { "" };
 
-                        let is_bot = entry.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
-                        let bot_marker = if is_bot { " [BOT]" } else { "" };
+                                let is_you = !is_bot && player_id == client_id;
+                                let is_winner = winner.as_ref().map(|w| w.player_id == player_id).unwrap_or(false);
+                                let you_marker = if is_you { " (You)" } else { "" };
+                                let medal = match rank {
+                                    0 => "🥇",
+                                    1 => "🥈",
+                                    2 => "🥉",
+                                    _ => "  ",
+                                };
 
-                        let is_you = !is_bot && player_id == client_id;
-                        let is_winner = winner.as_ref().map(|w| w.player_id == player_id).unwrap_or(false);
-                        let you_marker = if is_you { " (You)" } else { "" };
-                        let text_color = if is_winner {
-                            egui::Color32::from_rgb(255, 215, 0)
-                        } else if is_you {
-                            egui::Color32::from_rgb(255, 255, 100)
-                        } else {
-                            egui::Color32::WHITE
-                        };
+                                ui.horizontal(|ui| {
+                                    let color = generate_color_from_client_id(&player_id);
+                                    let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
+                                    let cache_key = format!("gameover_score_head_{}", player_id);
+                                    let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
 
-                        ui.horizontal(|ui| {
-                            let color = generate_color_from_client_id(&player_id);
-                            let head_sprite = self.sprites.get_head_sprite(Direction::Right).clone();
-                            let cache_key = format!("gameover_score_head_{}", player_id);
-                            let texture = self.get_or_create_texture(ctx, head_sprite, cache_key);
+                                    let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
+                                    let (rect, _response) = ui.allocate_exact_size(
+                                        egui::vec2(icon_size, icon_size),
+                                        egui::Sense::hover()
+                                    );
 
-                            let icon_size = (pixels_per_cell * 0.3).clamp(16.0, 32.0);
-                            let (rect, _response) = ui.allocate_exact_size(
-                                egui::vec2(icon_size, icon_size),
-                                egui::Sense::hover()
-                            );
+                                    ui.painter().image(
+                                        texture.id(),
+                                        rect,
+                                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                        color,
+                                    );
 
-                            ui.painter().image(
-                                texture.id(),
-                                rect,
-                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                                color,
-                            );
+                                    let mut text = egui::RichText::new(format!(
+                                        "{} {}. {}{}{}: {} points",
+                                        medal,
+                                        rank + 1,
+                                        player_id,
+                                        bot_marker,
+                                        you_marker,
+                                        entry.score
+                                    ));
 
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{}. {}{}{}: {} points",
-                                    rank + 1,
-                                    player_id,
-                                    bot_marker,
-                                    you_marker,
-                                    entry.score
-                                ))
-                                .size(14.0)
-                                .color(text_color)
-                            );
+                                    if is_winner || is_you {
+                                        text = text.strong();
+                                    }
+
+                                    ui.label(text);
+                                });
+                            }
                         });
-                    }
 
                     ui.add_space(10.0);
 
                     match play_again_status {
                         PlayAgainStatus::Available { ready_players, pending_players } => {
                             if pending_players.is_empty() {
-                                ui.label(egui::RichText::new("Starting new game...").size(14.0).color(egui::Color32::from_rgb(100, 255, 100)));
+                                ui.label("Starting new game...");
                             } else {
                                 let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
                                 if is_ready {
-                                    ui.label(egui::RichText::new("Waiting for other players...").size(14.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                                    ui.label("Waiting for other players...");
                                 } else {
-                                    if ui.button(egui::RichText::new("Play Again (R)").size(16.0)).clicked() {
+                                    if ui.button("Play Again (R)").clicked() {
                                         let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                     }
                                     ctx.input(|i| {
@@ -334,31 +321,31 @@ impl GameUi {
                                 }
 
                                 ui.add_space(5.0);
-                                ui.label(egui::RichText::new("Players ready:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
+                                ui.label("Players ready:");
                                 for ready_player in ready_players {
                                     let is_you = ready_player.player_id == client_id;
                                     let you_marker = if is_you { " (You)" } else { "" };
-                                    ui.label(egui::RichText::new(format!("✓ {}{}", ready_player.player_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(100, 255, 100)));
+                                    ui.label(format!("✓ {}{}", ready_player.player_id, you_marker));
                                 }
                                 if !pending_players.is_empty() {
-                                    ui.label(egui::RichText::new("Waiting for:").size(12.0).color(egui::Color32::from_rgb(200, 200, 200)));
+                                    ui.label("Waiting for:");
                                     for pending_player in pending_players {
                                         let is_you = pending_player.player_id == client_id;
                                         let you_marker = if is_you { " (You)" } else { "" };
-                                        ui.label(egui::RichText::new(format!("⏳ {}{}", pending_player.player_id, you_marker)).size(12.0).color(egui::Color32::from_rgb(255, 215, 0)));
+                                        ui.label(format!("⏳ {}{}", pending_player.player_id, you_marker));
                                     }
                                 }
                                 ui.add_space(5.0);
                             }
                         }
                         PlayAgainStatus::NotAvailable => {
-                            ui.label(egui::RichText::new("Play again not available").size(12.0).color(egui::Color32::from_rgb(150, 150, 150)));
-                            ui.label(egui::RichText::new("(A player left the lobby)").size(10.0).color(egui::Color32::from_rgb(150, 150, 150)));
+                            ui.label("Play again not available");
+                            ui.label("(A player left the lobby)");
                             ui.add_space(5.0);
                         }
                     }
 
-                    if ui.button(egui::RichText::new("Back to Lobby List (Esc)").size(14.0)).clicked() {
+                    if ui.button("Back to Lobby List (Esc)").clicked() {
                         let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
 
