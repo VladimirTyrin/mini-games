@@ -77,11 +77,8 @@ jobs:
           path: target
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build server
-        run: cargo build --release -p snake_game_server --target ${{ matrix.target }}
-
-      - name: Build client
-        run: cargo build --release -p snake_game_client --target ${{ matrix.target }}
+      - name: Build server and client
+        run: cargo build --release -p snake_game_server -p snake_game_client --target ${{ matrix.target }}
 
       - name: Prepare artifacts (Unix)
         if: matrix.os != 'windows-latest'
