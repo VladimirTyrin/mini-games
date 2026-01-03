@@ -49,7 +49,11 @@ impl GameUi {
                 ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
             let rect = response.rect;
-            self.render_game_field(&painter, ctx, rect, state, false);
+            let show_dead_snakes = matches!(
+                common::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
+                Ok(common::DeadSnakeBehavior::StayOnField)
+            );
+            self.render_game_field(&painter, ctx, rect, state, show_dead_snakes);
 
             ui.separator();
             ui.heading("Scores:");

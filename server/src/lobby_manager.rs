@@ -536,6 +536,7 @@ mod tests {
             tick_interval_ms: 200,
             max_food_count: 5,
             food_spawn_probability: 0.5,
+            dead_snake_behavior: common::DeadSnakeBehavior::Disappear.into(),
         }
     }
 

@@ -29,6 +29,12 @@ pub enum WallCollisionMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeadSnakeBehavior {
+    Disappear,
+    StayOnField,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeathReason {
     WallCollision,
     SelfCollision,
@@ -126,18 +132,20 @@ pub struct GameState {
     pub food_set: HashSet<Point>,
     pub field_size: FieldSize,
     pub wall_collision_mode: WallCollisionMode,
+    pub dead_snake_behavior: DeadSnakeBehavior,
     pub max_food_count: usize,
     pub food_spawn_probability: f32,
     pub game_end_reason: Option<DeathReason>,
 }
 
 impl GameState {
-    pub fn new(field_size: FieldSize, wall_collision_mode: WallCollisionMode, max_food_count: usize, food_spawn_probability: f32) -> Self {
+    pub fn new(field_size: FieldSize, wall_collision_mode: WallCollisionMode, dead_snake_behavior: DeadSnakeBehavior, max_food_count: usize, food_spawn_probability: f32) -> Self {
         Self {
             snakes: HashMap::new(),
             food_set: HashSet::new(),
             field_size,
             wall_collision_mode,
+            dead_snake_behavior,
             max_food_count,
             food_spawn_probability,
             game_end_reason: None,
@@ -289,11 +297,12 @@ impl GameState {
                 continue;
             }
 
-            if !other_snake.is_alive() {
-                continue;
-            }
+            let should_check_collision = match self.dead_snake_behavior {
+                DeadSnakeBehavior::Disappear => other_snake.is_alive(),
+                DeadSnakeBehavior::StayOnField => true,
+            };
 
-            if other_snake.body_set.contains(&next_head) {
+            if should_check_collision && other_snake.body_set.contains(&next_head) {
                 log!("{} collided with {} at ({}, {})", player_id, other_id, next_head.x, next_head.y);
                 return Err(DeathReason::OtherSnakeCollision);
             }
@@ -320,7 +329,12 @@ impl GameState {
 
             let mut occupied = false;
             for snake in self.snakes.values() {
-                if snake.body_set.contains(&pos) {
+                let should_check_occupied = match self.dead_snake_behavior {
+                    DeadSnakeBehavior::Disappear => snake.is_alive(),
+                    DeadSnakeBehavior::StayOnField => true,
+                };
+
+                if should_check_occupied && snake.body_set.contains(&pos) {
                     occupied = true;
                     break;
                 }

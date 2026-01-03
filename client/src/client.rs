@@ -124,6 +124,7 @@ pub async fn grpc_client_task(
                                         tick_interval_ms: config.tick_interval_ms,
                                         max_food_count: config.max_food_count,
                                         food_spawn_probability: config.food_spawn_probability,
+                                        dead_snake_behavior: config.dead_snake_behavior.into(),
                                     }),
                                 }))
                             }

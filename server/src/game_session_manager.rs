@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
 use common::{ClientId, LobbyId, PlayerId, BotId, BotType, log, ServerMessage, server_message, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
-use crate::game::{GameState, FieldSize, WallCollisionMode, Direction, Point, DeathReason};
+use crate::game::{GameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason};
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::LobbyManager;
 use crate::bot::BotController;
@@ -89,6 +89,12 @@ impl GameSessionManager {
             Ok(common::WallCollisionMode::WrapAround) => WallCollisionMode::WrapAround,
             _ => WallCollisionMode::Death,
         };
+        let dead_snake_behavior = match common::DeadSnakeBehavior::try_from(settings.dead_snake_behavior) {
+            Ok(common::DeadSnakeBehavior::StayOnField) => DeadSnakeBehavior::StayOnField,
+            Ok(common::DeadSnakeBehavior::Disappear) |
+            Ok(common::DeadSnakeBehavior::Unspecified) |
+            _ => DeadSnakeBehavior::Disappear,
+        };
         let tick_interval = Duration::from_millis(settings.tick_interval_ms as u64);
         let max_food_count = settings.max_food_count.max(1) as usize;
         let food_spawn_probability = settings.food_spawn_probability.clamp(0.001, 1.0);
@@ -98,7 +104,7 @@ impl GameSessionManager {
             width: field_width,
             height: field_height,
         };
-        let mut game_state = GameState::new(field_size, wall_collision_mode, max_food_count, food_spawn_probability);
+        let mut game_state = GameState::new(field_size, wall_collision_mode, dead_snake_behavior, max_food_count, food_spawn_probability);
 
         let total_players = human_players.len() + bots.len();
         let mut idx = 0;
@@ -190,6 +196,11 @@ impl GameSessionManager {
                     y: p.y as i32,
                 }).collect();
 
+                let dead_snake_behavior_proto = match state.dead_snake_behavior {
+                    DeadSnakeBehavior::Disappear => common::DeadSnakeBehavior::Disappear,
+                    DeadSnakeBehavior::StayOnField => common::DeadSnakeBehavior::StayOnField,
+                };
+
                 let game_state_msg = ServerMessage {
                     message: Some(server_message::Message::State(
                         GameStateUpdate {
@@ -198,6 +209,7 @@ impl GameSessionManager {
                             food,
                             field_width: state.field_size.width as u32,
                             field_height: state.field_size.height as u32,
+                            dead_snake_behavior: dead_snake_behavior_proto as i32,
                         }
                     )),
                 };

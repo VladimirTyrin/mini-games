@@ -1,5 +1,5 @@
 use common::{PlayerId, BotType};
-use crate::game::{GameState, Direction, Point, WallCollisionMode};
+use crate::game::{GameState, Direction, Point, WallCollisionMode, DeadSnakeBehavior};
 use rand::Rng;
 
 pub struct BotController;
@@ -140,12 +140,17 @@ impl BotController {
 
     fn is_safe_position(pos: Point, player_id: &PlayerId, state: &GameState) -> bool {
         for (id, snake) in &state.snakes {
-            if !snake.is_alive() {
+            let should_check = match state.dead_snake_behavior {
+                DeadSnakeBehavior::Disappear => snake.is_alive(),
+                DeadSnakeBehavior::StayOnField => true,
+            };
+
+            if !should_check {
                 continue;
             }
 
             if id == player_id {
-                if snake.body_set.contains(&pos) && pos != snake.tail() {
+                if snake.is_alive() && snake.body_set.contains(&pos) && pos != snake.tail() {
                     return false;
                 }
             } else {

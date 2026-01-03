@@ -44,6 +44,7 @@ pub struct MenuApp {
     max_food_count_input: String,
     food_spawn_probability_input: String,
     wall_collision_mode: WallCollisionMode,
+    dead_snake_behavior: common::DeadSnakeBehavior,
     selected_bot_type: common::BotType,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
@@ -77,6 +78,7 @@ impl MenuApp {
             max_food_count_input: config.lobby.max_food_count.to_string(),
             food_spawn_probability_input: config.lobby.food_spawn_probability.to_string(),
             wall_collision_mode: config.lobby.wall_collision_mode,
+            dead_snake_behavior: config.lobby.dead_snake_behavior,
             selected_bot_type: common::BotType::Efficient,
             disconnecting: None,
             disconnect_timeout,
@@ -208,6 +210,12 @@ impl MenuApp {
                     ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::Death, "Death");
                 });
 
+                ui.label("Dead Snake Behavior:");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::Disappear, "Disappear");
+                    ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::StayOnField, "Stay On Field");
+                });
+
                 ui.horizontal(|ui| {
                     if ui.button("Create (Enter)").clicked() {
                         create_lobby = true;
@@ -258,6 +266,7 @@ impl MenuApp {
                 field_width,
                 field_height,
                 wall_collision_mode: self.wall_collision_mode,
+                dead_snake_behavior: self.dead_snake_behavior,
                 tick_interval_ms,
                 max_food_count,
                 food_spawn_probability,

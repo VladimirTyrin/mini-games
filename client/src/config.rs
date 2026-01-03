@@ -1,5 +1,5 @@
 pub(crate) use common::config::{ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
-use common::WallCollisionMode;
+use common::{WallCollisionMode, DeadSnakeBehavior};
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "snake_game_client_config.yaml";
@@ -47,6 +47,7 @@ pub struct LobbyConfig {
     pub field_width: u32,
     pub field_height: u32,
     pub wall_collision_mode: WallCollisionMode,
+    pub dead_snake_behavior: DeadSnakeBehavior,
     pub tick_interval_ms: u32,
     pub max_food_count: u32,
     pub food_spawn_probability: f32,
@@ -94,6 +95,7 @@ impl Default for Config {
                 field_width: 15,
                 field_height: 15,
                 wall_collision_mode: WallCollisionMode::WrapAround,
+                dead_snake_behavior: DeadSnakeBehavior::Disappear,
                 tick_interval_ms: 200,
                 max_food_count: 1,
                 food_spawn_probability: 1.0,

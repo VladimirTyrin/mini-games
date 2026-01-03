@@ -126,12 +126,19 @@ message LobbySettings {
     uint32 tick_interval_ms = 4;
     uint32 max_food_count = 5;
     float food_spawn_probability = 6;
+    DeadSnakeBehavior dead_snake_behavior = 7;
 }
 
 enum WallCollisionMode {
     WALL_COLLISION_MODE_UNSPECIFIED = 0;
     WALL_COLLISION_MODE_DEATH = 1;
     WALL_COLLISION_MODE_WRAP_AROUND = 2;
+}
+
+enum DeadSnakeBehavior {
+    DEAD_SNAKE_BEHAVIOR_UNSPECIFIED = 0;
+    DEAD_SNAKE_BEHAVIOR_DISAPPEAR = 1;
+    DEAD_SNAKE_BEHAVIOR_STAY_ON_FIELD = 2;
 }
 
 enum BotType {
@@ -209,6 +216,7 @@ message GameStateUpdate {
     repeated Position food = 3;
     uint32 field_width = 4;
     uint32 field_height = 5;
+    DeadSnakeBehavior dead_snake_behavior = 6;
 }
 
 message Snake {
