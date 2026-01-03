@@ -248,7 +248,6 @@ impl GameUi {
                                             let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                         }
                                     });
-                                    ctx.request_repaint();
                                 }
 
                                 ui.add_space(5.0);
