@@ -8,36 +8,36 @@ service SnakeGameService {
 
 message ClientMessage {
     oneof message {
-        ConnectRequest connect = 1;
-        DisconnectRequest disconnect = 2;
-        ListLobbiesRequest list_lobbies = 3;
-        CreateLobbyRequest create_lobby = 4;
-        JoinLobbyRequest join_lobby = 5;
-        LeaveLobbyRequest leave_lobby = 6;
-        MarkReadyRequest mark_ready = 7;
-        StartGameRequest start_game = 8;
-        PlayAgainRequest play_again = 9;
-        TurnCommand turn = 10;
-        AddBotRequest add_bot = 11;
-        KickFromLobbyRequest kick_from_lobby = 12;
+        ConnectRequest connect = 10;
+        DisconnectRequest disconnect = 11;
+        ListLobbiesRequest list_lobbies = 12;
+        CreateLobbyRequest create_lobby = 13;
+        JoinLobbyRequest join_lobby = 14;
+        LeaveLobbyRequest leave_lobby = 15;
+        MarkReadyRequest mark_ready = 16;
+        StartGameRequest start_game = 17;
+        PlayAgainRequest play_again = 18;
+        TurnCommand turn = 19;
+        AddBotRequest add_bot = 20;
+        KickFromLobbyRequest kick_from_lobby = 21;
     }
 }
 
 message ServerMessage {
     oneof message {
-        LobbyListResponse lobby_list = 1;
-        LobbyUpdateNotification lobby_update = 2;
-        PlayerJoinedNotification player_joined = 3;
-        PlayerLeftNotification player_left = 4;
-        PlayerReadyNotification player_ready = 5;
-        GameStartingNotification game_starting = 6;
-        LobbyListUpdateNotification lobby_list_update = 7;
-        LobbyClosedNotification lobby_closed = 8;
-        PlayAgainStatusNotification play_again_status = 9;
-        GameStateUpdate state = 10;
-        GameOverNotification game_over = 11;
-        ErrorResponse error = 12;
-        ServerShuttingDownNotification server_shutting_down = 13;
+        LobbyListResponse lobby_list = 10;
+        LobbyUpdateNotification lobby_update = 11;
+        PlayerJoinedNotification player_joined = 12;
+        PlayerLeftNotification player_left = 13;
+        PlayerReadyNotification player_ready = 14;
+        GameStartingNotification game_starting = 15;
+        LobbyListUpdateNotification lobby_list_update = 16;
+        LobbyClosedNotification lobby_closed = 17;
+        PlayAgainStatusNotification play_again_status = 18;
+        GameStateUpdate state = 19;
+        GameOverNotification game_over = 20;
+        ErrorResponse error = 21;
+        ServerShuttingDownNotification server_shutting_down = 22;
     }
 }
 
