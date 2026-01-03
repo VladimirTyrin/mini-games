@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use common::{LobbyInfo, LobbyDetails, PlayerInfo, LobbySettings, ClientId, LobbyId, PlayerId, BotId, BotType};
+use common::id_generator::generate_client_id;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlayerIdentity {
@@ -10,22 +11,10 @@ pub enum PlayerIdentity {
 }
 
 impl PlayerIdentity {
-    /// Returns the client_id string for API purposes (works for both humans and bots)
     pub fn client_id(&self) -> String {
         match self {
             PlayerIdentity::Player(id) => id.to_string(),
             PlayerIdentity::Bot { id, .. } => id.to_string(),
-        }
-    }
-
-    pub fn is_bot(&self) -> bool {
-        matches!(self, PlayerIdentity::Bot { .. })
-    }
-
-    pub fn bot_type(&self) -> Option<BotType> {
-        match self {
-            PlayerIdentity::Bot { bot_type, .. } => Some(*bot_type),
-            PlayerIdentity::Player(_) => None,
         }
     }
 
@@ -178,10 +167,6 @@ impl Lobby {
         }
         self.bots.insert(bot_id, bot_type);
         true
-    }
-
-    pub fn get_all_bots(&self) -> &HashMap<BotId, BotType> {
-        &self.bots
     }
 
     fn has_ever_started(&self) -> bool {
@@ -390,7 +375,7 @@ impl LobbyManager {
             return Err("Only the host can add bots".to_string());
         }
 
-        let bot_id = BotId::new(format!("Bot-{}", bot_id_number));
+        let bot_id = BotId::new(format!("{} Bot-{}", generate_client_id(), bot_id_number));
 
         if !lobby.add_bot(bot_id.clone(), bot_type) {
             return Err("Cannot add bot: lobby full or bot already exists".to_string());
@@ -855,7 +840,7 @@ mod tests {
 
         assert!(result.is_ok());
         let details = result.unwrap();
-        assert!(details.players.iter().any(|p| p.client_id == joiner_id.to_string() && p.ready));
+        assert!(details.players.iter().any(|p| p.identity.unwrap().player_id == joiner_id.to_string() && p.ready));
     }
 
     #[tokio::test]

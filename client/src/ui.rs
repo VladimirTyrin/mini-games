@@ -68,19 +68,32 @@ impl MenuApp {
         }
     }
 
-    fn render_lobby_list(&mut self, ui: &mut egui::Ui, lobbies: &[LobbyInfo]) {
+    fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo]) {
         ui.heading("Snake Game - Lobby List");
         ui.separator();
 
         ui.horizontal(|ui| {
-            if ui.button("🔄 Update").clicked() {
+            if ui.button("🔄 Update (F5)").clicked() {
                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
             }
 
-            if ui.button("➕ Create Lobby").clicked() {
+            if ui.button("➕ Create Lobby (Ctrl+N)").clicked() {
                 self.create_lobby_dialog = true;
                 self.lobby_name_input = self.client_id.clone();
-                self.max_players_input = "4".to_string();
+                let config = self.config_manager.get_config().unwrap();
+                self.max_players_input = config.lobby.max_players.to_string();
+            }
+        });
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::F5) {
+                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+            }
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
+                self.create_lobby_dialog = true;
+                self.lobby_name_input = self.client_id.clone();
+                let config = self.config_manager.get_config().unwrap();
+                self.max_players_input = config.lobby.max_players.to_string();
             }
         });
 
@@ -142,6 +155,7 @@ impl MenuApp {
 
     fn render_create_lobby_dialog(&mut self, ctx: &egui::Context) {
         let mut close_dialog = false;
+        let mut create_lobby = false;
 
         egui::Window::new("Create Lobby")
             .open(&mut self.create_lobby_dialog)
@@ -169,62 +183,74 @@ impl MenuApp {
                 });
 
                 ui.horizontal(|ui| {
-                    if ui.button("Create").clicked() {
-                        let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
-                            return;
-                        };
-
-                        let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
-                            return;
-                        };
-
-                        let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
-                            return;
-                        };
-
-                        let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
-                            return;
-                        };
-
-                        let lobby_config = LobbyConfig {
-                            max_players,
-                            field_width,
-                            field_height,
-                            wall_collision_mode: self.wall_collision_mode,
-                            tick_interval_ms,
-                        };
-
-                        let mut config = self.config_manager.get_config().unwrap();
-                        config.lobby = lobby_config.clone();
-
-                        // This also validates the config
-                        match self.config_manager.set_config(&config) {
-                            Ok(_) => {
-                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
-                                    name: self.lobby_name_input.clone(),
-                                    config: lobby_config
-                                }));
-                                close_dialog = true;
-                            }
-                            Err(error) => {
-                                self.shared_state.set_error(error);
-                                return;
-                            }
-                        }
+                    if ui.button("Create (Enter)").clicked() {
+                        create_lobby = true;
                     }
 
-                    if ui.button("Cancel").clicked() {
+                    if ui.button("Cancel (Esc)").clicked() {
+                        close_dialog = true;
+                    }
+                });
+
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::Enter) {
+                        create_lobby = true;
+                    }
+                    if i.key_pressed(egui::Key::Escape) {
                         close_dialog = true;
                     }
                 });
             });
+
+        if create_lobby {
+            let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
+                return;
+            };
+
+            let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
+                return;
+            };
+
+            let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
+                return;
+            };
+
+            let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
+                return;
+            };
+
+            let lobby_config = LobbyConfig {
+                max_players,
+                field_width,
+                field_height,
+                wall_collision_mode: self.wall_collision_mode,
+                tick_interval_ms,
+            };
+
+            let mut config = self.config_manager.get_config().unwrap();
+            config.lobby = lobby_config.clone();
+
+            match self.config_manager.set_config(&config) {
+                Ok(_) => {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
+                        name: self.lobby_name_input.clone(),
+                        config: lobby_config
+                    }));
+                    close_dialog = true;
+                }
+                Err(error) => {
+                    self.shared_state.set_error(error);
+                    return;
+                }
+            }
+        }
 
         if close_dialog {
             self.create_lobby_dialog = false;
         }
     }
 
-    fn render_in_lobby(&mut self, ui: &mut egui::Ui, details: &LobbyDetails, event_log: &[String]) {
+    fn render_in_lobby(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, details: &LobbyDetails, event_log: &[String]) {
         ui.heading(format!("Lobby: {}", details.lobby_name));
         ui.separator();
 
@@ -322,12 +348,25 @@ impl MenuApp {
 
         if is_host {
             ui.horizontal(|ui| {
-                if ui.button("🤖 Add Efficient Bot").clicked() {
+                if ui.button("🤖 Add Efficient Bot (Ctrl+E)").clicked() {
                     let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
                         bot_type: common::BotType::Efficient,
                     }));
                 }
-                if ui.button("🎲 Add Random Bot").clicked() {
+                if ui.button("🎲 Add Random Bot (Ctrl+R)").clicked() {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                        bot_type: common::BotType::Random,
+                    }));
+                }
+            });
+
+            ctx.input(|i| {
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::E) {
+                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                        bot_type: common::BotType::Efficient,
+                    }));
+                }
+                if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
                     let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
                         bot_type: common::BotType::Random,
                     }));
@@ -442,10 +481,10 @@ impl eframe::App for MenuApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             match current_state {
                 AppState::LobbyList { lobbies } => {
-                    self.render_lobby_list(ui, &lobbies);
+                    self.render_lobby_list(ui, ctx, &lobbies);
                 }
                 AppState::InLobby { details, event_log } => {
-                    self.render_in_lobby(ui, &details, &event_log);
+                    self.render_in_lobby(ui, ctx, &details, &event_log);
                 }
                 AppState::InGame { session_id, game_state } => {
                     if self.game_ui.is_none() {

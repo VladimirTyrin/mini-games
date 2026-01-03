@@ -138,7 +138,7 @@ impl GameState {
             food_set: HashSet::new(),
             field_size,
             wall_collision_mode,
-            max_food_count: 1,
+            max_food_count: 2,
             food_spawn_probability: 1f32,
             game_end_reason: None,
         }
@@ -237,7 +237,7 @@ impl GameState {
         Ok(())
     }
 
-    fn calculate_next_head_position_for_player(&self, _player_id: &PlayerId, snake: &Snake) -> Result<Point, DeathReason> {
+    fn calculate_next_head_position_for_player(&self, player_id: &PlayerId, snake: &Snake) -> Result<Point, DeathReason> {
         let head = snake.head();
         let direction = &snake.direction;
 
@@ -284,12 +284,17 @@ impl GameState {
             return Err(DeathReason::SelfCollision);
         }
 
-        for (_other_id, other_snake) in &self.snakes {
+        for (other_id, other_snake) in &self.snakes {
+            if other_id == player_id {
+                continue;
+            }
+
             if !other_snake.is_alive() {
                 continue;
             }
 
             if other_snake.body_set.contains(&next_head) {
+                log!("{} collided with {} at ({}, {})", player_id, other_id, next_head.x, next_head.y);
                 return Err(DeathReason::OtherSnakeCollision);
             }
         }

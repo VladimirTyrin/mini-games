@@ -167,7 +167,13 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::LobbyUpdate(update) => {
                                     if let Some(lobby) = update.lobby {
                                         match shared_state.get_state() {
-                                            AppState::InLobby { .. } | AppState::LobbyList { .. } => {
+                                            AppState::InLobby { event_log, .. } => {
+                                                shared_state.set_state(AppState::InLobby {
+                                                    details: lobby,
+                                                    event_log,
+                                                });
+                                            }
+                                            AppState::LobbyList { .. } => {
                                                 shared_state.set_state(AppState::InLobby {
                                                     details: lobby,
                                                     event_log: Vec::new(),
@@ -178,23 +184,60 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerJoined(notification) => {
-                                    let player_name = notification.identity.as_ref()
-                                        .map(|i| i.player_id.clone())
-                                        .unwrap_or_else(|| "Unknown".to_string());
-                                    shared_state.add_event_log(format!("{} joined", player_name));
+                                    if let Some(identity) = &notification.identity {
+                                        if identity.is_bot {
+                                            let bot_type_name = match common::BotType::try_from(identity.bot_type).unwrap_or(common::BotType::Unspecified) {
+                                                common::BotType::Efficient => "Efficient",
+                                                common::BotType::Random => "Random",
+                                                _ => "Unknown",
+                                            };
+
+                                            let host_name = match shared_state.get_state() {
+                                                AppState::InLobby { details, .. } => {
+                                                    details.creator.as_ref()
+                                                        .map(|c| c.player_id.clone())
+                                                        .unwrap_or_else(|| "Host".to_string())
+                                                }
+                                                _ => "Host".to_string()
+                                            };
+
+                                            shared_state.add_event_log(format!("{} added {} (Bot - {})", host_name, identity.player_id, bot_type_name));
+                                        } else {
+                                            shared_state.add_event_log(format!("{} joined", identity.player_id));
+                                        }
+                                    }
                                 }
                                 common::server_message::Message::PlayerLeft(notification) => {
-                                    let player_name = notification.identity.as_ref()
-                                        .map(|i| i.player_id.clone())
-                                        .unwrap_or_else(|| "Unknown".to_string());
-                                    shared_state.add_event_log(format!("{} left", player_name));
+                                    if let Some(identity) = &notification.identity {
+                                        if identity.is_bot {
+                                            let bot_type_name = match common::BotType::try_from(identity.bot_type).unwrap_or(common::BotType::Unspecified) {
+                                                common::BotType::Efficient => "Efficient",
+                                                common::BotType::Random => "Random",
+                                                _ => "Unknown",
+                                            };
+
+                                            let host_name = match shared_state.get_state() {
+                                                AppState::InLobby { details, .. } => {
+                                                    details.creator.as_ref()
+                                                        .map(|c| c.player_id.clone())
+                                                        .unwrap_or_else(|| "Host".to_string())
+                                                }
+                                                _ => "Host".to_string()
+                                            };
+
+                                            shared_state.add_event_log(format!("{} removed {} (Bot - {})", host_name, identity.player_id, bot_type_name));
+                                        } else {
+                                            shared_state.add_event_log(format!("{} left", identity.player_id));
+                                        }
+                                    }
                                 }
                                 common::server_message::Message::PlayerReady(notification) => {
-                                    let player_name = notification.identity.as_ref()
-                                        .map(|i| i.player_id.clone())
-                                        .unwrap_or_else(|| "Unknown".to_string());
-                                    let status = if notification.ready { "ready" } else { "not ready" };
-                                    shared_state.add_event_log(format!("{} is {}", player_name, status));
+                                    if let Some(identity) = &notification.identity {
+                                        if !identity.is_bot {
+                                            let status = if notification.ready { "ready" } else { "not ready" };
+                                            shared_state.add_event_log(format!("{} is {}", identity.player_id, status));
+                                        }
+                                    }
                                 }
                                 common::server_message::Message::Error(err) => {
                                     shared_state.set_error(err.message);

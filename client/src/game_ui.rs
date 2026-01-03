@@ -139,7 +139,7 @@ impl GameUi {
             let rect = response.rect;
             self.render_game_field(&painter, ctx, rect, state, true);
 
-            let overlay_color = egui::Color32::from_black_alpha(200);
+            let overlay_color = egui::Color32::from_black_alpha(100);
             painter.rect_filled(rect, 0.0, overlay_color);
 
             let center = rect.center();
@@ -153,7 +153,7 @@ impl GameUi {
             painter.rect_filled(
                 overlay_rect,
                 8.0,
-                egui::Color32::from_rgba_premultiplied(40, 40, 40, 240),
+                egui::Color32::from_rgba_premultiplied(40, 40, 40, 200),
             );
             painter.rect_stroke(
                 overlay_rect,
@@ -239,8 +239,16 @@ impl GameUi {
                                 let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
                                 if is_ready {
                                     ui.label(egui::RichText::new("Waiting for other players...").size(14.0).color(egui::Color32::from_rgb(255, 215, 0)));
-                                } else if ui.button(egui::RichText::new("Play Again").size(16.0)).clicked() {
-                                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                } else {
+                                    if ui.button(egui::RichText::new("Play Again (R)").size(16.0)).clicked() {
+                                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                    }
+                                    ctx.input(|i| {
+                                        if i.key_pressed(egui::Key::R) {
+                                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                        }
+                                    });
+                                    ctx.request_repaint();
                                 }
 
                                 ui.add_space(5.0);
@@ -268,9 +276,15 @@ impl GameUi {
                         }
                     }
 
-                    if ui.button(egui::RichText::new("Back to Lobby List").size(14.0)).clicked() {
+                    if ui.button(egui::RichText::new("Back to Lobby List (Esc)").size(14.0)).clicked() {
                         let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
+
+                    ctx.input(|i| {
+                        if i.key_pressed(egui::Key::Escape) {
+                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                        }
+                    });
                 });
             });
         } else {
@@ -354,9 +368,15 @@ impl GameUi {
             }
 
             ui.separator();
-            if ui.button("Back to Lobby List").clicked() {
+            if ui.button("Back to Lobby List (Esc)").clicked() {
                 let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
+
+            ctx.input(|i| {
+                if i.key_pressed(egui::Key::Escape) {
+                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                }
+            });
         }
     }
 
