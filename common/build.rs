@@ -12,7 +12,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_prost_build::configure()
         .file_descriptor_set_path(&descriptor_path)
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
-        .compile_protos(&["proto/snake_game.proto"], &["proto"])?;
+        .compile_protos(
+            &[
+                "proto/game_service.proto",
+                "proto/snake.proto",
+                "proto/tictactoe.proto",
+            ],
+            &["proto"],
+        )?;
     
     Ok(())
 }

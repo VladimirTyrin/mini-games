@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package game_service;
+
+import "snake.proto";
+import "tictactoe.proto";
+
+service GameService {
+    rpc GameStream(stream ClientMessage) returns (stream ServerMessage);
+}
+
+message ClientMessage {
+    string version = 1;
+    oneof message {
+        ConnectRequest connect = 2;
+        DisconnectRequest disconnect = 3;
+        ListLobbiesRequest list_lobbies = 4;
+        CreateLobbyRequest create_lobby = 5;
+        JoinLobbyRequest join_lobby = 6;
+        LeaveLobbyRequest leave_lobby = 7;
+        MarkReadyRequest mark_ready = 8;
+        StartGameRequest start_game = 9;
+        PlayAgainRequest play_again = 10;
+        AddBotRequest add_bot = 11;
+        KickFromLobbyRequest kick_from_lobby = 12;
+        LobbyListChatMessage lobby_list_chat = 13;
+        InLobbyChatMessage in_lobby_chat = 14;
+        PingRequest ping = 15;
+        InGameCommand in_game = 20;
+    }
+}
+
+message ServerMessage {
+    oneof message {
+        ConnectResponse connect = 1;
+        ErrorResponse error = 2;
+        LobbyListResponse lobby_list = 3;
+        LobbyCreatedNotification lobby_created = 4;
+        LobbyJoinedNotification lobby_joined = 5;
+        LobbyUpdateNotification lobby_update = 6;
+        PlayerJoinedNotification player_joined = 7;
+        PlayerLeftNotification player_left = 8;
+        PlayerReadyNotification player_ready = 9;
+        GameStartingNotification game_starting = 10;
+        GameOverNotification game_over = 11;
+        KickedFromLobbyNotification kicked = 12;
+        ServerShuttingDownNotification shutdown = 13;
+        PlayAgainStatusNotification play_again_status = 14;
+        LobbyListChatNotification lobby_list_chat = 15;
+        InLobbyChatNotification in_lobby_chat = 16;
+        PongResponse pong = 17;
+        LobbyListUpdateNotification lobby_list_update = 18;
+        LobbyClosedNotification lobby_closed = 19;
+        GameStateUpdate game_state = 20;
+    }
+}
+
+message ConnectRequest {
+    string client_id = 1;
+}
+
+message ConnectResponse {
+    bool success = 1;
+}
+
+message DisconnectRequest {}
+
+message ErrorResponse {
+    string message = 1;
+}
+
+message ListLobbiesRequest {}
+
+message LobbyListResponse {
+    repeated LobbyInfo lobbies = 1;
+}
+
+message LobbyInfo {
+    string lobby_id = 1;
+    string lobby_name = 2;
+    uint32 current_players = 3;
+    uint32 max_players = 4;
+    oneof settings {
+        snake.SnakeLobbySettings snake = 10;
+        tictactoe.TicTacToeLobbySettings tictactoe = 11;
+    }
+}
+
+message CreateLobbyRequest {
+    string lobby_name = 1;
+    uint32 max_players = 2;
+    oneof settings {
+        snake.SnakeLobbySettings snake = 10;
+        tictactoe.TicTacToeLobbySettings tictactoe = 11;
+    }
+}
+
+message JoinLobbyRequest {
+    string lobby_id = 1;
+}
+
+message LeaveLobbyRequest {}
+
+message MarkReadyRequest {
+    bool ready = 1;
+}
+
+message StartGameRequest {}
+
+message PlayAgainRequest {}
+
+message AddBotRequest {
+    oneof bot_type {
+        snake.SnakeBotType snake_bot = 1;
+        tictactoe.TicTacToeBotType tictactoe_bot = 2;
+    }
+}
+
+message KickFromLobbyRequest {
+    string player_id = 1;
+}
+
+message LobbyListChatMessage {
+    string message = 1;
+}
+
+message InLobbyChatMessage {
+    string message = 1;
+}
+
+message PingRequest {
+    uint64 ping_id = 1;
+    uint64 client_timestamp_ms = 2;
+}
+
+message PongResponse {
+    uint64 ping_id = 1;
+    uint64 client_timestamp_ms = 2;
+}
+
+message InGameCommand {
+    oneof command {
+        snake.SnakeInGameCommand snake = 1;
+        tictactoe.TicTacToeInGameCommand tictactoe = 2;
+    }
+}
+
+message GameStateUpdate {
+    oneof state {
+        snake.SnakeGameState snake = 1;
+        tictactoe.TicTacToeGameState tictactoe = 2;
+    }
+}
+
+message PlayerIdentity {
+    string player_id = 1;
+    bool is_bot = 2;
+}
+
+message LobbyDetails {
+    string lobby_id = 1;
+    string lobby_name = 2;
+    uint32 max_players = 3;
+    repeated PlayerInfo players = 4;
+    PlayerIdentity creator = 5;
+    oneof settings {
+        snake.SnakeLobbySettings snake = 10;
+        tictactoe.TicTacToeLobbySettings tictactoe = 11;
+    }
+}
+
+message PlayerInfo {
+    PlayerIdentity identity = 1;
+    bool ready = 2;
+}
+
+message LobbyCreatedNotification {
+    LobbyDetails details = 1;
+}
+
+message LobbyJoinedNotification {
+    LobbyDetails details = 1;
+}
+
+message LobbyUpdateNotification {
+    LobbyDetails details = 1;
+}
+
+message PlayerJoinedNotification {
+    PlayerIdentity player = 1;
+}
+
+message PlayerLeftNotification {
+    PlayerIdentity player = 1;
+}
+
+message PlayerReadyNotification {
+    PlayerIdentity player = 1;
+    bool ready = 2;
+}
+
+message GameStartingNotification {
+    string session_id = 1;
+}
+
+message GameOverNotification {
+    repeated ScoreEntry scores = 1;
+    PlayerIdentity winner = 2;
+    oneof reason {
+        snake.SnakeGameEndReason snake_reason = 10;
+        tictactoe.TicTacToeGameEndReason tictactoe_reason = 11;
+    }
+}
+
+message ScoreEntry {
+    PlayerIdentity identity = 1;
+    uint32 score = 2;
+}
+
+message KickedFromLobbyNotification {
+    string reason = 1;
+}
+
+message ServerShuttingDownNotification {
+    string message = 1;
+}
+
+message PlayAgainStatusNotification {
+    repeated PlayerIdentity ready_players = 1;
+    repeated PlayerIdentity pending_players = 2;
+    bool available = 3;
+}
+
+message LobbyListChatNotification {
+    PlayerIdentity sender = 1;
+    string message = 2;
+}
+
+message InLobbyChatNotification {
+    PlayerIdentity sender = 1;
+    string message = 2;
+}
+
+message LobbyListUpdateNotification {}
+
+message LobbyClosedNotification {
+    string message = 1;
+}

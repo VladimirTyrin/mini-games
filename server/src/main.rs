@@ -1,20 +1,19 @@
 mod lobby_manager;
 mod broadcaster;
 mod service;
-mod game;
+mod games;
 mod game_session_manager;
-mod bot;
 
 use tonic::transport::Server;
 use common::{
-    snake_game_service_server::SnakeGameServiceServer,
+    proto::game_service::game_service_server::GameServiceServer,
     logger,
     log,
     ServerMessage, server_message,
     ServerShuttingDownNotification,
 };
 use clap::Parser;
-use service::SnakeGameServiceImpl;
+use service::GameServiceImpl;
 use lobby_manager::LobbyManager;
 use broadcaster::Broadcaster;
 use game_session_manager::GameSessionManager;
@@ -42,9 +41,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broadcaster = Broadcaster::new();
     let session_manager = GameSessionManager::new(broadcaster.clone(), lobby_manager.clone());
 
-    let service = SnakeGameServiceImpl::new(lobby_manager, broadcaster.clone(), session_manager);
+    let service = GameServiceImpl::new(lobby_manager, broadcaster.clone(), session_manager);
 
-    log!("Snake Game Server listening on {}", addr);
+    log!("Mini Games Server listening on {}", addr);
 
     let broadcaster_clone = broadcaster.clone();
     let shutdown_signal = async move {
@@ -55,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log!("Shutdown signal received, notifying clients...");
 
         let shutdown_msg = ServerMessage {
-            message: Some(server_message::Message::ServerShuttingDown(
+            message: Some(server_message::Message::Shutdown(
                 ServerShuttingDownNotification {
                     message: "Server is shutting down".to_string(),
                 }
@@ -68,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Server::builder()
-        .add_service(SnakeGameServiceServer::new(service))
+        .add_service(GameServiceServer::new(service))
         .serve_with_shutdown(addr, shutdown_signal)
         .await?;
 

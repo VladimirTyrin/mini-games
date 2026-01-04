@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package tictactoe;
+
+message TicTacToeLobbySettings {
+    uint32 field_width = 1;
+    uint32 field_height = 2;
+    uint32 win_count = 3;
+    FirstPlayerMode first_player = 4;
+}
+
+enum FirstPlayerMode {
+    FIRST_PLAYER_MODE_UNSPECIFIED = 0;
+    FIRST_PLAYER_MODE_RANDOM = 1;
+    FIRST_PLAYER_MODE_HOST = 2;
+}
+
+enum TicTacToeBotType {
+    TICTACTOE_BOT_TYPE_UNSPECIFIED = 0;
+    TICTACTOE_BOT_TYPE_WIN_BLOCK = 1;
+    TICTACTOE_BOT_TYPE_MINIMAX = 2;
+    TICTACTOE_BOT_TYPE_RANDOM = 3;
+}
+
+message TicTacToeInGameCommand {
+    oneof command {
+        PlaceMarkCommand place = 1;
+    }
+}
+
+message PlaceMarkCommand {
+    uint32 x = 1;
+    uint32 y = 2;
+}
+
+message TicTacToeGameState {
+    repeated CellMark board = 1;
+    uint32 field_width = 2;
+    uint32 field_height = 3;
+    uint32 win_count = 4;
+    PlayerIdentity current_player = 5;
+    PlayerIdentity player_x = 6;
+    PlayerIdentity player_o = 7;
+    GameStatus status = 8;
+}
+
+message CellMark {
+    uint32 x = 1;
+    uint32 y = 2;
+    MarkType mark = 3;
+}
+
+enum MarkType {
+    MARK_TYPE_UNSPECIFIED = 0;
+    MARK_TYPE_EMPTY = 1;
+    MARK_TYPE_X = 2;
+    MARK_TYPE_O = 3;
+}
+
+enum GameStatus {
+    GAME_STATUS_UNSPECIFIED = 0;
+    GAME_STATUS_IN_PROGRESS = 1;
+    GAME_STATUS_X_WON = 2;
+    GAME_STATUS_O_WON = 3;
+    GAME_STATUS_DRAW = 4;
+}
+
+message PlayerIdentity {
+    string player_id = 1;
+    bool is_bot = 2;
+}
+
+enum TicTacToeGameEndReason {
+    TICTACTOE_GAME_END_REASON_UNSPECIFIED = 0;
+    TICTACTOE_GAME_END_REASON_WIN = 1;
+    TICTACTOE_GAME_END_REASON_DRAW = 2;
+    TICTACTOE_GAME_END_REASON_PLAYER_DISCONNECTED = 3;
+}

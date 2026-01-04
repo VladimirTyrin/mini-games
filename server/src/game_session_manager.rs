@@ -3,11 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
-use common::{ClientId, LobbyId, PlayerId, BotId, BotType, log, ServerMessage, server_message, GameStateUpdate, Position, ScoreEntry, GameOverNotification, GameEndReason};
-use crate::game::{GameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason};
+use common::{ClientId, LobbyId, PlayerId, BotId, log, ServerMessage, server_message, SnakePosition};
+use crate::games::snake::{GameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason, BotController};
 use crate::broadcaster::Broadcaster;
-use crate::lobby_manager::LobbyManager;
-use crate::bot::BotController;
+use crate::lobby_manager::{LobbyManager, BotType, LobbySettings};
 
 pub type SessionId = String;
 
@@ -61,43 +60,46 @@ impl GameSessionManager {
     pub async fn create_session(
         &self,
         session_id: SessionId,
-        lobby_details: common::LobbyDetails,
+        _lobby_details: common::LobbyDetails,
     ) {
-        let mut human_players: Vec<PlayerId> = Vec::new();
-        let mut bots: HashMap<BotId, BotType> = HashMap::new();
-
-        for player_info in &lobby_details.players {
-            if let Some(identity) = &player_info.identity {
-                if identity.is_bot {
-                    let bot_id = BotId::new(identity.player_id.clone());
-                    let bot_type = common::BotType::try_from(identity.bot_type)
-                        .unwrap_or(common::BotType::Unspecified);
-                    bots.insert(bot_id, bot_type);
-                } else {
-                    let player_id = PlayerId::new(identity.player_id.clone());
-                    human_players.push(player_id);
-                }
+        let lobby_id = LobbyId::new(session_id.clone());
+        let lobby = match self.lobby_manager.get_lobby(&lobby_id).await {
+            Some(l) => l,
+            None => {
+                log!("Cannot create session: lobby {} not found", lobby_id);
+                return;
             }
-        }
+        };
 
-        let settings = lobby_details.settings.unwrap_or_default();
-        let field_width = settings.field_width as usize;
-        let field_height = settings.field_height as usize;
-        let wall_collision_mode = match common::WallCollisionMode::try_from(settings.wall_collision_mode) {
-            Ok(common::WallCollisionMode::Death) |
-            Ok(common::WallCollisionMode::Unspecified) => WallCollisionMode::Death,
-            Ok(common::WallCollisionMode::WrapAround) => WallCollisionMode::WrapAround,
-            _ => WallCollisionMode::Death,
+        let human_players: Vec<PlayerId> = lobby.players.keys().cloned().collect();
+        let bots: HashMap<BotId, BotType> = lobby.bots.clone();
+
+        let (field_width, field_height, wall_collision_mode, dead_snake_behavior, tick_interval, max_food_count, food_spawn_probability) = match &lobby.settings {
+            LobbySettings::Snake(snake_settings) => {
+                let field_width = snake_settings.field_width as usize;
+                let field_height = snake_settings.field_height as usize;
+                let wall_collision_mode = match common::proto::snake::WallCollisionMode::try_from(snake_settings.wall_collision_mode) {
+                    Ok(common::proto::snake::WallCollisionMode::Death) |
+                    Ok(common::proto::snake::WallCollisionMode::Unspecified) => WallCollisionMode::Death,
+                    Ok(common::proto::snake::WallCollisionMode::WrapAround) => WallCollisionMode::WrapAround,
+                    _ => WallCollisionMode::Death,
+                };
+                let dead_snake_behavior = match common::proto::snake::DeadSnakeBehavior::try_from(snake_settings.dead_snake_behavior) {
+                    Ok(common::proto::snake::DeadSnakeBehavior::StayOnField) => DeadSnakeBehavior::StayOnField,
+                    Ok(common::proto::snake::DeadSnakeBehavior::Disappear) |
+                    Ok(common::proto::snake::DeadSnakeBehavior::Unspecified) |
+                    _ => DeadSnakeBehavior::Disappear,
+                };
+                let tick_interval = Duration::from_millis(snake_settings.tick_interval_ms as u64);
+                let max_food_count = snake_settings.max_food_count.max(1) as usize;
+                let food_spawn_probability = snake_settings.food_spawn_probability.clamp(0.001, 1.0);
+                (field_width, field_height, wall_collision_mode, dead_snake_behavior, tick_interval, max_food_count, food_spawn_probability)
+            }
+            LobbySettings::TicTacToe(_) => {
+                log!("Cannot create Snake session for TicTacToe lobby");
+                return;
+            }
         };
-        let dead_snake_behavior = match common::DeadSnakeBehavior::try_from(settings.dead_snake_behavior) {
-            Ok(common::DeadSnakeBehavior::StayOnField) => DeadSnakeBehavior::StayOnField,
-            Ok(common::DeadSnakeBehavior::Disappear) |
-            Ok(common::DeadSnakeBehavior::Unspecified) |
-            _ => DeadSnakeBehavior::Disappear,
-        };
-        let tick_interval = Duration::from_millis(settings.tick_interval_ms as u64);
-        let max_food_count = settings.max_food_count.max(1) as usize;
-        let food_spawn_probability = settings.food_spawn_probability.clamp(0.001, 1.0);
         let mut sessions = self.sessions.lock().await;
 
         let field_size = FieldSize {
@@ -148,9 +150,11 @@ impl GameSessionManager {
 
                 let bots_map = bots_clone.lock().await;
                 for (bot_id, bot_type) in bots_map.iter() {
-                    let player_id = bot_id.to_player_id();
-                    if let Some(direction) = BotController::calculate_move(*bot_type, &player_id, &state) {
-                        state.set_snake_direction(&player_id, direction);
+                    if let BotType::Snake(snake_bot_type) = bot_type {
+                        let player_id = bot_id.to_player_id();
+                        if let Some(direction) = BotController::calculate_move(*snake_bot_type, &player_id, &state) {
+                            state.set_snake_direction(&player_id, direction);
+                        }
                     }
                 }
                 drop(bots_map);
@@ -163,26 +167,17 @@ impl GameSessionManager {
                 let mut snakes = vec![];
                 let bots_ref = bots_clone.lock().await;
                 for (id, snake) in &state.snakes {
-                    let segments = snake.body.iter().map(|p| Position {
+                    let segments = snake.body.iter().map(|p| SnakePosition {
                         x: p.x as i32,
                         y: p.y as i32,
                     }).collect();
 
                     let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
-                    let bot_type = if is_bot {
-                        bots_ref.iter()
-                            .find(|(bot_id, _)| bot_id.to_player_id() == *id)
-                            .map(|(_, bt)| *bt as i32)
-                            .unwrap_or(common::BotType::Unspecified as i32)
-                    } else {
-                        common::BotType::Unspecified as i32
-                    };
 
-                    snakes.push(common::Snake {
-                        identity: Some(common::PlayerIdentity {
+                    snakes.push(common::proto::snake::Snake {
+                        identity: Some(common::proto::snake::PlayerIdentity {
                             player_id: id.to_string(),
                             is_bot,
-                            bot_type,
                         }),
                         segments,
                         alive: snake.is_alive(),
@@ -191,25 +186,36 @@ impl GameSessionManager {
                 }
                 drop(bots_ref);
 
-                let food: Vec<Position> = state.food_set.iter().map(|p| Position {
+                let food: Vec<SnakePosition> = state.food_set.iter().map(|p| SnakePosition {
                     x: p.x as i32,
                     y: p.y as i32,
                 }).collect();
 
                 let dead_snake_behavior_proto = match state.dead_snake_behavior {
-                    DeadSnakeBehavior::Disappear => common::DeadSnakeBehavior::Disappear,
-                    DeadSnakeBehavior::StayOnField => common::DeadSnakeBehavior::StayOnField,
+                    DeadSnakeBehavior::Disappear => common::proto::snake::DeadSnakeBehavior::Disappear,
+                    DeadSnakeBehavior::StayOnField => common::proto::snake::DeadSnakeBehavior::StayOnField,
+                };
+
+                let wall_collision_mode_proto = match state.wall_collision_mode {
+                    WallCollisionMode::Death => common::proto::snake::WallCollisionMode::Death,
+                    WallCollisionMode::WrapAround => common::proto::snake::WallCollisionMode::WrapAround,
                 };
 
                 let game_state_msg = ServerMessage {
-                    message: Some(server_message::Message::State(
-                        GameStateUpdate {
-                            tick: *tick_value,
-                            snakes,
-                            food,
-                            field_width: state.field_size.width as u32,
-                            field_height: state.field_size.height as u32,
-                            dead_snake_behavior: dead_snake_behavior_proto as i32,
+                    message: Some(server_message::Message::GameState(
+                        common::GameStateUpdate {
+                            state: Some(common::game_state_update::State::Snake(
+                                common::proto::snake::SnakeGameState {
+                                    tick: *tick_value,
+                                    snakes,
+                                    food,
+                                    field_width: state.field_size.width as u32,
+                                    field_height: state.field_size.height as u32,
+                                    tick_interval_ms: tick_interval.as_millis() as u32,
+                                    wall_collision_mode: wall_collision_mode_proto as i32,
+                                    dead_snake_behavior: dead_snake_behavior_proto as i32,
+                                }
+                            ))
                         }
                     )),
                 };
@@ -227,22 +233,13 @@ impl GameSessionManager {
                 };
                 if game_over {
                     let bots_ref = bots_clone.lock().await;
-                    let scores: Vec<ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
+                    let scores: Vec<common::ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
                         let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
-                        let bot_type = if is_bot {
-                            bots_ref.iter()
-                                .find(|(bot_id, _)| bot_id.to_player_id() == *id)
-                                .map(|(_, bt)| *bt as i32)
-                                .unwrap_or(common::BotType::Unspecified as i32)
-                        } else {
-                            common::BotType::Unspecified as i32
-                        };
 
-                        ScoreEntry {
+                        common::ScoreEntry {
                             identity: Some(common::PlayerIdentity {
                                 player_id: id.to_string(),
                                 is_bot,
-                                bot_type,
                             }),
                             score: snake.score,
                         }
@@ -252,37 +249,28 @@ impl GameSessionManager {
                         .find(|(_, snake)| snake.is_alive())
                         .map(|(id, _)| {
                             let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
-                            let bot_type = if is_bot {
-                                bots_ref.iter()
-                                    .find(|(bot_id, _)| bot_id.to_player_id() == *id)
-                                    .map(|(_, bt)| *bt as i32)
-                                    .unwrap_or(common::BotType::Unspecified as i32)
-                            } else {
-                                common::BotType::Unspecified as i32
-                            };
                             common::PlayerIdentity {
                                 player_id: id.to_string(),
                                 is_bot,
-                                bot_type,
                             }
                         });
                     drop(bots_ref);
 
                     let game_end_reason = state.game_end_reason
                         .map(|r| match r {
-                            DeathReason::WallCollision => GameEndReason::WallCollision as i32,
-                            DeathReason::SelfCollision => GameEndReason::SelfCollision as i32,
-                            DeathReason::OtherSnakeCollision => GameEndReason::SnakeCollision as i32,
-                            DeathReason::PlayerDisconnected => GameEndReason::PlayerDisconnected as i32,
+                            DeathReason::WallCollision => common::proto::snake::SnakeGameEndReason::WallCollision,
+                            DeathReason::SelfCollision => common::proto::snake::SnakeGameEndReason::SelfCollision,
+                            DeathReason::OtherSnakeCollision => common::proto::snake::SnakeGameEndReason::SnakeCollision,
+                            DeathReason::PlayerDisconnected => common::proto::snake::SnakeGameEndReason::PlayerDisconnected,
                         })
-                        .unwrap_or(GameEndReason::GameCompleted as i32);
+                        .unwrap_or(common::proto::snake::SnakeGameEndReason::GameCompleted);
 
                     let game_over_msg = ServerMessage {
                         message: Some(server_message::Message::GameOver(
-                            GameOverNotification {
+                            common::GameOverNotification {
                                 scores,
                                 winner,
-                                reason: game_end_reason,
+                                reason: Some(common::game_over_notification::Reason::SnakeReason(game_end_reason as i32)),
                             }
                         )),
                     };
@@ -300,34 +288,29 @@ impl GameSessionManager {
                             if let Some(_lobby_details) = lobby_manager_clone.get_lobby_details(&lobby_id).await {
                                 match lobby_manager_clone.get_play_again_status(&lobby_id).await {
                                     Ok(status) => {
-                                        let proto_status = match status {
+                                        let (ready_players, pending_players, available) = match status {
                                             crate::lobby_manager::PlayAgainStatus::NotAvailable => {
-                                                common::play_again_status_notification::Status::NotAvailable(
-                                                    common::PlayAgainNotAvailable {}
-                                                )
+                                                (vec![], vec![], false)
                                             }
                                             crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
-                                                common::play_again_status_notification::Status::Available(
-                                                    common::PlayAgainAvailable {
-                                                        ready_players: ready_player_ids.iter().map(|id| common::PlayerIdentity {
-                                                            player_id: id.clone(),
-                                                            is_bot: false,
-                                                            bot_type: common::BotType::Unspecified as i32,
-                                                        }).collect(),
-                                                        pending_players: pending_player_ids.iter().map(|id| common::PlayerIdentity {
-                                                            player_id: id.clone(),
-                                                            is_bot: false,
-                                                            bot_type: common::BotType::Unspecified as i32,
-                                                        }).collect(),
-                                                    }
-                                                )
+                                                let ready = ready_player_ids.iter().map(|id| common::PlayerIdentity {
+                                                    player_id: id.clone(),
+                                                    is_bot: false,
+                                                }).collect();
+                                                let pending = pending_player_ids.iter().map(|id| common::PlayerIdentity {
+                                                    player_id: id.clone(),
+                                                    is_bot: false,
+                                                }).collect();
+                                                (ready, pending, true)
                                             }
                                         };
 
                                         let play_again_msg = ServerMessage {
                                             message: Some(server_message::Message::PlayAgainStatus(
                                                 common::PlayAgainStatusNotification {
-                                                    status: Some(proto_status),
+                                                    ready_players,
+                                                    pending_players,
+                                                    available,
                                                 }
                                             )),
                                         };
@@ -391,7 +374,7 @@ impl GameSessionManager {
     pub async fn kill_snake(
         &self,
         client_id: &ClientId,
-        reason: crate::game::DeathReason,
+        reason: DeathReason,
     ) {
         let mapping = self.client_to_session.lock().await;
         if let Some(session_id) = mapping.get(client_id) {

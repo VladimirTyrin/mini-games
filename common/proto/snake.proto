@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package snake;
+
+message SnakeLobbySettings {
+    uint32 field_width = 1;
+    uint32 field_height = 2;
+    WallCollisionMode wall_collision_mode = 3;
+    uint32 tick_interval_ms = 4;
+    uint32 max_food_count = 5;
+    float food_spawn_probability = 6;
+    DeadSnakeBehavior dead_snake_behavior = 7;
+}
+
+enum WallCollisionMode {
+    WALL_COLLISION_MODE_UNSPECIFIED = 0;
+    WALL_COLLISION_MODE_DEATH = 1;
+    WALL_COLLISION_MODE_WRAP_AROUND = 2;
+}
+
+enum DeadSnakeBehavior {
+    DEAD_SNAKE_BEHAVIOR_UNSPECIFIED = 0;
+    DEAD_SNAKE_BEHAVIOR_DISAPPEAR = 1;
+    DEAD_SNAKE_BEHAVIOR_STAY_ON_FIELD = 2;
+}
+
+enum SnakeBotType {
+    SNAKE_BOT_TYPE_UNSPECIFIED = 0;
+    SNAKE_BOT_TYPE_EFFICIENT = 1;
+    SNAKE_BOT_TYPE_RANDOM = 2;
+}
+
+message SnakeInGameCommand {
+    oneof command {
+        TurnCommand turn = 1;
+    }
+}
+
+message TurnCommand {
+    Direction direction = 1;
+}
+
+enum Direction {
+    DIRECTION_UNSPECIFIED = 0;
+    DIRECTION_UP = 1;
+    DIRECTION_DOWN = 2;
+    DIRECTION_LEFT = 3;
+    DIRECTION_RIGHT = 4;
+}
+
+message SnakeGameState {
+    uint64 tick = 1;
+    repeated Snake snakes = 2;
+    repeated Position food = 3;
+    uint32 field_width = 4;
+    uint32 field_height = 5;
+    uint32 tick_interval_ms = 6;
+    int32 wall_collision_mode = 7;
+    int32 dead_snake_behavior = 8;
+}
+
+message Snake {
+    PlayerIdentity identity = 1;
+    repeated Position segments = 2;
+    bool alive = 3;
+    uint32 score = 4;
+}
+
+message Position {
+    int32 x = 1;
+    int32 y = 2;
+}
+
+message PlayerIdentity {
+    string player_id = 1;
+    bool is_bot = 2;
+}
+
+enum SnakeGameEndReason {
+    SNAKE_GAME_END_REASON_UNSPECIFIED = 0;
+    SNAKE_GAME_END_REASON_WALL_COLLISION = 1;
+    SNAKE_GAME_END_REASON_SELF_COLLISION = 2;
+    SNAKE_GAME_END_REASON_SNAKE_COLLISION = 3;
+    SNAKE_GAME_END_REASON_PLAYER_DISCONNECTED = 4;
+    SNAKE_GAME_END_REASON_GAME_COMPLETED = 5;
+}

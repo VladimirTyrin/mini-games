@@ -3,23 +3,23 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use common::{
-    snake_game_service_server::SnakeGameService,
+    proto::game_service::game_service_server::GameService,
     ClientMessage, ServerMessage, client_message, server_message,
     ClientId,
     log,
 };
-use crate::lobby_manager::LobbyManager;
+use crate::lobby_manager::{LobbyManager, BotType};
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
 
 #[derive(Debug)]
-pub struct SnakeGameServiceImpl {
+pub struct GameServiceImpl {
     lobby_manager: LobbyManager,
     broadcaster: Broadcaster,
     session_manager: GameSessionManager,
 }
 
-impl SnakeGameServiceImpl {
+impl GameServiceImpl {
     pub fn new(
         lobby_manager: LobbyManager,
         broadcaster: Broadcaster,
@@ -35,7 +35,7 @@ impl SnakeGameServiceImpl {
 }
 
 #[tonic::async_trait]
-impl SnakeGameService for SnakeGameServiceImpl {
+impl GameService for GameServiceImpl {
     type GameStreamStream = ReceiverStream<Result<ServerMessage, Status>>;
 
     async fn game_stream(
@@ -160,11 +160,11 @@ impl SnakeGameService for SnakeGameServiceImpl {
                                         Self::send_not_connected_error(&tx, "play again").await;
                                     }
                                 }
-                                client_message::Message::Turn(turn_cmd) => {
+                                client_message::Message::InGame(in_game_cmd) => {
                                     if let Some(client_id) = &client_id_opt {
-                                        Self::handle_turn(&session_manager, client_id, turn_cmd).await;
+                                        Self::handle_in_game_command(&session_manager, client_id, in_game_cmd).await;
                                     } else {
-                                        Self::send_not_connected_error(&tx, "send turn").await;
+                                        Self::send_not_connected_error(&tx, "send in-game command").await;
                                     }
                                 }
                                 client_message::Message::AddBot(req) => {
@@ -197,11 +197,10 @@ impl SnakeGameService for SnakeGameServiceImpl {
                                         broadcaster.broadcast_to_clients(
                                             &clients,
                                             ServerMessage {
-                                                message: Some(server_message::Message::LobbyListChat(common::LobbyListChatMessageNotification {
+                                                message: Some(server_message::Message::LobbyListChat(common::LobbyListChatNotification {
                                                     sender: Some(common::PlayerIdentity {
                                                         player_id: client_id.to_string(),
                                                         is_bot: false,
-                                                        bot_type: common::BotType::Unspecified.into(),
                                                     }),
                                                     message: req.message,
                                                 })),
@@ -217,11 +216,10 @@ impl SnakeGameService for SnakeGameServiceImpl {
                                             broadcaster.broadcast_to_lobby(
                                                 &lobby_details,
                                                 ServerMessage {
-                                                    message: Some(server_message::Message::InLobbyChat(common::InLobbyChatMessageNotification {
+                                                    message: Some(server_message::Message::InLobbyChat(common::InLobbyChatNotification {
                                                         sender: Some(common::PlayerIdentity {
                                                             player_id: client_id.to_string(),
                                                             is_bot: false,
-                                                            bot_type: common::BotType::Unspecified.into(),
                                                         }),
                                                         message: req.message,
                                                     })),
@@ -259,7 +257,7 @@ impl SnakeGameService for SnakeGameServiceImpl {
     }
 }
 
-impl SnakeGameServiceImpl {
+impl GameServiceImpl {
     async fn send_not_connected_error(
         tx: &mpsc::Sender<Result<ServerMessage, Status>>,
         action: &str,
@@ -307,7 +305,18 @@ impl SnakeGameServiceImpl {
         client_id: &ClientId,
         request: common::CreateLobbyRequest,
     ) {
-        let settings = request.settings.unwrap_or_default();
+        let settings = match crate::lobby_manager::LobbySettings::from_proto(request.settings) {
+            Ok(s) => s,
+            Err(e) => {
+                let error_msg = ServerMessage {
+                    message: Some(server_message::Message::Error(common::ErrorResponse {
+                        message: e,
+                    })),
+                };
+                let _ = tx.send(Ok(error_msg)).await;
+                return;
+            }
+        };
 
         match lobby_manager.create_lobby(
             request.lobby_name,
@@ -318,7 +327,7 @@ impl SnakeGameServiceImpl {
             Ok(lobby_details) => {
                 let response = ServerMessage {
                     message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                        lobby: Some(lobby_details.clone()),
+                        details: Some(lobby_details.clone()),
                     })),
                 };
                 let _ = tx.send(Ok(response)).await;
@@ -349,7 +358,7 @@ impl SnakeGameServiceImpl {
             Ok(lobby_details) => {
                 let response = ServerMessage {
                     message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                        lobby: Some(lobby_details.clone()),
+                        details: Some(lobby_details.clone()),
                     })),
                 };
                 let _ = tx.send(Ok(response)).await;
@@ -360,10 +369,9 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::PlayerJoined(common::PlayerJoinedNotification {
-                            identity: Some(common::PlayerIdentity {
+                            player: Some(common::PlayerIdentity {
                                 player_id: client_id.to_string(),
                                 is_bot: false,
-                                bot_type: common::BotType::Unspecified as i32,
                             }),
                         })),
                     },
@@ -374,7 +382,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                            lobby: Some(lobby_details.clone()),
+                            details: Some(lobby_details.clone()),
                         })),
                     },
                 ).await;
@@ -427,10 +435,9 @@ impl SnakeGameServiceImpl {
                             &updated_details,
                             ServerMessage {
                                 message: Some(server_message::Message::PlayerLeft(common::PlayerLeftNotification {
-                                    identity: Some(common::PlayerIdentity {
+                                    player: Some(common::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
-                                        bot_type: common::BotType::Unspecified as i32,
                                     }),
                                 })),
                             },
@@ -440,7 +447,7 @@ impl SnakeGameServiceImpl {
                             &updated_details,
                             ServerMessage {
                                 message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                                    lobby: Some(updated_details.clone()),
+                                    details: Some(updated_details.clone()),
                                 })),
                             },
                         ).await;
@@ -473,10 +480,9 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::PlayerReady(common::PlayerReadyNotification {
-                            identity: Some(common::PlayerIdentity {
+                            player: Some(common::PlayerIdentity {
                                 player_id: client_id.to_string(),
                                 is_bot: false,
-                                bot_type: common::BotType::Unspecified as i32,
                             }),
                             ready: request.ready,
                         })),
@@ -487,7 +493,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                            lobby: Some(lobby_details.clone()),
+                            details: Some(lobby_details.clone()),
                         })),
                     },
                 ).await;
@@ -510,8 +516,18 @@ impl SnakeGameServiceImpl {
         client_id: &ClientId,
         request: common::AddBotRequest,
     ) {
-        let bot_type = common::BotType::try_from(request.bot_type)
-            .unwrap_or(common::BotType::Unspecified);
+        let bot_type = match BotType::from_proto(request.bot_type) {
+            Ok(bt) => bt,
+            Err(e) => {
+                let error_msg = ServerMessage {
+                    message: Some(server_message::Message::Error(common::ErrorResponse {
+                        message: e,
+                    })),
+                };
+                let _ = tx.send(Ok(error_msg)).await;
+                return;
+            }
+        };
 
         match lobby_manager.add_bot(client_id, bot_type).await {
             Ok((lobby_details, bot_identity)) => {
@@ -519,7 +535,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::PlayerJoined(common::PlayerJoinedNotification {
-                            identity: Some(bot_identity.to_proto()),
+                            player: Some(bot_identity.to_proto()),
                         })),
                     },
                 ).await;
@@ -528,7 +544,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                            lobby: Some(lobby_details.clone()),
+                            details: Some(lobby_details.clone()),
                         })),
                     },
                 ).await;
@@ -571,7 +587,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::PlayerLeft(common::PlayerLeftNotification {
-                            identity: Some(kicked_identity.to_proto()),
+                            player: Some(kicked_identity.to_proto()),
                         })),
                     },
                 ).await;
@@ -580,7 +596,7 @@ impl SnakeGameServiceImpl {
                     &lobby_details,
                     ServerMessage {
                         message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                            lobby: Some(lobby_details.clone()),
+                            details: Some(lobby_details.clone()),
                         })),
                     },
                 ).await;
@@ -649,34 +665,29 @@ impl SnakeGameServiceImpl {
                     None => return,
                 };
 
-                let proto_status = match &status {
+                let (ready_players, pending_players, available) = match &status {
                     crate::lobby_manager::PlayAgainStatus::NotAvailable => {
-                        common::play_again_status_notification::Status::NotAvailable(
-                            common::PlayAgainNotAvailable {}
-                        )
+                        (vec![], vec![], false)
                     }
                     crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
-                        common::play_again_status_notification::Status::Available(
-                            common::PlayAgainAvailable {
-                                ready_players: ready_player_ids.iter().map(|id| common::PlayerIdentity {
-                                    player_id: id.clone(),
-                                    is_bot: false,
-                                    bot_type: common::BotType::Unspecified as i32,
-                                }).collect(),
-                                pending_players: pending_player_ids.iter().map(|id| common::PlayerIdentity {
-                                    player_id: id.clone(),
-                                    is_bot: false,
-                                    bot_type: common::BotType::Unspecified as i32,
-                                }).collect(),
-                            }
-                        )
+                        let ready = ready_player_ids.iter().map(|id| common::PlayerIdentity {
+                            player_id: id.clone(),
+                            is_bot: false,
+                        }).collect();
+                        let pending = pending_player_ids.iter().map(|id| common::PlayerIdentity {
+                            player_id: id.clone(),
+                            is_bot: false,
+                        }).collect();
+                        (ready, pending, true)
                     }
                 };
 
                 let status_msg = ServerMessage {
                     message: Some(server_message::Message::PlayAgainStatus(
                         common::PlayAgainStatusNotification {
-                            status: Some(proto_status),
+                            ready_players,
+                            pending_players,
+                            available,
                         }
                     )),
                 };
@@ -718,22 +729,26 @@ impl SnakeGameServiceImpl {
         }
     }
 
-    async fn handle_turn(
+    async fn handle_in_game_command(
         session_manager: &GameSessionManager,
         client_id: &ClientId,
-        turn_cmd: common::TurnCommand,
+        in_game_cmd: common::InGameCommand,
     ) {
-        use crate::game::Direction as GameDirection;
+        if let Some(common::in_game_command::Command::Snake(snake_cmd)) = in_game_cmd.command {
+            if let Some(common::proto::snake::snake_in_game_command::Command::Turn(turn_cmd)) = snake_cmd.command {
+                use crate::games::snake::Direction as GameDirection;
 
-        let direction = match common::Direction::try_from(turn_cmd.direction) {
-            Ok(common::Direction::Up) => GameDirection::Up,
-            Ok(common::Direction::Down) => GameDirection::Down,
-            Ok(common::Direction::Left) => GameDirection::Left,
-            Ok(common::Direction::Right) => GameDirection::Right,
-            _ => return,
-        };
+                let direction = match common::proto::snake::Direction::try_from(turn_cmd.direction) {
+                    Ok(common::proto::snake::Direction::Up) => GameDirection::Up,
+                    Ok(common::proto::snake::Direction::Down) => GameDirection::Down,
+                    Ok(common::proto::snake::Direction::Left) => GameDirection::Left,
+                    Ok(common::proto::snake::Direction::Right) => GameDirection::Right,
+                    _ => return,
+                };
 
-        session_manager.set_direction(client_id, direction).await;
+                session_manager.set_direction(client_id, direction).await;
+            }
+        }
     }
 
     async fn handle_client_disconnected(
@@ -745,7 +760,7 @@ impl SnakeGameServiceImpl {
         lobby_manager.remove_client(client_id).await;
         broadcaster.unregister(client_id).await;
 
-        session_manager.kill_snake(client_id, crate::game::DeathReason::PlayerDisconnected).await;
+        session_manager.kill_snake(client_id, crate::games::snake::DeathReason::PlayerDisconnected).await;
 
         if let Ok(leave_state) = lobby_manager.leave_lobby(client_id).await {
             use crate::lobby_manager::LobbyStateAfterLeave;
@@ -770,10 +785,9 @@ impl SnakeGameServiceImpl {
                         &updated_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerLeft(common::PlayerLeftNotification {
-                                identity: Some(common::PlayerIdentity {
+                                player: Some(common::PlayerIdentity {
                                     player_id: client_id.to_string(),
                                     is_bot: false,
-                                    bot_type: common::BotType::Unspecified as i32,
                                 }),
                             })),
                         },
@@ -783,7 +797,7 @@ impl SnakeGameServiceImpl {
                         &updated_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
-                                lobby: Some(updated_details.clone()),
+                                details: Some(updated_details.clone()),
                             })),
                         },
                     ).await;
