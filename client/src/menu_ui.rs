@@ -594,6 +594,10 @@ impl MenuApp {
 
 impl eframe::App for MenuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if !self.shared_state.has_context() {
+            self.shared_state.set_context(ctx.clone());
+        }
+
         if ctx.input(|i| i.viewport().close_requested()) {
             if let Some(disconnect_time) = self.disconnecting {
                 if disconnect_time.elapsed() < self.disconnect_timeout {

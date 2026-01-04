@@ -487,8 +487,6 @@ impl GameUi {
                 let _ = command_tx.send(ClientCommand::Game(GameCommand::SendTurn { direction }));
             }
         });
-
-        ctx.request_repaint();
     }
 
     fn render_sprite_at(

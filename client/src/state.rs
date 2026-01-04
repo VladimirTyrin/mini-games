@@ -70,6 +70,7 @@ pub struct SharedState {
     connection_failed: Arc<Mutex<bool>>,
     retry_server_address: Arc<Mutex<Option<String>>>,
     ping_ms: Arc<Mutex<Option<u64>>>,
+    ctx: Arc<Mutex<Option<eframe::egui::Context>>>,
 }
 
 impl SharedState {
@@ -81,11 +82,27 @@ impl SharedState {
             connection_failed: Arc::new(Mutex::new(false)),
             retry_server_address: Arc::new(Mutex::new(None)),
             ping_ms: Arc::new(Mutex::new(None)),
+            ctx: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn set_context(&self, ctx: eframe::egui::Context) {
+        *self.ctx.lock().unwrap() = Some(ctx);
+    }
+
+    pub fn has_context(&self) -> bool {
+        self.ctx.lock().unwrap().is_some()
+    }
+
+    fn request_repaint(&self) {
+        if let Some(ctx) = self.ctx.lock().unwrap().as_ref() {
+            ctx.request_repaint();
         }
     }
 
     pub fn set_state(&self, state: AppState) {
         *self.state.lock().unwrap() = state;
+        self.request_repaint();
     }
 
     pub fn get_state(&self) -> AppState {
@@ -100,6 +117,8 @@ impl SharedState {
         let mut state = self.state.lock().unwrap();
         if let AppState::InLobby { event_log, .. } = &mut *state {
             event_log.enqueue(event);
+            drop(state);
+            self.request_repaint();
         }
     }
 
@@ -111,11 +130,14 @@ impl SharedState {
         let mut state = self.state.lock().unwrap();
         if let AppState::InGame { game_state: current_state, .. } = &mut *state {
             *current_state = Some(game_state);
+            drop(state);
+            self.request_repaint();
         }
     }
 
     pub fn set_error(&self, error: String) {
         *self.error.lock().unwrap() = Some(error);
+        self.request_repaint();
     }
 
     pub fn get_error(&self) -> Option<String> {
@@ -154,11 +176,14 @@ impl SharedState {
         let mut state = self.state.lock().unwrap();
         if let AppState::GameOver { play_again_status: current_status, .. } = &mut *state {
             *current_status = play_again_status;
+            drop(state);
+            self.request_repaint();
         }
     }
 
     pub fn set_ping(&self, ping_ms: u64) {
         *self.ping_ms.lock().unwrap() = Some(ping_ms);
+        self.request_repaint();
     }
 
     pub fn get_ping(&self) -> Option<u64> {
@@ -175,6 +200,7 @@ impl Clone for SharedState {
             connection_failed: Arc::clone(&self.connection_failed),
             retry_server_address: Arc::clone(&self.retry_server_address),
             ping_ms: Arc::clone(&self.ping_ms),
+            ctx: Arc::clone(&self.ctx),
         }
     }
 }
