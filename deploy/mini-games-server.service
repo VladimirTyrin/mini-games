@@ -1,11 +1,11 @@
 [Unit]
-Description=Snake Game Server
+Description=Mini Games Server
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/snake-game-server
-ExecStart=/opt/snake-game-server/snake_game_server
+WorkingDirectory=/opt/mini-games-server
+ExecStart=/opt/mini-games-server/mini_games_server
 Restart=always
 RestartSec=5
 StandardOutput=journal

@@ -1,10 +1,10 @@
 [package]
-name = "snake_game_server"
+name = "mini_games_server"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "snake_game_server"
+name = "mini_games_server"
 path = "src/main.rs"
 
 [dependencies]

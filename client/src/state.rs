@@ -1,8 +1,20 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndReason, SnakeBotType}, PlayerIdentity};
-use crate::config::LobbyConfig;
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndReason, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndReason, TicTacToeBotType}, PlayerIdentity};
+use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
+
+#[derive(Debug, Clone, Copy)]
+pub enum BotType {
+    Snake(SnakeBotType),
+    TicTacToe(TicTacToeBotType),
+}
+
+#[derive(Debug, Clone)]
+pub enum LobbyConfig {
+    Snake(SnakeLobbyConfig),
+    TicTacToe(TicTacToeLobbyConfig),
+}
 
 #[derive(Debug, Clone)]
 pub enum MenuCommand {
@@ -13,7 +25,7 @@ pub enum MenuCommand {
     MarkReady { ready: bool },
     StartGame,
     PlayAgain,
-    AddBot { bot_type: SnakeBotType },
+    AddBot { bot_type: BotType },
     KickFromLobby { player_id: String },
     Disconnect,
     InLobbyChatMessage { message: String },
@@ -21,14 +33,31 @@ pub enum MenuCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum GameCommand {
+pub enum SnakeGameCommand {
     SendTurn { direction: Direction },
+}
+
+#[derive(Debug, Clone)]
+pub enum TicTacToeGameCommand {
+    PlaceMark { x: u32, y: u32 },
+}
+
+#[derive(Debug, Clone)]
+pub enum GameCommand {
+    Snake(SnakeGameCommand),
+    TicTacToe(TicTacToeGameCommand),
 }
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
     Menu(MenuCommand),
     Game(GameCommand),
+}
+
+#[derive(Debug, Clone)]
+pub enum GameEndReason {
+    Snake(SnakeGameEndReason),
+    TicTacToe(TicTacToeGameEndReason),
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +87,7 @@ pub enum AppState {
         scores: Vec<ScoreEntry>,
         winner: Option<PlayerIdentity>,
         last_game_state: Option<GameStateUpdate>,
-        reason: SnakeGameEndReason,
+        reason: GameEndReason,
         play_again_status: PlayAgainStatus,
     },
 }

@@ -1,7 +1,7 @@
-use crate::config::{Config, LobbyConfig};
+use crate::config::{Config, GameType, SnakeLobbyConfig};
 use crate::game_ui::GameUi;
 use crate::sprites::Sprites;
-use crate::state::{AppState, MenuCommand, ClientCommand, SharedState};
+use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig};
 use crate::colors::generate_color_from_client_id;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
 use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode};
@@ -57,6 +57,7 @@ pub struct MenuApp {
     shared_state: SharedState,
     menu_command_tx: mpsc::UnboundedSender<ClientCommand>,
     create_lobby_dialog: bool,
+    selected_game_type: GameType,
     lobby_name_input: String,
     max_players_input: String,
     field_width_input: String,
@@ -66,7 +67,9 @@ pub struct MenuApp {
     food_spawn_probability_input: String,
     wall_collision_mode: WallCollisionMode,
     dead_snake_behavior: common::DeadSnakeBehavior,
-    selected_bot_type: SnakeBotType,
+    selected_snake_bot_type: SnakeBotType,
+    selected_ttt_bot_type: common::TicTacToeBotType,
+    win_count_input: String,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -93,16 +96,19 @@ impl MenuApp {
             shared_state,
             menu_command_tx,
             create_lobby_dialog: false,
+            selected_game_type: config.last_game.unwrap_or(GameType::Snake),
             lobby_name_input: String::new(),
-            max_players_input: config.lobby.max_players.to_string(),
-            field_width_input: config.lobby.field_width.to_string(),
-            field_height_input: config.lobby.field_height.to_string(),
-            tick_interval_input: config.lobby.tick_interval_ms.to_string(),
-            max_food_count_input: config.lobby.max_food_count.to_string(),
-            food_spawn_probability_input: config.lobby.food_spawn_probability.to_string(),
-            wall_collision_mode: config.lobby.wall_collision_mode,
-            dead_snake_behavior: config.lobby.dead_snake_behavior,
-            selected_bot_type: SnakeBotType::Efficient,
+            max_players_input: config.snake.max_players.to_string(),
+            field_width_input: config.snake.field_width.to_string(),
+            field_height_input: config.snake.field_height.to_string(),
+            tick_interval_input: config.snake.tick_interval_ms.to_string(),
+            max_food_count_input: config.snake.max_food_count.to_string(),
+            food_spawn_probability_input: config.snake.food_spawn_probability.to_string(),
+            wall_collision_mode: config.snake.wall_collision_mode,
+            dead_snake_behavior: config.snake.dead_snake_behavior,
+            selected_snake_bot_type: SnakeBotType::Efficient,
+            selected_ttt_bot_type: common::TicTacToeBotType::TictactoeBotTypeMinimax,
+            win_count_input: config.tictactoe.win_count.to_string(),
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -214,7 +220,7 @@ impl MenuApp {
                         self.create_lobby_dialog = true;
                         self.lobby_name_input = self.client_id.clone();
                         let config = self.config_manager.get_config().unwrap();
-                        self.max_players_input = config.lobby.max_players.to_string();
+                        self.max_players_input = config.snake.max_players.to_string();
                     }
                 });
 
@@ -226,7 +232,7 @@ impl MenuApp {
                         self.create_lobby_dialog = true;
                         self.lobby_name_input = self.client_id.clone();
                         let config = self.config_manager.get_config().unwrap();
-                        self.max_players_input = config.lobby.max_players.to_string();
+                        self.max_players_input = config.snake.max_players.to_string();
                     }
                 });
 
@@ -304,11 +310,34 @@ impl MenuApp {
             .open(&mut self.create_lobby_dialog)
             .collapsible(false)
             .show(ctx, |ui| {
+                ui.label("Game Type:");
+                ui.horizontal(|ui| {
+                    if ui.radio_value(&mut self.selected_game_type, GameType::Snake, "Snake").clicked() {
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = config.snake.max_players.to_string();
+                        self.field_width_input = config.snake.field_width.to_string();
+                        self.field_height_input = config.snake.field_height.to_string();
+                    }
+                    if ui.radio_value(&mut self.selected_game_type, GameType::TicTacToe, "TicTacToe").clicked() {
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = "2".to_string();
+                        self.field_width_input = config.tictactoe.field_width.to_string();
+                        self.field_height_input = config.tictactoe.field_height.to_string();
+                        self.win_count_input = config.tictactoe.win_count.to_string();
+                    }
+                });
+
+                ui.separator();
+
                 ui.label("Lobby Name:");
                 ui.text_edit_singleline(&mut self.lobby_name_input);
 
                 ui.label("Max Players:");
-                ui.text_edit_singleline(&mut self.max_players_input);
+                let max_players_enabled = self.selected_game_type == GameType::Snake;
+                ui.add_enabled(max_players_enabled, egui::TextEdit::singleline(&mut self.max_players_input));
+                if self.selected_game_type == GameType::TicTacToe {
+                    ui.label("  (Fixed at 2 for TicTacToe)");
+                }
 
                 ui.label("Field Width:");
                 ui.text_edit_singleline(&mut self.field_width_input);
@@ -316,26 +345,34 @@ impl MenuApp {
                 ui.label("Field Height:");
                 ui.text_edit_singleline(&mut self.field_height_input);
 
-                ui.label("Tick Interval (ms):");
-                ui.text_edit_singleline(&mut self.tick_interval_input);
+                match self.selected_game_type {
+                    GameType::Snake => {
+                        ui.label("Tick Interval (ms):");
+                        ui.text_edit_singleline(&mut self.tick_interval_input);
 
-                ui.label("Max Food Count:");
-                ui.text_edit_singleline(&mut self.max_food_count_input);
+                        ui.label("Max Food Count:");
+                        ui.text_edit_singleline(&mut self.max_food_count_input);
 
-                ui.label("Food Spawn Probability:");
-                ui.text_edit_singleline(&mut self.food_spawn_probability_input);
+                        ui.label("Food Spawn Probability:");
+                        ui.text_edit_singleline(&mut self.food_spawn_probability_input);
 
-                ui.label("Wall Collision Mode:");
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::WrapAround, "Wrap Around");
-                    ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::Death, "Death");
-                });
+                        ui.label("Wall Collision Mode:");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::WrapAround, "Wrap Around");
+                            ui.radio_value(&mut self.wall_collision_mode, WallCollisionMode::Death, "Death");
+                        });
 
-                ui.label("Dead Snake Behavior:");
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::Disappear, "Disappear");
-                    ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::StayOnField, "Stay On Field");
-                });
+                        ui.label("Dead Snake Behavior:");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::Disappear, "Disappear");
+                            ui.radio_value(&mut self.dead_snake_behavior, common::DeadSnakeBehavior::StayOnField, "Stay On Field");
+                        });
+                    }
+                    GameType::TicTacToe => {
+                        ui.label("Win Count:");
+                        ui.text_edit_singleline(&mut self.win_count_input);
+                    }
+                }
 
                 ui.horizontal(|ui| {
                     if ui.button("Create (Enter)").clicked() {
@@ -366,49 +403,67 @@ impl MenuApp {
                 return;
             };
 
-            let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
-                return;
-            };
+            let lobby_config = match self.selected_game_type {
+                GameType::Snake => {
+                    let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
+                        return;
+                    };
 
-            let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
-                return;
-            };
+                    let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
+                        return;
+                    };
 
-            let Some(max_food_count) = parse_u32_input(&self.max_food_count_input, "Max food count", &self.shared_state) else {
-                return;
-            };
+                    let Some(max_food_count) = parse_u32_input(&self.max_food_count_input, "Max food count", &self.shared_state) else {
+                        return;
+                    };
 
-            let Some(food_spawn_probability) = parse_f32_input(&self.food_spawn_probability_input, "Food spawn probability", &self.shared_state) else {
-                return;
-            };
+                    let Some(food_spawn_probability) = parse_f32_input(&self.food_spawn_probability_input, "Food spawn probability", &self.shared_state) else {
+                        return;
+                    };
 
-            let lobby_config = LobbyConfig {
-                max_players,
-                field_width,
-                field_height,
-                wall_collision_mode: self.wall_collision_mode,
-                dead_snake_behavior: self.dead_snake_behavior,
-                tick_interval_ms,
-                max_food_count,
-                food_spawn_probability,
-            };
+                    let snake_config = SnakeLobbyConfig {
+                        max_players,
+                        field_width,
+                        field_height,
+                        wall_collision_mode: self.wall_collision_mode,
+                        dead_snake_behavior: self.dead_snake_behavior,
+                        tick_interval_ms,
+                        max_food_count,
+                        food_spawn_probability,
+                    };
 
-            let mut config = self.config_manager.get_config().unwrap();
-            config.lobby = lobby_config.clone();
+                    let mut config = self.config_manager.get_config().unwrap();
+                    config.snake = snake_config.clone();
+                    config.last_game = Some(GameType::Snake);
+                    self.config_manager.set_config(&config).ok();
 
-            match self.config_manager.set_config(&config) {
-                Ok(_) => {
-                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
-                        name: self.lobby_name_input.clone(),
-                        config: lobby_config
-                    }));
-                    close_dialog = true;
+                    LobbyConfig::Snake(snake_config)
                 }
-                Err(error) => {
-                    self.shared_state.set_error(error);
-                    return;
+                GameType::TicTacToe => {
+                    let Some(win_count) = parse_u32_input(&self.win_count_input, "Win count", &self.shared_state) else {
+                        return;
+                    };
+
+                    let ttt_config = crate::config::TicTacToeLobbyConfig {
+                        field_width,
+                        field_height,
+                        win_count,
+                    };
+
+                    let mut config = self.config_manager.get_config().unwrap();
+                    config.tictactoe = ttt_config.clone();
+                    config.last_game = Some(GameType::TicTacToe);
+                    self.config_manager.set_config(&config).ok();
+
+                    LobbyConfig::TicTacToe(ttt_config)
                 }
-            }
+            };
+
+            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
+                name: self.lobby_name_input.clone(),
+                config: lobby_config
+            }));
+            close_dialog = true;
         }
 
         if close_dialog {
@@ -439,6 +494,10 @@ impl MenuApp {
                     .unwrap_or_else(|| "Unknown".to_string());
                 let is_host = self.client_id == creator_id;
 
+                let is_snake_lobby = details.settings.as_ref()
+                    .map(|s| matches!(s, common::lobby_details::Settings::Snake(_)))
+                    .unwrap_or(false);
+
                 for player in &details.players {
                     ui.horizontal(|ui| {
                         let player_id = player.identity.as_ref()
@@ -462,22 +521,24 @@ impl MenuApp {
                             (false, false) => format!("👤 {}{}", player_id, bot_type_suffix),
                         };
 
-                        let color = generate_color_from_client_id(&player_id);
-                        let head_sprite = self.sprites.get_head_sprite(Direction::Right);
-                        let texture = head_sprite.to_egui_texture(ctx, &format!("lobby_head_{}", player_id));
+                        if is_snake_lobby {
+                            let color = generate_color_from_client_id(&player_id);
+                            let head_sprite = self.sprites.get_head_sprite(Direction::Right);
+                            let texture = head_sprite.to_egui_texture(ctx, &format!("lobby_head_{}", player_id));
 
-                        let icon_size = 20.0;
-                        let (rect, _response) = ui.allocate_exact_size(
-                            egui::vec2(icon_size, icon_size),
-                            egui::Sense::hover()
-                        );
+                            let icon_size = 20.0;
+                            let (rect, _response) = ui.allocate_exact_size(
+                                egui::vec2(icon_size, icon_size),
+                                egui::Sense::hover()
+                            );
 
-                        ui.painter().image(
-                            texture.id(),
-                            rect,
-                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                            color,
-                        );
+                            ui.painter().image(
+                                texture.id(),
+                                rect,
+                                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                                color,
+                            );
+                        }
 
                         ui.label(player_display);
 
@@ -545,29 +606,64 @@ impl MenuApp {
                 });
 
                 if is_host {
-                    ui.horizontal(|ui| {
-                        egui::ComboBox::from_label("Bot Type")
-                            .selected_text(match self.selected_bot_type {
-                                SnakeBotType::Efficient => "Efficient",
-                                SnakeBotType::Random => "Random",
-                                _ => "Unknown",
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.selected_bot_type, SnakeBotType::Efficient, "Efficient");
-                                ui.selectable_value(&mut self.selected_bot_type, SnakeBotType::Random, "Random");
-                            });
+                    let is_snake_lobby = details.settings.as_ref()
+                        .map(|s| matches!(s, common::lobby_details::Settings::Snake(_)))
+                        .unwrap_or(false);
+                    let is_ttt_lobby = details.settings.as_ref()
+                        .map(|s| matches!(s, common::lobby_details::Settings::Tictactoe(_)))
+                        .unwrap_or(false);
 
-                        if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
-                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                                bot_type: self.selected_bot_type,
-                            }));
+                    ui.horizontal(|ui| {
+                        if is_snake_lobby {
+                            egui::ComboBox::from_label("Bot Type")
+                                .selected_text(match self.selected_snake_bot_type {
+                                    SnakeBotType::Efficient => "Efficient",
+                                    SnakeBotType::Random => "Random",
+                                    _ => "Unknown",
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.selected_snake_bot_type, SnakeBotType::Efficient, "Efficient");
+                                    ui.selectable_value(&mut self.selected_snake_bot_type, SnakeBotType::Random, "Random");
+                                });
+
+                            if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                    bot_type: crate::state::BotType::Snake(self.selected_snake_bot_type),
+                                }));
+                            }
+                        } else if is_ttt_lobby {
+                            egui::ComboBox::from_label("Bot Type")
+                                .selected_text(match self.selected_ttt_bot_type {
+                                    common::TicTacToeBotType::TictactoeBotTypeRandom => "Random",
+                                    common::TicTacToeBotType::TictactoeBotTypeWinBlock => "WinBlock",
+                                    common::TicTacToeBotType::TictactoeBotTypeMinimax => "Minimax",
+                                    _ => "Unknown",
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeRandom, "Random");
+                                    ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeWinBlock, "WinBlock");
+                                    ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeMinimax, "Minimax");
+                                });
+
+                            if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                    bot_type: crate::state::BotType::TicTacToe(self.selected_ttt_bot_type),
+                                }));
+                            }
                         }
                     });
 
                     ctx.input(|i| {
                         if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
+                            let bot_type = if is_snake_lobby {
+                                crate::state::BotType::Snake(self.selected_snake_bot_type)
+                            } else if is_ttt_lobby {
+                                crate::state::BotType::TicTacToe(self.selected_ttt_bot_type)
+                            } else {
+                                return;
+                            };
                             let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
-                                bot_type: self.selected_bot_type,
+                                bot_type,
                             }));
                         }
                     });
@@ -689,7 +785,17 @@ impl eframe::App for MenuApp {
                 }
                 AppState::InGame { session_id, game_state } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new_snake());
+                        if let Some(ref state) = game_state {
+                            match &state.state {
+                                Some(common::game_state_update::State::Snake(_)) => {
+                                    self.game_ui = Some(GameUi::new_snake());
+                                }
+                                Some(common::game_state_update::State::Tictactoe(_)) => {
+                                    self.game_ui = Some(GameUi::new_tictactoe());
+                                }
+                                None => {}
+                            }
+                        }
                     }
                     if let Some(game_ui) = &mut self.game_ui {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
@@ -697,10 +803,24 @@ impl eframe::App for MenuApp {
                 }
                 AppState::GameOver { scores, winner, last_game_state, reason, play_again_status } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new_snake());
+                        match reason {
+                            crate::state::GameEndReason::Snake(_) => {
+                                self.game_ui = Some(GameUi::new_snake());
+                            }
+                            crate::state::GameEndReason::TicTacToe(_) => {
+                                self.game_ui = Some(GameUi::new_tictactoe());
+                            }
+                        }
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game_over(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);
+                        match reason {
+                            crate::state::GameEndReason::Snake(snake_reason) => {
+                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_reason, &play_again_status, &self.menu_command_tx);
+                            }
+                            crate::state::GameEndReason::TicTacToe(ttt_reason) => {
+                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_reason, &play_again_status, &self.menu_command_tx);
+                            }
+                        }
                     }
                 }
             }

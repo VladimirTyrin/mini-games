@@ -626,16 +626,16 @@ impl GameServiceImpl {
                 let session_id = lobby_id.to_string();
 
                 if let Some(lobby_details) = lobby_manager.get_lobby_details(&lobby_id).await {
-                    session_manager.create_session(session_id.clone(), lobby_details.clone()).await;
-
                     broadcaster.broadcast_to_lobby(
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::GameStarting(common::GameStartingNotification {
-                                session_id,
+                                session_id: session_id.clone(),
                             })),
                         },
                     ).await;
+
+                    session_manager.create_session(session_id.clone(), lobby_details.clone()).await;
 
                     Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
@@ -701,16 +701,16 @@ impl GameServiceImpl {
                             let session_id = lobby_id.to_string();
 
                             if let Some(updated_lobby_details) = lobby_manager.get_lobby_details(&lobby_id).await {
-                                session_manager.create_session(session_id.clone(), updated_lobby_details.clone()).await;
-
                                 broadcaster.broadcast_to_lobby(
                                     &updated_lobby_details,
                                     ServerMessage {
                                         message: Some(server_message::Message::GameStarting(common::GameStartingNotification {
-                                            session_id,
+                                            session_id: session_id.clone(),
                                         })),
                                     },
                                 ).await;
+
+                                session_manager.create_session(session_id.clone(), updated_lobby_details.clone()).await;
 
                                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                             }
@@ -734,20 +734,28 @@ impl GameServiceImpl {
         client_id: &ClientId,
         in_game_cmd: common::InGameCommand,
     ) {
-        if let Some(common::in_game_command::Command::Snake(snake_cmd)) = in_game_cmd.command {
-            if let Some(common::proto::snake::snake_in_game_command::Command::Turn(turn_cmd)) = snake_cmd.command {
-                use crate::games::snake::Direction as GameDirection;
+        match in_game_cmd.command {
+            Some(common::in_game_command::Command::Snake(snake_cmd)) => {
+                if let Some(common::proto::snake::snake_in_game_command::Command::Turn(turn_cmd)) = snake_cmd.command {
+                    use crate::games::snake::Direction as GameDirection;
 
-                let direction = match common::proto::snake::Direction::try_from(turn_cmd.direction) {
-                    Ok(common::proto::snake::Direction::Up) => GameDirection::Up,
-                    Ok(common::proto::snake::Direction::Down) => GameDirection::Down,
-                    Ok(common::proto::snake::Direction::Left) => GameDirection::Left,
-                    Ok(common::proto::snake::Direction::Right) => GameDirection::Right,
-                    _ => return,
-                };
+                    let direction = match common::proto::snake::Direction::try_from(turn_cmd.direction) {
+                        Ok(common::proto::snake::Direction::Up) => GameDirection::Up,
+                        Ok(common::proto::snake::Direction::Down) => GameDirection::Down,
+                        Ok(common::proto::snake::Direction::Left) => GameDirection::Left,
+                        Ok(common::proto::snake::Direction::Right) => GameDirection::Right,
+                        _ => return,
+                    };
 
-                session_manager.set_direction(client_id, direction).await;
+                    session_manager.set_direction(client_id, direction).await;
+                }
             }
+            Some(common::in_game_command::Command::Tictactoe(ttt_cmd)) => {
+                if let Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(place_cmd)) = ttt_cmd.command {
+                    session_manager.place_mark(client_id, place_cmd.x, place_cmd.y).await;
+                }
+            }
+            None => {}
         }
     }
 

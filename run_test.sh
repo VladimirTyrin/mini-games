@@ -5,20 +5,20 @@ echo "Building all projects..."
 cargo build --release
 
 echo "Starting server..."
-./target/release/snake_game_server.exe --use-log-prefix &
+./target/release/mini_games_server.exe --use-log-prefix &
 SERVER_PID=$!
 sleep 2
 
 echo "Starting client 1..."
-./target/release/snake_game_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
 CLIENT1_PID=$!
 
 echo "Starting client 2..."
-./target/release/snake_game_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
 CLIENT2_PID=$!
 
 echo "Starting client 3..."
-./target/release/snake_game_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
 CLIENT3_PID=$!
 
 echo "Test setup running:"

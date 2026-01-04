@@ -2,7 +2,13 @@ pub(crate) use common::config::{ConfigManager, FileContentConfigProvider, Valida
 use common::{WallCollisionMode, DeadSnakeBehavior};
 use serde::{Deserialize, Serialize};
 
-const CONFIG_FILE: &str = "snake_game_client_config.yaml";
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
+pub enum GameType {
+    Snake,
+    TicTacToe,
+}
+
+const CONFIG_FILE: &str = "mini_games_client_config.yaml";
 
 pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer> {
     ConfigManager::from_yaml_file(CONFIG_FILE)
@@ -11,14 +17,17 @@ pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub server: ServerConfig,
-    pub lobby: LobbyConfig,
+    pub last_game: Option<GameType>,
+    pub snake: SnakeLobbyConfig,
+    pub tictactoe: TicTacToeLobbyConfig,
     pub client_id: Option<String>,
 }
 
 impl Validate for Config {
     fn validate(&self) -> Result<(), String> {
         self.server.validate()?;
-        self.lobby.validate()?;
+        self.snake.validate()?;
+        self.tictactoe.validate()?;
         Ok(())
     }
 }
@@ -42,7 +51,7 @@ impl Validate for ServerConfig {
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct LobbyConfig {
+pub struct SnakeLobbyConfig {
     pub max_players: u32,
     pub field_width: u32,
     pub field_height: u32,
@@ -53,7 +62,7 @@ pub struct LobbyConfig {
     pub food_spawn_probability: f32,
 }
 
-impl Validate for LobbyConfig {
+impl Validate for SnakeLobbyConfig {
     fn validate(&self) -> Result<(), String> {
         if self.max_players == 0 {
             return Err("max_players must be greater than 0".to_string());
@@ -83,6 +92,32 @@ impl Validate for LobbyConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct TicTacToeLobbyConfig {
+    pub field_width: u32,
+    pub field_height: u32,
+    pub win_count: u32,
+}
+
+impl Validate for TicTacToeLobbyConfig {
+    fn validate(&self) -> Result<(), String> {
+        if self.field_width < 3 || self.field_height < 3 {
+            return Err("TicTacToe field dimensions must be at least 3x3".to_string());
+        }
+        if self.field_width > 20 || self.field_height > 20 {
+            return Err("TicTacToe field dimensions must not exceed 20x20".to_string());
+        }
+        let min_dimension = self.field_width.min(self.field_height);
+        if self.win_count < 3 || self.win_count > min_dimension {
+            return Err(format!(
+                "win_count must be between 3 and {} (minimum field dimension)",
+                min_dimension
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -90,7 +125,8 @@ impl Default for Config {
                 address: "http://185.157.212.124:5001".to_string(),
                 disconnect_timeout_ms: 200,
             },
-            lobby: LobbyConfig {
+            last_game: None,
+            snake: SnakeLobbyConfig {
                 max_players: 4,
                 field_width: 15,
                 field_height: 15,
@@ -99,6 +135,11 @@ impl Default for Config {
                 tick_interval_ms: 200,
                 max_food_count: 1,
                 food_spawn_probability: 1.0,
+            },
+            tictactoe: TicTacToeLobbyConfig {
+                field_width: 3,
+                field_height: 3,
+                win_count: 3,
             },
             client_id: None,
         }
@@ -115,7 +156,7 @@ mod tests {
         use std::env;
         let mut path = env::temp_dir();
         let random_number: u32 = rand::random();
-        let file_name = format!("temp_snake_game_client_config_{}.yaml", random_number);
+        let file_name = format!("temp_mini_games_client_config_{}.yaml", random_number);
         path.push(file_name);
         path.to_str().unwrap().to_string()
     }

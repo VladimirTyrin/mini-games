@@ -4,11 +4,19 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::interval;
 use common::{ClientId, LobbyId, PlayerId, BotId, log, ServerMessage, server_message, SnakePosition};
-use crate::games::snake::{GameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason, BotController};
+use crate::games::snake::{GameState as SnakeGameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason, BotController as SnakeBotController};
+use crate::games::tictactoe::game_state::{TicTacToeGameState, FirstPlayerMode, GameStatus as TicTacToeGameStatus};
+use crate::games::tictactoe::bot_controller as TicTacToeBotController;
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::{LobbyManager, BotType, LobbySettings};
 
 pub type SessionId = String;
+
+#[derive(Debug)]
+enum GameStateEnum {
+    Snake(SnakeGameState),
+    TicTacToe(TicTacToeGameState),
+}
 
 #[derive(Debug)]
 pub struct GameSessionManager {
@@ -19,7 +27,7 @@ pub struct GameSessionManager {
 }
 
 struct GameSession {
-    state: Arc<Mutex<GameState>>,
+    state: Arc<Mutex<GameStateEnum>>,
     tick: Arc<Mutex<u64>>,
     bots: Arc<Mutex<HashMap<BotId, BotType>>>,
     initial_player_count: usize,
@@ -95,8 +103,18 @@ impl GameSessionManager {
                 let food_spawn_probability = snake_settings.food_spawn_probability.clamp(0.001, 1.0);
                 (field_width, field_height, wall_collision_mode, dead_snake_behavior, tick_interval, max_food_count, food_spawn_probability)
             }
-            LobbySettings::TicTacToe(_) => {
-                log!("Cannot create Snake session for TicTacToe lobby");
+            LobbySettings::TicTacToe(ttt_settings) => {
+                Self::create_tictactoe_session(
+                    session_id,
+                    human_players,
+                    bots,
+                    ttt_settings,
+                    self.sessions.clone(),
+                    self.client_to_session.clone(),
+                    self.broadcaster.clone(),
+                    self.lobby_manager.clone(),
+                    self.clone(),
+                ).await;
                 return;
             }
         };
@@ -106,7 +124,7 @@ impl GameSessionManager {
             width: field_width,
             height: field_height,
         };
-        let mut game_state = GameState::new(field_size, wall_collision_mode, dead_snake_behavior, max_food_count, food_spawn_probability);
+        let mut game_state = SnakeGameState::new(field_size, wall_collision_mode, dead_snake_behavior, max_food_count, food_spawn_probability);
 
         let total_players = human_players.len() + bots.len();
         let mut idx = 0;
@@ -125,7 +143,7 @@ impl GameSessionManager {
             idx += 1;
         }
 
-        let state = Arc::new(Mutex::new(game_state));
+        let state = Arc::new(Mutex::new(GameStateEnum::Snake(game_state)));
         let tick = Arc::new(Mutex::new(0u64));
         let bot_count = bots.len();
         let bots_arc = Arc::new(Mutex::new(bots));
@@ -146,13 +164,20 @@ impl GameSessionManager {
             loop {
                 tick_interval_timer.tick().await;
 
-                let mut state = state_clone.lock().await;
+                let mut state_guard = state_clone.lock().await;
+                let state = match &mut *state_guard {
+                    GameStateEnum::Snake(s) => s,
+                    _ => {
+                        log!("Invalid game state type in Snake game loop");
+                        break;
+                    }
+                };
 
                 let bots_map = bots_clone.lock().await;
                 for (bot_id, bot_type) in bots_map.iter() {
                     if let BotType::Snake(snake_bot_type) = bot_type {
                         let player_id = bot_id.to_player_id();
-                        if let Some(direction) = BotController::calculate_move(*snake_bot_type, &player_id, &state) {
+                        if let Some(direction) = SnakeBotController::calculate_move(*snake_bot_type, &player_id, &state) {
                             state.set_snake_direction(&player_id, direction);
                         }
                     }
@@ -231,7 +256,19 @@ impl GameSessionManager {
                 } else {
                     alive_count <= 1
                 };
+
+                drop(state_guard);
+                drop(tick_value);
+
                 if game_over {
+                    let mut state_guard = state_clone.lock().await;
+                    let state = match &mut *state_guard {
+                        GameStateEnum::Snake(s) => s,
+                        _ => {
+                            log!("Invalid game state type in game over handling");
+                            break;
+                        }
+                    };
                     let bots_ref = bots_clone.lock().await;
                     let scores: Vec<common::ScoreEntry> = state.snakes.iter().map(|(id, snake)| {
                         let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *id);
@@ -277,8 +314,7 @@ impl GameSessionManager {
 
                     broadcaster_clone.broadcast_to_clients(&client_ids, game_over_msg).await;
 
-                    drop(state);
-                    drop(tick_value);
+                    drop(state_guard);
 
                     let lobby_id = LobbyId::new(session_id_clone.clone());
                     match lobby_manager_clone.end_game(&lobby_id).await {
@@ -329,9 +365,6 @@ impl GameSessionManager {
                     }
                     break;
                 }
-
-                drop(state);
-                drop(tick_value);
             }
 
             session_manager_clone.remove_session(&session_id_clone).await;
@@ -364,9 +397,11 @@ impl GameSessionManager {
         if let Some(session_id) = mapping.get(client_id) {
             let sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get(session_id) {
-                let mut state = session.state.lock().await;
-                let player_id = PlayerId::new(client_id.to_string());
-                state.set_snake_direction(&player_id, direction);
+                let mut state_guard = session.state.lock().await;
+                if let GameStateEnum::Snake(state) = &mut *state_guard {
+                    let player_id = PlayerId::new(client_id.to_string());
+                    state.set_snake_direction(&player_id, direction);
+                }
             }
         }
     }
@@ -380,9 +415,11 @@ impl GameSessionManager {
         if let Some(session_id) = mapping.get(client_id) {
             let sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get(session_id) {
-                let mut state = session.state.lock().await;
-                let player_id = PlayerId::new(client_id.to_string());
-                state.kill_snake(&player_id, reason);
+                let mut state_guard = session.state.lock().await;
+                if let GameStateEnum::Snake(state) = &mut *state_guard {
+                    let player_id = PlayerId::new(client_id.to_string());
+                    state.kill_snake(&player_id, reason);
+                }
             }
         }
     }
@@ -407,6 +444,340 @@ impl GameSessionManager {
 
     fn calculate_start_direction(_index: usize, _total: usize) -> Direction {
         Direction::Up
+    }
+
+    async fn create_tictactoe_session(
+        session_id: SessionId,
+        human_players: Vec<PlayerId>,
+        bots: HashMap<BotId, BotType>,
+        ttt_settings: &common::proto::tictactoe::TicTacToeLobbySettings,
+        sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
+        client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
+        broadcaster: Broadcaster,
+        lobby_manager: LobbyManager,
+        session_manager: GameSessionManager,
+    ) {
+        let field_width = ttt_settings.field_width as usize;
+        let field_height = ttt_settings.field_height as usize;
+        let win_count = ttt_settings.win_count as usize;
+        let first_player_mode = match common::proto::tictactoe::FirstPlayerMode::try_from(ttt_settings.first_player) {
+            Ok(common::proto::tictactoe::FirstPlayerMode::Host) => FirstPlayerMode::Host,
+            Ok(common::proto::tictactoe::FirstPlayerMode::Random) |
+            Ok(common::proto::tictactoe::FirstPlayerMode::Unspecified) |
+            _ => FirstPlayerMode::Random,
+        };
+
+        if human_players.len() + bots.len() != 2 {
+            log!("TicTacToe requires exactly 2 players, got {} humans and {} bots", human_players.len(), bots.len());
+            return;
+        }
+
+        let mut all_players: Vec<PlayerId> = human_players.clone();
+        for (bot_id, _) in &bots {
+            all_players.push(bot_id.to_player_id());
+        }
+
+        let game_state = TicTacToeGameState::new(
+            field_width,
+            field_height,
+            win_count,
+            all_players.clone(),
+            first_player_mode,
+        );
+
+        let state = Arc::new(Mutex::new(GameStateEnum::TicTacToe(game_state)));
+        let tick = Arc::new(Mutex::new(0u64));
+        let bot_count = bots.len();
+        let bots_arc = Arc::new(Mutex::new(bots));
+        let initial_player_count = human_players.len() + bot_count;
+
+        let session = GameSession {
+            state: state.clone(),
+            tick,
+            bots: bots_arc.clone(),
+            initial_player_count,
+        };
+
+        let mut sessions_guard = sessions.lock().await;
+        sessions_guard.insert(session_id.clone(), session);
+        drop(sessions_guard);
+
+        let mut mapping = client_to_session.lock().await;
+        for player_id in &human_players {
+            mapping.insert(ClientId::new(player_id.to_string()), session_id.clone());
+        }
+        drop(mapping);
+
+        log!("TicTacToe session created: {} with {} players ({} humans, {} bots)", session_id, human_players.len() + bot_count, human_players.len(), bot_count);
+
+        let state_clone = state.clone();
+        let bots_clone = bots_arc.clone();
+        let session_id_clone = session_id.clone();
+        let human_players_clone = human_players.clone();
+
+        let _ = tokio::spawn(async move {
+            Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &human_players_clone, &broadcaster).await;
+
+            {
+                let bots = bots_clone.lock().await;
+                log!("TicTacToe game loop starting with {} bots", bots.len());
+                for (bot_id, bot_type) in bots.iter() {
+                    log!("Bot: {} (player_id: {}) - type: {:?}", bot_id, bot_id.to_player_id(), bot_type);
+                }
+            }
+
+            loop {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+
+                let mut state_guard = state_clone.lock().await;
+                let state = match &mut *state_guard {
+                    GameStateEnum::TicTacToe(s) => s,
+                    _ => {
+                        log!("Invalid game state type in TicTacToe game loop");
+                        break;
+                    }
+                };
+
+                if state.status != TicTacToeGameStatus::InProgress {
+                    drop(state_guard);
+                    break;
+                }
+
+                let current_player = state.current_player.clone();
+                let bots_map = bots_clone.lock().await;
+                let is_bot_turn = bots_map.iter().any(|(bot_id, _)| bot_id.to_player_id() == current_player);
+
+                if is_bot_turn {
+                    let bot_type = bots_map.iter()
+                        .find(|(bot_id, _)| bot_id.to_player_id() == current_player)
+                        .and_then(|(_, bot_type)| match bot_type {
+                            BotType::TicTacToe(ttt_bot) => Some(*ttt_bot),
+                            _ => None,
+                        });
+
+                    if let Some(bot_type) = bot_type {
+                        log!("Bot turn detected, calculating move with bot type: {:?}", bot_type);
+                        if let Some((x, y)) = TicTacToeBotController::calculate_move(bot_type, &state) {
+                            log!("Bot placing mark at ({}, {})", x, y);
+                            if let Err(e) = state.place_mark(&current_player, x, y) {
+                                log!("Bot move failed: {}", e);
+                            } else {
+                                log!("Bot move succeeded");
+                                drop(state_guard);
+                                drop(bots_map);
+
+                                Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &human_players_clone, &broadcaster).await;
+
+                                let mut state_guard = state_clone.lock().await;
+                                let state = match &mut *state_guard {
+                                    GameStateEnum::TicTacToe(s) => s,
+                                    _ => break,
+                                };
+
+                                if state.status != TicTacToeGameStatus::InProgress {
+                                    drop(state_guard);
+                                    break;
+                                }
+
+                                drop(state_guard);
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                drop(bots_map);
+                drop(state_guard);
+            }
+
+            let mut state_guard = state_clone.lock().await;
+            let state = match &mut *state_guard {
+                GameStateEnum::TicTacToe(s) => s,
+                _ => {
+                    log!("Invalid game state type in game over handling");
+                    return;
+                }
+            };
+
+            let bots_ref = bots_clone.lock().await;
+            let scores: Vec<common::ScoreEntry> = all_players.iter().map(|player_id| {
+                let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == *player_id);
+                let score = if state.get_winner().as_ref() == Some(player_id) {
+                    1
+                } else {
+                    0
+                };
+
+                common::ScoreEntry {
+                    identity: Some(common::PlayerIdentity {
+                        player_id: player_id.to_string(),
+                        is_bot,
+                    }),
+                    score,
+                }
+            }).collect();
+
+            let winner = state.get_winner().map(|player_id| {
+                let is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == player_id);
+                common::PlayerIdentity {
+                    player_id: player_id.to_string(),
+                    is_bot,
+                }
+            });
+            drop(bots_ref);
+
+            let game_end_reason = match state.status {
+                TicTacToeGameStatus::XWon | TicTacToeGameStatus::OWon => {
+                    common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonWin
+                }
+                TicTacToeGameStatus::Draw => {
+                    common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonDraw
+                }
+                _ => common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonUnspecified,
+            };
+
+            let game_over_msg = ServerMessage {
+                message: Some(server_message::Message::GameOver(
+                    common::GameOverNotification {
+                        scores,
+                        winner,
+                        reason: Some(common::game_over_notification::Reason::TictactoeReason(game_end_reason as i32)),
+                    }
+                )),
+            };
+
+            let client_ids: Vec<ClientId> = human_players_clone.iter()
+                .map(|p| ClientId::new(p.to_string()))
+                .collect();
+            broadcaster.broadcast_to_clients(&client_ids, game_over_msg).await;
+
+            drop(state_guard);
+
+            let lobby_id = LobbyId::new(session_id_clone.clone());
+            match lobby_manager.end_game(&lobby_id).await {
+                Ok(_player_ids) => {
+                    log!("TicTacToe game ended for lobby {}, {} players in lobby", lobby_id, _player_ids.len());
+
+                    if let Some(_lobby_details) = lobby_manager.get_lobby_details(&lobby_id).await {
+                        match lobby_manager.get_play_again_status(&lobby_id).await {
+                            Ok(status) => {
+                                let (ready_players, pending_players, available) = match status {
+                                    crate::lobby_manager::PlayAgainStatus::NotAvailable => {
+                                        (vec![], vec![], false)
+                                    }
+                                    crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids, pending_player_ids } => {
+                                        let ready = ready_player_ids.iter().map(|id| common::PlayerIdentity {
+                                            player_id: id.clone(),
+                                            is_bot: false,
+                                        }).collect();
+                                        let pending = pending_player_ids.iter().map(|id| common::PlayerIdentity {
+                                            player_id: id.clone(),
+                                            is_bot: false,
+                                        }).collect();
+                                        (ready, pending, true)
+                                    }
+                                };
+
+                                let play_again_msg = ServerMessage {
+                                    message: Some(server_message::Message::PlayAgainStatus(
+                                        common::PlayAgainStatusNotification {
+                                            ready_players,
+                                            pending_players,
+                                            available,
+                                        }
+                                    )),
+                                };
+
+                                broadcaster.broadcast_to_clients(&client_ids, play_again_msg).await;
+                            }
+                            Err(e) => {
+                                log!("Failed to get play again status: {}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    log!("Failed to end game for lobby {}: {}", lobby_id, e);
+                }
+            }
+
+            session_manager.remove_session(&session_id_clone).await;
+        });
+    }
+
+    async fn broadcast_tictactoe_state(
+        state: &Arc<Mutex<GameStateEnum>>,
+        bots: &Arc<Mutex<HashMap<BotId, BotType>>>,
+        human_players: &[PlayerId],
+        broadcaster: &Broadcaster,
+    ) {
+        let state_guard = state.lock().await;
+        let ttt_state = match &*state_guard {
+            GameStateEnum::TicTacToe(s) => s,
+            _ => return,
+        };
+
+        let bots_ref = bots.lock().await;
+        let player_x_is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == ttt_state.player_x);
+        let player_o_is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == ttt_state.player_o);
+        let current_player_is_bot = bots_ref.iter().any(|(bot_id, _)| bot_id.to_player_id() == ttt_state.current_player);
+
+        let proto_state = ttt_state.to_proto_state(player_x_is_bot, player_o_is_bot, current_player_is_bot);
+        drop(bots_ref);
+        drop(state_guard);
+
+        let game_state_msg = ServerMessage {
+            message: Some(server_message::Message::GameState(
+                common::GameStateUpdate {
+                    state: Some(common::game_state_update::State::Tictactoe(proto_state))
+                }
+            )),
+        };
+
+        let client_ids: Vec<ClientId> = human_players.iter()
+            .map(|p| ClientId::new(p.to_string()))
+            .collect();
+        broadcaster.broadcast_to_clients(&client_ids, game_state_msg).await;
+    }
+
+    pub async fn place_mark(
+        &self,
+        client_id: &ClientId,
+        x: u32,
+        y: u32,
+    ) {
+        let mapping = self.client_to_session.lock().await;
+        let session_id = match mapping.get(client_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+        drop(mapping);
+
+        let sessions = self.sessions.lock().await;
+        let (state_arc, bots_arc) = match sessions.get(&session_id) {
+            Some(session) => (session.state.clone(), session.bots.clone()),
+            None => return,
+        };
+        drop(sessions);
+
+        let mut state_guard = state_arc.lock().await;
+        if let GameStateEnum::TicTacToe(state) = &mut *state_guard {
+            let player_id = PlayerId::new(client_id.to_string());
+            if let Err(e) = state.place_mark(&player_id, x as usize, y as usize) {
+                log!("Failed to place mark: {}", e);
+                return;
+            }
+        } else {
+            return;
+        }
+        drop(state_guard);
+
+        let human_players = match self.lobby_manager.get_lobby(&LobbyId::new(session_id)).await {
+            Some(lobby) => lobby.players.keys().cloned().collect(),
+            None => vec![],
+        };
+
+        Self::broadcast_tictactoe_state(&state_arc, &bots_arc, &human_players, &self.broadcaster).await;
     }
 }
 

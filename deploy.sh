@@ -4,13 +4,13 @@ set -euo pipefail
 
 REMOTE_HOST="185.157.212.124"
 REMOTE_USER="root"
-SERVICE_NAME="snake-game-server"
-DEPLOY_DIR="/opt/snake-game-server"
-BINARY_NAME="snake_game_server"
+SERVICE_NAME="mini-games-server"
+DEPLOY_DIR="/opt/mini-games-server"
+BINARY_NAME="mini_games_server"
 TARGET="x86_64-unknown-linux-musl"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVICE_FILE="${SCRIPT_DIR}/deploy/snake-game-server.service"
+SERVICE_FILE="${SCRIPT_DIR}/deploy/mini-games-server.service"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 
 echo "==> Building server for Linux (${TARGET})..."
@@ -19,7 +19,7 @@ if ! rustup target list --installed | grep -q "${TARGET}"; then
     rustup target add "${TARGET}"
 fi
 
-cargo build --release --target "${TARGET}" -p snake_game_server
+cargo build --release --target "${TARGET}" -p mini_games_server
 
 if [[ ! -f "${BUILD_BINARY}" ]]; then
     echo "Error: Binary not found at ${BUILD_BINARY}" >&2

@@ -116,18 +116,32 @@ pub async fn grpc_client_task(
                                 Some(client_message::Message::ListLobbies(ListLobbiesRequest {}))
                             }
                             MenuCommand::CreateLobby { name, config } => {
+                                let (max_players, settings) = match config {
+                                    crate::state::LobbyConfig::Snake(snake_config) => {
+                                        (snake_config.max_players, Some(common::create_lobby_request::Settings::Snake(SnakeLobbySettings {
+                                            field_width: snake_config.field_width,
+                                            field_height: snake_config.field_height,
+                                            wall_collision_mode: snake_config.wall_collision_mode.into(),
+                                            tick_interval_ms: snake_config.tick_interval_ms,
+                                            max_food_count: snake_config.max_food_count,
+                                            food_spawn_probability: snake_config.food_spawn_probability,
+                                            dead_snake_behavior: snake_config.dead_snake_behavior.into(),
+                                        })))
+                                    }
+                                    crate::state::LobbyConfig::TicTacToe(ttt_config) => {
+                                        (2, Some(common::create_lobby_request::Settings::Tictactoe(common::proto::tictactoe::TicTacToeLobbySettings {
+                                            field_width: ttt_config.field_width,
+                                            field_height: ttt_config.field_height,
+                                            win_count: ttt_config.win_count,
+                                            first_player: 1,
+                                        })))
+                                    }
+                                };
+
                                 Some(client_message::Message::CreateLobby(CreateLobbyRequest {
                                     lobby_name: name,
-                                    max_players: config.max_players,
-                                    settings: Some(common::create_lobby_request::Settings::Snake(SnakeLobbySettings {
-                                        field_width: config.field_width,
-                                        field_height: config.field_height,
-                                        wall_collision_mode: config.wall_collision_mode.into(),
-                                        tick_interval_ms: config.tick_interval_ms,
-                                        max_food_count: config.max_food_count,
-                                        food_spawn_probability: config.food_spawn_probability,
-                                        dead_snake_behavior: config.dead_snake_behavior.into(),
-                                    })),
+                                    max_players,
+                                    settings,
                                 }))
                             }
                             MenuCommand::JoinLobby { lobby_id } => {
@@ -150,8 +164,16 @@ pub async fn grpc_client_task(
                                 Some(client_message::Message::PlayAgain(PlayAgainRequest {}))
                             }
                             MenuCommand::AddBot { bot_type } => {
+                                let proto_bot_type = match bot_type {
+                                    crate::state::BotType::Snake(snake_bot) => {
+                                        Some(common::add_bot_request::BotType::SnakeBot(snake_bot as i32))
+                                    }
+                                    crate::state::BotType::TicTacToe(ttt_bot) => {
+                                        Some(common::add_bot_request::BotType::TictactoeBot(ttt_bot as i32))
+                                    }
+                                };
                                 Some(client_message::Message::AddBot(AddBotRequest {
-                                    bot_type: Some(common::add_bot_request::BotType::SnakeBot(bot_type as i32)),
+                                    bot_type: proto_bot_type,
                                 }))
                             }
                             MenuCommand::KickFromLobby { player_id } => {
@@ -176,18 +198,40 @@ pub async fn grpc_client_task(
                     }
                     ClientCommand::Game(game_cmd) => {
                         match game_cmd {
-                            GameCommand::SendTurn { direction } => {
-                                Some(client_message::Message::InGame(InGameCommand {
-                                    command: Some(in_game_command::Command::Snake(
-                                        common::proto::snake::SnakeInGameCommand {
-                                            command: Some(common::proto::snake::snake_in_game_command::Command::Turn(
-                                                TurnCommand {
-                                                    direction: direction as i32,
+                            GameCommand::Snake(snake_cmd) => {
+                                match snake_cmd {
+                                    crate::state::SnakeGameCommand::SendTurn { direction } => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::Snake(
+                                                common::proto::snake::SnakeInGameCommand {
+                                                    command: Some(common::proto::snake::snake_in_game_command::Command::Turn(
+                                                        TurnCommand {
+                                                            direction: direction as i32,
+                                                        }
+                                                    ))
                                                 }
                                             ))
-                                        }
-                                    ))
-                                }))
+                                        }))
+                                    }
+                                }
+                            }
+                            GameCommand::TicTacToe(ttt_cmd) => {
+                                match ttt_cmd {
+                                    crate::state::TicTacToeGameCommand::PlaceMark { x, y } => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::Tictactoe(
+                                                common::proto::tictactoe::TicTacToeInGameCommand {
+                                                    command: Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(
+                                                        common::proto::tictactoe::PlaceMarkCommand {
+                                                            x,
+                                                            y,
+                                                        }
+                                                    ))
+                                                }
+                                            ))
+                                        }))
+                                    }
+                                }
                             }
                         }
                     }
@@ -335,10 +379,18 @@ pub async fn grpc_client_task(
 
                                     let reason = match &game_over.reason {
                                         Some(common::game_over_notification::Reason::SnakeReason(r)) => {
-                                            common::proto::snake::SnakeGameEndReason::try_from(*r)
-                                                .unwrap_or(common::proto::snake::SnakeGameEndReason::Unspecified)
+                                            crate::state::GameEndReason::Snake(
+                                                common::proto::snake::SnakeGameEndReason::try_from(*r)
+                                                    .unwrap_or(common::proto::snake::SnakeGameEndReason::Unspecified)
+                                            )
                                         }
-                                        _ => common::proto::snake::SnakeGameEndReason::Unspecified,
+                                        Some(common::game_over_notification::Reason::TictactoeReason(r)) => {
+                                            crate::state::GameEndReason::TicTacToe(
+                                                common::proto::tictactoe::TicTacToeGameEndReason::try_from(*r)
+                                                    .unwrap_or(common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonUnspecified)
+                                            )
+                                        }
+                                        _ => crate::state::GameEndReason::Snake(common::proto::snake::SnakeGameEndReason::Unspecified),
                                     };
 
                                     shared_state.set_state(AppState::GameOver {

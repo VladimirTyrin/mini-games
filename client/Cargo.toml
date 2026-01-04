@@ -1,10 +1,10 @@
 [package]
-name = "snake_game_client"
+name = "mini_games_client"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "snake_game_client"
+name = "mini_games_client"
 path = "src/main.rs"
 
 [dependencies]

@@ -44,12 +44,12 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            server_binary: snake_game_server.exe
-            client_binary: snake_game_client.exe
+            server_binary: mini_games_server.exe
+            client_binary: mini_games_client.exe
           # - os: macos-latest
             # target: x86_64-apple-darwin
-            # server_binary: snake_game_server
-            # client_binary: snake_game_client
+            # server_binary: mini_games_server
+            # client_binary: mini_games_client
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build server and client
-        run: cargo build --release -p snake_game_server -p snake_game_client --target ${{ matrix.target }}
+        run: cargo build --release -p mini_games_server -p mini_games_client --target ${{ matrix.target }}
 
       - name: Prepare artifacts (Unix)
         if: matrix.os != 'windows-latest'
@@ -83,7 +83,7 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ matrix.server_binary }} artifacts/
           cp target/${{ matrix.target }}/release/${{ matrix.client_binary }} artifacts/
           cd artifacts
-          tar czf ../snake_game_${{ matrix.target }}.tar.gz *
+          tar czf ../mini_games_${{ matrix.target }}.tar.gz *
 
       - name: Prepare artifacts (Windows)
         if: matrix.os == 'windows-latest'
@@ -91,21 +91,21 @@ jobs:
           mkdir artifacts
           cp target/${{ matrix.target }}/release/${{ matrix.server_binary }} artifacts/
           cp target/${{ matrix.target }}/release/${{ matrix.client_binary }} artifacts/
-          Compress-Archive -Path artifacts/* -DestinationPath snake_game_${{ matrix.target }}.zip
+          Compress-Archive -Path artifacts/* -DestinationPath mini_games_${{ matrix.target }}.zip
 
       - name: Upload artifact (Unix)
         if: matrix.os != 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: snake_game_${{ matrix.target }}
-          path: snake_game_${{ matrix.target }}.tar.gz
+          name: mini_games_${{ matrix.target }}
+          path: mini_games_${{ matrix.target }}.tar.gz
 
       - name: Upload artifact (Windows)
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: snake_game_${{ matrix.target }}
-          path: snake_game_${{ matrix.target }}.zip
+          name: mini_games_${{ matrix.target }}
+          path: mini_games_${{ matrix.target }}.zip
 
   release:
     needs: [check-version, build]

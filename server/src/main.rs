@@ -19,7 +19,7 @@ use broadcaster::Broadcaster;
 use game_session_manager::GameSessionManager;
 
 #[derive(Parser)]
-#[command(name = "snake_game_server")]
+#[command(name = "mini_games_server")]
 struct Args {
     #[arg(long)]
     use_log_prefix: bool,

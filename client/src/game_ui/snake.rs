@@ -1,5 +1,5 @@
 use crate::sprites::Sprites;
-use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
+use crate::state::{GameCommand, SnakeGameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use crate::colors::generate_color_from_client_id;
 use common::{proto::snake::{Direction, SnakeGameEndReason}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
@@ -494,7 +494,7 @@ impl SnakeGameUi {
             }
 
             if let Some(direction) = new_direction {
-                let _ = command_tx.send(ClientCommand::Game(GameCommand::SendTurn { direction }));
+                let _ = command_tx.send(ClientCommand::Game(GameCommand::Snake(SnakeGameCommand::SendTurn { direction })));
             }
         });
     }

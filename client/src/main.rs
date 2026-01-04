@@ -20,7 +20,7 @@ use menu_ui::MenuApp;
 use crate::config::get_config_manager;
 
 #[derive(Parser)]
-#[command(name = "snake_game_client")]
+#[command(name = "mini_games_client")]
 struct Args {
     #[arg(long)]
     use_log_prefix: bool,
