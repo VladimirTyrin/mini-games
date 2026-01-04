@@ -1,0 +1,57 @@
+pub mod snake;
+
+use crate::state::{ClientCommand, PlayAgainStatus};
+use common::{GameStateUpdate, ScoreEntry, PlayerIdentity};
+use eframe::egui;
+use tokio::sync::mpsc;
+
+pub enum GameUi {
+    Snake(snake::SnakeGameUi),
+}
+
+impl GameUi {
+    pub fn new_snake() -> Self {
+        GameUi::Snake(snake::SnakeGameUi::new())
+    }
+
+    pub fn render_game(
+        &mut self,
+        egui_ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        session_id: &str,
+        game_state: &Option<GameStateUpdate>,
+        client_id: &str,
+        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+    ) {
+        match self {
+            GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, command_tx),
+        }
+    }
+
+    pub fn render_game_over(
+        &mut self,
+        egui_ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        scores: &[ScoreEntry],
+        winner: &Option<PlayerIdentity>,
+        client_id: &str,
+        last_game_state: &Option<GameStateUpdate>,
+        reason: &common::proto::snake::SnakeGameEndReason,
+        play_again_status: &PlayAgainStatus,
+        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+    ) {
+        match self {
+            GameUi::Snake(ui) => ui.render_game_over(
+                egui_ui,
+                ctx,
+                scores,
+                winner,
+                client_id,
+                last_game_state,
+                reason,
+                play_again_status,
+                command_tx,
+            ),
+        }
+    }
+}

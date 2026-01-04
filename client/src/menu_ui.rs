@@ -548,13 +548,13 @@ impl MenuApp {
                     ui.horizontal(|ui| {
                         egui::ComboBox::from_label("Bot Type")
                             .selected_text(match self.selected_bot_type {
-                                common::BotType::Efficient => "Efficient",
-                                common::BotType::Random => "Random",
+                                SnakeBotType::Efficient => "Efficient",
+                                SnakeBotType::Random => "Random",
                                 _ => "Unknown",
                             })
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.selected_bot_type, common::BotType::Efficient, "Efficient");
-                                ui.selectable_value(&mut self.selected_bot_type, common::BotType::Random, "Random");
+                                ui.selectable_value(&mut self.selected_bot_type, SnakeBotType::Efficient, "Efficient");
+                                ui.selectable_value(&mut self.selected_bot_type, SnakeBotType::Random, "Random");
                             });
 
                         if ui.button("🤖 Add Bot (Ctrl+B)").clicked() {
@@ -689,7 +689,7 @@ impl eframe::App for MenuApp {
                 }
                 AppState::InGame { session_id, game_state } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new());
+                        self.game_ui = Some(GameUi::new_snake());
                     }
                     if let Some(game_ui) = &mut self.game_ui {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
@@ -697,7 +697,7 @@ impl eframe::App for MenuApp {
                 }
                 AppState::GameOver { scores, winner, last_game_state, reason, play_again_status } => {
                     if self.game_ui.is_none() {
-                        self.game_ui = Some(GameUi::new());
+                        self.game_ui = Some(GameUi::new_snake());
                     }
                     if let Some(game_ui) = &mut self.game_ui {
                         game_ui.render_game_over(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &reason, &play_again_status, &self.menu_command_tx);

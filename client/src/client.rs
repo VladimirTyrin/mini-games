@@ -1,6 +1,6 @@
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 use common::proto::game_service::game_service_client::GameServiceClient;
-use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, log, proto::snake::{SnakeLobbySettings, TurnCommand, Direction as ProtoDirection}, InGameCommand, in_game_command};
+use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, log, proto::snake::{SnakeLobbySettings, TurnCommand}, InGameCommand, in_game_command};
 use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, ClientCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
@@ -151,7 +151,7 @@ pub async fn grpc_client_task(
                             }
                             MenuCommand::AddBot { bot_type } => {
                                 Some(client_message::Message::AddBot(AddBotRequest {
-                                    bot_type: bot_type as i32,
+                                    bot_type: Some(common::add_bot_request::BotType::SnakeBot(bot_type as i32)),
                                 }))
                             }
                             MenuCommand::KickFromLobby { player_id } => {
@@ -297,7 +297,7 @@ pub async fn grpc_client_task(
                                         break;
                                     }
                                 }
-                                common::server_message::Message::ServerShuttingDown(_) => {
+                                common::server_message::Message::Shutdown(_) => {
                                     shared_state.set_error("Server is shutting down".to_string());
                                     shared_state.set_should_close();
                                     break;
@@ -400,6 +400,14 @@ pub async fn grpc_client_task(
                                             event_log.enqueue(format!("{}{}: {}", sender.player_id, you_message, notification.message));
                                         }
                                     }
+                                }
+                                common::server_message::Message::Connect(_) => {
+                                }
+                                common::server_message::Message::LobbyCreated(_) => {
+                                }
+                                common::server_message::Message::LobbyJoined(_) => {
+                                }
+                                common::server_message::Message::Kicked(_) => {
                                 }
                             }
                         }

@@ -13,13 +13,13 @@ struct Color {
     b: u8,
 }
 
-pub struct GameUi {
+pub struct SnakeGameUi {
     sprites: Sprites,
     texture_cache: HashMap<String, egui::TextureHandle>,
     cached_cell_size: f32,
 }
 
-impl GameUi {
+impl SnakeGameUi {
     const SCORES_AREA_WIDTH: f32 = 150.0;
     const MIN_CELL_SIZE: f32 = 16.0;
     const MAX_CELL_SIZE: f32 = 128.0;
@@ -83,7 +83,12 @@ impl GameUi {
         client_id: &str,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
-        if let Some(state) = game_state {
+        if let Some(game_state_update) = game_state {
+            let state = match &game_state_update.state {
+                Some(common::game_state_update::State::Snake(snake_state)) => snake_state,
+                _ => return,
+            };
+
             self.handle_input(ctx, command_tx);
 
             let available_width = ui.available_width();
@@ -110,8 +115,8 @@ impl GameUi {
 
                 let rect = response.rect;
                 let show_dead_snakes = matches!(
-                    common::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
-                    Ok(common::DeadSnakeBehavior::StayOnField)
+                    common::proto::snake::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
+                    Ok(common::proto::snake::DeadSnakeBehavior::StayOnField)
                 );
                 self.render_game_field(&painter, ctx, rect, state, pixels_per_cell, show_dead_snakes);
 
@@ -178,11 +183,16 @@ impl GameUi {
         winner: &Option<PlayerIdentity>,
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
-        reason: &common::GameEndReason,
+        reason: &SnakeGameEndReason,
         play_again_status: &PlayAgainStatus,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
-        if let Some(state) = last_game_state {
+        if let Some(game_state_update) = last_game_state {
+            let state = match &game_state_update.state {
+                Some(common::game_state_update::State::Snake(snake_state)) => snake_state,
+                _ => return,
+            };
+
             let available_width = ui.available_width();
             let available_height = ui.available_height();
 
@@ -524,7 +534,7 @@ impl GameUi {
         painter: &egui::Painter,
         ctx: &egui::Context,
         rect: egui::Rect,
-        state: &GameStateUpdate,
+        state: &common::proto::snake::SnakeGameState,
         pixels_per_cell: f32,
         show_dead_snakes: bool,
     ) {
@@ -627,7 +637,7 @@ impl GameUi {
         }
     }
 
-    fn get_direction(from: &Position, to: &Position, field_width: u32, field_height: u32) -> Direction {
+    fn get_direction(from: &SnakePosition, to: &SnakePosition, field_width: u32, field_height: u32) -> Direction {
         let dx = (to.x - from.x + field_width as i32) % field_width as i32;
         let dy = (to.y - from.y + field_height as i32) % field_height as i32;
 
