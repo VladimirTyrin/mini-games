@@ -1,7 +1,7 @@
 use crate::sprites::Sprites;
 use crate::state::{GameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use crate::colors::generate_color_from_client_id;
-use common::{Direction, GameStateUpdate, Position, ScoreEntry, PlayerIdentity};
+use common::{proto::snake::{Direction, SnakeGameEndReason}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
 use std::collections::HashMap;
@@ -224,11 +224,11 @@ impl GameUi {
 
                     ui.add_space(5.0);
                     let reason_text = match reason {
-                        common::GameEndReason::WallCollision => "💥 Game ended: Wall collision",
-                        common::GameEndReason::SelfCollision => "🐍 Game ended: Self collision",
-                        common::GameEndReason::SnakeCollision => "💥 Game ended: Snake collision",
-                        common::GameEndReason::PlayerDisconnected => "📡 Game ended: Player disconnected",
-                        common::GameEndReason::GameCompleted => "✅ Game completed",
+                        SnakeGameEndReason::WallCollision => "💥 Game ended: Wall collision",
+                        SnakeGameEndReason::SelfCollision => "🐍 Game ended: Self collision",
+                        SnakeGameEndReason::SnakeCollision => "💥 Game ended: Snake collision",
+                        SnakeGameEndReason::PlayerDisconnected => "📡 Game ended: Player disconnected",
+                        SnakeGameEndReason::GameCompleted => "✅ Game completed",
                         _ => "Game ended",
                     };
                     ui.label(reason_text);

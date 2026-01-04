@@ -1,4 +1,4 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, Direction, BotType, PlayerIdentity};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndReason, SnakeBotType}, PlayerIdentity};
 use crate::config::LobbyConfig;
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
@@ -13,7 +13,7 @@ pub enum MenuCommand {
     MarkReady { ready: bool },
     StartGame,
     PlayAgain,
-    AddBot { bot_type: BotType },
+    AddBot { bot_type: SnakeBotType },
     KickFromLobby { player_id: String },
     Disconnect,
     InLobbyChatMessage { message: String },
@@ -58,7 +58,7 @@ pub enum AppState {
         scores: Vec<ScoreEntry>,
         winner: Option<PlayerIdentity>,
         last_game_state: Option<GameStateUpdate>,
-        reason: common::GameEndReason,
+        reason: SnakeGameEndReason,
         play_again_status: PlayAgainStatus,
     },
 }

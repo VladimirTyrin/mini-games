@@ -4,7 +4,7 @@ use crate::sprites::Sprites;
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState};
 use crate::colors::generate_color_from_client_id;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
-use common::{Direction, WallCollisionMode};
+use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode};
 use common::{LobbyDetails, LobbyInfo};
 use eframe::egui;
 use egui::{Align, Layout};
@@ -66,7 +66,7 @@ pub struct MenuApp {
     food_spawn_probability_input: String,
     wall_collision_mode: WallCollisionMode,
     dead_snake_behavior: common::DeadSnakeBehavior,
-    selected_bot_type: common::BotType,
+    selected_bot_type: SnakeBotType,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -102,7 +102,7 @@ impl MenuApp {
             food_spawn_probability_input: config.lobby.food_spawn_probability.to_string(),
             wall_collision_mode: config.lobby.wall_collision_mode,
             dead_snake_behavior: config.lobby.dead_snake_behavior,
-            selected_bot_type: common::BotType::Efficient,
+            selected_bot_type: SnakeBotType::Efficient,
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -447,14 +447,7 @@ impl MenuApp {
 
                         let is_bot = player.identity.as_ref().map(|i| i.is_bot).unwrap_or(false);
                         let bot_type_suffix = if is_bot {
-                            let bot_type = player.identity.as_ref()
-                                .and_then(|i| common::BotType::try_from(i.bot_type).ok())
-                                .unwrap_or(common::BotType::Unspecified);
-                            match bot_type {
-                                common::BotType::Efficient => " (Bot - Efficient)",
-                                common::BotType::Random => " (Bot - Random)",
-                                _ => " (Bot)",
-                            }
+                            " (Bot)"
                         } else {
                             ""
                         };

@@ -1,6 +1,6 @@
 use ringbuffer::{AllocRingBuffer, RingBuffer};
-use common::snake_game_service_client::SnakeGameServiceClient;
-use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, LobbySettings, log, TurnCommand};
+use common::proto::game_service::game_service_client::GameServiceClient;
+use common::{ClientMessage, client_message, ConnectRequest, DisconnectRequest, ListLobbiesRequest, CreateLobbyRequest, JoinLobbyRequest, LeaveLobbyRequest, MarkReadyRequest, StartGameRequest, PlayAgainRequest, AddBotRequest, KickFromLobbyRequest, log, proto::snake::{SnakeLobbySettings, TurnCommand, Direction as ProtoDirection}, InGameCommand, in_game_command};
 use tokio::sync::mpsc;
 use crate::state::{MenuCommand, GameCommand, ClientCommand, SharedState, AppState, PlayAgainStatus};
 use crate::config::{ConfigManager, FileContentConfigProvider, Config, YamlConfigSerializer};
@@ -40,7 +40,7 @@ pub async fn grpc_client_task(
     config_manager: ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
-        let mut client = match SnakeGameServiceClient::connect(server_address.clone()).await {
+        let mut client = match GameServiceClient::connect(server_address.clone()).await {
             Ok(client) => {
                 let mut config = config_manager.get_config().unwrap_or_default();
                 config.server.address = server_address.clone();
@@ -119,7 +119,7 @@ pub async fn grpc_client_task(
                                 Some(client_message::Message::CreateLobby(CreateLobbyRequest {
                                     lobby_name: name,
                                     max_players: config.max_players,
-                                    settings: Some(LobbySettings {
+                                    settings: Some(common::create_lobby_request::Settings::Snake(SnakeLobbySettings {
                                         field_width: config.field_width,
                                         field_height: config.field_height,
                                         wall_collision_mode: config.wall_collision_mode.into(),
@@ -127,7 +127,7 @@ pub async fn grpc_client_task(
                                         max_food_count: config.max_food_count,
                                         food_spawn_probability: config.food_spawn_probability,
                                         dead_snake_behavior: config.dead_snake_behavior.into(),
-                                    }),
+                                    })),
                                 }))
                             }
                             MenuCommand::JoinLobby { lobby_id } => {
@@ -163,12 +163,12 @@ pub async fn grpc_client_task(
                                 Some(client_message::Message::Disconnect(DisconnectRequest {}))
                             }
                             MenuCommand::InLobbyChatMessage { message } => {
-                                Some(client_message::Message::InLobbyChat(common::InLobbyChatMessageRequest {
+                                Some(client_message::Message::InLobbyChat(common::InLobbyChatMessage {
                                     message,
                                 }))
                             },
                             MenuCommand::LobbyListChatMessage { message } => {
-                                Some(client_message::Message::LobbyListChat(common::LobbyListChatMessageRequest {
+                                Some(client_message::Message::LobbyListChat(common::LobbyListChatMessage {
                                     message,
                                 }))
                             }
@@ -177,8 +177,16 @@ pub async fn grpc_client_task(
                     ClientCommand::Game(game_cmd) => {
                         match game_cmd {
                             GameCommand::SendTurn { direction } => {
-                                Some(client_message::Message::Turn(TurnCommand {
-                                    direction: direction as i32,
+                                Some(client_message::Message::InGame(InGameCommand {
+                                    command: Some(in_game_command::Command::Snake(
+                                        common::proto::snake::SnakeInGameCommand {
+                                            command: Some(common::proto::snake::snake_in_game_command::Command::Turn(
+                                                TurnCommand {
+                                                    direction: direction as i32,
+                                                }
+                                            ))
+                                        }
+                                    ))
                                 }))
                             }
                         }
@@ -213,7 +221,7 @@ pub async fn grpc_client_task(
                                     });
                                 }
                                 common::server_message::Message::LobbyUpdate(update) => {
-                                    if let Some(lobby) = update.lobby {
+                                    if let Some(lobby) = update.details {
                                         match shared_state.get_state() {
                                             AppState::InLobby { event_log, .. } => {
                                                 shared_state.set_state(AppState::InLobby {
@@ -232,13 +240,9 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerJoined(notification) => {
-                                    if let Some(identity) = &notification.identity {
+                                    if let Some(identity) = &notification.player {
                                         if identity.is_bot {
-                                            let bot_type_name = match common::BotType::try_from(identity.bot_type).unwrap_or(common::BotType::Unspecified) {
-                                                common::BotType::Efficient => "Efficient",
-                                                common::BotType::Random => "Random",
-                                                _ => "Unknown",
-                                            };
+                                            let bot_type_name = "Bot";
 
                                             let host_name = match shared_state.get_state() {
                                                 AppState::InLobby { details, .. } => {
@@ -256,13 +260,9 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerLeft(notification) => {
-                                    if let Some(identity) = &notification.identity {
+                                    if let Some(identity) = &notification.player {
                                         if identity.is_bot {
-                                            let bot_type_name = match common::BotType::try_from(identity.bot_type).unwrap_or(common::BotType::Unspecified) {
-                                                common::BotType::Efficient => "Efficient",
-                                                common::BotType::Random => "Random",
-                                                _ => "Unknown",
-                                            };
+                                            let bot_type_name = "Bot";
 
                                             let host_name = match shared_state.get_state() {
                                                 AppState::InLobby { details, .. } => {
@@ -280,7 +280,7 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerReady(notification) => {
-                                    if let Some(identity) = &notification.identity {
+                                    if let Some(identity) = &notification.player {
                                         if !identity.is_bot {
                                             let status = if notification.ready { "ready" } else { "not ready" };
                                             shared_state.add_event_log(format!("{} is {}", identity.player_id, status));
@@ -319,7 +319,7 @@ pub async fn grpc_client_task(
                                         game_state: None,
                                     });
                                 }
-                                common::server_message::Message::State(state) => {
+                                common::server_message::Message::GameState(state) => {
                                     shared_state.update_game_state(state);
                                 }
                                 common::server_message::Message::GameOver(game_over) => {
@@ -333,8 +333,13 @@ pub async fn grpc_client_task(
                                         _ => None,
                                     };
 
-                                    let reason = common::GameEndReason::try_from(game_over.reason)
-                                        .unwrap_or(common::GameEndReason::Unspecified);
+                                    let reason = match &game_over.reason {
+                                        Some(common::game_over_notification::Reason::SnakeReason(r)) => {
+                                            common::proto::snake::SnakeGameEndReason::try_from(*r)
+                                                .unwrap_or(common::proto::snake::SnakeGameEndReason::Unspecified)
+                                        }
+                                        _ => common::proto::snake::SnakeGameEndReason::Unspecified,
+                                    };
 
                                     shared_state.set_state(AppState::GameOver {
                                         scores: game_over.scores,
@@ -345,20 +350,15 @@ pub async fn grpc_client_task(
                                     });
                                 }
                                 common::server_message::Message::PlayAgainStatus(notification) => {
-                                    if let Some(status) = notification.status {
-                                        let play_again_status = match status {
-                                            common::play_again_status_notification::Status::NotAvailable(_) => {
-                                                PlayAgainStatus::NotAvailable
-                                            }
-                                            common::play_again_status_notification::Status::Available(available) => {
-                                                PlayAgainStatus::Available {
-                                                    ready_players: available.ready_players,
-                                                    pending_players: available.pending_players,
-                                                }
-                                            }
-                                        };
-                                        shared_state.update_play_again_status(play_again_status);
-                                    }
+                                    let play_again_status = if notification.available {
+                                        PlayAgainStatus::Available {
+                                            ready_players: notification.ready_players,
+                                            pending_players: notification.pending_players,
+                                        }
+                                    } else {
+                                        PlayAgainStatus::NotAvailable
+                                    };
+                                    shared_state.update_play_again_status(play_again_status);
                                 }
                                 common::server_message::Message::Pong(pong) => {
                                     if last_ping_id == Some(pong.ping_id) {
