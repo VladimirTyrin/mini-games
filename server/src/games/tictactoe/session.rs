@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{Mutex, Notify};
 use common::{ClientId, PlayerId, BotId, log, ServerMessage, server_message};
 use crate::lobby_manager::BotType;
@@ -90,10 +91,12 @@ pub async fn run_game_loop(
         drop(bots_map);
 
         if is_bot_turn {
+            let turn_start = Instant::now();
             play_bot_turn(&state, &bots).await;
             broadcast_state(&state, &bots, &observers, &ctx.human_players, &ctx.broadcaster).await;
-            
-            tokio::task::yield_now().await;
+            log!("Bot turn completed in {:?}", turn_start.elapsed());
+
+            // tokio::task::yield_now().await;
 
             let state_guard = state.lock().await;
             let game_state = match &*state_guard {
@@ -116,24 +119,36 @@ async fn play_bot_turn(
     state: &Arc<Mutex<GameStateEnum>>,
     bots: &Arc<Mutex<HashMap<BotId, BotType>>>,
 ) {
-    let mut state_guard = state.lock().await;
-    let game_state = match &mut *state_guard {
-        GameStateEnum::TicTacToe(s) => s,
-        _ => return,
+    let (bot_input, bot_type, current_player) = {
+        let state_guard = state.lock().await;
+        let game_state = match &*state_guard {
+            GameStateEnum::TicTacToe(s) => s,
+            _ => return,
+        };
+
+        let current_player = game_state.current_player.clone();
+        let bots_map = bots.lock().await;
+
+        let bot_type = bots_map.iter()
+            .find(|(bot_id, _)| bot_id.to_player_id() == current_player)
+            .and_then(|(_, bot_type)| match bot_type {
+                BotType::TicTacToe(ttt_bot) => Some(*ttt_bot),
+                _ => None,
+            });
+
+        match bot_type {
+            Some(bt) => (bot_controller::BotInput::from_game_state(game_state), bt, current_player),
+            None => return,
+        }
     };
 
-    let current_player = game_state.current_player.clone();
-    let bots_map = bots.lock().await;
+    let calculated_move = tokio::task::spawn_blocking(move || {
+        bot_controller::calculate_move(bot_type, bot_input)
+    }).await;
 
-    let bot_type = bots_map.iter()
-        .find(|(bot_id, _)| bot_id.to_player_id() == current_player)
-        .and_then(|(_, bot_type)| match bot_type {
-            BotType::TicTacToe(ttt_bot) => Some(*ttt_bot),
-            _ => None,
-        });
-
-    if let Some(bot_type) = bot_type {
-        if let Some(pos) = bot_controller::calculate_move(bot_type, game_state) {
+    if let Ok(Some(pos)) = calculated_move {
+        let mut state_guard = state.lock().await;
+        if let GameStateEnum::TicTacToe(game_state) = &mut *state_guard {
             if let Err(e) = game_state.place_mark(&current_player, pos.x, pos.y) {
                 log!("Bot move failed: {}", e);
             }

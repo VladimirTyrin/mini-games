@@ -5,53 +5,55 @@ use super::win_detector::check_win;
 use common::proto::tictactoe::TicTacToeBotType;
 use rand::prelude::IndexedRandom;
 
-pub fn calculate_move(
-    bot_type: TicTacToeBotType,
-    state: &TicTacToeGameState,
-) -> Option<Position> {
-    let available = get_available_moves(&state.board);
-    common::log!("Bot calculating move. Board: {}x{}, Available moves: {}",
-        state.width, state.height, available.len());
-
-    let result = match bot_type {
-        TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(state),
-        TicTacToeBotType::TictactoeBotTypeMinimax => calculate_minimax_move(state),
-        _ => None,
-    };
-
-    common::log!("Bot move result: {:?}", result);
-    result
+pub struct BotInput {
+    pub board: Vec<Vec<Mark>>,
+    pub win_count: usize,
+    pub current_mark: Mark,
 }
 
-fn calculate_random_move(state: &TicTacToeGameState) -> Option<Position> {
-    let available_moves = get_available_moves(&state.board);
+impl BotInput {
+    pub fn from_game_state(state: &TicTacToeGameState) -> Self {
+        Self {
+            board: state.board.clone(),
+            win_count: state.win_count,
+            current_mark: state.current_mark,
+        }
+    }
+}
+
+pub fn calculate_move(bot_type: TicTacToeBotType, input: BotInput) -> Option<Position> {
+    match bot_type {
+        TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(&input),
+        TicTacToeBotType::TictactoeBotTypeMinimax => calculate_minimax_move(&input),
+        _ => None,
+    }
+}
+
+fn calculate_random_move(input: &BotInput) -> Option<Position> {
+    let available_moves = get_available_moves(&input.board);
     available_moves.choose(&mut rand::rng()).map(|&(x, y)| Position::new(x, y))
 }
 
-fn calculate_minimax_move(state: &TicTacToeGameState) -> Option<Position> {
-    let bot_mark = state.current_mark;
-    let available_moves = get_available_moves(&state.board);
-
-    common::log!("Minimax: bot_mark={:?}, available_moves={}", bot_mark, available_moves.len());
+fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
+    let bot_mark = input.current_mark;
+    let available_moves = get_available_moves(&input.board);
 
     if available_moves.is_empty() {
-        common::log!("Minimax: no available moves!");
         return None;
     }
 
-    let depth_limit = calculate_depth_limit(&state.board);
-    common::log!("Minimax: depth_limit={}", depth_limit);
+    let depth_limit = calculate_depth_limit(&input.board);
 
     let mut best_move = None;
     let mut best_score = i32::MIN;
 
     for (x, y) in available_moves {
-        let mut test_board = state.board.clone();
+        let mut test_board = input.board.clone();
         test_board[y][x] = bot_mark;
 
         let score = minimax(
             &test_board,
-            state.win_count,
+            input.win_count,
             0,
             depth_limit,
             false,
