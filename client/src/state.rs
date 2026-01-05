@@ -20,13 +20,16 @@ pub enum LobbyConfig {
 pub enum MenuCommand {
     ListLobbies,
     CreateLobby { name: String, config: LobbyConfig },
-    JoinLobby { lobby_id: String },
+    JoinLobby { lobby_id: String, join_as_observer: bool },
     LeaveLobby,
     MarkReady { ready: bool },
     StartGame,
     PlayAgain,
     AddBot { bot_type: BotType },
     KickFromLobby { player_id: String },
+    BecomeObserver,
+    BecomePlayer,
+    MakePlayerObserver { player_id: String },
     Disconnect,
     InLobbyChatMessage { message: String },
     LobbyListChatMessage { message: String },
@@ -82,6 +85,7 @@ pub enum AppState {
     InGame {
         session_id: String,
         game_state: Option<GameStateUpdate>,
+        is_observer: bool,
     },
     GameOver {
         scores: Vec<ScoreEntry>,
@@ -89,6 +93,7 @@ pub enum AppState {
         last_game_state: Option<GameStateUpdate>,
         game_info: GameEndInfo,
         play_again_status: PlayAgainStatus,
+        is_observer: bool,
     },
 }
 

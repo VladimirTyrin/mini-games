@@ -45,6 +45,7 @@ impl TicTacToeGameUi {
         _session_id: &str,
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
+        is_observer: bool,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         let Some(game_state_update) = game_state else {
@@ -83,17 +84,29 @@ impl TicTacToeGameUi {
         let board_width = cell_size * state.field_width as f32;
         let _board_height = cell_size * state.field_height as f32;
 
+        if is_observer {
+            ctx.input(|i| {
+                if i.key_pressed(egui::Key::Escape) {
+                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                }
+            });
+        }
+
         ui.horizontal(|ui| {
             ui.allocate_ui(
                 egui::vec2(board_width + Self::BOARD_PADDING * 2.0, available_height),
                 |ui| {
-                    self.render_board(ui, ctx, state, cell_size, client_id, command_tx);
+                    self.render_board(ui, ctx, state, cell_size, client_id, is_observer, command_tx);
                 },
             );
 
             ui.separator();
 
             ui.vertical(|ui| {
+                if is_observer {
+                    ui.label(egui::RichText::new("👁 OBSERVER MODE (Esc to leave)").color(egui::Color32::YELLOW));
+                    ui.separator();
+                }
                 self.render_info_panel(ui, state, client_id);
             });
         });
@@ -106,6 +119,7 @@ impl TicTacToeGameUi {
         state: &common::proto::tictactoe::TicTacToeGameState,
         cell_size: f32,
         client_id: &str,
+        is_observer: bool,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         let board_width = cell_size * state.field_width as f32;
@@ -180,7 +194,7 @@ impl TicTacToeGameUi {
             }
         }
 
-        if is_my_turn && state.status == 1 {
+        if !is_observer && is_my_turn && state.status == 1 {
             if let Some(hover_pos) = response.hover_pos() {
                 let x = ((hover_pos.x - rect.left()) / cell_size) as u32;
                 let y = ((hover_pos.y - rect.top()) / cell_size) as u32;
@@ -312,6 +326,7 @@ impl TicTacToeGameUi {
         last_game_state: &Option<GameStateUpdate>,
         game_info: &TicTacToeGameEndInfo,
         play_again_status: &PlayAgainStatus,
+        is_observer: bool,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
         let state = if let Some(game_state_update) = last_game_state {
@@ -464,47 +479,52 @@ impl TicTacToeGameUi {
                 ui.add_space(10.0);
                 ui.separator();
 
-                match play_again_status {
-                    PlayAgainStatus::Available { ready_players, pending_players } => {
-                        if pending_players.is_empty() {
-                            ui.label("Starting new game...");
-                        } else {
-                            let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
-                            if is_ready {
-                                ui.label("Waiting for other players...");
+                if is_observer {
+                    ui.label(egui::RichText::new("👁 Observer Mode").color(egui::Color32::YELLOW));
+                    ui.label("Waiting for players to start new game...");
+                } else {
+                    match play_again_status {
+                        PlayAgainStatus::Available { ready_players, pending_players } => {
+                            if pending_players.is_empty() {
+                                ui.label("Starting new game...");
                             } else {
-                                if ui.button("Play Again (R)").clicked() {
-                                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
-                                }
-                                ctx.input(|i| {
-                                    if i.key_pressed(egui::Key::R) {
+                                let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
+                                if is_ready {
+                                    ui.label("Waiting for other players...");
+                                } else {
+                                    if ui.button("Play Again (R)").clicked() {
                                         let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                     }
-                                });
-                            }
-
-                            ui.add_space(5.0);
-                            ui.label("Players ready:");
-                            for ready_player in ready_players {
-                                let is_you = ready_player.player_id == client_id;
-                                let you_marker = if is_you { " (You)" } else { "" };
-                                ui.label(format!("✓ {}{}", ready_player.player_id, you_marker));
-                            }
-                            if !pending_players.is_empty() {
-                                ui.label("Waiting for:");
-                                for pending_player in pending_players {
-                                    let is_you = pending_player.player_id == client_id;
-                                    let you_marker = if is_you { " (You)" } else { "" };
-                                    ui.label(format!("⏳ {}{}", pending_player.player_id, you_marker));
+                                    ctx.input(|i| {
+                                        if i.key_pressed(egui::Key::R) {
+                                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                        }
+                                    });
                                 }
+
+                                ui.add_space(5.0);
+                                ui.label("Players ready:");
+                                for ready_player in ready_players {
+                                    let is_you = ready_player.player_id == client_id;
+                                    let you_marker = if is_you { " (You)" } else { "" };
+                                    ui.label(format!("✓ {}{}", ready_player.player_id, you_marker));
+                                }
+                                if !pending_players.is_empty() {
+                                    ui.label("Waiting for:");
+                                    for pending_player in pending_players {
+                                        let is_you = pending_player.player_id == client_id;
+                                        let you_marker = if is_you { " (You)" } else { "" };
+                                        ui.label(format!("⏳ {}{}", pending_player.player_id, you_marker));
+                                    }
+                                }
+                                ui.add_space(5.0);
                             }
+                        }
+                        PlayAgainStatus::NotAvailable => {
+                            ui.label("Play again not available");
+                            ui.label("(A player left the lobby)");
                             ui.add_space(5.0);
                         }
-                    }
-                    PlayAgainStatus::NotAvailable => {
-                        ui.label("Play again not available");
-                        ui.label("(A player left the lobby)");
-                        ui.add_space(5.0);
                     }
                 }
 

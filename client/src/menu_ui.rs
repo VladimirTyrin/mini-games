@@ -285,6 +285,7 @@ impl MenuApp {
                             if button_clicked || double_clicked {
                                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::JoinLobby {
                                     lobby_id: lobby.lobby_id.clone(),
+                                    join_as_observer: false,
                                 }));
                             }
                         }
@@ -508,6 +509,10 @@ impl MenuApp {
                     details.players.len() >= 1
                 };
 
+                let is_self_observer = details.observers.iter()
+                    .any(|o| o.player_id == self.client_id);
+                let lobby_is_full = details.players.len() >= details.max_players as usize;
+
                 for player in &details.players {
                     ui.horizontal(|ui| {
                         let player_id = player.identity.as_ref()
@@ -558,6 +563,13 @@ impl MenuApp {
                             ui.label("⏳ Not Ready");
                         }
 
+                        if is_host && !is_self && !is_bot
+                            && ui.button("👁 Make Observer").clicked() {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MakePlayerObserver {
+                                    player_id: player_id.clone(),
+                                }));
+                            }
+
                         if is_host && !is_self
                             && ui.button("❌ Kick").clicked() {
                                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
@@ -565,6 +577,31 @@ impl MenuApp {
                                 }));
                             }
                     });
+                }
+
+                if !details.observers.is_empty() {
+                    ui.separator();
+                    ui.heading("Observers:");
+
+                    for observer in &details.observers {
+                        ui.horizontal(|ui| {
+                            let is_self = observer.player_id == self.client_id;
+                            let observer_display = if is_self {
+                                format!("👁 {} (You)", observer.player_id)
+                            } else {
+                                format!("👁 {}", observer.player_id)
+                            };
+
+                            ui.label(observer_display);
+
+                            if is_host && !is_self
+                                && ui.button("❌ Kick").clicked() {
+                                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
+                                        player_id: observer.player_id.clone(),
+                                    }));
+                                }
+                        });
+                    }
                 }
 
                 ui.separator();
@@ -583,11 +620,25 @@ impl MenuApp {
                 let can_start = is_host && all_ready && has_enough_players;
 
                 ui.horizontal(|ui| {
-                    let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
-                    if ui.button(button_text).clicked() {
-                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
-                            ready: !current_ready,
-                        }));
+                    if is_self_observer {
+                        if !lobby_is_full {
+                            if ui.button("👤 Become Player (Ctrl+P)").clicked() {
+                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
+                            }
+                        } else {
+                            ui.add_enabled(false, egui::Button::new("👤 Become Player (Lobby Full)"));
+                        }
+                    } else {
+                        let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
+                        if ui.button(button_text).clicked() {
+                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                                ready: !current_ready,
+                            }));
+                        }
+
+                        if ui.button("👁 Become Observer (Ctrl+O)").clicked() {
+                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
+                        }
                     }
 
                     if ui.button("🚪 Leave Lobby (Esc)").clicked() {
@@ -615,10 +666,16 @@ impl MenuApp {
                     if i.key_pressed(egui::Key::Escape) {
                         let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
-                    if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
+                    if !is_self_observer && i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
                         let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
                             ready: !current_ready,
                         }));
+                    }
+                    if !is_self_observer && i.modifiers.ctrl && i.key_pressed(egui::Key::O) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
+                    }
+                    if is_self_observer && !lobby_is_full && i.modifiers.ctrl && i.key_pressed(egui::Key::P) {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
                     }
                     if can_start && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
                         let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
@@ -800,7 +857,7 @@ impl eframe::App for MenuApp {
                 AppState::InLobby { details, event_log } => {
                     self.render_in_lobby(ui, ctx, &details, &event_log);
                 }
-                AppState::InGame { session_id, game_state } => {
+                AppState::InGame { session_id, game_state, is_observer } => {
                     if self.game_ui.is_none()
                         && let Some(ref state) = game_state {
                             match &state.state {
@@ -814,10 +871,10 @@ impl eframe::App for MenuApp {
                             }
                         }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
+                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, &self.menu_command_tx);
                     }
                 }
-                AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status } => {
+                AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status, is_observer } => {
                     if self.game_ui.is_none() {
                         match game_info {
                             crate::state::GameEndInfo::Snake(_) => {
@@ -831,10 +888,10 @@ impl eframe::App for MenuApp {
                     if let Some(game_ui) = &mut self.game_ui {
                         match game_info {
                             crate::state::GameEndInfo::Snake(snake_info) => {
-                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, &self.menu_command_tx);
+                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, is_observer, &self.menu_command_tx);
                             }
                             crate::state::GameEndInfo::TicTacToe(ttt_info) => {
-                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, &self.menu_command_tx);
+                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, &self.menu_command_tx);
                             }
                         }
                     }

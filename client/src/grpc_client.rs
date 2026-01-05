@@ -144,9 +144,10 @@ pub async fn grpc_client_task(
                                     settings,
                                 }))
                             }
-                            MenuCommand::JoinLobby { lobby_id } => {
+                            MenuCommand::JoinLobby { lobby_id, join_as_observer } => {
                                 Some(client_message::Message::JoinLobby(JoinLobbyRequest {
                                     lobby_id,
+                                    join_as_observer,
                                 }))
                             }
                             MenuCommand::LeaveLobby => {
@@ -178,6 +179,17 @@ pub async fn grpc_client_task(
                             }
                             MenuCommand::KickFromLobby { player_id } => {
                                 Some(client_message::Message::KickFromLobby(KickFromLobbyRequest {
+                                    player_id,
+                                }))
+                            }
+                            MenuCommand::BecomeObserver => {
+                                Some(client_message::Message::BecomeObserver(common::BecomeObserverFromPlayerRequest {}))
+                            }
+                            MenuCommand::BecomePlayer => {
+                                Some(client_message::Message::BecomePlayer(common::BecomePlayerFromObserverRequest {}))
+                            }
+                            MenuCommand::MakePlayerObserver { player_id } => {
+                                Some(client_message::Message::MakeObserver(common::MakePlayerObserverRequest {
                                     player_id,
                                 }))
                             }
@@ -356,9 +368,16 @@ pub async fn grpc_client_task(
                                 }
                                 common::server_message::Message::GameStarting(notification) => {
                                     log!("Game starting! Session ID: {}", notification.session_id);
+                                    let is_observer = match shared_state.get_state() {
+                                        AppState::InLobby { details, .. } => {
+                                            details.observers.iter().any(|o| o.player_id == client_id)
+                                        }
+                                        _ => false,
+                                    };
                                     shared_state.set_state(AppState::InGame {
                                         session_id: notification.session_id.clone(),
                                         game_state: None,
+                                        is_observer,
                                     });
                                 }
                                 common::server_message::Message::GameState(state) => {
@@ -370,9 +389,9 @@ pub async fn grpc_client_task(
                                         .unwrap_or_else(|| "None".to_string());
                                     log!("Game over! Winner: {}", winner_name);
 
-                                    let last_game_state = match shared_state.get_state() {
-                                        AppState::InGame { game_state, .. } => game_state,
-                                        _ => None,
+                                    let (last_game_state, is_observer) = match shared_state.get_state() {
+                                        AppState::InGame { game_state, is_observer, .. } => (game_state, is_observer),
+                                        _ => (None, false),
                                     };
 
                                     let game_info = match &game_over.game_info {
@@ -393,6 +412,7 @@ pub async fn grpc_client_task(
                                         last_game_state,
                                         game_info,
                                         play_again_status: PlayAgainStatus::NotAvailable,
+                                        is_observer,
                                     });
                                 }
                                 common::server_message::Message::PlayAgainStatus(notification) => {
@@ -454,6 +474,16 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::LobbyJoined(_) => {
                                 }
                                 common::server_message::Message::Kicked(_) => {
+                                }
+                                common::server_message::Message::PlayerBecameObserver(notification) => {
+                                    if let Some(player) = &notification.player {
+                                        shared_state.add_event_log(format!("{} became an observer", player.player_id));
+                                    }
+                                }
+                                common::server_message::Message::ObserverBecamePlayer(notification) => {
+                                    if let Some(observer) = &notification.observer {
+                                        shared_state.add_event_log(format!("{} became a player", observer.player_id));
+                                    }
                                 }
                             }
                         }

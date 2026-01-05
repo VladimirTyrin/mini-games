@@ -232,6 +232,27 @@ impl GameService for GrpcService {
                                         Self::send_not_connected_error(&tx, "send in-lobby chat message").await;
                                     }
                                 }
+                                client_message::Message::BecomeObserver(_) => {
+                                    if let Some(client_id) = &client_id_opt {
+                                        Self::handle_become_observer(&lobby_manager, &broadcaster, &tx, client_id).await;
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "become observer").await;
+                                    }
+                                }
+                                client_message::Message::BecomePlayer(_) => {
+                                    if let Some(client_id) = &client_id_opt {
+                                        Self::handle_become_player(&lobby_manager, &broadcaster, &tx, client_id).await;
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "become player").await;
+                                    }
+                                }
+                                client_message::Message::MakeObserver(req) => {
+                                    if let Some(client_id) = &client_id_opt {
+                                        Self::handle_make_player_observer(&lobby_manager, &broadcaster, &tx, client_id, req).await;
+                                    } else {
+                                        Self::send_not_connected_error(&tx, "make player observer").await;
+                                    }
+                                }
                             }
                         }
                     }
@@ -354,7 +375,7 @@ impl GrpcService {
     ) {
         let lobby_id = common::LobbyId::new(request.lobby_id);
 
-        match lobby_manager.join_lobby(lobby_id, client_id.clone()).await {
+        match lobby_manager.join_lobby(lobby_id, client_id.clone(), request.join_as_observer).await {
             Ok(lobby_details) => {
                 let response = ServerMessage {
                     message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
@@ -421,13 +442,10 @@ impl GrpcService {
                             &kicked_players,
                             ServerMessage {
                                 message: Some(server_message::Message::LobbyClosed(common::LobbyClosedNotification {
-                                    message: "Host left the lobby".to_string(),
+                                    message: "Lobby closed".to_string(),
                                 })),
                             },
                         ).await;
-                        Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
-                    }
-                    LobbyStateAfterLeave::LobbyEmpty => {
                         Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                     }
                     LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
@@ -614,6 +632,127 @@ impl GrpcService {
         }
     }
 
+    async fn handle_become_observer(
+        lobby_manager: &LobbyManager,
+        broadcaster: &Broadcaster,
+        tx: &mpsc::Sender<Result<ServerMessage, Status>>,
+        client_id: &ClientId,
+    ) {
+        match lobby_manager.become_observer(client_id).await {
+            Ok(lobby_details) => {
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::PlayerBecameObserver(common::PlayerBecameObserverNotification {
+                            player: Some(common::PlayerIdentity {
+                                player_id: client_id.to_string(),
+                                is_bot: false,
+                            }),
+                        })),
+                    },
+                ).await;
+
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
+                            details: Some(lobby_details.clone()),
+                        })),
+                    },
+                ).await;
+            }
+            Err(e) => {
+                let error_msg = ServerMessage {
+                    message: Some(server_message::Message::Error(common::ErrorResponse {
+                        message: e,
+                    })),
+                };
+                let _ = tx.send(Ok(error_msg)).await;
+            }
+        }
+    }
+
+    async fn handle_become_player(
+        lobby_manager: &LobbyManager,
+        broadcaster: &Broadcaster,
+        tx: &mpsc::Sender<Result<ServerMessage, Status>>,
+        client_id: &ClientId,
+    ) {
+        match lobby_manager.become_player(client_id).await {
+            Ok(lobby_details) => {
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::ObserverBecamePlayer(common::ObserverBecamePlayerNotification {
+                            observer: Some(common::PlayerIdentity {
+                                player_id: client_id.to_string(),
+                                is_bot: false,
+                            }),
+                        })),
+                    },
+                ).await;
+
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
+                            details: Some(lobby_details.clone()),
+                        })),
+                    },
+                ).await;
+            }
+            Err(e) => {
+                let error_msg = ServerMessage {
+                    message: Some(server_message::Message::Error(common::ErrorResponse {
+                        message: e,
+                    })),
+                };
+                let _ = tx.send(Ok(error_msg)).await;
+            }
+        }
+    }
+
+    async fn handle_make_player_observer(
+        lobby_manager: &LobbyManager,
+        broadcaster: &Broadcaster,
+        tx: &mpsc::Sender<Result<ServerMessage, Status>>,
+        client_id: &ClientId,
+        request: common::MakePlayerObserverRequest,
+    ) {
+        match lobby_manager.make_player_observer(client_id, request.player_id.clone()).await {
+            Ok(lobby_details) => {
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::PlayerBecameObserver(common::PlayerBecameObserverNotification {
+                            player: Some(common::PlayerIdentity {
+                                player_id: request.player_id,
+                                is_bot: false,
+                            }),
+                        })),
+                    },
+                ).await;
+
+                broadcaster.broadcast_to_lobby(
+                    &lobby_details,
+                    ServerMessage {
+                        message: Some(server_message::Message::LobbyUpdate(common::LobbyUpdateNotification {
+                            details: Some(lobby_details.clone()),
+                        })),
+                    },
+                ).await;
+            }
+            Err(e) => {
+                let error_msg = ServerMessage {
+                    message: Some(server_message::Message::Error(common::ErrorResponse {
+                        message: e,
+                    })),
+                };
+                let _ = tx.send(Ok(error_msg)).await;
+            }
+        }
+    }
+
     async fn handle_start_game(
         lobby_manager: &LobbyManager,
         broadcaster: &Broadcaster,
@@ -778,13 +917,10 @@ impl GrpcService {
                         &kicked_players,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyClosed(common::LobbyClosedNotification {
-                                message: "Host left the lobby".to_string(),
+                                message: "Lobby closed".to_string(),
                             })),
                         },
                     ).await;
-                    Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
-                }
-                LobbyStateAfterLeave::LobbyEmpty => {
                     Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
                 }
                 LobbyStateAfterLeave::LobbyStillActive { updated_details } => {

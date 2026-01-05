@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -31,6 +31,7 @@ struct GameSession {
     state: Arc<Mutex<GameStateEnum>>,
     tick: Arc<Mutex<u64>>,
     bots: Arc<Mutex<HashMap<BotId, BotType>>>,
+    observers: Arc<Mutex<HashSet<PlayerId>>>,
     initial_player_count: usize,
 }
 
@@ -40,6 +41,7 @@ impl std::fmt::Debug for GameSession {
             .field("state", &self.state)
             .field("tick", &self.tick)
             .field("bots", &self.bots)
+            .field("observers", &self.observers)
             .field("initial_player_count", &self.initial_player_count)
             .finish()
     }
@@ -81,6 +83,7 @@ impl GameSessionManager {
         };
 
         let human_players: Vec<PlayerId> = lobby.players.keys().cloned().collect();
+        let observers: HashSet<PlayerId> = lobby.observers.clone();
         let bots: HashMap<BotId, BotType> = lobby.bots.clone();
 
         let (field_width, field_height, wall_collision_mode, dead_snake_behavior, tick_interval, max_food_count, food_spawn_probability) = match &lobby.settings {
@@ -107,6 +110,7 @@ impl GameSessionManager {
                 Self::create_tictactoe_session(
                     session_id,
                     human_players,
+                    observers,
                     bots,
                     ttt_settings,
                     self.sessions.clone(),
@@ -147,11 +151,13 @@ impl GameSessionManager {
         let tick = Arc::new(Mutex::new(0u64));
         let bot_count = bots.len();
         let bots_arc = Arc::new(Mutex::new(bots));
+        let observers_arc = Arc::new(Mutex::new(observers));
 
         let initial_player_count = human_players.len() + bot_count;
         let state_clone = state.clone();
         let tick_clone = tick.clone();
         let bots_clone = bots_arc.clone();
+        let observers_clone = observers_arc.clone();
         let session_id_clone = session_id.clone();
         let broadcaster_clone = self.broadcaster.clone();
         let lobby_manager_clone = self.lobby_manager.clone();
@@ -245,9 +251,12 @@ impl GameSessionManager {
                     )),
                 };
 
-                let client_ids: Vec<ClientId> = human_players_clone.iter()
+                let observers_set = observers_clone.lock().await;
+                let mut client_ids: Vec<ClientId> = human_players_clone.iter()
                     .map(|p| ClientId::new(p.to_string()))
                     .collect();
+                client_ids.extend(observers_set.iter().map(|p| ClientId::new(p.to_string())));
+                drop(observers_set);
                 broadcaster_clone.broadcast_to_clients(&client_ids, game_state_msg).await;
 
                 let alive_count = state.snakes.values().filter(|s| s.is_alive()).count();
@@ -378,6 +387,7 @@ impl GameSessionManager {
             state,
             tick,
             bots: bots_arc,
+            observers: observers_arc,
             initial_player_count,
         };
 
@@ -453,6 +463,7 @@ impl GameSessionManager {
     async fn create_tictactoe_session(
         session_id: SessionId,
         human_players: Vec<PlayerId>,
+        observers: HashSet<PlayerId>,
         bots: HashMap<BotId, BotType>,
         ttt_settings: &common::proto::tictactoe::TicTacToeLobbySettings,
         sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
@@ -492,12 +503,14 @@ impl GameSessionManager {
         let tick = Arc::new(Mutex::new(0u64));
         let bot_count = bots.len();
         let bots_arc = Arc::new(Mutex::new(bots));
+        let observers_arc = Arc::new(Mutex::new(observers));
         let initial_player_count = human_players.len() + bot_count;
 
         let session = GameSession {
             state: state.clone(),
             tick,
             bots: bots_arc.clone(),
+            observers: observers_arc.clone(),
             initial_player_count,
         };
 
@@ -515,11 +528,12 @@ impl GameSessionManager {
 
         let state_clone = state.clone();
         let bots_clone = bots_arc.clone();
+        let observers_clone = observers_arc.clone();
         let session_id_clone = session_id.clone();
         let human_players_clone = human_players.clone();
 
         tokio::spawn(async move {
-            Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &human_players_clone, &broadcaster).await;
+            Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &observers_clone, &human_players_clone, &broadcaster).await;
 
             {
                 let bots = bots_clone.lock().await;
@@ -569,7 +583,7 @@ impl GameSessionManager {
                                 drop(state_guard);
                                 drop(bots_map);
 
-                                Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &human_players_clone, &broadcaster).await;
+                                Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &observers_clone, &human_players_clone, &broadcaster).await;
 
                                 let mut state_guard = state_clone.lock().await;
                                 let state = match &mut *state_guard {
@@ -660,9 +674,12 @@ impl GameSessionManager {
                 )),
             };
 
-            let client_ids: Vec<ClientId> = human_players_clone.iter()
+            let observers_set = observers_clone.lock().await;
+            let mut client_ids: Vec<ClientId> = human_players_clone.iter()
                 .map(|p| ClientId::new(p.to_string()))
                 .collect();
+            client_ids.extend(observers_set.iter().map(|p| ClientId::new(p.to_string())));
+            drop(observers_set);
             broadcaster.broadcast_to_clients(&client_ids, game_over_msg).await;
 
             drop(state_guard);
@@ -722,6 +739,7 @@ impl GameSessionManager {
     async fn broadcast_tictactoe_state(
         state: &Arc<Mutex<GameStateEnum>>,
         bots: &Arc<Mutex<HashMap<BotId, BotType>>>,
+        observers: &Arc<Mutex<HashSet<PlayerId>>>,
         human_players: &[PlayerId],
         broadcaster: &Broadcaster,
     ) {
@@ -748,9 +766,12 @@ impl GameSessionManager {
             )),
         };
 
-        let client_ids: Vec<ClientId> = human_players.iter()
+        let observers_set = observers.lock().await;
+        let mut client_ids: Vec<ClientId> = human_players.iter()
             .map(|p| ClientId::new(p.to_string()))
             .collect();
+        client_ids.extend(observers_set.iter().map(|p| ClientId::new(p.to_string())));
+        drop(observers_set);
         broadcaster.broadcast_to_clients(&client_ids, game_state_msg).await;
     }
 
@@ -768,8 +789,8 @@ impl GameSessionManager {
         drop(mapping);
 
         let sessions = self.sessions.lock().await;
-        let (state_arc, bots_arc) = match sessions.get(&session_id) {
-            Some(session) => (session.state.clone(), session.bots.clone()),
+        let (state_arc, bots_arc, observers_arc) = match sessions.get(&session_id) {
+            Some(session) => (session.state.clone(), session.bots.clone(), session.observers.clone()),
             None => return,
         };
         drop(sessions);
@@ -791,7 +812,7 @@ impl GameSessionManager {
             None => vec![],
         };
 
-        Self::broadcast_tictactoe_state(&state_arc, &bots_arc, &human_players, &self.broadcaster).await;
+        Self::broadcast_tictactoe_state(&state_arc, &bots_arc, &observers_arc, &human_players, &self.broadcaster).await;
     }
 }
 

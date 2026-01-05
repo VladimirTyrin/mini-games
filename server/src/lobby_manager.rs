@@ -97,6 +97,7 @@ pub struct Lobby {
     pub settings: LobbySettings,
     pub players: HashMap<PlayerId, bool>,
     pub bots: HashMap<BotId, BotType>,
+    pub observers: HashSet<PlayerId>,
     pub in_game: bool,
     pub play_again_votes: HashSet<PlayerId>,
     pub original_game_players: HashSet<PlayerId>,
@@ -105,7 +106,6 @@ pub struct Lobby {
 #[derive(Debug)]
 pub enum LobbyStateAfterLeave {
     LobbyStillActive { updated_details: LobbyDetails },
-    LobbyEmpty,
     HostLeft { kicked_players: Vec<ClientId> },
 }
 
@@ -128,6 +128,7 @@ impl Lobby {
             settings,
             players: HashMap::new(),
             bots: HashMap::new(),
+            observers: HashSet::new(),
             in_game: false,
             play_again_votes: HashSet::new(),
             original_game_players: HashSet::new(),
@@ -140,6 +141,7 @@ impl Lobby {
             lobby_name: self.name.clone(),
             current_players: (self.players.len() + self.bots.len()) as u32,
             max_players: self.max_players,
+            observer_count: self.observers.len() as u32,
             settings: self.settings.to_info_proto(),
         }
     }
@@ -164,6 +166,13 @@ impl Lobby {
             });
         }
 
+        let observers: Vec<common::PlayerIdentity> = self.observers.iter()
+            .map(|id| common::PlayerIdentity {
+                player_id: id.to_string(),
+                is_bot: false,
+            })
+            .collect();
+
         let creator_identity = common::PlayerIdentity {
             player_id: self.creator_id.to_string(),
             is_bot: false,
@@ -174,6 +183,7 @@ impl Lobby {
             lobby_name: self.name.clone(),
             players: all_players,
             max_players: self.max_players,
+            observers,
             settings: self.settings.to_proto(),
             creator: Some(creator_identity),
         }
@@ -220,6 +230,40 @@ impl Lobby {
 
     fn has_ever_started(&self) -> bool {
         !self.original_game_players.is_empty()
+    }
+
+    fn add_observer(&mut self, player_id: PlayerId) -> bool {
+        if self.players.contains_key(&player_id) || self.observers.contains(&player_id) {
+            return false;
+        }
+        self.observers.insert(player_id);
+        true
+    }
+
+    fn remove_observer(&mut self, player_id: &PlayerId) -> bool {
+        self.observers.remove(player_id)
+    }
+
+    fn player_to_observer(&mut self, player_id: &PlayerId) -> bool {
+        if self.players.remove(player_id).is_some() {
+            self.observers.insert(player_id.clone());
+            true
+        } else {
+            false
+        }
+    }
+
+    fn observer_to_player(&mut self, player_id: &PlayerId) -> bool {
+        if !self.observers.contains(player_id) {
+            return false;
+        }
+        let current_player_count = self.players.len() + self.bots.len();
+        if current_player_count >= self.max_players as usize {
+            return false;
+        }
+        self.observers.remove(player_id);
+        self.players.insert(player_id.clone(), false);
+        true
     }
 
     fn get_pending_for_play_again(&self) -> Vec<String> {
@@ -317,7 +361,7 @@ impl LobbyManager {
         state.lobbies.get(lobby_id).map(|lobby| lobby.to_details())
     }
 
-    pub async fn join_lobby(&self, lobby_id: LobbyId, client_id: ClientId) -> Result<LobbyDetails, String> {
+    pub async fn join_lobby(&self, lobby_id: LobbyId, client_id: ClientId, join_as_observer: bool) -> Result<LobbyDetails, String> {
         let mut state = self.state.lock().await;
 
         if state.client_to_lobby.contains_key(&client_id) {
@@ -331,8 +375,15 @@ impl LobbyManager {
         }
 
         let player_id = PlayerId::new(client_id.to_string());
-        if !lobby.add_player(player_id) {
-            return Err("Lobby is full or already joined".to_string());
+
+        if join_as_observer {
+            if !lobby.add_observer(player_id) {
+                return Err("Already in lobby".to_string());
+            }
+        } else {
+            if !lobby.add_player(player_id) {
+                return Err("Lobby is full or already joined".to_string());
+            }
         }
 
         let lobby_details = lobby.to_details();
@@ -352,17 +403,29 @@ impl LobbyManager {
             let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
             let is_host = &lobby.creator_id == client_id;
             let player_id = PlayerId::new(client_id.to_string());
-            lobby.remove_player(&player_id);
+
+            let was_observer = lobby.remove_observer(&player_id);
+            if !was_observer {
+                lobby.remove_player(&player_id);
+            }
 
             if is_host {
                 let kicked_players: Vec<ClientId> = lobby.players.keys()
                     .map(|player_id| ClientId::new(player_id.to_string()))
                     .collect();
+                let kicked_observers: Vec<ClientId> = lobby.observers.iter()
+                    .map(|player_id| ClientId::new(player_id.to_string()))
+                    .collect();
                 LobbyStateAfterLeave::HostLeft {
-                    kicked_players,
+                    kicked_players: kicked_players.into_iter().chain(kicked_observers).collect(),
                 }
             } else if lobby.players.is_empty() && lobby.bots.is_empty() {
-                LobbyStateAfterLeave::LobbyEmpty
+                let kicked_observers: Vec<ClientId> = lobby.observers.iter()
+                    .map(|player_id| ClientId::new(player_id.to_string()))
+                    .collect();
+                LobbyStateAfterLeave::HostLeft {
+                    kicked_players: kicked_observers,
+                }
             } else {
                 LobbyStateAfterLeave::LobbyStillActive {
                     updated_details: lobby.to_details(),
@@ -374,13 +437,10 @@ impl LobbyManager {
 
         match &result {
             LobbyStateAfterLeave::HostLeft { kicked_players } => {
-                for client_id in kicked_players {
-                    state.client_to_lobby.remove(client_id);
-                    state.clients_not_in_lobby.insert(client_id.clone());
+                for kicked_id in kicked_players {
+                    state.client_to_lobby.remove(kicked_id);
+                    state.clients_not_in_lobby.insert(kicked_id.clone());
                 }
-                state.lobbies.remove(&lobby_id);
-            }
-            LobbyStateAfterLeave::LobbyEmpty => {
                 state.lobbies.remove(&lobby_id);
             }
             LobbyStateAfterLeave::LobbyStillActive { .. } => {}
@@ -535,6 +595,7 @@ impl LobbyManager {
         }
 
         let player_id = PlayerId::new(client_id.to_string());
+
         if !lobby.original_game_players.contains(&player_id) {
             return Err("Player was not in the original game".to_string());
         }
@@ -578,6 +639,53 @@ impl LobbyManager {
             ready_player_ids,
             pending_player_ids
         })
+    }
+
+    pub async fn become_observer(&self, client_id: &ClientId) -> Result<LobbyDetails, String> {
+        let mut state = self.state.lock().await;
+        let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        let player_id = PlayerId::new(client_id.to_string());
+        if !lobby.player_to_observer(&player_id) {
+            return Err("Not a player in this lobby".to_string());
+        }
+
+        Ok(lobby.to_details())
+    }
+
+    pub async fn become_player(&self, client_id: &ClientId) -> Result<LobbyDetails, String> {
+        let mut state = self.state.lock().await;
+        let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        let player_id = PlayerId::new(client_id.to_string());
+        if !lobby.observer_to_player(&player_id) {
+            return Err("Cannot become player: not an observer or lobby is full".to_string());
+        }
+
+        Ok(lobby.to_details())
+    }
+
+    pub async fn make_player_observer(&self, client_id: &ClientId, target_id: String) -> Result<LobbyDetails, String> {
+        let mut state = self.state.lock().await;
+        let lobby_id = state.client_to_lobby.get(client_id).cloned().ok_or("Not in a lobby")?;
+        let lobby = state.lobbies.get_mut(&lobby_id).ok_or("Lobby not found")?;
+
+        if &lobby.creator_id != client_id {
+            return Err("Only the host can make players observers".to_string());
+        }
+
+        if lobby.creator_id.to_string() == target_id {
+            return Err("Cannot make host an observer".to_string());
+        }
+
+        let target_player_id = PlayerId::new(target_id);
+        if !lobby.player_to_observer(&target_player_id) {
+            return Err("Target is not a player in this lobby".to_string());
+        }
+
+        Ok(lobby.to_details())
     }
 
     pub async fn get_client_lobby(&self, client_id: &ClientId) -> Option<LobbyDetails> {

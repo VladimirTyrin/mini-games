@@ -11,47 +11,60 @@ service GameService {
 
 message ClientMessage {
     string version = 1;
+
     oneof message {
-        ConnectRequest connect = 2;
-        DisconnectRequest disconnect = 3;
-        ListLobbiesRequest list_lobbies = 4;
-        CreateLobbyRequest create_lobby = 5;
-        JoinLobbyRequest join_lobby = 6;
-        LeaveLobbyRequest leave_lobby = 7;
-        MarkReadyRequest mark_ready = 8;
-        StartGameRequest start_game = 9;
-        PlayAgainRequest play_again = 10;
-        AddBotRequest add_bot = 11;
-        KickFromLobbyRequest kick_from_lobby = 12;
-        LobbyListChatMessage lobby_list_chat = 13;
-        InLobbyChatMessage in_lobby_chat = 14;
-        PingRequest ping = 15;
-        InGameCommand in_game = 20;
+        ConnectRequest connect = 10;
+        DisconnectRequest disconnect = 11;
+        ListLobbiesRequest list_lobbies = 12;
+        CreateLobbyRequest create_lobby = 13;
+        JoinLobbyRequest join_lobby = 14;
+        LeaveLobbyRequest leave_lobby = 15;
+        MarkReadyRequest mark_ready = 16;
+        StartGameRequest start_game = 17;
+        PlayAgainRequest play_again = 18;
+        AddBotRequest add_bot = 19;
+        KickFromLobbyRequest kick_from_lobby = 20;
+        LobbyListChatMessage lobby_list_chat = 21;
+        InLobbyChatMessage in_lobby_chat = 22;
+        PingRequest ping = 23;
+
+        // Observer commands: 30-39
+        BecomeObserverFromPlayerRequest become_observer = 30;
+        BecomePlayerFromObserverRequest become_player = 31;
+        MakePlayerObserverRequest make_observer = 32;
+
+        // In-game: 100+
+        InGameCommand in_game = 100;
     }
 }
 
 message ServerMessage {
     oneof message {
         ConnectResponse connect = 1;
-        ErrorResponse error = 2;
-        LobbyListResponse lobby_list = 3;
-        LobbyCreatedNotification lobby_created = 4;
-        LobbyJoinedNotification lobby_joined = 5;
-        LobbyUpdateNotification lobby_update = 6;
-        PlayerJoinedNotification player_joined = 7;
-        PlayerLeftNotification player_left = 8;
-        PlayerReadyNotification player_ready = 9;
-        GameStartingNotification game_starting = 10;
-        GameOverNotification game_over = 11;
-        KickedFromLobbyNotification kicked = 12;
-        ServerShuttingDownNotification shutdown = 13;
-        PlayAgainStatusNotification play_again_status = 14;
-        LobbyListChatNotification lobby_list_chat = 15;
-        InLobbyChatNotification in_lobby_chat = 16;
-        PongResponse pong = 17;
-        LobbyListUpdateNotification lobby_list_update = 18;
-        LobbyClosedNotification lobby_closed = 19;
-        GameStateUpdate game_state = 20;
+
+        LobbyListResponse lobby_list = 10;
+        LobbyCreatedNotification lobby_created = 11;
+        LobbyJoinedNotification lobby_joined = 12;
+        LobbyUpdateNotification lobby_update = 13;
+        PlayerJoinedNotification player_joined = 14;
+        PlayerLeftNotification player_left = 15;
+        PlayerReadyNotification player_ready = 16;
+        KickedFromLobbyNotification kicked = 17;
+        ServerShuttingDownNotification shutdown = 18;
+        PlayAgainStatusNotification play_again_status = 19;
+        LobbyListChatNotification lobby_list_chat = 20;
+        InLobbyChatNotification in_lobby_chat = 21;
+        PongResponse pong = 22;
+        LobbyListUpdateNotification lobby_list_update = 23;
+        LobbyClosedNotification lobby_closed = 24;
+        PlayerBecameObserverNotification player_became_observer = 25;
+        ObserverBecamePlayerNotification observer_became_player = 26;
+
+        GameStartingNotification game_starting = 100;
+        GameStateUpdate game_state = 101;
+        GameOverNotification game_over = 102;
+
+        ErrorResponse error = 200;
     }
 }
 
@@ -80,6 +93,7 @@ message LobbyInfo {
     string lobby_name = 2;
     uint32 current_players = 3;
     uint32 max_players = 4;
+    uint32 observer_count = 5;
     oneof settings {
         snake.SnakeLobbySettings snake = 10;
         tictactoe.TicTacToeLobbySettings tictactoe = 11;
@@ -97,6 +111,7 @@ message CreateLobbyRequest {
 
 message JoinLobbyRequest {
     string lobby_id = 1;
+    bool join_as_observer = 2;
 }
 
 message LeaveLobbyRequest {}
@@ -118,6 +133,22 @@ message AddBotRequest {
 
 message KickFromLobbyRequest {
     string player_id = 1;
+}
+
+message BecomeObserverFromPlayerRequest {}
+
+message BecomePlayerFromObserverRequest {}
+
+message MakePlayerObserverRequest {
+    string player_id = 1;
+}
+
+message PlayerBecameObserverNotification {
+    PlayerIdentity player = 1;
+}
+
+message ObserverBecamePlayerNotification {
+    PlayerIdentity observer = 1;
 }
 
 message LobbyListChatMessage {
@@ -163,6 +194,7 @@ message LobbyDetails {
     uint32 max_players = 3;
     repeated PlayerInfo players = 4;
     PlayerIdentity creator = 5;
+    repeated PlayerIdentity observers = 6;
     oneof settings {
         snake.SnakeLobbySettings snake = 10;
         tictactoe.TicTacToeLobbySettings tictactoe = 11;
