@@ -1,7 +1,6 @@
 use super::board::get_available_moves;
 use super::game_state::{Mark, TicTacToeGameState};
 use super::types::Position;
-use super::win_detector::check_win;
 use common::proto::tictactoe::TicTacToeBotType;
 use rand::prelude::IndexedRandom;
 
@@ -43,16 +42,16 @@ fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
     }
 
     let depth_limit = calculate_depth_limit(&input.board);
+    let mut board = input.board.clone();
 
     let mut best_move = None;
     let mut best_score = i32::MIN;
 
     for (x, y) in available_moves {
-        let mut test_board = input.board.clone();
-        test_board[y][x] = bot_mark;
+        board[y][x] = bot_mark;
 
         let score = minimax(
-            &test_board,
+            &mut board,
             input.win_count,
             0,
             depth_limit,
@@ -60,7 +59,11 @@ fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
             bot_mark,
             i32::MIN,
             i32::MAX,
+            x,
+            y,
         );
+
+        board[y][x] = Mark::Empty;
 
         if score > best_score {
             best_score = score;
@@ -91,8 +94,59 @@ fn calculate_depth_limit(board: &[Vec<Mark>]) -> usize {
     }
 }
 
+fn check_win_at(board: &[Vec<Mark>], win_count: usize, x: usize, y: usize) -> Option<Mark> {
+    let mark = board[y][x];
+    if mark == Mark::Empty {
+        return None;
+    }
+
+    let height = board.len();
+    let width = board[0].len();
+    let win_count_i = win_count as isize;
+
+    let directions: [(isize, isize); 4] = [(1, 0), (0, 1), (1, 1), (1, -1)];
+
+    for (dx, dy) in directions {
+        let mut count = 1;
+
+        let mut i = 1isize;
+        while i < win_count_i {
+            let nx = x as isize + dx * i;
+            let ny = y as isize + dy * i;
+            if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                break;
+            }
+            if board[ny as usize][nx as usize] != mark {
+                break;
+            }
+            count += 1;
+            i += 1;
+        }
+
+        let mut i = 1isize;
+        while i < win_count_i {
+            let nx = x as isize - dx * i;
+            let ny = y as isize - dy * i;
+            if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                break;
+            }
+            if board[ny as usize][nx as usize] != mark {
+                break;
+            }
+            count += 1;
+            i += 1;
+        }
+
+        if count >= win_count {
+            return Some(mark);
+        }
+    }
+
+    None
+}
+
 fn minimax(
-    board: &[Vec<Mark>],
+    board: &mut [Vec<Mark>],
     win_count: usize,
     depth: usize,
     max_depth: usize,
@@ -100,18 +154,15 @@ fn minimax(
     bot_mark: Mark,
     mut alpha: i32,
     mut beta: i32,
+    last_x: usize,
+    last_y: usize,
 ) -> i32 {
-    if let Some(winner) = check_win(board, win_count) {
+    if let Some(winner) = check_win_at(board, win_count, last_x, last_y) {
         return if winner == bot_mark {
             1000 - depth as i32
         } else {
             -1000 + depth as i32
         };
-    }
-
-    let available_moves = get_available_moves(board);
-    if available_moves.is_empty() {
-        return 0;
     }
 
     if depth >= max_depth {
@@ -120,53 +171,67 @@ fn minimax(
 
     if is_maximizing {
         let mut max_eval = i32::MIN;
-        for (x, y) in available_moves {
-            let mut test_board = board.to_vec();
-            test_board[y][x] = bot_mark;
+        for y in 0..board.len() {
+            for x in 0..board[0].len() {
+                if board[y][x] != Mark::Empty {
+                    continue;
+                }
 
-            let eval = minimax(
-                &test_board,
-                win_count,
-                depth + 1,
-                max_depth,
-                false,
-                bot_mark,
-                alpha,
-                beta,
-            );
+                board[y][x] = bot_mark;
+                let eval = minimax(
+                    board,
+                    win_count,
+                    depth + 1,
+                    max_depth,
+                    false,
+                    bot_mark,
+                    alpha,
+                    beta,
+                    x,
+                    y,
+                );
+                board[y][x] = Mark::Empty;
 
-            max_eval = max_eval.max(eval);
-            alpha = alpha.max(eval);
-            if beta <= alpha {
-                break;
+                max_eval = max_eval.max(eval);
+                alpha = alpha.max(eval);
+                if beta <= alpha {
+                    return max_eval;
+                }
             }
         }
-        max_eval
+        if max_eval == i32::MIN { 0 } else { max_eval }
     } else {
         let opponent_mark = bot_mark.opponent().unwrap();
         let mut min_eval = i32::MAX;
-        for (x, y) in available_moves {
-            let mut test_board = board.to_vec();
-            test_board[y][x] = opponent_mark;
+        for y in 0..board.len() {
+            for x in 0..board[0].len() {
+                if board[y][x] != Mark::Empty {
+                    continue;
+                }
 
-            let eval = minimax(
-                &test_board,
-                win_count,
-                depth + 1,
-                max_depth,
-                true,
-                bot_mark,
-                alpha,
-                beta,
-            );
+                board[y][x] = opponent_mark;
+                let eval = minimax(
+                    board,
+                    win_count,
+                    depth + 1,
+                    max_depth,
+                    true,
+                    bot_mark,
+                    alpha,
+                    beta,
+                    x,
+                    y,
+                );
+                board[y][x] = Mark::Empty;
 
-            min_eval = min_eval.min(eval);
-            beta = beta.min(eval);
-            if beta <= alpha {
-                break;
+                min_eval = min_eval.min(eval);
+                beta = beta.min(eval);
+                if beta <= alpha {
+                    return min_eval;
+                }
             }
         }
-        min_eval
+        if min_eval == i32::MAX { 0 } else { min_eval }
     }
 }
 
