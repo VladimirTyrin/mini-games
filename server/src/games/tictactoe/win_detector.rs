@@ -1,10 +1,11 @@
 use super::game_state::Mark;
+use super::types::{Position, WinningLine};
 
 pub fn check_win(board: &[Vec<Mark>], win_count: usize) -> Option<Mark> {
-    check_win_with_line(board, win_count).map(|(mark, _)| mark)
+    check_win_with_line(board, win_count).map(|line| line.mark)
 }
 
-pub fn check_win_with_line(board: &[Vec<Mark>], win_count: usize) -> Option<(Mark, (u32, u32, u32, u32))> {
+pub fn check_win_with_line(board: &[Vec<Mark>], win_count: usize) -> Option<WinningLine> {
     let height = board.len();
     if height == 0 {
         return None;
@@ -19,22 +20,24 @@ pub fn check_win_with_line(board: &[Vec<Mark>], win_count: usize) -> Option<(Mar
             }
 
             if check_horizontal(board, x, y, mark, win_count) {
-                let end_x = x + win_count - 1;
-                return Some((mark, (x as u32, y as u32, end_x as u32, y as u32)));
+                let start = Position::new(x, y);
+                let end = Position::new(x + win_count - 1, y);
+                return Some(WinningLine::new(mark, start, end));
             }
             if check_vertical(board, x, y, mark, win_count) {
-                let end_y = y + win_count - 1;
-                return Some((mark, (x as u32, y as u32, x as u32, end_y as u32)));
+                let start = Position::new(x, y);
+                let end = Position::new(x, y + win_count - 1);
+                return Some(WinningLine::new(mark, start, end));
             }
             if check_diagonal_down_right(board, x, y, mark, win_count) {
-                let end_x = x + win_count - 1;
-                let end_y = y + win_count - 1;
-                return Some((mark, (x as u32, y as u32, end_x as u32, end_y as u32)));
+                let start = Position::new(x, y);
+                let end = Position::new(x + win_count - 1, y + win_count - 1);
+                return Some(WinningLine::new(mark, start, end));
             }
             if check_diagonal_down_left(board, x, y, mark, win_count) {
-                let end_x = x - (win_count - 1);
-                let end_y = y + win_count - 1;
-                return Some((mark, (x as u32, y as u32, end_x as u32, end_y as u32)));
+                let start = Position::new(x, y);
+                let end = Position::new(x - (win_count - 1), y + win_count - 1);
+                return Some(WinningLine::new(mark, start, end));
             }
         }
     }

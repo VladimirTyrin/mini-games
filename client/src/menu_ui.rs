@@ -635,13 +635,11 @@ impl MenuApp {
                             egui::ComboBox::from_label("Bot Type")
                                 .selected_text(match self.selected_ttt_bot_type {
                                     common::TicTacToeBotType::TictactoeBotTypeRandom => "Random",
-                                    common::TicTacToeBotType::TictactoeBotTypeWinBlock => "WinBlock",
                                     common::TicTacToeBotType::TictactoeBotTypeMinimax => "Minimax",
                                     _ => "Unknown",
                                 })
                                 .show_ui(ui, |ui| {
                                     ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeRandom, "Random");
-                                    ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeWinBlock, "WinBlock");
                                     ui.selectable_value(&mut self.selected_ttt_bot_type, common::TicTacToeBotType::TictactoeBotTypeMinimax, "Minimax");
                                 });
 

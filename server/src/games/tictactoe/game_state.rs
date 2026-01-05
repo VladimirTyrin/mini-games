@@ -1,5 +1,6 @@
 use common::PlayerId;
 use rand::Rng;
+use super::types::Position;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mark {
@@ -62,7 +63,7 @@ pub struct TicTacToeGameState {
     pub current_player: PlayerId,
     pub current_mark: Mark,
     pub status: GameStatus,
-    pub last_move: Option<(usize, usize)>,
+    pub last_move: Option<Position>,
 }
 
 impl TicTacToeGameState {
@@ -123,7 +124,7 @@ impl TicTacToeGameState {
         }
 
         self.board[y][x] = self.current_mark;
-        self.last_move = Some((x, y));
+        self.last_move = Some(Position::new(x, y));
 
         self.check_game_over();
 
@@ -217,10 +218,7 @@ impl TicTacToeGameState {
                 player_id: self.current_player.to_string(),
                 is_bot: current_player_is_bot,
             }),
-            last_move: self.last_move.map(|(x, y)| common::proto::tictactoe::Position {
-                x: x as u32,
-                y: y as u32,
-            }),
+            last_move: self.last_move.map(|pos| pos.to_proto()),
         }
     }
 }

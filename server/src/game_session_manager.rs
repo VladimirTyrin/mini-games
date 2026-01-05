@@ -562,9 +562,9 @@ impl GameSessionManager {
 
                     if let Some(bot_type) = bot_type {
                         log!("Bot turn detected, calculating move with bot type: {:?}", bot_type);
-                        if let Some((x, y)) = TicTacToeBotController::calculate_move(bot_type, &state) {
-                            log!("Bot placing mark at ({}, {})", x, y);
-                            if let Err(e) = state.place_mark(&current_player, x, y) {
+                        if let Some(pos) = TicTacToeBotController::calculate_move(bot_type, &state) {
+                            log!("Bot placing mark at ({}, {})", pos.x, pos.y);
+                            if let Err(e) = state.place_mark(&current_player, pos.x, pos.y) {
                                 log!("Bot move failed: {}", e);
                             } else {
                                 log!("Bot move succeeded");
@@ -642,14 +642,7 @@ impl GameSessionManager {
             };
 
             let winning_line = if matches!(state.status, TicTacToeGameStatus::XWon | TicTacToeGameStatus::OWon) {
-                check_win_with_line(&state.board, state.win_count).map(|(_, (start_x, start_y, end_x, end_y))| {
-                    common::proto::tictactoe::WinningLine {
-                        start_x,
-                        start_y,
-                        end_x,
-                        end_y,
-                    }
-                })
+                check_win_with_line(&state.board, state.win_count).map(|line| line.to_proto())
             } else {
                 None
             };

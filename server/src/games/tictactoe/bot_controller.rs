@@ -1,5 +1,6 @@
 use super::board::get_available_moves;
 use super::game_state::{Mark, TicTacToeGameState};
+use super::types::Position;
 use super::win_detector::check_win;
 use common::proto::tictactoe::TicTacToeBotType;
 use rand::prelude::IndexedRandom;
@@ -7,14 +8,13 @@ use rand::prelude::IndexedRandom;
 pub fn calculate_move(
     bot_type: TicTacToeBotType,
     state: &TicTacToeGameState,
-) -> Option<(usize, usize)> {
+) -> Option<Position> {
     let available = get_available_moves(&state.board);
     common::log!("Bot calculating move. Board: {}x{}, Available moves: {}",
         state.width, state.height, available.len());
 
     let result = match bot_type {
         TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(state),
-        TicTacToeBotType::TictactoeBotTypeWinBlock => calculate_winblock_move(state),
         TicTacToeBotType::TictactoeBotTypeMinimax => calculate_minimax_move(state),
         _ => None,
     };
@@ -23,42 +23,12 @@ pub fn calculate_move(
     result
 }
 
-fn calculate_random_move(state: &TicTacToeGameState) -> Option<(usize, usize)> {
+fn calculate_random_move(state: &TicTacToeGameState) -> Option<Position> {
     let available_moves = get_available_moves(&state.board);
-    available_moves.choose(&mut rand::rng()).copied()
+    available_moves.choose(&mut rand::rng()).map(|&(x, y)| Position::new(x, y))
 }
 
-fn calculate_winblock_move(state: &TicTacToeGameState) -> Option<(usize, usize)> {
-    let bot_mark = state.current_mark;
-    let opponent_mark = bot_mark.opponent()?;
-
-    if let Some(winning_move) = find_winning_move(state, bot_mark) {
-        return Some(winning_move);
-    }
-
-    if let Some(blocking_move) = find_winning_move(state, opponent_mark) {
-        return Some(blocking_move);
-    }
-
-    calculate_random_move(state)
-}
-
-fn find_winning_move(state: &TicTacToeGameState, mark: Mark) -> Option<(usize, usize)> {
-    let available_moves = get_available_moves(&state.board);
-
-    for (x, y) in available_moves {
-        let mut test_board = state.board.clone();
-        test_board[y][x] = mark;
-
-        if check_win(&test_board, state.win_count).is_some() {
-            return Some((x, y));
-        }
-    }
-
-    None
-}
-
-fn calculate_minimax_move(state: &TicTacToeGameState) -> Option<(usize, usize)> {
+fn calculate_minimax_move(state: &TicTacToeGameState) -> Option<Position> {
     let bot_mark = state.current_mark;
     let available_moves = get_available_moves(&state.board);
 
@@ -92,7 +62,7 @@ fn calculate_minimax_move(state: &TicTacToeGameState) -> Option<(usize, usize)> 
 
         if score > best_score {
             best_score = score;
-            best_move = Some((x, y));
+            best_move = Some(Position::new(x, y));
         }
     }
 
