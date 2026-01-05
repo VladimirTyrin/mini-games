@@ -91,9 +91,9 @@ fn calculate_depth_limit(board: &[Vec<Mark>]) -> usize {
     } else if empty_cells <= 16 {
         4
     } else if empty_cells <= 49 {
-        2
+        3
     } else {
-        1
+        2
     }
 }
 
