@@ -43,6 +43,12 @@ impl Broadcaster {
                     }
                 }
         }
+        for observer in &lobby_details.observers {
+            let client_id = ClientId::new(observer.player_id.clone());
+            if let Some(sender) = clients.get(&client_id) {
+                let _ = sender.send(Ok(message.clone())).await;
+            }
+        }
     }
 
     pub async fn broadcast_to_lobby_except(
@@ -60,6 +66,13 @@ impl Broadcaster {
                         && let Some(sender) = clients.get(&client_id) {
                             let _ = sender.send(Ok(message.clone())).await;
                         }
+                }
+        }
+        for observer in &lobby_details.observers {
+            let client_id = ClientId::new(observer.player_id.clone());
+            if &client_id != except
+                && let Some(sender) = clients.get(&client_id) {
+                    let _ = sender.send(Ok(message.clone())).await;
                 }
         }
     }
