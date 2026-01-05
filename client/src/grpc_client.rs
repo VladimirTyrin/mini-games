@@ -297,8 +297,6 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::PlayerJoined(notification) => {
                                     if let Some(identity) = &notification.player {
                                         if identity.is_bot {
-                                            let bot_type_name = "Bot";
-
                                             let host_name = match shared_state.get_state() {
                                                 AppState::InLobby { details, .. } => {
                                                     details.creator.as_ref()
@@ -308,7 +306,7 @@ pub async fn grpc_client_task(
                                                 _ => "Host".to_string()
                                             };
 
-                                            shared_state.add_event_log(format!("{} added {} (Bot - {})", host_name, identity.player_id, bot_type_name));
+                                            shared_state.add_event_log(format!("{} added {} (Bot - {})", host_name, identity.player_id));
                                         } else {
                                             shared_state.add_event_log(format!("{} joined", identity.player_id));
                                         }
@@ -317,8 +315,6 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::PlayerLeft(notification) => {
                                     if let Some(identity) = &notification.player {
                                         if identity.is_bot {
-                                            let bot_type_name = "Bot";
-
                                             let host_name = match shared_state.get_state() {
                                                 AppState::InLobby { details, .. } => {
                                                     details.creator.as_ref()
@@ -328,7 +324,7 @@ pub async fn grpc_client_task(
                                                 _ => "Host".to_string()
                                             };
 
-                                            shared_state.add_event_log(format!("{} removed {} (Bot - {})", host_name, identity.player_id, bot_type_name));
+                                            shared_state.add_event_log(format!("{} removed {} (Bot)", host_name, identity.player_id));
                                         } else {
                                             shared_state.add_event_log(format!("{} left", identity.player_id));
                                         }

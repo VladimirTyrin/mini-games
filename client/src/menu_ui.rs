@@ -170,49 +170,56 @@ impl MenuApp {
 
         let input_height = 30.0;
         let available_width = ui.available_width();
-        let scroll_height = ui.available_height() - input_height - 5.0;
 
         let scroll_id = match location {
             ChatLocation::LobbyList => "lobby_list_chat_scroll",
             ChatLocation::InLobby => "in_lobby_chat_scroll",
         };
 
-        egui::ScrollArea::vertical()
-            .id_salt(scroll_id)
-            .stick_to_bottom(true)
-            .min_scrolled_height(scroll_height)
-            .max_height(scroll_height)
-            .show(ui, |ui| {
-                ui.set_min_width(available_width - 15.0);
-                if chat_messages.is_empty() {
-                    ui.label(egui::RichText::new("No messages yet...").italics().color(egui::Color32::GRAY));
-                } else {
-                    for message in chat_messages {
-                        ui.label(message);
-                    }
-                }
+        let mut response_opt: Option<egui::Response> = None;
+
+        ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
+            response_opt = Some(ui.add_sized(
+                egui::vec2(available_width, input_height),
+                egui::TextEdit::singleline(&mut self.chat_input)
+                    .hint_text("Type message and press Enter...")
+            ));
+
+            ui.add_space(5.0);
+
+            ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt(scroll_id)
+                    .stick_to_bottom(true)
+                    .show(ui, |ui| {
+                        ui.set_min_width(available_width - 15.0);
+                        if chat_messages.is_empty() {
+                            ui.label(egui::RichText::new("No messages yet...").italics().color(egui::Color32::GRAY));
+                        } else {
+                            for message in chat_messages {
+                                ui.label(message);
+                            }
+                        }
+                    });
             });
+        });
 
-        let response = ui.add_sized(
-            egui::vec2(available_width, input_height),
-            egui::TextEdit::singleline(&mut self.chat_input)
-                .hint_text("Type message and press Enter...")
-        );
-
-        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            let message = self.chat_input.trim();
-            if !message.is_empty() {
-                let command = match location {
-                    ChatLocation::LobbyList => ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
-                        message: message.to_string(),
-                    }),
-                    ChatLocation::InLobby => ClientCommand::Menu(MenuCommand::InLobbyChatMessage {
-                        message: message.to_string(),
-                    }),
-                };
-                let _ = self.menu_command_tx.send(command);
-                self.chat_input.clear();
-                response.request_focus();
+        if let Some(response) = response_opt {
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                let message = self.chat_input.trim();
+                if !message.is_empty() {
+                    let command = match location {
+                        ChatLocation::LobbyList => ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
+                            message: message.to_string(),
+                        }),
+                        ChatLocation::InLobby => ClientCommand::Menu(MenuCommand::InLobbyChatMessage {
+                            message: message.to_string(),
+                        }),
+                    };
+                    let _ = self.menu_command_tx.send(command);
+                    self.chat_input.clear();
+                    response.request_focus();
+                }
             }
         }
     }
