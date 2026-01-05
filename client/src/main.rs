@@ -1,5 +1,5 @@
 mod state;
-mod client;
+mod grpc_client;
 mod menu_ui;
 mod sprites;
 mod game_ui;
@@ -13,7 +13,7 @@ use eframe::egui;
 use tokio::sync::mpsc;
 use std::time::Duration;
 
-use client::grpc_client_task;
+use grpc_client::grpc_client_task;
 use common::logger::init_logger;
 use state::SharedState;
 use menu_ui::MenuApp;
