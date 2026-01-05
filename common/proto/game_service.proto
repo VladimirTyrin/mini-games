@@ -206,9 +206,9 @@ message GameStartingNotification {
 message GameOverNotification {
     repeated ScoreEntry scores = 1;
     PlayerIdentity winner = 2;
-    oneof reason {
-        snake.SnakeGameEndReason snake_reason = 10;
-        tictactoe.TicTacToeGameEndReason tictactoe_reason = 11;
+    oneof game_info {
+        snake.SnakeGameEndInfo snake_info = 10;
+        tictactoe.TicTacToeGameEndInfo tictactoe_info = 11;
     }
 }
 

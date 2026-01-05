@@ -1,6 +1,6 @@
 use crate::state::{ClientCommand, GameCommand, MenuCommand, PlayAgainStatus, TicTacToeGameCommand};
 use crate::colors::generate_color_from_client_id;
-use common::{proto::tictactoe::TicTacToeGameEndReason, GameStateUpdate, ScoreEntry, PlayerIdentity};
+use common::{proto::tictactoe::TicTacToeGameEndInfo, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
 
@@ -41,7 +41,7 @@ impl TicTacToeGameUi {
     pub fn render_game(
         &mut self,
         ui: &mut egui::Ui,
-        _ctx: &egui::Context,
+        ctx: &egui::Context,
         _session_id: &str,
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
@@ -87,7 +87,7 @@ impl TicTacToeGameUi {
             ui.allocate_ui(
                 egui::vec2(board_width + Self::BOARD_PADDING * 2.0, available_height),
                 |ui| {
-                    self.render_board(ui, state, cell_size, client_id, command_tx);
+                    self.render_board(ui, ctx, state, cell_size, client_id, command_tx);
                 },
             );
 
@@ -102,6 +102,7 @@ impl TicTacToeGameUi {
     fn render_board(
         &mut self,
         ui: &mut egui::Ui,
+        ctx: &egui::Context,
         state: &common::proto::tictactoe::TicTacToeGameState,
         cell_size: f32,
         client_id: &str,
@@ -118,6 +119,27 @@ impl TicTacToeGameUi {
         let painter = ui.painter();
 
         painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(240, 240, 240));
+
+        if let Some(last_move) = &state.last_move {
+            let time = ctx.input(|i| i.time);
+            let pulse = ((time * 3.0).sin() * 0.5 + 0.5) as f32;
+
+            let base_blue = 173;
+            let max_blue = 220;
+            let blue_value = (base_blue as f32 + (max_blue - base_blue) as f32 * pulse) as u8;
+            let highlight_color = egui::Color32::from_rgb(200, 220, blue_value);
+
+            let cell_rect = egui::Rect::from_min_size(
+                egui::pos2(
+                    rect.left() + last_move.x as f32 * cell_size,
+                    rect.top() + last_move.y as f32 * cell_size,
+                ),
+                egui::vec2(cell_size, cell_size),
+            );
+            painter.rect_filled(cell_rect, 0.0, highlight_color);
+
+            ctx.request_repaint();
+        }
 
         for i in 0..=state.field_width {
             let x = rect.left() + i as f32 * cell_size;
@@ -234,79 +256,6 @@ impl TicTacToeGameUi {
         painter.circle_stroke(center, radius, stroke);
     }
 
-    fn find_winning_line(state: &common::proto::tictactoe::TicTacToeGameState) -> Option<(u32, u32, u32, u32)> {
-        let width = state.field_width as usize;
-        let height = state.field_height as usize;
-        let win_count = state.win_count as usize;
-
-        let mut board = vec![vec![0i32; width]; height];
-        for cell in &state.board {
-            if cell.y < height as u32 && cell.x < width as u32 {
-                board[cell.y as usize][cell.x as usize] = cell.mark;
-            }
-        }
-
-        let winning_mark = if state.status == 2 { 2 } else if state.status == 3 { 3 } else { return None; };
-
-        for y in 0..height {
-            for x in 0..width {
-                if board[y][x] == winning_mark {
-                    if let Some(line) = Self::check_line_from(&board, x, y, 1, 0, win_count, winning_mark) {
-                        return Some(line);
-                    }
-                    if let Some(line) = Self::check_line_from(&board, x, y, 0, 1, win_count, winning_mark) {
-                        return Some(line);
-                    }
-                    if let Some(line) = Self::check_line_from(&board, x, y, 1, 1, win_count, winning_mark) {
-                        return Some(line);
-                    }
-                    if let Some(line) = Self::check_line_from(&board, x, y, 1, -1, win_count, winning_mark) {
-                        return Some(line);
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
-    fn check_line_from(
-        board: &[Vec<i32>],
-        start_x: usize,
-        start_y: usize,
-        dx: isize,
-        dy: isize,
-        win_count: usize,
-        mark: i32,
-    ) -> Option<(u32, u32, u32, u32)> {
-        let height = board.len();
-        let width = board[0].len();
-
-        let mut count = 0;
-        for i in 0..win_count {
-            let x = start_x as isize + dx * i as isize;
-            let y = start_y as isize + dy * i as isize;
-
-            if x < 0 || y < 0 || x >= width as isize || y >= height as isize {
-                return None;
-            }
-
-            if board[y as usize][x as usize] == mark {
-                count += 1;
-            } else {
-                return None;
-            }
-        }
-
-        if count == win_count {
-            let end_x = start_x as isize + dx * (win_count as isize - 1);
-            let end_y = start_y as isize + dy * (win_count as isize - 1);
-            Some((start_x as u32, start_y as u32, end_x as u32, end_y as u32))
-        } else {
-            None
-        }
-    }
-
     fn render_info_panel(
         &self,
         ui: &mut egui::Ui,
@@ -362,7 +311,7 @@ impl TicTacToeGameUi {
         winner: &Option<PlayerIdentity>,
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
-        _reason: &TicTacToeGameEndReason,
+        game_info: &TicTacToeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
@@ -436,15 +385,14 @@ impl TicTacToeGameUi {
                 }
             }
 
-            if let Some(winning_line) = Self::find_winning_line(state) {
-                let (start_x, start_y, end_x, end_y) = winning_line;
+            if let Some(winning_line) = &game_info.winning_line {
                 let start_pos = egui::pos2(
-                    rect.left() + (start_x as f32 + 0.5) * cell_size,
-                    rect.top() + (start_y as f32 + 0.5) * cell_size,
+                    rect.left() + (winning_line.start_x as f32 + 0.5) * cell_size,
+                    rect.top() + (winning_line.start_y as f32 + 0.5) * cell_size,
                 );
                 let end_pos = egui::pos2(
-                    rect.left() + (end_x as f32 + 0.5) * cell_size,
-                    rect.top() + (end_y as f32 + 0.5) * cell_size,
+                    rect.left() + (winning_line.end_x as f32 + 0.5) * cell_size,
+                    rect.top() + (winning_line.end_y as f32 + 0.5) * cell_size,
                 );
                 painter.line_segment(
                     [start_pos, end_pos],
@@ -519,21 +467,57 @@ impl TicTacToeGameUi {
 
                 match play_again_status {
                     PlayAgainStatus::Available { ready_players, pending_players } => {
-                        let total = ready_players.len() + pending_players.len();
-                        ui.label(format!("Play again? ({}/{})", ready_players.len(), total));
+                        if pending_players.is_empty() {
+                            ui.label("Starting new game...");
+                        } else {
+                            let is_ready = ready_players.iter().any(|p| p.player_id == client_id);
+                            if is_ready {
+                                ui.label("Waiting for other players...");
+                            } else {
+                                if ui.button("Play Again (R)").clicked() {
+                                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                }
+                                ctx.input(|i| {
+                                    if i.key_pressed(egui::Key::R) {
+                                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                    }
+                                });
+                            }
 
-                        if ui.button("Play Again").clicked() {
-                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                            ui.add_space(5.0);
+                            ui.label("Players ready:");
+                            for ready_player in ready_players {
+                                let is_you = ready_player.player_id == client_id;
+                                let you_marker = if is_you { " (You)" } else { "" };
+                                ui.label(format!("✓ {}{}", ready_player.player_id, you_marker));
+                            }
+                            if !pending_players.is_empty() {
+                                ui.label("Waiting for:");
+                                for pending_player in pending_players {
+                                    let is_you = pending_player.player_id == client_id;
+                                    let you_marker = if is_you { " (You)" } else { "" };
+                                    ui.label(format!("⏳ {}{}", pending_player.player_id, you_marker));
+                                }
+                            }
+                            ui.add_space(5.0);
                         }
                     }
                     PlayAgainStatus::NotAvailable => {
                         ui.label("Play again not available");
+                        ui.label("(A player left the lobby)");
+                        ui.add_space(5.0);
                     }
                 }
 
-                if ui.button("Leave Game").clicked() {
+                if ui.button("Back to Lobby List (Esc)").clicked() {
                     let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                 }
+
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::Escape) {
+                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    }
+                });
             });
         });
     }

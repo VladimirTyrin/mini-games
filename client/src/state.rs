@@ -1,4 +1,4 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndReason, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndReason, TicTacToeBotType}, PlayerIdentity};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, PlayerIdentity};
 use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
@@ -55,9 +55,9 @@ pub enum ClientCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum GameEndReason {
-    Snake(SnakeGameEndReason),
-    TicTacToe(TicTacToeGameEndReason),
+pub enum GameEndInfo {
+    Snake(SnakeGameEndInfo),
+    TicTacToe(TicTacToeGameEndInfo),
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +87,7 @@ pub enum AppState {
         scores: Vec<ScoreEntry>,
         winner: Option<PlayerIdentity>,
         last_game_state: Option<GameStateUpdate>,
-        reason: GameEndReason,
+        game_info: GameEndInfo,
         play_again_status: PlayAgainStatus,
     },
 }

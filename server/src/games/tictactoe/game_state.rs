@@ -62,6 +62,7 @@ pub struct TicTacToeGameState {
     pub current_player: PlayerId,
     pub current_mark: Mark,
     pub status: GameStatus,
+    pub last_move: Option<(usize, usize)>,
 }
 
 impl TicTacToeGameState {
@@ -100,6 +101,7 @@ impl TicTacToeGameState {
             current_player,
             current_mark: Mark::X,
             status: GameStatus::InProgress,
+            last_move: None,
         }
     }
 
@@ -121,6 +123,7 @@ impl TicTacToeGameState {
         }
 
         self.board[y][x] = self.current_mark;
+        self.last_move = Some((x, y));
 
         self.check_game_over();
 
@@ -162,16 +165,6 @@ impl TicTacToeGameState {
         self.board
             .iter()
             .all(|row| row.iter().all(|&cell| cell != Mark::Empty))
-    }
-
-    pub fn get_mark(&self, player_id: &PlayerId) -> Option<Mark> {
-        if player_id == &self.player_x {
-            Some(Mark::X)
-        } else if player_id == &self.player_o {
-            Some(Mark::O)
-        } else {
-            None
-        }
     }
 
     pub fn get_winner(&self) -> Option<PlayerId> {
@@ -223,6 +216,10 @@ impl TicTacToeGameState {
             current_player: Some(common::proto::tictactoe::PlayerIdentity {
                 player_id: self.current_player.to_string(),
                 is_bot: current_player_is_bot,
+            }),
+            last_move: self.last_move.map(|(x, y)| common::proto::tictactoe::Position {
+                x: x as u32,
+                y: y as u32,
             }),
         }
     }

@@ -1,7 +1,7 @@
 use crate::sprites::Sprites;
 use crate::state::{GameCommand, SnakeGameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use crate::colors::generate_color_from_client_id;
-use common::{proto::snake::{Direction, SnakeGameEndReason}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
+use common::{proto::snake::{Direction, SnakeGameEndReason, SnakeGameEndInfo}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use tokio::sync::mpsc;
 use std::collections::HashMap;
@@ -183,10 +183,12 @@ impl SnakeGameUi {
         winner: &Option<PlayerIdentity>,
         client_id: &str,
         last_game_state: &Option<GameStateUpdate>,
-        reason: &SnakeGameEndReason,
+        game_info: &SnakeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         command_tx: &mpsc::UnboundedSender<ClientCommand>,
     ) {
+        let reason = SnakeGameEndReason::try_from(game_info.reason)
+            .unwrap_or(SnakeGameEndReason::Unspecified);
         if let Some(game_state_update) = last_game_state {
             let state = match &game_state_update.state {
                 Some(common::game_state_update::State::Snake(snake_state)) => snake_state,

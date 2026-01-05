@@ -708,9 +708,9 @@ impl eframe::App for MenuApp {
         }
 
         let title = if let Some(ping) = self.shared_state.get_ping() {
-            format!("Snake Game - Ping: {}ms", ping)
+            format!("Mini Games - Ping: {}ms", ping)
         } else {
-            "Snake Game".to_string()
+            "Mini Games".to_string()
         };
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
 
@@ -801,24 +801,24 @@ impl eframe::App for MenuApp {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
                     }
                 }
-                AppState::GameOver { scores, winner, last_game_state, reason, play_again_status } => {
+                AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status } => {
                     if self.game_ui.is_none() {
-                        match reason {
-                            crate::state::GameEndReason::Snake(_) => {
+                        match game_info {
+                            crate::state::GameEndInfo::Snake(_) => {
                                 self.game_ui = Some(GameUi::new_snake());
                             }
-                            crate::state::GameEndReason::TicTacToe(_) => {
+                            crate::state::GameEndInfo::TicTacToe(_) => {
                                 self.game_ui = Some(GameUi::new_tictactoe());
                             }
                         }
                     }
                     if let Some(game_ui) = &mut self.game_ui {
-                        match reason {
-                            crate::state::GameEndReason::Snake(snake_reason) => {
-                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_reason, &play_again_status, &self.menu_command_tx);
+                        match game_info {
+                            crate::state::GameEndInfo::Snake(snake_info) => {
+                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, &self.menu_command_tx);
                             }
-                            crate::state::GameEndReason::TicTacToe(ttt_reason) => {
-                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_reason, &play_again_status, &self.menu_command_tx);
+                            crate::state::GameEndInfo::TicTacToe(ttt_info) => {
+                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, &self.menu_command_tx);
                             }
                         }
                     }

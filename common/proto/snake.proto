@@ -84,3 +84,7 @@ enum SnakeGameEndReason {
     SNAKE_GAME_END_REASON_PLAYER_DISCONNECTED = 4;
     SNAKE_GAME_END_REASON_GAME_COMPLETED = 5;
 }
+
+message SnakeGameEndInfo {
+    SnakeGameEndReason reason = 1;
+}

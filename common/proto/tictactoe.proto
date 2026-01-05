@@ -42,6 +42,12 @@ message TicTacToeGameState {
     PlayerIdentity player_x = 6;
     PlayerIdentity player_o = 7;
     GameStatus status = 8;
+    optional Position last_move = 9;
+}
+
+message Position {
+    uint32 x = 1;
+    uint32 y = 2;
 }
 
 message CellMark {
@@ -75,4 +81,16 @@ enum TicTacToeGameEndReason {
     TICTACTOE_GAME_END_REASON_WIN = 1;
     TICTACTOE_GAME_END_REASON_DRAW = 2;
     TICTACTOE_GAME_END_REASON_PLAYER_DISCONNECTED = 3;
+}
+
+message WinningLine {
+    uint32 start_x = 1;
+    uint32 start_y = 2;
+    uint32 end_x = 3;
+    uint32 end_y = 4;
+}
+
+message TicTacToeGameEndInfo {
+    TicTacToeGameEndReason reason = 1;
+    optional WinningLine winning_line = 2;
 }

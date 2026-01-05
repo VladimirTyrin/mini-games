@@ -377,27 +377,23 @@ pub async fn grpc_client_task(
                                         _ => None,
                                     };
 
-                                    let reason = match &game_over.reason {
-                                        Some(common::game_over_notification::Reason::SnakeReason(r)) => {
-                                            crate::state::GameEndReason::Snake(
-                                                common::proto::snake::SnakeGameEndReason::try_from(*r)
-                                                    .unwrap_or(common::proto::snake::SnakeGameEndReason::Unspecified)
-                                            )
+                                    let game_info = match &game_over.game_info {
+                                        Some(common::game_over_notification::GameInfo::SnakeInfo(info)) => {
+                                            crate::state::GameEndInfo::Snake(info.clone())
                                         }
-                                        Some(common::game_over_notification::Reason::TictactoeReason(r)) => {
-                                            crate::state::GameEndReason::TicTacToe(
-                                                common::proto::tictactoe::TicTacToeGameEndReason::try_from(*r)
-                                                    .unwrap_or(common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonUnspecified)
-                                            )
+                                        Some(common::game_over_notification::GameInfo::TictactoeInfo(info)) => {
+                                            crate::state::GameEndInfo::TicTacToe(info.clone())
                                         }
-                                        _ => crate::state::GameEndReason::Snake(common::proto::snake::SnakeGameEndReason::Unspecified),
+                                        _ => crate::state::GameEndInfo::Snake(common::proto::snake::SnakeGameEndInfo {
+                                            reason: common::proto::snake::SnakeGameEndReason::Unspecified as i32,
+                                        }),
                                     };
 
                                     shared_state.set_state(AppState::GameOver {
                                         scores: game_over.scores,
                                         winner: game_over.winner,
                                         last_game_state,
-                                        reason,
+                                        game_info,
                                         play_again_status: PlayAgainStatus::NotAvailable,
                                     });
                                 }

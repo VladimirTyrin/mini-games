@@ -1,6 +1,10 @@
 use super::game_state::Mark;
 
 pub fn check_win(board: &[Vec<Mark>], win_count: usize) -> Option<Mark> {
+    check_win_with_line(board, win_count).map(|(mark, _)| mark)
+}
+
+pub fn check_win_with_line(board: &[Vec<Mark>], win_count: usize) -> Option<(Mark, (u32, u32, u32, u32))> {
     let height = board.len();
     if height == 0 {
         return None;
@@ -15,16 +19,22 @@ pub fn check_win(board: &[Vec<Mark>], win_count: usize) -> Option<Mark> {
             }
 
             if check_horizontal(board, x, y, mark, win_count) {
-                return Some(mark);
+                let end_x = x + win_count - 1;
+                return Some((mark, (x as u32, y as u32, end_x as u32, y as u32)));
             }
             if check_vertical(board, x, y, mark, win_count) {
-                return Some(mark);
+                let end_y = y + win_count - 1;
+                return Some((mark, (x as u32, y as u32, x as u32, end_y as u32)));
             }
             if check_diagonal_down_right(board, x, y, mark, win_count) {
-                return Some(mark);
+                let end_x = x + win_count - 1;
+                let end_y = y + win_count - 1;
+                return Some((mark, (x as u32, y as u32, end_x as u32, end_y as u32)));
             }
             if check_diagonal_down_left(board, x, y, mark, win_count) {
-                return Some(mark);
+                let end_x = x - (win_count - 1);
+                let end_y = y + win_count - 1;
+                return Some((mark, (x as u32, y as u32, end_x as u32, end_y as u32)));
             }
         }
     }

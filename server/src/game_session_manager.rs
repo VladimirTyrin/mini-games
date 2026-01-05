@@ -7,6 +7,7 @@ use common::{ClientId, LobbyId, PlayerId, BotId, log, ServerMessage, server_mess
 use crate::games::snake::{GameState as SnakeGameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, DeathReason, BotController as SnakeBotController};
 use crate::games::tictactoe::game_state::{TicTacToeGameState, FirstPlayerMode, GameStatus as TicTacToeGameStatus};
 use crate::games::tictactoe::bot_controller as TicTacToeBotController;
+use crate::games::tictactoe::win_detector::check_win_with_line;
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::{LobbyManager, BotType, LobbySettings};
 
@@ -307,7 +308,11 @@ impl GameSessionManager {
                             common::GameOverNotification {
                                 scores,
                                 winner,
-                                reason: Some(common::game_over_notification::Reason::SnakeReason(game_end_reason as i32)),
+                                game_info: Some(common::game_over_notification::GameInfo::SnakeInfo(
+                                    common::proto::snake::SnakeGameEndInfo {
+                                        reason: game_end_reason as i32,
+                                    }
+                                )),
                             }
                         )),
                     };
@@ -636,12 +641,30 @@ impl GameSessionManager {
                 _ => common::proto::tictactoe::TicTacToeGameEndReason::TictactoeGameEndReasonUnspecified,
             };
 
+            let winning_line = if matches!(state.status, TicTacToeGameStatus::XWon | TicTacToeGameStatus::OWon) {
+                check_win_with_line(&state.board, state.win_count).map(|(_, (start_x, start_y, end_x, end_y))| {
+                    common::proto::tictactoe::WinningLine {
+                        start_x,
+                        start_y,
+                        end_x,
+                        end_y,
+                    }
+                })
+            } else {
+                None
+            };
+
             let game_over_msg = ServerMessage {
                 message: Some(server_message::Message::GameOver(
                     common::GameOverNotification {
                         scores,
                         winner,
-                        reason: Some(common::game_over_notification::Reason::TictactoeReason(game_end_reason as i32)),
+                        game_info: Some(common::game_over_notification::GameInfo::TictactoeInfo(
+                            common::proto::tictactoe::TicTacToeGameEndInfo {
+                                reason: game_end_reason as i32,
+                                winning_line,
+                            }
+                        )),
                     }
                 )),
             };
