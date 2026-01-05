@@ -306,7 +306,7 @@ pub async fn grpc_client_task(
                                                 _ => "Host".to_string()
                                             };
 
-                                            shared_state.add_event_log(format!("{} added {} (Bot - {})", host_name, identity.player_id));
+                                            shared_state.add_event_log(format!("{} added {} (Bot)", host_name, identity.player_id));
                                         } else {
                                             shared_state.add_event_log(format!("{} joined", identity.player_id));
                                         }
