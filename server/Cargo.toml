@@ -15,9 +15,6 @@ path = "src/main.rs"
 name = "minimax_bench"
 harness = false
 
-[profile.bench]
-debug = true
-
 [dependencies]
 common = { path = "../common" }
 tonic = "0.14.2"

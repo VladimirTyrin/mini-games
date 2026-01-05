@@ -43,11 +43,13 @@ fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
 
     let depth_limit = calculate_depth_limit(&input.board);
     let mut board = input.board.clone();
+    let initial_score = evaluate_board(&board, bot_mark, input.win_count);
 
     let mut best_move = None;
     let mut best_score = i32::MIN;
 
     for (x, y) in available_moves {
+        let delta = eval_delta_before_move(&board, bot_mark, input.win_count, x, y, bot_mark);
         board[y][x] = bot_mark;
 
         let score = minimax(
@@ -61,6 +63,7 @@ fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
             i32::MAX,
             x,
             y,
+            initial_score + delta,
         );
 
         board[y][x] = Mark::Empty;
@@ -156,6 +159,7 @@ fn minimax(
     mut beta: i32,
     last_x: usize,
     last_y: usize,
+    current_score: i32,
 ) -> i32 {
     if let Some(winner) = check_win_at(board, win_count, last_x, last_y) {
         return if winner == bot_mark {
@@ -166,7 +170,7 @@ fn minimax(
     }
 
     if depth >= max_depth {
-        return evaluate_board(board, bot_mark, win_count);
+        return current_score;
     }
 
     if is_maximizing {
@@ -177,6 +181,7 @@ fn minimax(
                     continue;
                 }
 
+                let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, bot_mark);
                 board[y][x] = bot_mark;
                 let eval = minimax(
                     board,
@@ -189,6 +194,7 @@ fn minimax(
                     beta,
                     x,
                     y,
+                    current_score + delta,
                 );
                 board[y][x] = Mark::Empty;
 
@@ -209,6 +215,7 @@ fn minimax(
                     continue;
                 }
 
+                let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, opponent_mark);
                 board[y][x] = opponent_mark;
                 let eval = minimax(
                     board,
@@ -221,6 +228,7 @@ fn minimax(
                     beta,
                     x,
                     y,
+                    current_score + delta,
                 );
                 board[y][x] = Mark::Empty;
 
@@ -233,6 +241,75 @@ fn minimax(
         }
         if min_eval == i32::MAX { 0 } else { min_eval }
     }
+}
+
+fn eval_delta_before_move(
+    board: &[Vec<Mark>],
+    bot_mark: Mark,
+    win_count: usize,
+    x: usize,
+    y: usize,
+    move_mark: Mark,
+) -> i32 {
+    let height = board.len();
+    let width = board[0].len();
+    let directions: [(isize, isize); 4] = [(1, 0), (0, 1), (1, 1), (1, -1)];
+
+    let mut delta = 0i32;
+
+    for (dx, dy) in directions {
+        for offset in 0..win_count as isize {
+            let start_x = x as isize - dx * offset;
+            let start_y = y as isize - dy * offset;
+            let end_x = start_x + dx * (win_count as isize - 1);
+            let end_y = start_y + dy * (win_count as isize - 1);
+
+            if start_x < 0 || start_y < 0 || end_x < 0 || end_y < 0
+                || start_x >= width as isize || start_y >= height as isize
+                || end_x >= width as isize || end_y >= height as isize {
+                continue;
+            }
+
+            let mut bot_count = 0;
+            let mut opp_count = 0;
+
+            for i in 0..win_count as isize {
+                let cx = (start_x + dx * i) as usize;
+                let cy = (start_y + dy * i) as usize;
+                match board[cy][cx] {
+                    Mark::Empty => {}
+                    m if m == bot_mark => bot_count += 1,
+                    _ => opp_count += 1,
+                }
+            }
+
+            let old_score = if opp_count == 0 {
+                (bot_count * bot_count) as i32
+            } else if bot_count == 0 {
+                -((opp_count * opp_count) as i32)
+            } else {
+                0
+            };
+
+            let new_score = if move_mark == bot_mark {
+                if opp_count == 0 {
+                    ((bot_count + 1) * (bot_count + 1)) as i32
+                } else {
+                    0
+                }
+            } else {
+                if bot_count == 0 {
+                    -(((opp_count + 1) * (opp_count + 1)) as i32)
+                } else {
+                    0
+                }
+            };
+
+            delta += new_score - old_score;
+        }
+    }
+
+    delta
 }
 
 fn evaluate_board(board: &[Vec<Mark>], bot_mark: Mark, win_count: usize) -> i32 {
@@ -263,6 +340,7 @@ fn count_threats(board: &[Vec<Mark>], mark: Mark, win_count: usize) -> i32 {
     score
 }
 
+#[inline(always)]
 fn check_line_threat(
     board: &[Vec<Mark>],
     start_x: usize,
@@ -274,31 +352,25 @@ fn check_line_threat(
 ) -> i32 {
     let height = board.len();
     let width = board[0].len();
+    let last = (win_count - 1) as isize;
+
+    let end_x = start_x as isize + dx * last;
+    let end_y = start_y as isize + dy * last;
+    if end_x < 0 || end_y < 0 || end_x >= width as isize || end_y >= height as isize {
+        return 0;
+    }
 
     let mut count = 0;
-    let mut empty_count = 0;
 
     for i in 0..win_count {
-        let x = start_x as isize + dx * i as isize;
-        let y = start_y as isize + dy * i as isize;
-
-        if x < 0 || y < 0 || x >= width as isize || y >= height as isize {
-            return 0;
-        }
-
-        let cell = board[y as usize][x as usize];
+        let cell = board[start_y.wrapping_add_signed(dy * i as isize)]
+                       [start_x.wrapping_add_signed(dx * i as isize)];
         if cell == mark {
             count += 1;
-        } else if cell == Mark::Empty {
-            empty_count += 1;
-        } else {
+        } else if cell != Mark::Empty {
             return 0;
         }
     }
 
-    if count + empty_count == win_count {
-        (count * count) as i32
-    } else {
-        0
-    }
+    (count * count) as i32
 }
