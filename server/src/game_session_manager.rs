@@ -95,9 +95,8 @@ impl GameSessionManager {
                 };
                 let dead_snake_behavior = match common::proto::snake::DeadSnakeBehavior::try_from(snake_settings.dead_snake_behavior) {
                     Ok(common::proto::snake::DeadSnakeBehavior::StayOnField) => DeadSnakeBehavior::StayOnField,
-                    Ok(common::proto::snake::DeadSnakeBehavior::Disappear) |
-                    Ok(common::proto::snake::DeadSnakeBehavior::Unspecified) |
-                    _ => DeadSnakeBehavior::Disappear,
+                    Ok(common::proto::snake::DeadSnakeBehavior::Disappear | common::proto::snake::DeadSnakeBehavior::Unspecified) |
+                    Err(_) => DeadSnakeBehavior::Disappear,
                 };
                 let tick_interval = Duration::from_millis(snake_settings.tick_interval_ms as u64);
                 let max_food_count = snake_settings.max_food_count.max(1) as usize;
@@ -137,7 +136,7 @@ impl GameSessionManager {
             idx += 1;
         }
 
-        for (bot_id, _) in &bots {
+        for bot_id in bots.keys() {
             let start_pos = Self::calculate_start_position(idx, total_players, field_width, field_height);
             let direction = Self::calculate_start_direction(idx, total_players);
             game_state.add_snake(bot_id.to_player_id(), start_pos, direction);
@@ -159,7 +158,7 @@ impl GameSessionManager {
         let session_manager_clone = self.clone();
         let human_players_clone = human_players.clone();
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut tick_interval_timer = interval(tick_interval);
 
             loop {
@@ -178,7 +177,7 @@ impl GameSessionManager {
                 for (bot_id, bot_type) in bots_map.iter() {
                     if let BotType::Snake(snake_bot_type) = bot_type {
                         let player_id = bot_id.to_player_id();
-                        if let Some(direction) = SnakeBotController::calculate_move(*snake_bot_type, &player_id, &state) {
+                        if let Some(direction) = SnakeBotController::calculate_move(*snake_bot_type, &player_id, state) {
                             state.set_snake_direction(&player_id, direction);
                         }
                     }
@@ -467,9 +466,8 @@ impl GameSessionManager {
         let win_count = ttt_settings.win_count as usize;
         let first_player_mode = match common::proto::tictactoe::FirstPlayerMode::try_from(ttt_settings.first_player) {
             Ok(common::proto::tictactoe::FirstPlayerMode::Host) => FirstPlayerMode::Host,
-            Ok(common::proto::tictactoe::FirstPlayerMode::Random) |
-            Ok(common::proto::tictactoe::FirstPlayerMode::Unspecified) |
-            _ => FirstPlayerMode::Random,
+            Ok(common::proto::tictactoe::FirstPlayerMode::Random | common::proto::tictactoe::FirstPlayerMode::Unspecified) |
+            Err(_) => FirstPlayerMode::Random,
         };
 
         if human_players.len() + bots.len() != 2 {
@@ -478,7 +476,7 @@ impl GameSessionManager {
         }
 
         let mut all_players: Vec<PlayerId> = human_players.clone();
-        for (bot_id, _) in &bots {
+        for bot_id in bots.keys() {
             all_players.push(bot_id.to_player_id());
         }
 
@@ -520,7 +518,7 @@ impl GameSessionManager {
         let session_id_clone = session_id.clone();
         let human_players_clone = human_players.clone();
 
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             Self::broadcast_tictactoe_state(&state_clone, &bots_clone, &human_players_clone, &broadcaster).await;
 
             {
@@ -562,7 +560,7 @@ impl GameSessionManager {
 
                     if let Some(bot_type) = bot_type {
                         log!("Bot turn detected, calculating move with bot type: {:?}", bot_type);
-                        if let Some(pos) = TicTacToeBotController::calculate_move(bot_type, &state) {
+                        if let Some(pos) = TicTacToeBotController::calculate_move(bot_type, state) {
                             log!("Bot placing mark at ({}, {})", pos.x, pos.y);
                             if let Err(e) = state.place_mark(&current_player, pos.x, pos.y) {
                                 log!("Bot move failed: {}", e);

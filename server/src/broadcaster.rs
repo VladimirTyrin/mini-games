@@ -35,14 +35,13 @@ impl Broadcaster {
     pub async fn broadcast_to_lobby(&self, lobby_details: &LobbyDetails, message: ServerMessage) {
         let clients = self.clients.lock().await;
         for player in &lobby_details.players {
-            if let Some(identity) = &player.identity {
-                if !identity.is_bot {
+            if let Some(identity) = &player.identity
+                && !identity.is_bot {
                     let client_id = ClientId::new(identity.player_id.clone());
                     if let Some(sender) = clients.get(&client_id) {
                         let _ = sender.send(Ok(message.clone())).await;
                     }
                 }
-            }
         }
     }
 
@@ -54,16 +53,14 @@ impl Broadcaster {
     ) {
         let clients = self.clients.lock().await;
         for player in &lobby_details.players {
-            if let Some(identity) = &player.identity {
-                if !identity.is_bot {
+            if let Some(identity) = &player.identity
+                && !identity.is_bot {
                     let client_id = ClientId::new(identity.player_id.clone());
-                    if &client_id != except {
-                        if let Some(sender) = clients.get(&client_id) {
+                    if &client_id != except
+                        && let Some(sender) = clients.get(&client_id) {
                             let _ = sender.send(Ok(message.clone())).await;
                         }
-                    }
                 }
-            }
         }
     }
 

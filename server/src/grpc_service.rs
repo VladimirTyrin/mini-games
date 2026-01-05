@@ -13,13 +13,13 @@ use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
 
 #[derive(Debug)]
-pub struct GameServiceImpl {
+pub struct GrpcService {
     lobby_manager: LobbyManager,
     broadcaster: Broadcaster,
     session_manager: GameSessionManager,
 }
 
-impl GameServiceImpl {
+impl GrpcService {
     pub fn new(
         lobby_manager: LobbyManager,
         broadcaster: Broadcaster,
@@ -35,7 +35,7 @@ impl GameServiceImpl {
 }
 
 #[tonic::async_trait]
-impl GameService for GameServiceImpl {
+impl GameService for GrpcService {
     type GameStreamStream = ReceiverStream<Result<ServerMessage, Status>>;
 
     async fn game_stream(
@@ -257,7 +257,7 @@ impl GameService for GameServiceImpl {
     }
 }
 
-impl GameServiceImpl {
+impl GrpcService {
     async fn send_not_connected_error(
         tx: &mpsc::Sender<Result<ServerMessage, Status>>,
         action: &str,
@@ -694,8 +694,8 @@ impl GameServiceImpl {
 
                 broadcaster.broadcast_to_lobby(&lobby_details, status_msg).await;
 
-                if let crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids: _, pending_player_ids } = status {
-                    if pending_player_ids.is_empty() {
+                if let crate::lobby_manager::PlayAgainStatus::Available { ready_player_ids: _, pending_player_ids } = status
+                    && pending_player_ids.is_empty() {
                         let host_id = ClientId::new(lobby_details.creator.as_ref().unwrap().player_id.clone());
                         if let Ok(lobby_id) = lobby_manager.start_game(&host_id).await {
                             let session_id = lobby_id.to_string();
@@ -716,7 +716,6 @@ impl GameServiceImpl {
                             }
                         }
                     }
-                }
             }
             Err(e) => {
                 let error_msg = ServerMessage {

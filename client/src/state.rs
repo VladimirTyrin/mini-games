@@ -92,61 +92,70 @@ pub enum AppState {
     },
 }
 
+pub struct InnerState {
+    pub state: AppState,
+    pub error: Option<String>,
+    pub should_close: bool,
+    pub connection_failed: bool,
+    pub retry_server_address: Option<String>,
+    pub ping_ms: Option<u64>,
+    pub ctx: Option<eframe::egui::Context>,
+}
+
 pub struct SharedState {
-    state: Arc<Mutex<AppState>>,
-    error: Arc<Mutex<Option<String>>>,
-    should_close: Arc<Mutex<bool>>,
-    connection_failed: Arc<Mutex<bool>>,
-    retry_server_address: Arc<Mutex<Option<String>>>,
-    ping_ms: Arc<Mutex<Option<u64>>>,
-    ctx: Arc<Mutex<Option<eframe::egui::Context>>>,
+    inner: Arc<Mutex<InnerState>>,
 }
 
 impl SharedState {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(AppState::LobbyList { lobbies: vec![], chat_messages: AllocRingBuffer::new(CHAT_BUFFER_SIZE) })),
-            error: Arc::new(Mutex::new(None)),
-            should_close: Arc::new(Mutex::new(false)),
-            connection_failed: Arc::new(Mutex::new(false)),
-            retry_server_address: Arc::new(Mutex::new(None)),
-            ping_ms: Arc::new(Mutex::new(None)),
-            ctx: Arc::new(Mutex::new(None)),
+            inner: Arc::new(Mutex::new(InnerState {
+                state: AppState::LobbyList {
+                    lobbies: vec![],
+                    chat_messages: AllocRingBuffer::new(CHAT_BUFFER_SIZE),
+                },
+                error: None,
+                should_close: false,
+                connection_failed: false,
+                retry_server_address: None,
+                ping_ms: None,
+                ctx: None,
+            })),
         }
     }
 
     pub fn set_context(&self, ctx: eframe::egui::Context) {
-        *self.ctx.lock().unwrap() = Some(ctx);
+        self.inner.lock().expect("SharedState lock poisoned").ctx = Some(ctx);
     }
 
     pub fn has_context(&self) -> bool {
-        self.ctx.lock().unwrap().is_some()
+        self.inner.lock().expect("SharedState lock poisoned").ctx.is_some()
     }
 
     fn request_repaint(&self) {
-        if let Some(ctx) = self.ctx.lock().unwrap().as_ref() {
+        if let Some(ctx) = self.inner.lock().expect("SharedState lock poisoned").ctx.as_ref() {
             ctx.request_repaint();
         }
     }
 
     pub fn set_state(&self, state: AppState) {
-        *self.state.lock().unwrap() = state;
+        self.inner.lock().expect("SharedState lock poisoned").state = state;
         self.request_repaint();
     }
 
     pub fn get_state(&self) -> AppState {
-        self.state.lock().unwrap().clone()
+        self.inner.lock().expect("SharedState lock poisoned").state.clone()
     }
 
-    pub fn get_state_mut(&self) -> std::sync::MutexGuard<'_, AppState> {
-        self.state.lock().unwrap()
+    pub fn get_state_mut(&self) -> std::sync::MutexGuard<'_, InnerState> {
+        self.inner.lock().expect("SharedState lock poisoned")
     }
 
     pub fn add_event(&self, event: String) {
-        let mut state = self.state.lock().unwrap();
-        if let AppState::InLobby { event_log, .. } = &mut *state {
+        let mut inner = self.inner.lock().expect("SharedState lock poisoned");
+        if let AppState::InLobby { event_log, .. } = &mut inner.state {
             event_log.enqueue(event);
-            drop(state);
+            drop(inner);
             self.request_repaint();
         }
     }
@@ -156,80 +165,74 @@ impl SharedState {
     }
 
     pub fn update_game_state(&self, game_state: GameStateUpdate) {
-        let mut state = self.state.lock().unwrap();
-        if let AppState::InGame { game_state: current_state, .. } = &mut *state {
+        let mut inner = self.inner.lock().expect("SharedState lock poisoned");
+        if let AppState::InGame { game_state: current_state, .. } = &mut inner.state {
             *current_state = Some(game_state);
-            drop(state);
+            drop(inner);
             self.request_repaint();
         }
     }
 
     pub fn set_error(&self, error: String) {
-        *self.error.lock().unwrap() = Some(error);
+        self.inner.lock().expect("SharedState lock poisoned").error = Some(error);
         self.request_repaint();
     }
 
     pub fn get_error(&self) -> Option<String> {
-        self.error.lock().unwrap().clone()
+        self.inner.lock().expect("SharedState lock poisoned").error.clone()
     }
 
     pub fn clear_error(&self) {
-        *self.error.lock().unwrap() = None;
+        self.inner.lock().expect("SharedState lock poisoned").error = None;
     }
 
     pub fn set_should_close(&self) {
-        *self.should_close.lock().unwrap() = true;
+        self.inner.lock().expect("SharedState lock poisoned").should_close = true;
     }
 
     pub fn should_close(&self) -> bool {
-        *self.should_close.lock().unwrap()
+        self.inner.lock().expect("SharedState lock poisoned").should_close
     }
 
     pub fn set_connection_failed(&self, failed: bool) {
-        *self.connection_failed.lock().unwrap() = failed;
+        self.inner.lock().expect("SharedState lock poisoned").connection_failed = failed;
     }
 
     pub fn get_connection_failed(&self) -> bool {
-        *self.connection_failed.lock().unwrap()
+        self.inner.lock().expect("SharedState lock poisoned").connection_failed
     }
 
     pub fn set_retry_server_address(&self, address: Option<String>) {
-        *self.retry_server_address.lock().unwrap() = address;
+        self.inner.lock().expect("SharedState lock poisoned").retry_server_address = address;
     }
 
     pub fn take_retry_server_address(&self) -> Option<String> {
-        self.retry_server_address.lock().unwrap().take()
+        self.inner.lock().expect("SharedState lock poisoned").retry_server_address.take()
     }
 
     pub fn update_play_again_status(&self, play_again_status: PlayAgainStatus) {
-        let mut state = self.state.lock().unwrap();
-        if let AppState::GameOver { play_again_status: current_status, .. } = &mut *state {
+        let mut inner = self.inner.lock().expect("SharedState lock poisoned");
+        if let AppState::GameOver { play_again_status: current_status, .. } = &mut inner.state {
             *current_status = play_again_status;
-            drop(state);
+            drop(inner);
             self.request_repaint();
         }
     }
 
     pub fn set_ping(&self, ping_ms: u64) {
-        *self.ping_ms.lock().unwrap() = Some(ping_ms);
+        self.inner.lock().expect("SharedState lock poisoned").ping_ms = Some(ping_ms);
         self.request_repaint();
     }
 
     pub fn get_ping(&self) -> Option<u64> {
-        *self.ping_ms.lock().unwrap()
+        self.inner.lock().expect("SharedState lock poisoned").ping_ms
     }
 }
 
 impl Clone for SharedState {
     fn clone(&self) -> Self {
         Self {
-            state: Arc::clone(&self.state),
-            error: Arc::clone(&self.error),
-            should_close: Arc::clone(&self.should_close),
-            connection_failed: Arc::clone(&self.connection_failed),
-            retry_server_address: Arc::clone(&self.retry_server_address),
-            ping_ms: Arc::clone(&self.ping_ms),
-            ctx: Arc::clone(&self.ctx),
+            inner: Arc::clone(&self.inner),
         }
     }
 }

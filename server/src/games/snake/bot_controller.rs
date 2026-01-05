@@ -34,15 +34,14 @@ impl BotController {
         let mut best_distance = f32::MAX;
 
         for dir in valid_directions {
-            if let Some(next_pos) = Self::calculate_next_position(head, dir, state) {
-                if Self::is_safe_position(next_pos, player_id, state) {
+            if let Some(next_pos) = Self::calculate_next_position(head, dir, state)
+                && Self::is_safe_position(next_pos, player_id, state) {
                     let distance = Self::manhattan_distance(next_pos, nearest_food, state);
                     if distance < best_distance {
                         best_distance = distance;
                         best_dir = Some(dir);
                     }
                 }
-            }
         }
 
         best_dir.or_else(|| Self::random_valid_move(player_id, state))
@@ -153,10 +152,8 @@ impl BotController {
                 if snake.is_alive() && snake.body_set.contains(&pos) && pos != snake.tail() {
                     return false;
                 }
-            } else {
-                if snake.body_set.contains(&pos) {
-                    return false;
-                }
+            } else if snake.body_set.contains(&pos) {
+                return false;
             }
         }
         true

@@ -10,7 +10,7 @@ pub enum Mark {
 }
 
 impl Mark {
-    pub fn to_proto(&self) -> i32 {
+    pub fn to_proto(self) -> i32 {
         match self {
             Mark::Empty => 1,
             Mark::X => 2,
@@ -36,7 +36,7 @@ pub enum GameStatus {
 }
 
 impl GameStatus {
-    pub fn to_proto(&self) -> i32 {
+    pub fn to_proto(self) -> i32 {
         match self {
             GameStatus::InProgress => 1,
             GameStatus::XWon => 2,

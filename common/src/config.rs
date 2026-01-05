@@ -18,6 +18,12 @@ pub trait Validate {
 
 pub struct YamlConfigSerializer;
 
+impl Default for YamlConfigSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl YamlConfigSerializer {
     pub fn new() -> Self {
         Self {}

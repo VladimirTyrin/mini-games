@@ -237,11 +237,10 @@ pub async fn grpc_client_task(
                     }
                 };
 
-                if let Some(msg) = message {
-                    if tx.send(new_client_message(msg)).await.is_err() {
+                if let Some(msg) = message
+                    && tx.send(new_client_message(msg)).await.is_err() {
                         break;
                     }
-                }
             }
 
             result = response_stream.message() => {
@@ -324,12 +323,11 @@ pub async fn grpc_client_task(
                                     }
                                 }
                                 common::server_message::Message::PlayerReady(notification) => {
-                                    if let Some(identity) = &notification.player {
-                                        if !identity.is_bot {
+                                    if let Some(identity) = &notification.player
+                                        && !identity.is_bot {
                                             let status = if notification.ready { "ready" } else { "not ready" };
                                             shared_state.add_event_log(format!("{} is {}", identity.player_id, status));
                                         }
-                                    }
                                 }
                                 common::server_message::Message::Error(err) => {
                                     shared_state.set_error(err.message);
@@ -379,10 +377,10 @@ pub async fn grpc_client_task(
 
                                     let game_info = match &game_over.game_info {
                                         Some(common::game_over_notification::GameInfo::SnakeInfo(info)) => {
-                                            crate::state::GameEndInfo::Snake(info.clone())
+                                            crate::state::GameEndInfo::Snake(*info)
                                         }
                                         Some(common::game_over_notification::GameInfo::TictactoeInfo(info)) => {
-                                            crate::state::GameEndInfo::TicTacToe(info.clone())
+                                            crate::state::GameEndInfo::TicTacToe(*info)
                                         }
                                         _ => crate::state::GameEndInfo::Snake(common::proto::snake::SnakeGameEndInfo {
                                             reason: common::proto::snake::SnakeGameEndReason::Unspecified as i32,
@@ -420,7 +418,7 @@ pub async fn grpc_client_task(
                                 },
                                 common::server_message::Message::LobbyListChat(notification) => {
                                     if let Some(sender) = &notification.sender {
-                                        let mut state = shared_state.get_state_mut();
+                                        let mut inner = shared_state.get_state_mut();
 
                                         let you_message = if sender.player_id == client_id {
                                             " (You)".to_string()
@@ -428,7 +426,7 @@ pub async fn grpc_client_task(
                                             "".to_string()
                                         };
 
-                                        if let AppState::LobbyList { chat_messages, .. } = &mut *state {
+                                        if let AppState::LobbyList { chat_messages, .. } = &mut inner.state {
                                             chat_messages.enqueue(format!("{}{}: {}", sender.player_id, you_message, notification.message));
                                         }
                                     }
@@ -436,7 +434,7 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::InLobbyChat(notification) => {
                                     if let Some(sender) = &notification.sender {
 
-                                        let mut state = shared_state.get_state_mut();
+                                        let mut inner = shared_state.get_state_mut();
 
                                         let you_message = if sender.player_id == client_id {
                                             " (You)".to_string()
@@ -444,7 +442,7 @@ pub async fn grpc_client_task(
                                             "".to_string()
                                         };
 
-                                        if let AppState::InLobby { event_log, .. } = &mut *state {
+                                        if let AppState::InLobby { event_log, .. } = &mut inner.state {
                                             event_log.enqueue(format!("{}{}: {}", sender.player_id, you_message, notification.message));
                                         }
                                     }

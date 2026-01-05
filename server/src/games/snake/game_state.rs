@@ -112,11 +112,11 @@ impl Snake {
     }
 
     pub fn head(&self) -> Point {
-        *self.body.front().unwrap()
+        *self.body.front().expect("Snake body should never be empty")
     }
 
     pub fn tail(&self) -> Point {
-        *self.body.back().unwrap()
+        *self.body.back().expect("Snake body should never be empty")
     }
 }
 
@@ -174,20 +174,18 @@ impl GameState {
     }
 
     pub fn kill_snake(&mut self, player_id: &PlayerId, reason: DeathReason) {
-        if let Some(snake) = self.snakes.get_mut(player_id) {
-            if snake.is_alive() {
+        if let Some(snake) = self.snakes.get_mut(player_id)
+            && snake.is_alive() {
                 snake.death_reason = Some(reason);
                 self.game_end_reason = Some(reason);
             }
-        }
     }
 
     pub fn set_snake_direction(&mut self, player_id: &PlayerId, direction: Direction) {
-        if let Some(snake) = self.snakes.get_mut(player_id) {
-            if snake.is_alive() && !direction.is_opposite(&snake.direction) {
+        if let Some(snake) = self.snakes.get_mut(player_id)
+            && snake.is_alive() && !direction.is_opposite(&snake.direction) {
                 snake.pending_direction = Some(direction);
             }
-        }
     }
 
     pub fn update(&mut self) {
@@ -207,7 +205,7 @@ impl GameState {
         let player_ids: Vec<PlayerId> = self.snakes.keys().cloned().collect();
 
         for player_id in player_ids {
-            let snake = self.snakes.get_mut(&player_id).unwrap();
+            let snake = self.snakes.get_mut(&player_id).expect("Player ID should exist in snakes map");
             if !snake.is_alive() {
                 continue;
             }
@@ -215,7 +213,7 @@ impl GameState {
             match self.try_move_snake_for_player(&player_id) {
                 Ok(_) => {},
                 Err(reason) => {
-                    let snake = self.snakes.get_mut(&player_id).unwrap();
+                    let snake = self.snakes.get_mut(&player_id).expect("Player ID should exist in snakes map");
                     snake.death_reason = Some(reason);
                     self.game_end_reason = Some(reason);
                 }
@@ -225,11 +223,11 @@ impl GameState {
 
     fn try_move_snake_for_player(&mut self, player_id: &PlayerId) -> Result<(), DeathReason> {
         let next_head = {
-            let snake = self.snakes.get(player_id).unwrap();
+            let snake = self.snakes.get(player_id).expect("Player ID should exist in snakes map");
             self.calculate_next_head_position_for_player(player_id, snake)?
         };
 
-        let snake = self.snakes.get_mut(player_id).unwrap();
+        let snake = self.snakes.get_mut(player_id).expect("Player ID should exist in snakes map");
         snake.body.push_front(next_head);
         snake.body_set.insert(next_head);
 
@@ -238,7 +236,7 @@ impl GameState {
             snake.score += 1;
             log!("[{}] ate food at ({}, {}). Score: {}", player_id, next_head.x, next_head.y, snake.score);
         } else {
-            let tail = snake.body.pop_back().unwrap();
+            let tail = snake.body.pop_back().expect("Snake body should never be empty");
             snake.body_set.remove(&tail);
         }
 

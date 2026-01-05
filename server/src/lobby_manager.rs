@@ -25,15 +25,15 @@ impl LobbySettings {
 
     pub fn to_proto(&self) -> Option<lobby_details::Settings> {
         match self {
-            LobbySettings::Snake(s) => Some(lobby_details::Settings::Snake(s.clone())),
-            LobbySettings::TicTacToe(t) => Some(lobby_details::Settings::Tictactoe(t.clone())),
+            LobbySettings::Snake(s) => Some(lobby_details::Settings::Snake(*s)),
+            LobbySettings::TicTacToe(t) => Some(lobby_details::Settings::Tictactoe(*t)),
         }
     }
 
     pub fn to_info_proto(&self) -> Option<lobby_info::Settings> {
         match self {
-            LobbySettings::Snake(s) => Some(lobby_info::Settings::Snake(s.clone())),
-            LobbySettings::TicTacToe(t) => Some(lobby_info::Settings::Tictactoe(t.clone())),
+            LobbySettings::Snake(s) => Some(lobby_info::Settings::Snake(*s)),
+            LobbySettings::TicTacToe(t) => Some(lobby_info::Settings::Tictactoe(*t)),
         }
     }
 
@@ -487,6 +487,20 @@ impl LobbyManager {
             return Err("Not all players are ready".to_string());
         }
 
+        let total_players = lobby.players.len() + lobby.bots.len();
+        match &lobby.settings {
+            LobbySettings::TicTacToe(_) => {
+                if total_players != 2 {
+                    return Err(format!("TicTacToe requires exactly 2 players, but {} are in the lobby", total_players));
+                }
+            }
+            LobbySettings::Snake(_) => {
+                if total_players == 0 {
+                    return Err("Cannot start game with no players".to_string());
+                }
+            }
+        }
+
         lobby.in_game = true;
         lobby.play_again_votes.clear();
 
@@ -571,7 +585,7 @@ impl LobbyManager {
         let lobby_id = state.client_to_lobby.get(client_id);
 
         if let Some(lobby_id) = lobby_id {
-            state.lobbies.get(&lobby_id).map(|lobby| lobby.to_details())
+            state.lobbies.get(lobby_id).map(|lobby| lobby.to_details())
         } else {
             None
         }

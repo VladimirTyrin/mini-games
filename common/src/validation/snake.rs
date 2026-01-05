@@ -9,7 +9,7 @@ impl ValidateLobbySettings for SnakeLobbySettings {
         if self.field_height < 10 || self.field_height > 100 {
             return Err("Field height must be between 10 and 100".to_string());
         }
-        if max_players < 1 || max_players > 10 {
+        if !(1..=10).contains(&max_players) {
             return Err("Snake supports 1-10 players".to_string());
         }
         if self.tick_interval_ms < 50 || self.tick_interval_ms > 5000 {

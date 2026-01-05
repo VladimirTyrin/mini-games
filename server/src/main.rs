@@ -1,6 +1,6 @@
 mod lobby_manager;
 mod broadcaster;
-mod service;
+mod grpc_service;
 mod games;
 mod game_session_manager;
 
@@ -13,7 +13,7 @@ use common::{
     ServerShuttingDownNotification,
 };
 use clap::Parser;
-use service::GameServiceImpl;
+use grpc_service::GrpcService;
 use lobby_manager::LobbyManager;
 use broadcaster::Broadcaster;
 use game_session_manager::GameSessionManager;
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broadcaster = Broadcaster::new();
     let session_manager = GameSessionManager::new(broadcaster.clone(), lobby_manager.clone());
 
-    let service = GameServiceImpl::new(lobby_manager, broadcaster.clone(), session_manager);
+    let service = GrpcService::new(lobby_manager, broadcaster.clone(), session_manager);
 
     log!("Mini Games Server listening on {}", addr);
 

@@ -498,6 +498,16 @@ impl MenuApp {
                     .map(|s| matches!(s, common::lobby_details::Settings::Snake(_)))
                     .unwrap_or(false);
 
+                let is_tictactoe_lobby = details.settings.as_ref()
+                    .map(|s| matches!(s, common::lobby_details::Settings::Tictactoe(_)))
+                    .unwrap_or(false);
+
+                let has_enough_players = if is_tictactoe_lobby {
+                    details.players.len() == 2
+                } else {
+                    details.players.len() >= 1
+                };
+
                 for player in &details.players {
                     ui.horizontal(|ui| {
                         let player_id = player.identity.as_ref()
@@ -548,13 +558,12 @@ impl MenuApp {
                             ui.label("⏳ Not Ready");
                         }
 
-                        if is_host && !is_self {
-                            if ui.button("❌ Kick").clicked() {
+                        if is_host && !is_self
+                            && ui.button("❌ Kick").clicked() {
                                 let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
                                     player_id: player_id.clone(),
                                 }));
                             }
-                        }
                     });
                 }
 
@@ -571,6 +580,7 @@ impl MenuApp {
                     .unwrap_or(false);
 
                 let all_ready = details.players.iter().all(|p| p.ready);
+                let can_start = is_host && all_ready && has_enough_players;
 
                 ui.horizontal(|ui| {
                     let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
@@ -583,11 +593,21 @@ impl MenuApp {
                     if ui.button("🚪 Leave Lobby (Esc)").clicked() {
                         let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
-
-                    if is_host && all_ready {
-                        if ui.button("▶ Start Game (Ctrl+S)").clicked() {
-                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
-                        }
+                    if can_start && ui.button("▶ Start Game (Ctrl+S)").clicked() {
+                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+                    } else if is_host && !can_start {
+                        let reason = if !all_ready {
+                            "Not all players are ready"
+                        } else if !has_enough_players {
+                            if is_tictactoe_lobby {
+                                "TicTacToe requires exactly 2 players"
+                            } else {
+                                "Need at least 1 player"
+                            }
+                        } else {
+                            ""
+                        };
+                        ui.add_enabled(false, egui::Button::new(format!("▶ Start Game ({})", reason)));
                     }
                 });
 
@@ -600,7 +620,7 @@ impl MenuApp {
                             ready: !current_ready,
                         }));
                     }
-                    if is_host && all_ready && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
+                    if can_start && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
                         let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
                     }
                 });
@@ -699,11 +719,10 @@ impl eframe::App for MenuApp {
             }
         }
 
-        if let Some(disconnect_time) = self.disconnecting {
-            if disconnect_time.elapsed() >= self.disconnect_timeout {
+        if let Some(disconnect_time) = self.disconnecting
+            && disconnect_time.elapsed() >= self.disconnect_timeout {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
-        }
 
         let title = if let Some(ping) = self.shared_state.get_ping() {
             format!("Mini Games - Ping: {}ms", ping)
@@ -782,8 +801,8 @@ impl eframe::App for MenuApp {
                     self.render_in_lobby(ui, ctx, &details, &event_log);
                 }
                 AppState::InGame { session_id, game_state } => {
-                    if self.game_ui.is_none() {
-                        if let Some(ref state) = game_state {
+                    if self.game_ui.is_none()
+                        && let Some(ref state) = game_state {
                             match &state.state {
                                 Some(common::game_state_update::State::Snake(_)) => {
                                     self.game_ui = Some(GameUi::new_snake());
@@ -794,7 +813,6 @@ impl eframe::App for MenuApp {
                                 None => {}
                             }
                         }
-                    }
                     if let Some(game_ui) = &mut self.game_ui {
                         game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, &self.menu_command_tx);
                     }

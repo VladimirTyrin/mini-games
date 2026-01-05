@@ -216,11 +216,10 @@ impl TicTacToeGameUi {
                 self.last_hover = None;
             }
 
-            if response.clicked() {
-                if let Some((x, y)) = self.last_hover {
+            if response.clicked()
+                && let Some((x, y)) = self.last_hover {
                     let _ = command_tx.send(ClientCommand::Game(GameCommand::TicTacToe(TicTacToeGameCommand::PlaceMark { x, y })));
                 }
-            }
         }
     }
 

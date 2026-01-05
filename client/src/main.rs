@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_manager = get_config_manager();
     let config = config_manager.get_config()?;
 
-    let client_id = config.client_id.unwrap_or_else(|| generate_client_id());
+    let client_id = config.client_id.unwrap_or_else(generate_client_id);
 
     let args = Args::parse();
 
@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let disconnect_timeout = Duration::from_millis(config.server.disconnect_timeout_ms as u64);
 
     eframe::run_native(
-        "Snake Game Client",
+        "Mini Games Client",
         options,
         Box::new(|_cc| {
             Ok(Box::new(MenuApp::new(
