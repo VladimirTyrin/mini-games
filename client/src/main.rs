@@ -6,6 +6,10 @@ mod game_ui;
 mod config;
 mod colors;
 mod constants;
+mod command_sender;
+mod offline;
+
+pub use command_sender::CommandSender;
 
 use clap::Parser;
 use common::id_generator::generate_client_id;
@@ -46,26 +50,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let shared_state = SharedState::new();
     let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let command_sender = CommandSender::Grpc(command_tx);
 
     let client_id_clone = client_id.clone();
-    let server_address = args.server_address.unwrap_or_else(|| config.server.address.clone());
+    let server_address = args.server_address.or(config.server.address.clone());
     let shared_state_clone = shared_state.clone();
 
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let config_manager = get_config_manager();
-            if let Err(e) = grpc_client_task(
-                client_id_clone,
-                server_address,
-                shared_state_clone,
-                command_rx,
-                config_manager,
-            ).await {
-                eprintln!("gRPC client error: {}", e);
-            }
+    if let Some(address) = server_address {
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let config_manager = get_config_manager();
+                if let Err(e) = grpc_client_task(
+                    client_id_clone,
+                    address,
+                    shared_state_clone,
+                    command_rx,
+                    config_manager,
+                ).await {
+                    eprintln!("gRPC client error: {}", e);
+                }
+            });
         });
-    });
+    } else {
+        shared_state.set_connection_failed(true);
+    }
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -84,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(Box::new(MenuApp::new(
                 client_id,
                 shared_state,
-                command_tx,
+                command_sender,
                 disconnect_timeout,
                 config_manager
             )))

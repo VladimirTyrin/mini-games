@@ -1,10 +1,10 @@
 pub mod snake;
 pub mod tictactoe;
 
-use crate::state::{ClientCommand, PlayAgainStatus};
+use crate::state::PlayAgainStatus;
+use crate::CommandSender;
 use common::{GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
-use tokio::sync::mpsc;
 
 pub enum GameUi {
     Snake(snake::SnakeGameUi),
@@ -28,11 +28,11 @@ impl GameUi {
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         match self {
-            GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_tx),
-            GameUi::TicTacToe(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_tx),
+            GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
+            GameUi::TicTacToe(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
         }
     }
 
@@ -47,7 +47,7 @@ impl GameUi {
         game_info: &common::proto::snake::SnakeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         match self {
             GameUi::Snake(ui) => ui.render_game_over(
@@ -60,7 +60,7 @@ impl GameUi {
                 game_info,
                 play_again_status,
                 is_observer,
-                command_tx,
+                command_sender,
             ),
             GameUi::TicTacToe(_) => {}
         }
@@ -77,7 +77,7 @@ impl GameUi {
         game_info: &common::proto::tictactoe::TicTacToeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         match self {
             GameUi::Snake(_) => {}
@@ -91,7 +91,7 @@ impl GameUi {
                 game_info,
                 play_again_status,
                 is_observer,
-                command_tx,
+                command_sender,
             ),
         }
     }

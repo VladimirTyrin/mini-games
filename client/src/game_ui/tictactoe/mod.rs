@@ -1,8 +1,8 @@
 use crate::state::{ClientCommand, GameCommand, MenuCommand, PlayAgainStatus, TicTacToeGameCommand};
 use crate::colors::generate_color_from_client_id;
+use crate::CommandSender;
 use common::{proto::tictactoe::TicTacToeGameEndInfo, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
-use tokio::sync::mpsc;
 
 pub struct TicTacToeGameUi {
     last_hover: Option<(u32, u32)>,
@@ -46,7 +46,7 @@ impl TicTacToeGameUi {
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         let Some(game_state_update) = game_state else {
             ui.centered_and_justified(|ui| {
@@ -87,7 +87,7 @@ impl TicTacToeGameUi {
         if is_observer {
             ctx.input(|i| {
                 if i.key_pressed(egui::Key::Escape) {
-                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                 }
             });
         }
@@ -96,7 +96,7 @@ impl TicTacToeGameUi {
             ui.allocate_ui(
                 egui::vec2(board_width + Self::BOARD_PADDING * 2.0, available_height),
                 |ui| {
-                    self.render_board(ui, ctx, state, cell_size, client_id, is_observer, command_tx);
+                    self.render_board(ui, ctx, state, cell_size, client_id, is_observer, command_sender);
                 },
             );
 
@@ -120,7 +120,7 @@ impl TicTacToeGameUi {
         cell_size: f32,
         client_id: &str,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         let board_width = cell_size * state.field_width as f32;
         let board_height = cell_size * state.field_height as f32;
@@ -232,7 +232,7 @@ impl TicTacToeGameUi {
 
             if response.clicked()
                 && let Some((x, y)) = self.last_hover {
-                    let _ = command_tx.send(ClientCommand::Game(GameCommand::TicTacToe(TicTacToeGameCommand::PlaceMark { x, y })));
+                    command_sender.send(ClientCommand::Game(GameCommand::TicTacToe(TicTacToeGameCommand::PlaceMark { x, y })));
                 }
         }
     }
@@ -327,7 +327,7 @@ impl TicTacToeGameUi {
         game_info: &TicTacToeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         let state = if let Some(game_state_update) = last_game_state {
             match &game_state_update.state {
@@ -493,11 +493,11 @@ impl TicTacToeGameUi {
                                     ui.label("Waiting for other players...");
                                 } else {
                                     if ui.button("Play Again (R)").clicked() {
-                                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                        command_sender.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                     }
                                     ctx.input(|i| {
                                         if i.key_pressed(egui::Key::R) {
-                                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                            command_sender.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                         }
                                     });
                                 }
@@ -529,12 +529,12 @@ impl TicTacToeGameUi {
                 }
 
                 if ui.button("Back to Lobby List (Esc)").clicked() {
-                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                 }
 
                 ctx.input(|i| {
                     if i.key_pressed(egui::Key::Escape) {
-                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                        command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
                 });
             });

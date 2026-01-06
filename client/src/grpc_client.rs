@@ -43,7 +43,7 @@ pub async fn grpc_client_task(
         let mut client = match GameServiceClient::connect(server_address.clone()).await {
             Ok(client) => {
                 let mut config = config_manager.get_config().unwrap_or_default();
-                config.server.address = server_address.clone();
+                config.server.address = Some(server_address.clone());
                 let _ = config_manager.set_config(&config);
                 shared_state.set_connection_failed(false);
                 client

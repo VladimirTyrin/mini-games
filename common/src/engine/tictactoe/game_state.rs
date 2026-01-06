@@ -1,4 +1,4 @@
-use common::PlayerId;
+use crate::PlayerId;
 use rand::Rng;
 use super::types::Position;
 
@@ -181,8 +181,8 @@ impl TicTacToeGameState {
         player_x_is_bot: bool,
         player_o_is_bot: bool,
         current_player_is_bot: bool,
-    ) -> common::proto::tictactoe::TicTacToeGameState {
-        let board: Vec<common::proto::tictactoe::CellMark> = self.board
+    ) -> crate::proto::tictactoe::TicTacToeGameState {
+        let board: Vec<crate::proto::tictactoe::CellMark> = self.board
             .iter()
             .enumerate()
             .flat_map(|(y, row)| {
@@ -190,7 +190,7 @@ impl TicTacToeGameState {
                     if mark == Mark::Empty {
                         None
                     } else {
-                        Some(common::proto::tictactoe::CellMark {
+                        Some(crate::proto::tictactoe::CellMark {
                             x: x as u32,
                             y: y as u32,
                             mark: mark.to_proto(),
@@ -200,21 +200,21 @@ impl TicTacToeGameState {
             })
             .collect();
 
-        common::proto::tictactoe::TicTacToeGameState {
+        crate::proto::tictactoe::TicTacToeGameState {
             board,
             field_width: self.width as u32,
             field_height: self.height as u32,
             win_count: self.win_count as u32,
             status: self.status.to_proto(),
-            player_x: Some(common::proto::tictactoe::PlayerIdentity {
+            player_x: Some(crate::proto::tictactoe::PlayerIdentity {
                 player_id: self.player_x.to_string(),
                 is_bot: player_x_is_bot,
             }),
-            player_o: Some(common::proto::tictactoe::PlayerIdentity {
+            player_o: Some(crate::proto::tictactoe::PlayerIdentity {
                 player_id: self.player_o.to_string(),
                 is_bot: player_o_is_bot,
             }),
-            current_player: Some(common::proto::tictactoe::PlayerIdentity {
+            current_player: Some(crate::proto::tictactoe::PlayerIdentity {
                 player_id: self.current_player.to_string(),
                 is_bot: current_player_is_bot,
             }),

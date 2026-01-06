@@ -11,8 +11,8 @@ impl Position {
         Self { x, y }
     }
 
-    pub fn to_proto(self) -> common::proto::tictactoe::Position {
-        common::proto::tictactoe::Position {
+    pub fn to_proto(self) -> crate::proto::tictactoe::Position {
+        crate::proto::tictactoe::Position {
             x: self.x as u32,
             y: self.y as u32,
         }
@@ -31,8 +31,8 @@ impl WinningLine {
         Self { mark, start, end }
     }
 
-    pub fn to_proto(self) -> common::proto::tictactoe::WinningLine {
-        common::proto::tictactoe::WinningLine {
+    pub fn to_proto(self) -> crate::proto::tictactoe::WinningLine {
+        crate::proto::tictactoe::WinningLine {
             start_x: self.start.x as u32,
             start_y: self.start.y as u32,
             end_x: self.end.x as u32,

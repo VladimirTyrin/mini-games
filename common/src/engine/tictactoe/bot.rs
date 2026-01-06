@@ -1,7 +1,7 @@
 use super::board::get_available_moves;
 use super::game_state::{Mark, TicTacToeGameState};
 use super::types::Position;
-use common::proto::tictactoe::TicTacToeBotType;
+use crate::proto::tictactoe::TicTacToeBotType;
 use rand::prelude::IndexedRandom;
 
 pub struct BotInput {

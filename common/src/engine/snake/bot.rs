@@ -1,4 +1,4 @@
-use common::{PlayerId, SnakeBotType};
+use crate::{PlayerId, SnakeBotType};
 use super::game_state::{GameState, Direction, Point, WallCollisionMode, DeadSnakeBehavior};
 use rand::Rng;
 

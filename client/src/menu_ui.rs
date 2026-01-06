@@ -3,13 +3,13 @@ use crate::game_ui::GameUi;
 use crate::sprites::Sprites;
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig};
 use crate::colors::generate_color_from_client_id;
+use crate::CommandSender;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
 use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode};
 use common::{LobbyDetails, LobbyInfo};
 use eframe::egui;
 use egui::{Align, Layout};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
-use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
 
@@ -67,8 +67,10 @@ fn parse_f32_input(input: &str, field_name: &str, shared_state: &SharedState) ->
 pub struct MenuApp {
     client_id: String,
     shared_state: SharedState,
-    menu_command_tx: mpsc::UnboundedSender<ClientCommand>,
+    command_sender: CommandSender,
+    offline_command_sender: Option<CommandSender>,
     create_lobby_dialog: bool,
+    creating_offline_game: bool,
     selected_game_type: GameType,
     lobby_name_input: String,
     max_players_input: String,
@@ -97,7 +99,7 @@ impl MenuApp {
     pub fn new(
         client_id: String,
         shared_state: SharedState,
-        menu_command_tx: mpsc::UnboundedSender<ClientCommand>,
+        command_sender: CommandSender,
         disconnect_timeout: std::time::Duration,
         config_manager: ClientConfigManager
     ) -> Self {
@@ -106,8 +108,10 @@ impl MenuApp {
         Self {
             client_id,
             shared_state,
-            menu_command_tx,
+            command_sender,
+            offline_command_sender: None,
             create_lobby_dialog: false,
+            creating_offline_game: false,
             selected_game_type: config.last_game.unwrap_or(GameType::Snake),
             lobby_name_input: String::new(),
             max_players_input: config.snake.max_players.to_string(),
@@ -216,7 +220,7 @@ impl MenuApp {
                             message: message.to_string(),
                         }),
                     };
-                    let _ = self.menu_command_tx.send(command);
+                    self.command_sender.send(command);
                     self.chat_input.clear();
                     response.request_focus();
                 }
@@ -225,6 +229,64 @@ impl MenuApp {
     }
 
     fn render_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo], chat_messages: &AllocRingBuffer<String>) {
+        let is_offline = self.shared_state.get_connection_mode() == crate::state::ConnectionMode::TemporaryOffline;
+
+        if is_offline {
+            self.render_offline_lobby_list(ui, ctx);
+        } else {
+            self.render_online_lobby_list(ui, ctx, lobbies, chat_messages);
+        }
+    }
+
+    fn render_offline_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.heading("Snake Game - Offline Mode");
+        ui.separator();
+
+        ui.horizontal(|ui| {
+            ui.label("Not connected to server.");
+            if ui.button("🔌 Connect (F5)").clicked() {
+                self.shared_state.set_connection_mode(crate::state::ConnectionMode::Online);
+                self.shared_state.set_connection_failed(true);
+                self.shared_state.set_error("Enter server address to connect".to_string());
+            }
+        });
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::F5) {
+                self.shared_state.set_connection_mode(crate::state::ConnectionMode::Online);
+                self.shared_state.set_connection_failed(true);
+                self.shared_state.set_error("Enter server address to connect".to_string());
+            }
+        });
+
+        ui.separator();
+        ui.add_space(20.0);
+
+        ui.vertical_centered(|ui| {
+            ui.label("Play offline against bots:");
+            ui.add_space(10.0);
+
+            if ui.button("🎮 Create Offline Game (Ctrl+N)").clicked() {
+                self.create_lobby_dialog = true;
+                self.creating_offline_game = true;
+                self.lobby_name_input = "Offline Game".to_string();
+                let config = self.config_manager.get_config().unwrap();
+                self.max_players_input = config.snake.max_players.to_string();
+            }
+        });
+
+        ctx.input(|i| {
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
+                self.create_lobby_dialog = true;
+                self.creating_offline_game = true;
+                self.lobby_name_input = "Offline Game".to_string();
+                let config = self.config_manager.get_config().unwrap();
+                self.max_players_input = config.snake.max_players.to_string();
+            }
+        });
+    }
+
+    fn render_online_lobby_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, lobbies: &[LobbyInfo], chat_messages: &AllocRingBuffer<String>) {
         let main_content_height = 250.0;
 
         ui.allocate_ui_with_layout(
@@ -236,12 +298,21 @@ impl MenuApp {
 
                 ui.horizontal(|ui| {
                     if ui.button("🔄 Update (F5)").clicked() {
-                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                        self.command_sender.send(ClientCommand::Menu(MenuCommand::ListLobbies));
                     }
 
                     if ui.button("➕ Create Lobby (Ctrl+N)").clicked() {
                         self.create_lobby_dialog = true;
+                        self.creating_offline_game = false;
                         self.lobby_name_input = self.client_id.clone();
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = config.snake.max_players.to_string();
+                    }
+
+                    if ui.button("🎮 Offline Game (Ctrl+O)").clicked() {
+                        self.create_lobby_dialog = true;
+                        self.creating_offline_game = true;
+                        self.lobby_name_input = "Offline Game".to_string();
                         let config = self.config_manager.get_config().unwrap();
                         self.max_players_input = config.snake.max_players.to_string();
                     }
@@ -249,11 +320,19 @@ impl MenuApp {
 
                 ctx.input(|i| {
                     if i.key_pressed(egui::Key::F5) {
-                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+                        self.command_sender.send(ClientCommand::Menu(MenuCommand::ListLobbies));
                     }
                     if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
                         self.create_lobby_dialog = true;
+                        self.creating_offline_game = false;
                         self.lobby_name_input = self.client_id.clone();
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = config.snake.max_players.to_string();
+                    }
+                    if i.modifiers.ctrl && i.key_pressed(egui::Key::O) {
+                        self.create_lobby_dialog = true;
+                        self.creating_offline_game = true;
+                        self.lobby_name_input = "Offline Game".to_string();
                         let config = self.config_manager.get_config().unwrap();
                         self.max_players_input = config.snake.max_players.to_string();
                     }
@@ -306,7 +385,7 @@ impl MenuApp {
                             let double_clicked = inner_response.double_clicked() && can_join;
 
                             if button_clicked || double_clicked {
-                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::JoinLobby {
+                                self.command_sender.send(ClientCommand::Menu(MenuCommand::JoinLobby {
                                     lobby_id: lobby.lobby_id.clone(),
                                     join_as_observer: false,
                                 }));
@@ -324,7 +403,8 @@ impl MenuApp {
         let mut close_dialog = false;
         let mut create_lobby = false;
 
-        egui::Window::new("Create Lobby")
+        let title = if self.creating_offline_game { "Create Offline Game" } else { "Create Lobby" };
+        egui::Window::new(title)
             .open(&mut self.create_lobby_dialog)
             .collapsible(false)
             .show(ctx, |ui| {
@@ -477,10 +557,18 @@ impl MenuApp {
                 }
             };
 
-            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::CreateLobby {
-                name: self.lobby_name_input.clone(),
-                config: lobby_config
-            }));
+            if self.creating_offline_game {
+                let sender = self.get_or_create_offline_sender();
+                sender.send(ClientCommand::Menu(MenuCommand::CreateLobby {
+                    name: self.lobby_name_input.clone(),
+                    config: lobby_config
+                }));
+            } else {
+                self.command_sender.send(ClientCommand::Menu(MenuCommand::CreateLobby {
+                    name: self.lobby_name_input.clone(),
+                    config: lobby_config
+                }));
+            }
             close_dialog = true;
         }
 
@@ -489,7 +577,36 @@ impl MenuApp {
         }
     }
 
+    fn get_or_create_offline_sender(&mut self) -> CommandSender {
+        if let Some(ref sender) = self.offline_command_sender {
+            return sender.clone();
+        }
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let sender = CommandSender::Local(tx);
+        self.offline_command_sender = Some(sender.clone());
+
+        let client_id = self.client_id.clone();
+        let shared_state = self.shared_state.clone();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                crate::offline::local_game_task(client_id, shared_state, rx).await;
+            });
+        });
+
+        sender
+    }
+
     fn render_in_lobby(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, details: &LobbyDetails, event_log: &AllocRingBuffer<String>) {
+        let is_offline_lobby = details.lobby_id == "offline";
+        let cmd_sender = if is_offline_lobby {
+            self.offline_command_sender.clone().unwrap_or_else(|| self.command_sender.clone())
+        } else {
+            self.command_sender.clone()
+        };
+
         let creator_id = details.creator.as_ref()
             .map(|c| c.player_id.clone())
             .unwrap_or_else(|| "Unknown".to_string());
@@ -551,7 +668,7 @@ impl MenuApp {
                         if is_self_observer {
                             if !lobby_is_full {
                                 if ui.button("👤 Become Player (Ctrl+P)").clicked() {
-                                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
+                                    cmd_sender.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
                                 }
                             } else {
                                 ui.add_enabled(false, egui::Button::new("👤 Become Player (Lobby Full)"));
@@ -559,23 +676,23 @@ impl MenuApp {
                         } else {
                             let button_text = if current_ready { "Mark Not Ready (Ctrl+R)" } else { "Mark Ready (Ctrl+R)" };
                             if ui.button(button_text).clicked() {
-                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                                cmd_sender.send(ClientCommand::Menu(MenuCommand::MarkReady {
                                     ready: !current_ready,
                                 }));
                             }
 
                             if ui.button("👁 Become Observer (Ctrl+O)").clicked() {
-                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
+                                cmd_sender.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
                             }
                         }
 
                         if ui.button("🚪 Leave Lobby (Esc)").clicked() {
-                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                            cmd_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                         }
 
                         if can_start {
                             if ui.button("▶ Start Game (Ctrl+S)").clicked() {
-                                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+                                cmd_sender.send(ClientCommand::Menu(MenuCommand::StartGame));
                             }
                         } else if is_host {
                             let reason = if !all_ready {
@@ -610,7 +727,7 @@ impl MenuApp {
                                     });
 
                                 if ui.button("+ Add Bot (Ctrl+B)").clicked() {
-                                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                    cmd_sender.send(ClientCommand::Menu(MenuCommand::AddBot {
                                         bot_type: crate::state::BotType::Snake(self.selected_snake_bot_type),
                                     }));
                                 }
@@ -627,7 +744,7 @@ impl MenuApp {
                                     });
 
                                 if ui.button("+ Add Bot (Ctrl+B)").clicked() {
-                                    let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                                    cmd_sender.send(ClientCommand::Menu(MenuCommand::AddBot {
                                         bot_type: crate::state::BotType::TicTacToe(self.selected_ttt_bot_type),
                                     }));
                                 }
@@ -692,14 +809,14 @@ impl MenuApp {
 
                                 if is_host && !is_self && !is_bot
                                     && ui.button("👁").on_hover_text("Make Observer").clicked() {
-                                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MakePlayerObserver {
+                                        cmd_sender.send(ClientCommand::Menu(MenuCommand::MakePlayerObserver {
                                             player_id: player_id.clone(),
                                         }));
                                     }
 
                                 if is_host && !is_self
                                     && ui.button("❌").on_hover_text("Kick").clicked() {
-                                        let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
+                                        cmd_sender.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
                                             player_id: player_id.clone(),
                                         }));
                                     }
@@ -724,7 +841,7 @@ impl MenuApp {
 
                                     if is_host && !is_self
                                         && ui.button("❌").on_hover_text("Kick").clicked() {
-                                            let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
+                                            cmd_sender.send(ClientCommand::Menu(MenuCommand::KickFromLobby {
                                                 player_id: observer.player_id.clone(),
                                             }));
                                         }
@@ -738,21 +855,21 @@ impl MenuApp {
 
         ctx.input(|i| {
             if i.key_pressed(egui::Key::Escape) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
             if !is_self_observer && i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::MarkReady {
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::MarkReady {
                     ready: !current_ready,
                 }));
             }
             if !is_self_observer && i.modifiers.ctrl && i.key_pressed(egui::Key::O) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::BecomeObserver));
             }
             if is_self_observer && !lobby_is_full && i.modifiers.ctrl && i.key_pressed(egui::Key::P) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::BecomePlayer));
             }
             if can_start && i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::StartGame));
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::StartGame));
             }
             if is_host && i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
                 let bot_type = if is_snake_lobby {
@@ -762,13 +879,15 @@ impl MenuApp {
                 } else {
                     return;
                 };
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::AddBot {
+                cmd_sender.send(ClientCommand::Menu(MenuCommand::AddBot {
                     bot_type,
                 }));
             }
         });
 
-        self.render_chat_widget(ui, event_log, ChatLocation::InLobby, ChatHeading::Hide);
+        if !is_offline_lobby {
+            self.render_chat_widget(ui, event_log, ChatLocation::InLobby, ChatHeading::Hide);
+        }
     }
 }
 
@@ -787,7 +906,7 @@ impl eframe::App for MenuApp {
                 }
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                let _ = self.menu_command_tx.send(ClientCommand::Menu(MenuCommand::Disconnect));
+                self.command_sender.send(ClientCommand::Menu(MenuCommand::Disconnect));
                 self.disconnecting = Some(std::time::Instant::now());
             }
         }
@@ -826,6 +945,11 @@ impl eframe::App for MenuApp {
                                 self.shared_state.set_retry_server_address(Some(address));
                                 self.shared_state.clear_error();
                                 self.shared_state.set_connection_failed(false);
+                            }
+
+                            if ui.button("Continue Offline").clicked() {
+                                self.shared_state.clear_error();
+                                self.shared_state.set_connection_mode(crate::state::ConnectionMode::TemporaryOffline);
                             }
 
                             if ui.button("Quit").clicked() {
@@ -887,7 +1011,13 @@ impl eframe::App for MenuApp {
                             }
                         }
                     if let Some(game_ui) = &mut self.game_ui {
-                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, &self.menu_command_tx);
+                        let is_offline_game = session_id.starts_with("offline_");
+                        let sender = if is_offline_game {
+                            self.offline_command_sender.as_ref().unwrap_or(&self.command_sender)
+                        } else {
+                            &self.command_sender
+                        };
+                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, sender);
                     }
                 }
                 AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status, is_observer } => {
@@ -902,12 +1032,17 @@ impl eframe::App for MenuApp {
                         }
                     }
                     if let Some(game_ui) = &mut self.game_ui {
+                        let sender = if self.offline_command_sender.is_some() {
+                            self.offline_command_sender.as_ref().unwrap()
+                        } else {
+                            &self.command_sender
+                        };
                         match game_info {
                             crate::state::GameEndInfo::Snake(snake_info) => {
-                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, is_observer, &self.menu_command_tx);
+                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, is_observer, sender);
                             }
                             crate::state::GameEndInfo::TicTacToe(ttt_info) => {
-                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, &self.menu_command_tx);
+                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, sender);
                             }
                         }
                     }

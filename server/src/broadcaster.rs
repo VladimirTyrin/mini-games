@@ -2,7 +2,8 @@ use tokio::sync::{mpsc, Mutex};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
-use common::{ClientId, LobbyDetails, ServerMessage};
+use common::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification};
+use common::engine::session::GameBroadcaster;
 
 pub type ClientSender = mpsc::Sender<Result<ServerMessage, Status>>;
 
@@ -91,5 +92,21 @@ impl Broadcaster {
                 let _ = sender.send(Ok(message.clone())).await;
             }
         }
+    }
+}
+
+impl GameBroadcaster for Broadcaster {
+    async fn broadcast_state(&self, state: GameStateUpdate, recipients: Vec<ClientId>) {
+        let message = ServerMessage {
+            message: Some(server_message::Message::GameState(state)),
+        };
+        self.broadcast_to_clients(&recipients, message).await;
+    }
+
+    async fn broadcast_game_over(&self, notification: GameOverNotification, recipients: Vec<ClientId>) {
+        let message = ServerMessage {
+            message: Some(server_message::Message::GameOver(notification)),
+        };
+        self.broadcast_to_clients(&recipients, message).await;
     }
 }

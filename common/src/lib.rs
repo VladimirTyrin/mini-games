@@ -28,6 +28,8 @@ pub mod identifiers;
 pub mod config;
 pub mod version;
 pub mod validation;
+pub mod engine;
+pub mod lobby;
 
 pub use proto::*;
 pub use identifiers::*;

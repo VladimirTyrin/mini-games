@@ -59,6 +59,7 @@ impl GameService for GrpcService {
                         if client_message.version != server_version {
                             let error_msg = ServerMessage {
                                 message: Some(server_message::Message::Error(common::ErrorResponse {
+                                    code: common::ErrorCode::VersionMismatch.into(),
                                     message: format!(
                                         "Version mismatch: client version '{}', server version '{}'. Please download the latest client from https://github.com/VladimirTyrin/mini-games/releases",
                                         client_message.version,
@@ -74,24 +75,14 @@ impl GameService for GrpcService {
                             match message {
                                 client_message::Message::Connect(connect_req) => {
                                     if client_id_opt.is_some() {
-                                        let error_msg = ServerMessage {
-                                            message: Some(server_message::Message::Error(common::ErrorResponse {
-                                                message: "Already connected".to_string(),
-                                            })),
-                                        };
-                                        let _ = tx.send(Ok(error_msg)).await;
+                                        let _ = tx.send(Ok(Self::make_error_response("Already connected".to_string()))).await;
                                         continue;
                                     }
 
                                     let client_id = ClientId::new(connect_req.client_id);
 
                                     if !lobby_manager.add_client(&client_id).await {
-                                        let error_msg = ServerMessage {
-                                            message: Some(server_message::Message::Error(common::ErrorResponse {
-                                                message: "Client ID already connected".to_string(),
-                                            })),
-                                        };
-                                        let _ = tx.send(Ok(error_msg)).await;
+                                        let _ = tx.send(Ok(Self::make_error_response("Client ID already connected".to_string()))).await;
                                         break;
                                     }
 
@@ -283,12 +274,16 @@ impl GrpcService {
         tx: &mpsc::Sender<Result<ServerMessage, Status>>,
         action: &str,
     ) {
-        let error_msg = ServerMessage {
+        let _ = tx.send(Ok(Self::make_error_response(format!("Not connected: cannot {}", action)))).await;
+    }
+
+    fn make_error_response(message: String) -> ServerMessage {
+        ServerMessage {
             message: Some(server_message::Message::Error(common::ErrorResponse {
-                message: format!("Not connected: cannot {}", action),
+                code: common::ErrorCode::Unspecified.into(),
+                message,
             })),
-        };
-        let _ = tx.send(Ok(error_msg)).await;
+        }
     }
 
     async fn notify_lobby_list_update(
@@ -329,12 +324,7 @@ impl GrpcService {
         let settings = match crate::lobby_manager::LobbySettings::from_proto(request.settings) {
             Ok(s) => s,
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
                 return;
             }
         };
@@ -356,12 +346,7 @@ impl GrpcService {
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -409,12 +394,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -475,12 +455,7 @@ impl GrpcService {
                 }
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -517,12 +492,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -537,12 +507,7 @@ impl GrpcService {
         let bot_type = match BotType::from_proto(request.bot_type) {
             Ok(bt) => bt,
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
                 return;
             }
         };
@@ -570,12 +535,7 @@ impl GrpcService {
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -622,12 +582,7 @@ impl GrpcService {
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -662,12 +617,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -702,12 +652,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -743,12 +688,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -780,12 +720,7 @@ impl GrpcService {
                 }
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }
@@ -857,12 +792,7 @@ impl GrpcService {
                     }
             }
             Err(e) => {
-                let error_msg = ServerMessage {
-                    message: Some(server_message::Message::Error(common::ErrorResponse {
-                        message: e,
-                    })),
-                };
-                let _ = tx.send(Ok(error_msg)).await;
+                let _ = tx.send(Ok(Self::make_error_response(e))).await;
             }
         }
     }

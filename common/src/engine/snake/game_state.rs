@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use common::{log, PlayerId};
+use crate::{log, PlayerId};
 use rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

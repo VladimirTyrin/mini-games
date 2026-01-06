@@ -1,37 +1,45 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
 use common::{ClientId, LobbyId, PlayerId, BotId, log, ServerMessage, server_message};
-use crate::games::snake::{Direction, DeathReason};
-use crate::games::{GameStateEnum, GameSessionContext, GameSessionResult, GameOverResult, SessionId};
+use common::engine::snake::{GameState as SnakeGameState, Direction, DeathReason};
+use common::engine::tictactoe::TicTacToeGameState;
+use common::engine::session::GameSessionConfig;
+use common::engine::session::snake_session::{
+    SnakeSessionSettings,
+    create_session as create_snake_session,
+    run_game_loop as run_snake_game_loop,
+};
+use common::engine::session::tictactoe_session::{
+    TicTacToeSessionSettings,
+    create_session as create_tictactoe_session,
+    run_game_loop as run_tictactoe_game_loop,
+};
 use crate::broadcaster::Broadcaster;
-use crate::lobby_manager::{LobbyManager, BotType, LobbySettings};
+use crate::lobby_manager::{LobbyManager, LobbySettings};
 
-#[derive(Debug)]
+pub type SessionId = String;
+
+enum GameSession {
+    Snake {
+        game_state: Arc<Mutex<SnakeGameState>>,
+    },
+    TicTacToe {
+        game_state: Arc<Mutex<TicTacToeGameState>>,
+        turn_notify: Arc<Notify>,
+    },
+}
+
 pub struct GameSessionManager {
     sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
-    tictactoe_notifies: Arc<Mutex<HashMap<SessionId, Arc<Notify>>>>,
     broadcaster: Broadcaster,
     lobby_manager: LobbyManager,
 }
 
-struct GameSession {
-    state: Arc<Mutex<GameStateEnum>>,
-    tick: Arc<Mutex<u64>>,
-    bots: Arc<Mutex<HashMap<BotId, BotType>>>,
-    observers: Arc<Mutex<HashSet<PlayerId>>>,
-}
-
-impl std::fmt::Debug for GameSession {
+impl std::fmt::Debug for GameSessionManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("GameSession")
-            .field("state", &self.state)
-            .field("tick", &self.tick)
-            .field("bots", &self.bots)
-            .field("observers", &self.observers)
-            .finish()
+        f.debug_struct("GameSessionManager").finish()
     }
 }
 
@@ -40,7 +48,6 @@ impl GameSessionManager {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             client_to_session: Arc::new(Mutex::new(HashMap::new())),
-            tictactoe_notifies: Arc::new(Mutex::new(HashMap::new())),
             broadcaster,
             lobby_manager,
         }
@@ -53,17 +60,8 @@ impl GameSessionManager {
 
         let mut mapping = self.client_to_session.lock().await;
         mapping.retain(|_, sid| sid != session_id);
-        drop(mapping);
-
-        let mut notifies = self.tictactoe_notifies.lock().await;
-        notifies.remove(session_id);
 
         log!("Game session removed: {}", session_id);
-    }
-
-    async fn register_tictactoe_notify(&self, session_id: SessionId, notify: Arc<Notify>) {
-        let mut notifies = self.tictactoe_notifies.lock().await;
-        notifies.insert(session_id, notify);
     }
 
     pub async fn create_session(
@@ -82,62 +80,53 @@ impl GameSessionManager {
 
         let human_players: Vec<PlayerId> = lobby.players.keys().cloned().collect();
         let observers: HashSet<PlayerId> = lobby.observers.clone();
-        let bots: HashMap<BotId, BotType> = lobby.bots.clone();
+        let bots: HashMap<BotId, common::lobby::BotType> = lobby.bots.clone();
 
-        let ctx = Arc::new(GameSessionContext {
+        let config = GameSessionConfig {
             session_id: session_id.clone(),
             human_players: human_players.clone(),
             observers,
             bots,
-            broadcaster: self.broadcaster.clone(),
-        });
+        };
 
         match &lobby.settings {
             LobbySettings::Snake(snake_settings) => {
-                let result = crate::games::snake::session::create_session(&ctx, snake_settings);
-                let tick_interval = Duration::from_millis(snake_settings.tick_interval_ms as u64);
+                let settings = SnakeSessionSettings::from(snake_settings);
+                let session_state = create_snake_session(&config, &settings);
 
-                self.register_session(session_id, &result, &human_players).await;
+                self.register_snake_session(
+                    session_id.clone(),
+                    session_state.game_state.clone(),
+                    &human_players,
+                ).await;
 
                 let manager = self.clone();
-                let state = result.state;
-                let tick = result.tick;
-                let bots = result.bots;
-                let observers = result.observers;
+                let broadcaster = self.broadcaster.clone();
+                let config_clone = config.clone();
 
                 tokio::spawn(async move {
-                    let game_over = crate::games::snake::session::run_game_loop(
-                        ctx,
-                        state,
-                        tick,
-                        bots,
-                        observers,
-                        tick_interval,
-                    ).await;
-                    manager.handle_game_over(game_over).await;
+                    let notification = run_snake_game_loop(config_clone, session_state, broadcaster).await;
+                    manager.handle_game_over(&config, notification).await;
                 });
             }
             LobbySettings::TicTacToe(ttt_settings) => {
-                match crate::games::tictactoe::session::create_session(&ctx, ttt_settings) {
-                    Ok(handle) => {
-                        self.register_session(session_id.clone(), &handle.result, &human_players).await;
-                        self.register_tictactoe_notify(session_id.clone(), handle.turn_notify.clone()).await;
+                let settings = TicTacToeSessionSettings::from(ttt_settings);
+                match create_tictactoe_session(&config, &settings) {
+                    Ok(session_state) => {
+                        self.register_tictactoe_session(
+                            session_id.clone(),
+                            session_state.game_state.clone(),
+                            session_state.turn_notify.clone(),
+                            &human_players,
+                        ).await;
 
                         let manager = self.clone();
-                        let state = handle.result.state;
-                        let bots = handle.result.bots;
-                        let observers = handle.result.observers;
-                        let turn_notify = handle.turn_notify;
+                        let broadcaster = self.broadcaster.clone();
+                        let config_clone = config.clone();
 
                         tokio::spawn(async move {
-                            let game_over = crate::games::tictactoe::session::run_game_loop(
-                                ctx,
-                                state,
-                                bots,
-                                observers,
-                                turn_notify,
-                            ).await;
-                            manager.handle_game_over(game_over).await;
+                            let notification = run_tictactoe_game_loop(config_clone, session_state, broadcaster).await;
+                            manager.handle_game_over(&config, notification).await;
                         });
                     }
                     Err(e) => {
@@ -148,18 +137,13 @@ impl GameSessionManager {
         }
     }
 
-    async fn register_session(
+    async fn register_snake_session(
         &self,
         session_id: SessionId,
-        result: &GameSessionResult,
+        game_state: Arc<Mutex<SnakeGameState>>,
         human_players: &[PlayerId],
     ) {
-        let session = GameSession {
-            state: result.state.clone(),
-            tick: result.tick.clone(),
-            bots: result.bots.clone(),
-            observers: result.observers.clone(),
-        };
+        let session = GameSession::Snake { game_state };
 
         let mut sessions = self.sessions.lock().await;
         sessions.insert(session_id.clone(), session);
@@ -170,31 +154,46 @@ impl GameSessionManager {
             mapping.insert(ClientId::new(player_id.to_string()), session_id.clone());
         }
 
-        log!("Game session registered: {} with {} players", session_id, human_players.len());
+        log!("Snake game session registered: {} with {} players", session_id, human_players.len());
     }
 
-    async fn handle_game_over(&self, result: GameOverResult) {
-        let client_ids: Vec<ClientId> = result.human_players.iter()
+    async fn register_tictactoe_session(
+        &self,
+        session_id: SessionId,
+        game_state: Arc<Mutex<TicTacToeGameState>>,
+        turn_notify: Arc<Notify>,
+        human_players: &[PlayerId],
+    ) {
+        let session = GameSession::TicTacToe { game_state, turn_notify };
+
+        let mut sessions = self.sessions.lock().await;
+        sessions.insert(session_id.clone(), session);
+        drop(sessions);
+
+        let mut mapping = self.client_to_session.lock().await;
+        for player_id in human_players {
+            mapping.insert(ClientId::new(player_id.to_string()), session_id.clone());
+        }
+
+        log!("TicTacToe game session registered: {} with {} players", session_id, human_players.len());
+    }
+
+    async fn handle_game_over(&self, config: &GameSessionConfig, notification: common::GameOverNotification) {
+        let client_ids: Vec<ClientId> = config.human_players.iter()
             .map(|p| ClientId::new(p.to_string()))
-            .chain(result.observers.iter().map(|p| ClientId::new(p.to_string())))
+            .chain(config.observers.iter().map(|p| ClientId::new(p.to_string())))
             .collect();
 
         let game_over_msg = ServerMessage {
-            message: Some(server_message::Message::GameOver(
-                common::GameOverNotification {
-                    scores: result.scores,
-                    winner: result.winner,
-                    game_info: Some(result.game_info),
-                }
-            )),
+            message: Some(server_message::Message::GameOver(notification)),
         };
 
         self.broadcaster.broadcast_to_clients(&client_ids, game_over_msg).await;
 
-        let lobby_id = LobbyId::new(result.session_id.clone());
+        let lobby_id = LobbyId::new(config.session_id.clone());
         match self.lobby_manager.end_game(&lobby_id).await {
             Ok(_player_ids) => {
-                log!("Game ended for lobby {}, {} players in lobby", result.session_id, _player_ids.len());
+                log!("Game ended for lobby {}, {} players in lobby", config.session_id, _player_ids.len());
 
                 if let Some(_lobby_details) = self.lobby_manager.get_lobby_details(&lobby_id).await {
                     match self.lobby_manager.get_play_again_status(&lobby_id).await {
@@ -235,11 +234,11 @@ impl GameSessionManager {
                 }
             }
             Err(e) => {
-                log!("Failed to end game for lobby {}: {}", result.session_id, e);
+                log!("Failed to end game for lobby {}: {}", config.session_id, e);
             }
         }
 
-        self.remove_session(&result.session_id).await;
+        self.remove_session(&config.session_id).await;
     }
 
     pub async fn set_direction(
@@ -248,11 +247,15 @@ impl GameSessionManager {
         direction: Direction,
     ) {
         let mapping = self.client_to_session.lock().await;
-        if let Some(session_id) = mapping.get(client_id) {
-            let sessions = self.sessions.lock().await;
-            if let Some(session) = sessions.get(session_id) {
-                crate::games::snake::session::handle_direction(&session.state, client_id, direction).await;
-            }
+        let session_id = match mapping.get(client_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+        drop(mapping);
+
+        let sessions = self.sessions.lock().await;
+        if let Some(GameSession::Snake { game_state }) = sessions.get(&session_id) {
+            crate::games::snake::session::handle_direction(game_state, client_id, direction).await;
         }
     }
 
@@ -262,11 +265,15 @@ impl GameSessionManager {
         reason: DeathReason,
     ) {
         let mapping = self.client_to_session.lock().await;
-        if let Some(session_id) = mapping.get(client_id) {
-            let sessions = self.sessions.lock().await;
-            if let Some(session) = sessions.get(session_id) {
-                crate::games::snake::session::handle_kill_snake(&session.state, client_id, reason).await;
-            }
+        let session_id = match mapping.get(client_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+        drop(mapping);
+
+        let sessions = self.sessions.lock().await;
+        if let Some(GameSession::Snake { game_state }) = sessions.get(&session_id) {
+            crate::games::snake::session::handle_kill_snake(game_state, client_id, reason).await;
         }
     }
 
@@ -284,36 +291,20 @@ impl GameSessionManager {
         drop(mapping);
 
         let sessions = self.sessions.lock().await;
-        let (state_arc, bots_arc, observers_arc) = match sessions.get(&session_id) {
-            Some(session) => (session.state.clone(), session.bots.clone(), session.observers.clone()),
-            None => return,
-        };
-        drop(sessions);
+        if let Some(GameSession::TicTacToe { game_state, turn_notify }) = sessions.get(&session_id) {
+            let game_state = game_state.clone();
+            let turn_notify = turn_notify.clone();
+            drop(sessions);
 
-        let notifies = self.tictactoe_notifies.lock().await;
-        let turn_notify = match notifies.get(&session_id) {
-            Some(n) => n.clone(),
-            None => return,
-        };
-        drop(notifies);
-
-        let human_players: Vec<PlayerId> = match self.lobby_manager.get_lobby(&LobbyId::new(session_id)).await {
-            Some(lobby) => lobby.players.keys().cloned().collect(),
-            None => vec![],
-        };
-
-        if let Err(e) = crate::games::tictactoe::session::handle_place_mark(
-            &state_arc,
-            &bots_arc,
-            &observers_arc,
-            &human_players,
-            &self.broadcaster,
-            &turn_notify,
-            client_id,
-            x,
-            y,
-        ).await {
-            log!("Failed to place mark: {}", e);
+            if let Err(e) = crate::games::tictactoe::session::handle_place_mark(
+                &game_state,
+                &turn_notify,
+                client_id,
+                x,
+                y,
+            ).await {
+                log!("Failed to place mark: {}", e);
+            }
         }
     }
 }
@@ -323,7 +314,6 @@ impl Clone for GameSessionManager {
         Self {
             sessions: self.sessions.clone(),
             client_to_session: self.client_to_session.clone(),
-            tictactoe_notifies: self.tictactoe_notifies.clone(),
             broadcaster: self.broadcaster.clone(),
             lobby_manager: self.lobby_manager.clone(),
         }

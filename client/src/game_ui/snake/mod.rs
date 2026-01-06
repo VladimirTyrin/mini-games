@@ -1,9 +1,9 @@
 use crate::sprites::Sprites;
 use crate::state::{GameCommand, SnakeGameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
 use crate::colors::generate_color_from_client_id;
+use crate::CommandSender;
 use common::{proto::snake::{Direction, SnakeGameEndReason, SnakeGameEndInfo}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
-use tokio::sync::mpsc;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
@@ -82,7 +82,7 @@ impl SnakeGameUi {
         game_state: &Option<GameStateUpdate>,
         client_id: &str,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         if let Some(game_state_update) = game_state {
             let state = match &game_state_update.state {
@@ -91,13 +91,13 @@ impl SnakeGameUi {
             };
 
             if !is_observer {
-                self.handle_input(ctx, command_tx);
+                self.handle_input(ctx, command_sender);
             }
 
             if is_observer {
                 ctx.input(|i| {
                     if i.key_pressed(egui::Key::Escape) {
-                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                        command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
                 });
             }
@@ -203,7 +203,7 @@ impl SnakeGameUi {
         game_info: &SnakeGameEndInfo,
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
-        command_tx: &mpsc::UnboundedSender<ClientCommand>,
+        command_sender: &CommandSender,
     ) {
         let reason = SnakeGameEndReason::try_from(game_info.reason)
             .unwrap_or(SnakeGameEndReason::Unspecified);
@@ -345,11 +345,11 @@ impl SnakeGameUi {
                                         ui.label("Waiting for other players...");
                                     } else {
                                         if ui.button("Play Again (R)").clicked() {
-                                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                            command_sender.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                         }
                                         ctx.input(|i| {
                                             if i.key_pressed(egui::Key::R) {
-                                                let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                                                command_sender.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                                             }
                                         });
                                     }
@@ -381,12 +381,12 @@ impl SnakeGameUi {
                     }
 
                     if ui.button("Back to Lobby List (Esc)").clicked() {
-                        let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                        command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
 
                     ctx.input(|i| {
                         if i.key_pressed(egui::Key::Escape) {
-                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                            command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                         }
                     });
                 });
@@ -467,7 +467,7 @@ impl SnakeGameUi {
                         if is_ready {
                             ui.label("Waiting for other players...");
                         } else if ui.button("Play Again").clicked() {
-                            let _ = command_tx.send(ClientCommand::Menu(MenuCommand::PlayAgain));
+                            command_sender.send(ClientCommand::Menu(MenuCommand::PlayAgain));
                         }
 
                         ui.label("Players ready:");
@@ -493,18 +493,18 @@ impl SnakeGameUi {
 
             ui.separator();
             if ui.button("Back to Lobby List (Esc)").clicked() {
-                let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
             }
 
             ctx.input(|i| {
                 if i.key_pressed(egui::Key::Escape) {
-                    let _ = command_tx.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                    command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                 }
             });
         }
     }
 
-    fn handle_input(&mut self, ctx: &egui::Context, command_tx: &mpsc::UnboundedSender<ClientCommand>) {
+    fn handle_input(&mut self, ctx: &egui::Context, command_sender: &CommandSender) {
         ctx.input(|i| {
             let mut new_direction = None;
 
@@ -519,7 +519,7 @@ impl SnakeGameUi {
             }
 
             if let Some(direction) = new_direction {
-                let _ = command_tx.send(ClientCommand::Game(GameCommand::Snake(SnakeGameCommand::SendTurn { direction })));
+                command_sender.send(ClientCommand::Game(GameCommand::Snake(SnakeGameCommand::SendTurn { direction })));
             }
         });
     }

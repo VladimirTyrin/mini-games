@@ -4,6 +4,12 @@ use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionMode {
+    Online,
+    TemporaryOffline,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BotType {
     Snake(SnakeBotType),
@@ -101,7 +107,7 @@ pub struct InnerState {
     pub state: AppState,
     pub error: Option<String>,
     pub should_close: bool,
-    pub connection_failed: bool,
+    pub connection_mode: ConnectionMode,
     pub retry_server_address: Option<String>,
     pub ping_ms: Option<u64>,
     pub ctx: Option<eframe::egui::Context>,
@@ -121,7 +127,7 @@ impl SharedState {
                 },
                 error: None,
                 should_close: false,
-                connection_failed: false,
+                connection_mode: ConnectionMode::Online,
                 retry_server_address: None,
                 ping_ms: None,
                 ctx: None,
@@ -200,11 +206,20 @@ impl SharedState {
     }
 
     pub fn set_connection_failed(&self, failed: bool) {
-        self.inner.lock().expect("SharedState lock poisoned").connection_failed = failed;
+        let mode = if failed { ConnectionMode::TemporaryOffline } else { ConnectionMode::Online };
+        self.inner.lock().expect("SharedState lock poisoned").connection_mode = mode;
     }
 
     pub fn get_connection_failed(&self) -> bool {
-        self.inner.lock().expect("SharedState lock poisoned").connection_failed
+        self.inner.lock().expect("SharedState lock poisoned").connection_mode == ConnectionMode::TemporaryOffline
+    }
+
+    pub fn set_connection_mode(&self, mode: ConnectionMode) {
+        self.inner.lock().expect("SharedState lock poisoned").connection_mode = mode;
+    }
+
+    pub fn get_connection_mode(&self) -> ConnectionMode {
+        self.inner.lock().expect("SharedState lock poisoned").connection_mode
     }
 
     pub fn set_retry_server_address(&self, address: Option<String>) {
