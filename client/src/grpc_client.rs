@@ -355,7 +355,12 @@ pub async fn grpc_client_task(
                                         }
                                 }
                                 common::server_message::Message::Error(err) => {
+                                    let is_version_mismatch = err.code == common::ErrorCode::VersionMismatch.into();
                                     shared_state.set_error(err.message);
+                                    if is_version_mismatch {
+                                        shared_state.set_connection_mode(crate::state::ConnectionMode::TemporaryOffline);
+                                        break;
+                                    }
                                 }
                                 common::server_message::Message::LobbyListUpdate(_) => {
                                     if tx.send(new_client_message(
