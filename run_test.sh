@@ -10,15 +10,15 @@ SERVER_PID=$!
 sleep 2
 
 echo "Starting client 1..."
-./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 --random-client-id &
 CLIENT1_PID=$!
 
 echo "Starting client 2..."
-./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 --random-client-id &
 CLIENT2_PID=$!
 
 echo "Starting client 3..."
-./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 &
+./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 --random-client-id &
 CLIENT3_PID=$!
 
 echo "Test setup running:"

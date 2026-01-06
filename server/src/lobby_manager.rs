@@ -240,10 +240,12 @@ impl LobbyManager {
         let player_id = PlayerId::new(target_id.clone());
         let bot_id = BotId::new(target_id.clone());
 
-        let (identity, is_bot) = if lobby.players.contains_key(&player_id) {
-            (PlayerIdentity::Player(player_id.clone()), false)
+        let (identity, is_bot, is_observer) = if lobby.players.contains_key(&player_id) {
+            (PlayerIdentity::Player(player_id.clone()), false, false)
         } else if let Some(bot_type) = lobby.bots.get(&bot_id) {
-            (PlayerIdentity::Bot { id: bot_id.clone(), bot_type: *bot_type }, true)
+            (PlayerIdentity::Bot { id: bot_id.clone(), bot_type: *bot_type }, true, false)
+        } else if lobby.observers.contains(&player_id) {
+            (PlayerIdentity::Player(player_id.clone()), false, true)
         } else {
             return Err("Player not in lobby".to_string());
         };
@@ -251,6 +253,13 @@ impl LobbyManager {
         if is_bot {
             lobby.remove_bot(&bot_id);
             let lobby_details = lobby.to_details();
+            Ok((lobby_details, identity, is_bot))
+        } else if is_observer {
+            lobby.remove_observer(&player_id);
+            let lobby_details = lobby.to_details();
+            let target_client_id = ClientId::new(target_id);
+            state.client_to_lobby.remove(&target_client_id);
+            state.clients_not_in_lobby.insert(target_client_id);
             Ok((lobby_details, identity, is_bot))
         } else {
             lobby.remove_player(&player_id);

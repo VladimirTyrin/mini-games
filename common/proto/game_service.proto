@@ -28,12 +28,10 @@ message ClientMessage {
         InLobbyChatMessage in_lobby_chat = 22;
         PingRequest ping = 23;
 
-        // Observer commands: 30-39
         BecomeObserverFromPlayerRequest become_observer = 30;
         BecomePlayerFromObserverRequest become_player = 31;
         MakePlayerObserverRequest make_observer = 32;
 
-        // In-game: 100+
         InGameCommand in_game = 100;
     }
 }

@@ -34,11 +34,28 @@ impl GrpcLoggingSender<ClientMessage> {
 
 pub async fn grpc_client_task(
     client_id: String,
-    mut server_address: String,
+    initial_server_address: Option<String>,
     shared_state: SharedState,
     mut command_rx: mpsc::UnboundedReceiver<ClientCommand>,
     config_manager: ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut server_address = match initial_server_address {
+        Some(addr) => addr,
+        None => {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+                if let Some(new_address) = shared_state.take_retry_server_address() {
+                    break new_address;
+                }
+
+                if shared_state.should_close() {
+                    return Ok(());
+                }
+            }
+        }
+    };
+
     loop {
         let mut client = match GameServiceClient::connect(server_address.clone()).await {
             Ok(client) => {

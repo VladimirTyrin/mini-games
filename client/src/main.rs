@@ -8,6 +8,7 @@ mod colors;
 mod constants;
 mod command_sender;
 mod offline;
+mod username_prompt;
 
 pub use command_sender::CommandSender;
 
@@ -30,16 +31,29 @@ struct Args {
     use_log_prefix: bool,
 
     #[arg(long)]
-    server_address:  Option<String>,
+    server_address: Option<String>,
+
+    #[arg(long)]
+    random_client_id: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config_manager = get_config_manager();
-    let config = config_manager.get_config()?;
-
-    let client_id = config.client_id.unwrap_or_else(generate_client_id);
-
     let args = Args::parse();
+
+    let config_manager = get_config_manager();
+    let mut config = config_manager.get_config()?;
+
+    let client_id = if args.random_client_id {
+        generate_client_id()
+    } else if let Some(ref id) = config.client_id {
+        id.clone()
+    } else {
+        let username = username_prompt::prompt_for_username()
+            .ok_or("Username input was cancelled")?;
+        config.client_id = Some(username.clone());
+        config_manager.set_config(&config)?;
+        username
+    };
 
     let prefix = if args.use_log_prefix {
         Some(client_id.clone())
@@ -56,25 +70,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_address = args.server_address.or(config.server.address.clone());
     let shared_state_clone = shared_state.clone();
 
-    if let Some(address) = server_address {
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let config_manager = get_config_manager();
-                if let Err(e) = grpc_client_task(
-                    client_id_clone,
-                    address,
-                    shared_state_clone,
-                    command_rx,
-                    config_manager,
-                ).await {
-                    eprintln!("gRPC client error: {}", e);
-                }
-            });
-        });
-    } else {
+    if server_address.is_none() {
         shared_state.set_connection_failed(true);
     }
+
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let config_manager = get_config_manager();
+            if let Err(e) = grpc_client_task(
+                client_id_clone,
+                server_address,
+                shared_state_clone,
+                command_rx,
+                config_manager,
+            ).await {
+                eprintln!("gRPC client error: {}", e);
+            }
+        });
+    });
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
