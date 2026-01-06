@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 struct UsernamePromptApp {
     username: String,
     result: Arc<Mutex<Option<String>>>,
+    focus_requested: bool,
 }
 
 impl UsernamePromptApp {
@@ -11,6 +12,7 @@ impl UsernamePromptApp {
         Self {
             username: String::new(),
             result,
+            focus_requested: false,
         }
     }
 
@@ -39,6 +41,11 @@ impl eframe::App for UsernamePromptApp {
                         .hint_text("Username")
                         .desired_width(200.0)
                 );
+
+                if !self.focus_requested {
+                    response.request_focus();
+                    self.focus_requested = true;
+                }
 
                 let enter_pressed = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
