@@ -378,6 +378,20 @@ impl MenuApp {
                         for lobby in lobbies {
                             let can_join = lobby.current_players < lobby.max_players;
 
+                            let (game_icon, game_settings) = match lobby.settings.as_ref().and_then(|s| s.settings.as_ref()) {
+                                Some(common::lobby_settings::Settings::Snake(s)) => {
+                                    let wall_mode = match common::proto::snake::WallCollisionMode::try_from(s.wall_collision_mode) {
+                                        Ok(common::proto::snake::WallCollisionMode::WrapAround) => "wrap",
+                                        _ => "death",
+                                    };
+                                    ("🐍", format!("{}x{}, {}", s.field_width, s.field_height, wall_mode))
+                                }
+                                Some(common::lobby_settings::Settings::Tictactoe(s)) => {
+                                    ("⭕", format!("{}x{}, {} to win", s.field_width, s.field_height, s.win_count))
+                                }
+                                None => ("❓", "Unknown".to_string()),
+                            };
+
                             let (rect, inner_response) = ui.allocate_exact_size(
                                 egui::vec2(ui.available_width(), 60.0),
                                 egui::Sense::click(),
@@ -394,10 +408,10 @@ impl MenuApp {
                                                 } else {
                                                     ""
                                                 };
-                                                ui.label(format!("📋 {}", lobby.lobby_name));
+                                                ui.label(format!("{} {}", game_icon, lobby.lobby_name));
                                                 ui.label(format!(
-                                                    "👥 Players: {}/{} {}",
-                                                    lobby.current_players, lobby.max_players, full_message
+                                                    "👥 {}/{}{} | {}",
+                                                    lobby.current_players, lobby.max_players, full_message, game_settings
                                                 ));
                                             });
 
