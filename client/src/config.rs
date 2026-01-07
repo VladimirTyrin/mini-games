@@ -20,7 +20,10 @@ pub struct Config {
     pub last_game: Option<GameType>,
     pub snake: SnakeLobbyConfig,
     pub tictactoe: TicTacToeLobbyConfig,
+    pub replays: ReplayConfig,
     pub client_id: Option<String>,
+    #[serde(default)]
+    pub file_association_registered: bool,
 }
 
 impl Validate for Config {
@@ -28,6 +31,22 @@ impl Validate for Config {
         self.server.validate()?;
         self.snake.validate()?;
         self.tictactoe.validate()?;
+        self.replays.validate()?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
+pub struct ReplayConfig {
+    pub save: bool,
+    pub location: String,
+}
+
+impl Validate for ReplayConfig {
+    fn validate(&self) -> Result<(), String> {
+        if self.location.is_empty() {
+            return Err("replay location must not be empty".to_string());
+        }
         Ok(())
     }
 }
@@ -143,7 +162,12 @@ impl Default for Config {
                 field_height: 3,
                 win_count: 3,
             },
+            replays: ReplayConfig {
+                save: true,
+                location: "minigamesreplays".to_string(),
+            },
             client_id: None,
+            file_association_registered: false,
         }
     }
 }

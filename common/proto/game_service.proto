@@ -61,6 +61,7 @@ message ServerMessage {
         GameStartingNotification game_starting = 100;
         GameStateUpdate game_state = 101;
         GameOverNotification game_over = 102;
+        ReplayFileReadyNotification replay_file = 103;
 
         ErrorResponse error = 200;
     }
@@ -93,25 +94,26 @@ message LobbyListResponse {
     repeated LobbyInfo lobbies = 1;
 }
 
+message LobbySettings {
+    oneof settings {
+        snake.SnakeLobbySettings snake = 1;
+        tictactoe.TicTacToeLobbySettings tictactoe = 2;
+    }
+}
+
 message LobbyInfo {
     string lobby_id = 1;
     string lobby_name = 2;
     uint32 current_players = 3;
     uint32 max_players = 4;
     uint32 observer_count = 5;
-    oneof settings {
-        snake.SnakeLobbySettings snake = 10;
-        tictactoe.TicTacToeLobbySettings tictactoe = 11;
-    }
+    LobbySettings settings = 6;
 }
 
 message CreateLobbyRequest {
     string lobby_name = 1;
     uint32 max_players = 2;
-    oneof settings {
-        snake.SnakeLobbySettings snake = 10;
-        tictactoe.TicTacToeLobbySettings tictactoe = 11;
-    }
+    LobbySettings settings = 3;
 }
 
 message JoinLobbyRequest {
@@ -282,4 +284,10 @@ message LobbyListUpdateNotification {}
 
 message LobbyClosedNotification {
     string message = 1;
+}
+
+message ReplayFileReadyNotification {
+    int32 version = 1;
+    string suggested_file_name = 2;
+    bytes content = 3;
 }

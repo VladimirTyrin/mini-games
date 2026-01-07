@@ -3,6 +3,7 @@ use crate::colors::generate_color_from_client_id;
 use crate::CommandSender;
 use common::{proto::tictactoe::TicTacToeGameEndInfo, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
+use std::path::PathBuf;
 
 pub struct TicTacToeGameUi {
     last_hover: Option<(u32, u32)>,
@@ -328,14 +329,16 @@ impl TicTacToeGameUi {
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
         command_sender: &CommandSender,
-    ) {
+        replay_path: Option<&PathBuf>,
+    ) -> bool {
+        let mut watch_replay_clicked = false;
         let state = if let Some(game_state_update) = last_game_state {
             match &game_state_update.state {
                 Some(common::game_state_update::State::Tictactoe(ttt_state)) => ttt_state,
-                _ => return,
+                _ => return false,
             }
         } else {
-            return;
+            return false;
         };
 
         let available_width = ui.available_width();
@@ -528,6 +531,21 @@ impl TicTacToeGameUi {
                     }
                 }
 
+                if let Some(path) = replay_path {
+                    ui.add_space(5.0);
+                    ui.separator();
+                    ui.label(format!("Replay saved: {}", path.display()));
+                    if ui.button("Watch Replay (W)").clicked() {
+                        watch_replay_clicked = true;
+                    }
+                    ctx.input(|i| {
+                        if i.key_pressed(egui::Key::W) {
+                            watch_replay_clicked = true;
+                        }
+                    });
+                    ui.add_space(5.0);
+                }
+
                 if ui.button("Back to Lobby List (Esc)").clicked() {
                     command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                 }
@@ -539,5 +557,7 @@ impl TicTacToeGameUi {
                 });
             });
         });
+
+        watch_replay_clicked
     }
 }

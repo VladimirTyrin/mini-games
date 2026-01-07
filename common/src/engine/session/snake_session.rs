@@ -7,18 +7,21 @@ use tokio::time::interval;
 use crate::{
     BotId,
     GameStateUpdate, game_state_update, GameOverNotification, game_over_notification,
-    ScoreEntry, PlayerIdentity, SnakePosition,
-    proto::snake::{SnakeGameState as ProtoSnakeGameState, SnakeGameEndReason, SnakeGameEndInfo},
+    ScoreEntry, PlayerIdentity, SnakePosition, InGameCommand, in_game_command,
+    proto::snake::{SnakeGameState as ProtoSnakeGameState, SnakeGameEndReason, SnakeGameEndInfo, SnakeInGameCommand, snake_in_game_command, TurnCommand, Direction as ProtoDirection},
 };
 use crate::lobby::BotType;
 use crate::engine::snake::{GameState, Direction, Point, DeathReason, BotController, FieldSize, WallCollisionMode, DeadSnakeBehavior};
-use crate::engine::session::{GameBroadcaster, GameSessionConfig};
+use crate::engine::session::{GameBroadcaster, GameSessionConfig, SessionRng};
+use crate::replay::ReplayRecorder;
 
 pub struct SnakeSessionState {
     pub game_state: Arc<Mutex<GameState>>,
     pub tick: Arc<Mutex<u64>>,
+    pub rng: Arc<Mutex<SessionRng>>,
     pub bots: HashMap<BotId, BotType>,
     pub tick_interval: Duration,
+    pub replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
 }
 
 pub struct SnakeSessionSettings {
@@ -60,7 +63,14 @@ impl From<&crate::proto::snake::SnakeLobbySettings> for SnakeSessionSettings {
 pub fn create_session(
     config: &GameSessionConfig,
     settings: &SnakeSessionSettings,
+    seed: Option<u64>,
+    replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
 ) -> SnakeSessionState {
+    let rng = match seed {
+        Some(s) => SessionRng::new(s),
+        None => SessionRng::from_random(),
+    };
+
     let field_size = FieldSize {
         width: settings.field_width,
         height: settings.field_height,
@@ -93,8 +103,10 @@ pub fn create_session(
     SnakeSessionState {
         game_state: Arc::new(Mutex::new(game_state)),
         tick: Arc::new(Mutex::new(0u64)),
+        rng: Arc::new(Mutex::new(rng)),
         bots: config.bots.clone(),
         tick_interval: settings.tick_interval,
+        replay_recorder,
     }
 }
 
@@ -109,18 +121,33 @@ pub async fn run_game_loop<B: GameBroadcaster>(
     loop {
         tick_interval_timer.tick().await;
 
+        let current_tick = {
+            let tick = session_state.tick.lock().await;
+            *tick
+        };
+
         let mut game_state = session_state.game_state.lock().await;
+        let mut rng = session_state.rng.lock().await;
 
         for (bot_id, bot_type) in &session_state.bots {
             if let BotType::Snake(snake_bot_type) = bot_type {
                 let player_id = bot_id.to_player_id();
-                if let Some(direction) = BotController::calculate_move(*snake_bot_type, &player_id, &game_state) {
+                if let Some(direction) = BotController::calculate_move(*snake_bot_type, &player_id, &game_state, &mut rng) {
                     game_state.set_snake_direction(&player_id, direction);
+
+                    if let Some(ref recorder) = session_state.replay_recorder {
+                        let mut recorder = recorder.lock().await;
+                        if let Some(player_index) = recorder.find_player_index(&player_id.to_string()) {
+                            let command = create_turn_command(direction);
+                            recorder.record_command(current_tick as i64, player_index, command);
+                        }
+                    }
                 }
             }
         }
 
-        game_state.update();
+        game_state.update(&mut rng);
+        drop(rng);
 
         let mut tick_value = session_state.tick.lock().await;
         *tick_value += 1;
@@ -272,5 +299,22 @@ async fn build_game_over_notification(
                 reason: game_end_reason as i32,
             }
         )),
+    }
+}
+
+fn create_turn_command(direction: Direction) -> InGameCommand {
+    let proto_direction = match direction {
+        Direction::Up => ProtoDirection::Up,
+        Direction::Down => ProtoDirection::Down,
+        Direction::Left => ProtoDirection::Left,
+        Direction::Right => ProtoDirection::Right,
+    };
+
+    InGameCommand {
+        command: Some(in_game_command::Command::Snake(SnakeInGameCommand {
+            command: Some(snake_in_game_command::Command::Turn(TurnCommand {
+                direction: proto_direction as i32,
+            })),
+        })),
     }
 }

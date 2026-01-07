@@ -1,6 +1,6 @@
 use crate::{PlayerId, SnakeBotType};
+use crate::engine::session::SessionRng;
 use super::game_state::{GameState, Direction, Point, WallCollisionMode, DeadSnakeBehavior};
-use rand::Rng;
 
 pub struct BotController;
 
@@ -9,15 +9,16 @@ impl BotController {
         bot_type: SnakeBotType,
         player_id: &PlayerId,
         state: &GameState,
+        rng: &mut SessionRng,
     ) -> Option<Direction> {
         match bot_type {
-            SnakeBotType::Efficient => Self::efficient_pathfinding(player_id, state),
-            SnakeBotType::Random => Self::random_valid_move(player_id, state),
+            SnakeBotType::Efficient => Self::efficient_pathfinding(player_id, state, rng),
+            SnakeBotType::Random => Self::random_valid_move(player_id, state, rng),
             SnakeBotType::Unspecified => None,
         }
     }
 
-    fn efficient_pathfinding(player_id: &PlayerId, state: &GameState) -> Option<Direction> {
+    fn efficient_pathfinding(player_id: &PlayerId, state: &GameState, rng: &mut SessionRng) -> Option<Direction> {
         let snake = state.snakes.get(player_id)?;
         if !snake.is_alive() {
             return None;
@@ -44,10 +45,10 @@ impl BotController {
                 }
         }
 
-        best_dir.or_else(|| Self::random_valid_move(player_id, state))
+        best_dir.or_else(|| Self::random_valid_move(player_id, state, rng))
     }
 
-    fn random_valid_move(player_id: &PlayerId, state: &GameState) -> Option<Direction> {
+    fn random_valid_move(player_id: &PlayerId, state: &GameState, rng: &mut SessionRng) -> Option<Direction> {
         let snake = state.snakes.get(player_id)?;
         if !snake.is_alive() {
             return None;
@@ -71,7 +72,6 @@ impl BotController {
         if safe_directions.is_empty() {
             Some(current_direction)
         } else {
-            let mut rng = rand::rng();
             let idx = rng.random_range(0..safe_directions.len());
             Some(safe_directions[idx])
         }

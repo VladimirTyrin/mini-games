@@ -15,6 +15,8 @@ use common::engine::session::tictactoe_session::{
     create_session as create_tictactoe_session,
     run_game_loop as run_tictactoe_game_loop,
 };
+use common::replay::{ReplayRecorder, generate_replay_filename, save_replay_to_bytes, REPLAY_VERSION};
+use common::{ReplayGame, InGameCommand, in_game_command, ReplayFileReadyNotification};
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::{LobbyManager, LobbySettings};
 
@@ -23,10 +25,13 @@ pub type SessionId = String;
 enum GameSession {
     Snake {
         game_state: Arc<Mutex<SnakeGameState>>,
+        tick: Arc<Mutex<u64>>,
+        replay_recorder: Arc<Mutex<ReplayRecorder>>,
     },
     TicTacToe {
         game_state: Arc<Mutex<TicTacToeGameState>>,
         turn_notify: Arc<Notify>,
+        replay_recorder: Arc<Mutex<ReplayRecorder>>,
     },
 }
 
@@ -92,11 +97,28 @@ impl GameSessionManager {
         match &lobby.settings {
             LobbySettings::Snake(snake_settings) => {
                 let settings = SnakeSessionSettings::from(snake_settings);
-                let session_state = create_snake_session(&config, &settings);
+                let seed: u64 = rand::random();
+
+                let players: Vec<common::PlayerIdentity> = config.human_players.iter()
+                    .map(|p| common::PlayerIdentity { player_id: p.to_string(), is_bot: false })
+                    .chain(config.bots.keys().map(|b| common::PlayerIdentity { player_id: b.to_player_id().to_string(), is_bot: true }))
+                    .collect();
+
+                let replay_recorder = Arc::new(Mutex::new(ReplayRecorder::new(
+                    common::version::VERSION.to_string(),
+                    ReplayGame::Snake,
+                    seed,
+                    Some(common::lobby_settings::Settings::Snake(snake_settings.clone())),
+                    players,
+                )));
+
+                let session_state = create_snake_session(&config, &settings, Some(seed), Some(replay_recorder.clone()));
 
                 self.register_snake_session(
                     session_id.clone(),
                     session_state.game_state.clone(),
+                    session_state.tick.clone(),
+                    replay_recorder,
                     &human_players,
                 ).await;
 
@@ -111,12 +133,28 @@ impl GameSessionManager {
             }
             LobbySettings::TicTacToe(ttt_settings) => {
                 let settings = TicTacToeSessionSettings::from(ttt_settings);
-                match create_tictactoe_session(&config, &settings) {
+                let seed: u64 = rand::random();
+
+                let players: Vec<common::PlayerIdentity> = config.human_players.iter()
+                    .map(|p| common::PlayerIdentity { player_id: p.to_string(), is_bot: false })
+                    .chain(config.bots.keys().map(|b| common::PlayerIdentity { player_id: b.to_player_id().to_string(), is_bot: true }))
+                    .collect();
+
+                let replay_recorder = Arc::new(Mutex::new(ReplayRecorder::new(
+                    common::version::VERSION.to_string(),
+                    ReplayGame::Tictactoe,
+                    seed,
+                    Some(common::lobby_settings::Settings::Tictactoe(ttt_settings.clone())),
+                    players,
+                )));
+
+                match create_tictactoe_session(&config, &settings, Some(seed), Some(replay_recorder.clone())) {
                     Ok(session_state) => {
                         self.register_tictactoe_session(
                             session_id.clone(),
                             session_state.game_state.clone(),
                             session_state.turn_notify.clone(),
+                            replay_recorder,
                             &human_players,
                         ).await;
 
@@ -141,9 +179,11 @@ impl GameSessionManager {
         &self,
         session_id: SessionId,
         game_state: Arc<Mutex<SnakeGameState>>,
+        tick: Arc<Mutex<u64>>,
+        replay_recorder: Arc<Mutex<ReplayRecorder>>,
         human_players: &[PlayerId],
     ) {
-        let session = GameSession::Snake { game_state };
+        let session = GameSession::Snake { game_state, tick, replay_recorder };
 
         let mut sessions = self.sessions.lock().await;
         sessions.insert(session_id.clone(), session);
@@ -162,9 +202,10 @@ impl GameSessionManager {
         session_id: SessionId,
         game_state: Arc<Mutex<TicTacToeGameState>>,
         turn_notify: Arc<Notify>,
+        replay_recorder: Arc<Mutex<ReplayRecorder>>,
         human_players: &[PlayerId],
     ) {
-        let session = GameSession::TicTacToe { game_state, turn_notify };
+        let session = GameSession::TicTacToe { game_state, turn_notify, replay_recorder };
 
         let mut sessions = self.sessions.lock().await;
         sessions.insert(session_id.clone(), session);
@@ -189,6 +230,14 @@ impl GameSessionManager {
         };
 
         self.broadcaster.broadcast_to_clients(&client_ids, game_over_msg).await;
+
+        // Finalize and send replay
+        if let Some(replay_notification) = self.finalize_replay(&config.session_id).await {
+            let replay_msg = ServerMessage {
+                message: Some(server_message::Message::ReplayFile(replay_notification)),
+            };
+            self.broadcaster.broadcast_to_clients(&client_ids, replay_msg).await;
+        }
 
         let lobby_id = LobbyId::new(config.session_id.clone());
         match self.lobby_manager.end_game(&lobby_id).await {
@@ -241,11 +290,56 @@ impl GameSessionManager {
         self.remove_session(&config.session_id).await;
     }
 
-    pub async fn set_direction(
+    async fn finalize_replay(&self, session_id: &SessionId) -> Option<ReplayFileReadyNotification> {
+        let sessions = self.sessions.lock().await;
+        let session = sessions.get(session_id)?;
+
+        let (replay_recorder, game) = match session {
+            GameSession::Snake { replay_recorder, .. } => (replay_recorder.clone(), ReplayGame::Snake),
+            GameSession::TicTacToe { replay_recorder, .. } => (replay_recorder.clone(), ReplayGame::Tictactoe),
+        };
+        drop(sessions);
+
+        let replay = {
+            let mut recorder = replay_recorder.lock().await;
+            recorder.finalize()
+        };
+
+        let suggested_file_name = generate_replay_filename(game, common::version::VERSION);
+        let content = save_replay_to_bytes(&replay);
+
+        log!("Replay finalized: {} ({} bytes, {} actions)", suggested_file_name, content.len(), replay.actions.len());
+
+        Some(ReplayFileReadyNotification {
+            version: REPLAY_VERSION as i32,
+            suggested_file_name,
+            content,
+        })
+    }
+
+    pub async fn handle_snake_command(
         &self,
         client_id: &ClientId,
-        direction: Direction,
+        command: InGameCommand,
     ) {
+        let direction = match &command.command {
+            Some(in_game_command::Command::Snake(snake_cmd)) => {
+                match &snake_cmd.command {
+                    Some(common::proto::snake::snake_in_game_command::Command::Turn(turn_cmd)) => {
+                        match common::proto::snake::Direction::try_from(turn_cmd.direction) {
+                            Ok(common::proto::snake::Direction::Up) => Direction::Up,
+                            Ok(common::proto::snake::Direction::Down) => Direction::Down,
+                            Ok(common::proto::snake::Direction::Left) => Direction::Left,
+                            Ok(common::proto::snake::Direction::Right) => Direction::Right,
+                            _ => return,
+                        }
+                    }
+                    _ => return,
+                }
+            }
+            _ => return,
+        };
+
         let mapping = self.client_to_session.lock().await;
         let session_id = match mapping.get(client_id) {
             Some(id) => id.clone(),
@@ -254,8 +348,22 @@ impl GameSessionManager {
         drop(mapping);
 
         let sessions = self.sessions.lock().await;
-        if let Some(GameSession::Snake { game_state }) = sessions.get(&session_id) {
-            crate::games::snake::session::handle_direction(game_state, client_id, direction).await;
+        if let Some(GameSession::Snake { game_state, tick, replay_recorder }) = sessions.get(&session_id) {
+            let game_state = game_state.clone();
+            let tick = tick.clone();
+            let replay_recorder = replay_recorder.clone();
+            drop(sessions);
+
+            let current_tick = *tick.lock().await;
+
+            {
+                let mut recorder = replay_recorder.lock().await;
+                if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
+                    recorder.record_command(current_tick as i64, player_index, command);
+                }
+            }
+
+            crate::games::snake::session::handle_direction(&game_state, client_id, direction).await;
         }
     }
 
@@ -272,17 +380,41 @@ impl GameSessionManager {
         drop(mapping);
 
         let sessions = self.sessions.lock().await;
-        if let Some(GameSession::Snake { game_state }) = sessions.get(&session_id) {
-            crate::games::snake::session::handle_kill_snake(game_state, client_id, reason).await;
+        if let Some(GameSession::Snake { game_state, tick, replay_recorder }) = sessions.get(&session_id) {
+            let game_state = game_state.clone();
+            let tick = tick.clone();
+            let replay_recorder = replay_recorder.clone();
+            drop(sessions);
+
+            if reason == DeathReason::PlayerDisconnected {
+                let current_tick = *tick.lock().await;
+                let mut recorder = replay_recorder.lock().await;
+                if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
+                    recorder.record_disconnect(current_tick as i64, player_index);
+                }
+            }
+
+            crate::games::snake::session::handle_kill_snake(&game_state, client_id, reason).await;
         }
     }
 
-    pub async fn place_mark(
+    pub async fn handle_tictactoe_command(
         &self,
         client_id: &ClientId,
-        x: u32,
-        y: u32,
+        command: InGameCommand,
     ) {
+        let (x, y) = match &command.command {
+            Some(in_game_command::Command::Tictactoe(ttt_cmd)) => {
+                match &ttt_cmd.command {
+                    Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(place_cmd)) => {
+                        (place_cmd.x, place_cmd.y)
+                    }
+                    _ => return,
+                }
+            }
+            _ => return,
+        };
+
         let mapping = self.client_to_session.lock().await;
         let session_id = match mapping.get(client_id) {
             Some(id) => id.clone(),
@@ -291,10 +423,19 @@ impl GameSessionManager {
         drop(mapping);
 
         let sessions = self.sessions.lock().await;
-        if let Some(GameSession::TicTacToe { game_state, turn_notify }) = sessions.get(&session_id) {
+        if let Some(GameSession::TicTacToe { game_state, turn_notify, replay_recorder }) = sessions.get(&session_id) {
             let game_state = game_state.clone();
             let turn_notify = turn_notify.clone();
+            let replay_recorder = replay_recorder.clone();
             drop(sessions);
+
+            {
+                let mut recorder = replay_recorder.lock().await;
+                let turn = recorder.actions_count() as i64;
+                if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
+                    recorder.record_command(turn, player_index, command);
+                }
+            }
 
             if let Err(e) = crate::games::tictactoe::session::handle_place_mark(
                 &game_state,

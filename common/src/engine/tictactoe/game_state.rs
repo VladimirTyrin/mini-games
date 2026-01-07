@@ -1,5 +1,5 @@
 use crate::PlayerId;
-use rand::Rng;
+use crate::engine::session::SessionRng;
 use super::types::Position;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +73,7 @@ impl TicTacToeGameState {
         win_count: usize,
         players: Vec<PlayerId>,
         first_player_mode: FirstPlayerMode,
+        rng: &mut SessionRng,
     ) -> Self {
         if players.len() != 2 {
             panic!("TicTacToe requires exactly 2 players");
@@ -80,7 +81,7 @@ impl TicTacToeGameState {
 
         let (player_x, player_o) = match first_player_mode {
             FirstPlayerMode::Random => {
-                if rand::rng().random() {
+                if rng.random_bool() {
                     (players[0].clone(), players[1].clone())
                 } else {
                     (players[1].clone(), players[0].clone())

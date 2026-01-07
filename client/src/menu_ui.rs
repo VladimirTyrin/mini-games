@@ -1,15 +1,19 @@
 use crate::config::{Config, GameType, SnakeLobbyConfig};
 use crate::game_ui::GameUi;
 use crate::sprites::Sprites;
-use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig};
+use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig, ReplayInfo};
 use crate::colors::generate_color_from_client_id;
+use crate::replay_playback::{ReplayCommand, run_replay_playback};
 use crate::CommandSender;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
-use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode};
+use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode, ReplayGame};
 use common::{LobbyDetails, LobbyInfo};
+use common::replay::{load_replay, REPLAY_FILE_EXTENSION};
 use eframe::egui;
 use egui::{Align, Layout};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
+use std::path::PathBuf;
+use tokio::sync::mpsc;
 
 type ClientConfigManager = ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>;
 
@@ -19,6 +23,8 @@ enum AppStateType {
     InLobby,
     InGame,
     GameOver,
+    ReplayList,
+    WatchingReplay,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,6 +46,8 @@ impl AppStateType {
             AppState::InLobby { .. } => Self::InLobby,
             AppState::InGame { .. } => Self::InGame,
             AppState::GameOver { .. } => Self::GameOver,
+            AppState::ReplayList { .. } => Self::ReplayList,
+            AppState::WatchingReplay { .. } => Self::WatchingReplay,
         }
     }
 }
@@ -69,6 +77,7 @@ pub struct MenuApp {
     shared_state: SharedState,
     command_sender: CommandSender,
     offline_command_sender: Option<CommandSender>,
+    replay_command_sender: Option<mpsc::UnboundedSender<ReplayCommand>>,
     create_lobby_dialog: bool,
     creating_offline_game: bool,
     selected_game_type: GameType,
@@ -93,6 +102,7 @@ pub struct MenuApp {
     chat_input: String,
     normal_window_size: Option<egui::Vec2>,
     previous_app_state: Option<AppStateType>,
+    replay_speed: f32,
 }
 
 impl MenuApp {
@@ -110,6 +120,7 @@ impl MenuApp {
             shared_state,
             command_sender,
             offline_command_sender: None,
+            replay_command_sender: None,
             create_lobby_dialog: false,
             creating_offline_game: false,
             selected_game_type: config.last_game.unwrap_or(GameType::Snake),
@@ -134,6 +145,7 @@ impl MenuApp {
             chat_input: String::new(),
             normal_window_size: None,
             previous_app_state: None,
+            replay_speed: 1.0,
         }
     }
 
@@ -144,7 +156,7 @@ impl MenuApp {
         ctx: &egui::Context,
     ) {
         match (from, to) {
-            (_, AppStateType::InGame) => {
+            (_, AppStateType::InGame) | (_, AppStateType::WatchingReplay) => {
                 if self.normal_window_size.is_none() {
                     self.normal_window_size = Some(
                         ctx.input(|i| i.viewport().inner_rect)
@@ -155,7 +167,8 @@ impl MenuApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
             }
 
-            (Some(AppStateType::GameOver), AppStateType::LobbyList) => {
+            (Some(AppStateType::GameOver), AppStateType::LobbyList) |
+            (Some(AppStateType::WatchingReplay), AppStateType::ReplayList) => {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
                 if let Some(size) = self.normal_window_size {
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
@@ -273,6 +286,12 @@ impl MenuApp {
                 let config = self.config_manager.get_config().unwrap();
                 self.max_players_input = config.snake.max_players.to_string();
             }
+
+            ui.add_space(10.0);
+
+            if ui.button("📼 Watch Replays (Ctrl+R)").clicked() {
+                self.open_replay_list();
+            }
         });
 
         ctx.input(|i| {
@@ -282,6 +301,9 @@ impl MenuApp {
                 self.lobby_name_input = "Offline Game".to_string();
                 let config = self.config_manager.get_config().unwrap();
                 self.max_players_input = config.snake.max_players.to_string();
+            }
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
+                self.open_replay_list();
             }
         });
     }
@@ -316,6 +338,10 @@ impl MenuApp {
                         let config = self.config_manager.get_config().unwrap();
                         self.max_players_input = config.snake.max_players.to_string();
                     }
+
+                    if ui.button("📼 Replays (Ctrl+R)").clicked() {
+                        self.open_replay_list();
+                    }
                 });
 
                 ctx.input(|i| {
@@ -335,6 +361,9 @@ impl MenuApp {
                         self.lobby_name_input = "Offline Game".to_string();
                         let config = self.config_manager.get_config().unwrap();
                         self.max_players_input = config.snake.max_players.to_string();
+                    }
+                    if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
+                        self.open_replay_list();
                     }
                 });
 
@@ -889,6 +918,308 @@ impl MenuApp {
             self.render_chat_widget(ui, event_log, ChatLocation::InLobby, ChatHeading::Hide);
         }
     }
+
+    fn open_replay_list(&mut self) {
+        let config = self.config_manager.get_config().expect("Failed to load config");
+        let replay_dir = PathBuf::from(&config.replays.location);
+        let replays = self.load_replays_from_directory(&replay_dir);
+        self.shared_state.set_state_from_ui(AppState::ReplayList { replays });
+    }
+
+    fn load_replays_from_directory(&self, dir: &PathBuf) -> Vec<ReplayInfo> {
+        let mut replays = Vec::new();
+
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return replays;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension() {
+                    if ext == REPLAY_FILE_EXTENSION {
+                        if let Ok(replay) = load_replay(&path) {
+                            let game = ReplayGame::try_from(replay.game).unwrap_or(ReplayGame::Unspecified);
+                            let players: Vec<String> = replay.players.iter()
+                                .map(|p| {
+                                    if p.is_bot {
+                                        format!("{} (Bot)", p.player_id)
+                                    } else {
+                                        p.player_id.clone()
+                                    }
+                                })
+                                .collect();
+
+                            replays.push(ReplayInfo {
+                                file_path: path,
+                                game,
+                                timestamp_ms: replay.game_started_timestamp_ms,
+                                players,
+                                engine_version: replay.engine_version,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        replays.sort_by(|a, b| b.timestamp_ms.cmp(&a.timestamp_ms));
+        replays
+    }
+
+    fn render_replay_list(&mut self, ui: &mut egui::Ui, ctx: &egui::Context, replays: &[ReplayInfo]) {
+        ui.heading("📼 Replays");
+        ui.separator();
+
+        ui.horizontal(|ui| {
+            if ui.button("⬅ Back (Esc)").clicked() {
+                self.back_to_lobby_list();
+            }
+
+            if ui.button("🔄 Refresh (F5)").clicked() {
+                self.open_replay_list();
+            }
+
+            if ui.button("📂 Open File... (Ctrl+O)").clicked() {
+                self.open_replay_file_dialog();
+            }
+        });
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                self.back_to_lobby_list();
+            }
+            if i.key_pressed(egui::Key::F5) {
+                self.open_replay_list();
+            }
+            if i.modifiers.ctrl && i.key_pressed(egui::Key::O) {
+                self.open_replay_file_dialog();
+            }
+        });
+
+        ui.separator();
+
+        if replays.is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.add_space(50.0);
+                ui.label("No replays found.");
+                ui.add_space(10.0);
+                let config = self.config_manager.get_config().expect("Failed to load config");
+                ui.label(format!("Replay directory: {}", config.replays.location));
+            });
+        } else {
+            egui::ScrollArea::vertical()
+                .id_salt("replay_list_scroll")
+                .show(ui, |ui| {
+                    for (index, replay) in replays.iter().enumerate() {
+                        let game_icon = match replay.game {
+                            ReplayGame::Snake => "🐍",
+                            ReplayGame::Tictactoe => "⭕",
+                            ReplayGame::Unspecified => "❓",
+                        };
+
+                        let game_name = match replay.game {
+                            ReplayGame::Snake => "Snake",
+                            ReplayGame::Tictactoe => "TicTacToe",
+                            ReplayGame::Unspecified => "Unknown",
+                        };
+
+                        let datetime = chrono::DateTime::from_timestamp_millis(replay.timestamp_ms)
+                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                            .unwrap_or_else(|| "Unknown date".to_string());
+
+                        let players_str = replay.players.join(", ");
+
+                        let (rect, response) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), 70.0),
+                            egui::Sense::click(),
+                        );
+
+                        let is_selected = index == 0;
+                        let bg_color = if response.hovered() {
+                            egui::Color32::from_gray(60)
+                        } else if is_selected {
+                            egui::Color32::from_gray(50)
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+
+                        ui.painter().rect_filled(rect, 4.0, bg_color);
+
+                        ui.scope_builder(
+                            egui::UiBuilder::new().max_rect(rect.shrink(8.0)),
+                            |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui| {
+                                        ui.label(egui::RichText::new(format!("{} {}", game_icon, game_name)).strong());
+                                        ui.label(format!("📅 {}", datetime));
+                                        ui.label(format!("👥 {}", players_str));
+                                    });
+
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        ui.label(egui::RichText::new(format!("v{}", replay.engine_version)).small().color(egui::Color32::GRAY));
+                                    });
+                                });
+                            }
+                        );
+
+                        if response.double_clicked() {
+                            self.play_replay(&replay.file_path);
+                        }
+
+                        if response.clicked() {
+                            // Single click could select, double click plays
+                        }
+                    }
+                });
+        }
+    }
+
+    fn back_to_lobby_list(&mut self) {
+        let is_offline = self.shared_state.get_connection_mode() == crate::state::ConnectionMode::TemporaryOffline;
+        self.shared_state.set_state_from_ui(AppState::LobbyList {
+            lobbies: vec![],
+            chat_messages: AllocRingBuffer::new(crate::constants::CHAT_BUFFER_SIZE),
+        });
+        if !is_offline {
+            self.command_sender.send(ClientCommand::Menu(MenuCommand::ListLobbies));
+        }
+    }
+
+    fn open_replay_file_dialog(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Replay files", &[REPLAY_FILE_EXTENSION])
+            .pick_file()
+        {
+            self.play_replay(&path);
+        }
+    }
+
+    pub fn open_replay_file(&mut self, path: &PathBuf) {
+        self.play_replay(path);
+    }
+
+    fn play_replay(&mut self, path: &PathBuf) {
+        let (tx, rx) = mpsc::unbounded_channel();
+        self.replay_command_sender = Some(tx);
+        self.game_ui = None;
+
+        let file_path = path.clone();
+        let shared_state = self.shared_state.clone();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                run_replay_playback(file_path, shared_state, rx).await;
+            });
+        });
+    }
+
+    fn stop_replay(&mut self) {
+        if let Some(sender) = self.replay_command_sender.take() {
+            let _ = sender.send(ReplayCommand::Stop);
+        }
+        self.game_ui = None;
+    }
+
+    fn render_watching_replay(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        game_state: &Option<common::GameStateUpdate>,
+        is_paused: bool,
+        current_tick: u64,
+        total_ticks: u64,
+    ) {
+        if self.game_ui.is_none() {
+            if let Some(state) = game_state {
+                match &state.state {
+                    Some(common::game_state_update::State::Snake(_)) => {
+                        self.game_ui = Some(GameUi::new_snake());
+                    }
+                    Some(common::game_state_update::State::Tictactoe(_)) => {
+                        self.game_ui = Some(GameUi::new_tictactoe());
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        ui.horizontal(|ui| {
+            if ui.button("⬅ Back (Esc)").clicked() {
+                self.stop_replay();
+                self.open_replay_list();
+            }
+
+            ui.separator();
+
+            if is_paused {
+                if ui.button("▶ Play (Space)").clicked() {
+                    if let Some(ref sender) = self.replay_command_sender {
+                        let _ = sender.send(ReplayCommand::Resume);
+                    }
+                }
+            } else {
+                if ui.button("⏸ Pause (Space)").clicked() {
+                    if let Some(ref sender) = self.replay_command_sender {
+                        let _ = sender.send(ReplayCommand::Pause);
+                    }
+                }
+            }
+
+            ui.separator();
+
+            ui.label("Speed:");
+            let speed_options = [0.5, 1.0, 2.0, 4.0];
+            for speed in speed_options {
+                let label = format!("{}x", speed);
+                let selected = (self.replay_speed - speed).abs() < 0.01;
+                if ui.selectable_label(selected, &label).clicked() {
+                    self.replay_speed = speed;
+                    if let Some(ref sender) = self.replay_command_sender {
+                        let _ = sender.send(ReplayCommand::SetSpeed(speed));
+                    }
+                }
+            }
+
+            ui.separator();
+
+            let progress = if total_ticks > 0 {
+                current_tick as f32 / total_ticks as f32
+            } else {
+                0.0
+            };
+            ui.label(format!("Progress: {}/{} ({:.0}%)", current_tick, total_ticks, progress * 100.0));
+        });
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                self.stop_replay();
+                self.open_replay_list();
+            }
+            if i.key_pressed(egui::Key::Space) {
+                if let Some(ref sender) = self.replay_command_sender {
+                    let cmd = if is_paused {
+                        ReplayCommand::Resume
+                    } else {
+                        ReplayCommand::Pause
+                    };
+                    let _ = sender.send(cmd);
+                }
+            }
+        });
+
+        ui.separator();
+
+        if let Some(game_ui) = &mut self.game_ui {
+            let dummy_sender = CommandSender::Grpc(mpsc::unbounded_channel().0);
+            game_ui.render_game(ui, ctx, "replay", game_state, &self.client_id, true, &dummy_sender);
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.label("Loading replay...");
+            });
+        }
+    }
 }
 
 impl eframe::App for MenuApp {
@@ -1031,21 +1362,40 @@ impl eframe::App for MenuApp {
                             }
                         }
                     }
+                    let replay_path = self.shared_state.get_last_replay_path();
+                    let mut watch_replay_clicked = false;
                     if let Some(game_ui) = &mut self.game_ui {
                         let sender = if self.offline_command_sender.is_some() {
                             self.offline_command_sender.as_ref().unwrap()
                         } else {
                             &self.command_sender
                         };
-                        match game_info {
+                        watch_replay_clicked = match game_info {
                             crate::state::GameEndInfo::Snake(snake_info) => {
-                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, is_observer, sender);
+                                game_ui.render_game_over_snake(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &snake_info, &play_again_status, is_observer, sender, replay_path.as_ref())
                             }
                             crate::state::GameEndInfo::TicTacToe(ttt_info) => {
-                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, sender);
+                                game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, sender, replay_path.as_ref())
                             }
+                        };
+                    }
+                    if watch_replay_clicked {
+                        if let Some(path) = replay_path {
+                            let sender = if self.offline_command_sender.is_some() {
+                                self.offline_command_sender.as_ref().unwrap()
+                            } else {
+                                &self.command_sender
+                            };
+                            sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                            self.play_replay(&path);
                         }
                     }
+                }
+                AppState::ReplayList { replays } => {
+                    self.render_replay_list(ui, ctx, &replays);
+                }
+                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks } => {
+                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks);
                 }
             }
         });

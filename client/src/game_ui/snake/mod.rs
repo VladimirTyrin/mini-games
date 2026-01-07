@@ -5,6 +5,7 @@ use crate::CommandSender;
 use common::{proto::snake::{Direction, SnakeGameEndReason, SnakeGameEndInfo}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy, Debug)]
 struct Color {
@@ -204,13 +205,15 @@ impl SnakeGameUi {
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
         command_sender: &CommandSender,
-    ) {
+        replay_path: Option<&PathBuf>,
+    ) -> bool {
+        let mut watch_replay_clicked = false;
         let reason = SnakeGameEndReason::try_from(game_info.reason)
             .unwrap_or(SnakeGameEndReason::Unspecified);
         if let Some(game_state_update) = last_game_state {
             let state = match &game_state_update.state {
                 Some(common::game_state_update::State::Snake(snake_state)) => snake_state,
-                _ => return,
+                _ => return false,
             };
 
             let available_width = ui.available_width();
@@ -380,6 +383,21 @@ impl SnakeGameUi {
                         }
                     }
 
+                    if let Some(path) = replay_path {
+                        ui.add_space(5.0);
+                        ui.separator();
+                        ui.label(format!("Replay saved: {}", path.display()));
+                        if ui.button("Watch Replay (W)").clicked() {
+                            watch_replay_clicked = true;
+                        }
+                        ctx.input(|i| {
+                            if i.key_pressed(egui::Key::W) {
+                                watch_replay_clicked = true;
+                            }
+                        });
+                        ui.add_space(5.0);
+                    }
+
                     if ui.button("Back to Lobby List (Esc)").clicked() {
                         command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
                     }
@@ -491,6 +509,20 @@ impl SnakeGameUi {
                 }
             }
 
+            if let Some(path) = replay_path {
+                ui.add_space(5.0);
+                ui.separator();
+                ui.label(format!("Replay saved: {}", path.display()));
+                if ui.button("Watch Replay (W)").clicked() {
+                    watch_replay_clicked = true;
+                }
+                ctx.input(|i| {
+                    if i.key_pressed(egui::Key::W) {
+                        watch_replay_clicked = true;
+                    }
+                });
+            }
+
             ui.separator();
             if ui.button("Back to Lobby List (Esc)").clicked() {
                 command_sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
@@ -502,6 +534,8 @@ impl SnakeGameUi {
                 }
             });
         }
+
+        watch_replay_clicked
     }
 
     fn handle_input(&mut self, ctx: &egui::Context, command_sender: &CommandSender) {

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use crate::{log, PlayerId};
-use rand::Rng;
+use crate::engine::session::SessionRng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Point {
@@ -136,6 +136,7 @@ pub struct GameState {
     pub max_food_count: usize,
     pub food_spawn_probability: f32,
     pub game_end_reason: Option<DeathReason>,
+    player_order: Vec<PlayerId>,
 }
 
 impl GameState {
@@ -149,6 +150,7 @@ impl GameState {
             max_food_count,
             food_spawn_probability,
             game_end_reason: None,
+            player_order: Vec::new(),
         }
     }
 
@@ -170,7 +172,9 @@ impl GameState {
 
     pub fn add_snake(&mut self, player_id: PlayerId, start_pos: Point, direction: Direction) {
         let snake = Snake::new(start_pos, direction, &self.field_size);
-        self.snakes.insert(player_id, snake);
+        self.snakes.insert(player_id.clone(), snake);
+        self.player_order.push(player_id);
+        self.player_order.sort();
     }
 
     pub fn kill_snake(&mut self, player_id: &PlayerId, reason: DeathReason) {
@@ -188,8 +192,8 @@ impl GameState {
             }
     }
 
-    pub fn update(&mut self) {
-        self.try_spawn_food();
+    pub fn update(&mut self, rng: &mut SessionRng) {
+        self.try_spawn_food(rng);
 
         for snake in self.snakes.values_mut() {
             if !snake.is_alive() {
@@ -202,9 +206,7 @@ impl GameState {
             }
         }
 
-        let player_ids: Vec<PlayerId> = self.snakes.keys().cloned().collect();
-
-        for player_id in player_ids {
+        for player_id in self.player_order.clone() {
             let snake = self.snakes.get_mut(&player_id).expect("Player ID should exist in snakes map");
             if !snake.is_alive() {
                 continue;
@@ -309,12 +311,10 @@ impl GameState {
         Ok(next_head)
     }
 
-    fn try_spawn_food(&mut self) {
-        if !self.should_spawn_food() {
+    fn try_spawn_food(&mut self, rng: &mut SessionRng) {
+        if !self.should_spawn_food(rng) {
             return;
         }
-
-        let mut rng = rand::rng();
 
         for _ in 0..100 {
             let x = rng.random_range(0..self.field_size.width);
@@ -346,11 +346,10 @@ impl GameState {
         }
     }
 
-    fn should_spawn_food(&self) -> bool {
+    fn should_spawn_food(&self, rng: &mut SessionRng) -> bool {
         if self.food_set.len() >= self.max_food_count {
             return false;
         }
-        let mut rng = rand::rng();
         rng.random::<f32>() < self.food_spawn_probability
     }
 }

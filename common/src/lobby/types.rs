@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     LobbyInfo, LobbyDetails, PlayerInfo, ClientId, LobbyId, PlayerId, BotId,
     SnakeLobbySettings, SnakeBotType, TicTacToeLobbySettings, TicTacToeBotType,
-    lobby_info, lobby_details, create_lobby_request, add_bot_request,
+    lobby_details, lobby_settings, add_bot_request,
     validation::ValidateLobbySettings,
 };
 use crate::id_generator::generate_client_id;
@@ -28,17 +28,19 @@ impl LobbySettings {
         }
     }
 
-    pub fn to_info_proto(&self) -> Option<lobby_info::Settings> {
-        match self {
-            LobbySettings::Snake(s) => Some(lobby_info::Settings::Snake(*s)),
-            LobbySettings::TicTacToe(t) => Some(lobby_info::Settings::Tictactoe(*t)),
-        }
+    pub fn to_info_proto(&self) -> Option<crate::proto::game_service::LobbySettings> {
+        Some(crate::proto::game_service::LobbySettings {
+            settings: Some(match self {
+                LobbySettings::Snake(s) => lobby_settings::Settings::Snake(*s),
+                LobbySettings::TicTacToe(t) => lobby_settings::Settings::Tictactoe(*t),
+            }),
+        })
     }
 
-    pub fn from_proto(settings: Option<create_lobby_request::Settings>) -> Result<Self, String> {
+    pub fn from_proto(settings: Option<lobby_settings::Settings>) -> Result<Self, String> {
         match settings {
-            Some(create_lobby_request::Settings::Snake(s)) => Ok(LobbySettings::Snake(s)),
-            Some(create_lobby_request::Settings::Tictactoe(t)) => Ok(LobbySettings::TicTacToe(t)),
+            Some(lobby_settings::Settings::Snake(s)) => Ok(LobbySettings::Snake(s)),
+            Some(lobby_settings::Settings::Tictactoe(t)) => Ok(LobbySettings::TicTacToe(t)),
             None => Err("No settings provided".to_string()),
         }
     }

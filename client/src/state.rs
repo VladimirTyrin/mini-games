@@ -1,7 +1,8 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, PlayerIdentity};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, PlayerIdentity, ReplayGame};
 use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 use ringbuffer::{AllocRingBuffer, RingBuffer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,6 +80,15 @@ pub enum PlayAgainStatus {
 }
 
 #[derive(Debug, Clone)]
+pub struct ReplayInfo {
+    pub file_path: PathBuf,
+    pub game: ReplayGame,
+    pub timestamp_ms: i64,
+    pub players: Vec<String>,
+    pub engine_version: String,
+}
+
+#[derive(Debug, Clone)]
 pub enum AppState {
     LobbyList {
         lobbies: Vec<LobbyInfo>,
@@ -101,6 +111,15 @@ pub enum AppState {
         play_again_status: PlayAgainStatus,
         is_observer: bool,
     },
+    ReplayList {
+        replays: Vec<ReplayInfo>,
+    },
+    WatchingReplay {
+        game_state: Option<GameStateUpdate>,
+        is_paused: bool,
+        current_tick: u64,
+        total_ticks: u64,
+    },
 }
 
 pub struct InnerState {
@@ -111,6 +130,7 @@ pub struct InnerState {
     pub retry_server_address: Option<String>,
     pub ping_ms: Option<u64>,
     pub ctx: Option<eframe::egui::Context>,
+    pub last_replay_path: Option<PathBuf>,
 }
 
 pub struct SharedState {
@@ -131,6 +151,7 @@ impl SharedState {
                 retry_server_address: None,
                 ping_ms: None,
                 ctx: None,
+                last_replay_path: None,
             })),
         }
     }
@@ -152,6 +173,12 @@ impl SharedState {
     pub fn set_state(&self, state: AppState) {
         self.inner.lock().expect("SharedState lock poisoned").state = state;
         self.request_repaint();
+    }
+
+    /// Set state without requesting repaint. Use this when already inside egui callback
+    /// to avoid deadlock on egui Context lock.
+    pub fn set_state_from_ui(&self, state: AppState) {
+        self.inner.lock().expect("SharedState lock poisoned").state = state;
     }
 
     pub fn get_state(&self) -> AppState {
@@ -246,6 +273,15 @@ impl SharedState {
 
     pub fn get_ping(&self) -> Option<u64> {
         self.inner.lock().expect("SharedState lock poisoned").ping_ms
+    }
+
+    pub fn set_last_replay_path(&self, path: Option<PathBuf>) {
+        self.inner.lock().expect("SharedState lock poisoned").last_replay_path = path;
+        self.request_repaint();
+    }
+
+    pub fn get_last_replay_path(&self) -> Option<PathBuf> {
+        self.inner.lock().expect("SharedState lock poisoned").last_replay_path.clone()
     }
 }
 

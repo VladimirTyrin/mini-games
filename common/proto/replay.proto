@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package replay;
+
+import "game_service.proto";
+
+enum Game {
+    GAME_UNSPECIFIED = 0;
+    GAME_SNAKE = 1;
+    GAME_TICTACTOE = 2;
+}
+
+message PlayerDisconnected {}
+
+message PlayerActionContent {
+    oneof content {
+        PlayerDisconnected disconnected = 1;
+        game_service.InGameCommand command = 2;
+    }
+}
+
+message PlayerAction {
+    int64 tick = 1;
+    int32 player_index = 2;
+    PlayerActionContent content = 3;
+}
+
+message ReplayV1 {
+    string engine_version = 1;
+    int64 game_started_timestamp_ms = 2;
+    Game game = 3;
+    uint64 seed = 4;
+    game_service.LobbySettings lobby_settings = 5;
+    repeated game_service.PlayerIdentity players = 6;
+    reserved 7 to 9;
+    repeated PlayerAction actions = 10;
+}

@@ -5,17 +5,20 @@ use tokio::sync::{Mutex, Notify};
 use crate::{
     PlayerId, BotId,
     GameStateUpdate, game_state_update, GameOverNotification, game_over_notification,
-    ScoreEntry, PlayerIdentity,
-    proto::tictactoe::{TicTacToeGameEndReason, TicTacToeGameEndInfo},
+    ScoreEntry, PlayerIdentity, InGameCommand, in_game_command,
+    proto::tictactoe::{TicTacToeGameEndReason, TicTacToeGameEndInfo, TicTacToeBotType, TicTacToeInGameCommand, tic_tac_toe_in_game_command, PlaceMarkCommand},
 };
 use crate::lobby::BotType;
-use crate::engine::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus, calculate_move, BotInput, check_win_with_line};
-use crate::engine::session::{GameBroadcaster, GameSessionConfig};
+use crate::engine::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus, calculate_move, calculate_minimax_move, BotInput, check_win_with_line};
+use crate::engine::session::{GameBroadcaster, GameSessionConfig, SessionRng};
+use crate::replay::ReplayRecorder;
 
 pub struct TicTacToeSessionState {
     pub game_state: Arc<Mutex<TicTacToeGameState>>,
+    pub rng: Arc<Mutex<SessionRng>>,
     pub bots: HashMap<BotId, BotType>,
     pub turn_notify: Arc<Notify>,
+    pub replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
 }
 
 pub struct TicTacToeSessionSettings {
@@ -45,6 +48,8 @@ impl From<&crate::proto::tictactoe::TicTacToeLobbySettings> for TicTacToeSession
 pub fn create_session(
     config: &GameSessionConfig,
     settings: &TicTacToeSessionSettings,
+    seed: Option<u64>,
+    replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
 ) -> Result<TicTacToeSessionState, String> {
     if config.human_players.len() + config.bots.len() != 2 {
         return Err(format!(
@@ -53,6 +58,11 @@ pub fn create_session(
             config.bots.len()
         ));
     }
+
+    let mut rng = match seed {
+        Some(s) => SessionRng::new(s),
+        None => SessionRng::from_random(),
+    };
 
     let mut all_players: Vec<PlayerId> = config.human_players.clone();
     for bot_id in config.bots.keys() {
@@ -65,12 +75,15 @@ pub fn create_session(
         settings.win_count,
         all_players,
         settings.first_player_mode,
+        &mut rng,
     );
 
     Ok(TicTacToeSessionState {
         game_state: Arc::new(Mutex::new(game_state)),
+        rng: Arc::new(Mutex::new(rng)),
         bots: config.bots.clone(),
         turn_notify: Arc::new(Notify::new()),
+        replay_recorder,
     })
 }
 
@@ -104,31 +117,70 @@ pub async fn run_game_loop<B: GameBroadcaster>(
 }
 
 async fn play_bot_turn(session_state: &TicTacToeSessionState) {
-    let (bot_input, bot_type, current_player) = {
-        let game_state = session_state.game_state.lock().await;
+    let mut game_state = session_state.game_state.lock().await;
 
-        let current_player = game_state.current_player.clone();
+    let current_player = game_state.current_player.clone();
 
-        let bot_type = session_state.bots.iter()
-            .find(|(bot_id, _)| bot_id.to_player_id() == current_player)
-            .and_then(|(_, bot_type)| match bot_type {
-                BotType::TicTacToe(ttt_bot) => Some(*ttt_bot),
-                _ => None,
-            });
+    let bot_type = session_state.bots.iter()
+        .find(|(bot_id, _)| bot_id.to_player_id() == current_player)
+        .and_then(|(_, bot_type)| match bot_type {
+            BotType::TicTacToe(ttt_bot) => Some(*ttt_bot),
+            _ => None,
+        });
 
-        match bot_type {
-            Some(bt) => (BotInput::from_game_state(&game_state), bt, current_player),
-            None => return,
-        }
+    let Some(bot_type) = bot_type else {
+        return;
     };
 
-    let calculated_move = tokio::task::spawn_blocking(move || {
-        calculate_move(bot_type, bot_input)
-    }).await;
+    let bot_input = BotInput::from_game_state(&game_state);
 
-    if let Ok(Some(pos)) = calculated_move {
-        let mut game_state = session_state.game_state.lock().await;
-        let _ = game_state.place_mark(&current_player, pos.x, pos.y);
+    let calculated_move = match bot_type {
+        TicTacToeBotType::TictactoeBotTypeRandom => {
+            let mut rng = session_state.rng.lock().await;
+            calculate_move(bot_type, bot_input, &mut rng)
+        }
+        TicTacToeBotType::TictactoeBotTypeMinimax => {
+            // NOTE: spawn_blocking is required - minimax can take hundreds of milliseconds on larger boards
+            drop(game_state);
+            let result = tokio::task::spawn_blocking(move || {
+                calculate_minimax_move(&bot_input)
+            }).await;
+
+            if let Ok(Some(pos)) = result {
+                let mut game_state = session_state.game_state.lock().await;
+                if game_state.place_mark(&current_player, pos.x, pos.y).is_ok() {
+                    record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+                }
+            }
+            return;
+        }
+        _ => return,
+    };
+
+    if let Some(pos) = calculated_move {
+        if game_state.place_mark(&current_player, pos.x, pos.y).is_ok() {
+            drop(game_state);
+            record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+        }
+    }
+}
+
+async fn record_bot_move(session_state: &TicTacToeSessionState, player_id: &PlayerId, x: usize, y: usize) {
+    if let Some(ref recorder) = session_state.replay_recorder {
+        let mut recorder = recorder.lock().await;
+        if let Some(player_index) = recorder.find_player_index(&player_id.to_string()) {
+            let turn = recorder.actions_count() as i64;
+            let command = create_place_command(x as u32, y as u32);
+            recorder.record_command(turn, player_index, command);
+        }
+    }
+}
+
+fn create_place_command(x: u32, y: u32) -> InGameCommand {
+    InGameCommand {
+        command: Some(in_game_command::Command::Tictactoe(TicTacToeInGameCommand {
+            command: Some(tic_tac_toe_in_game_command::Command::Place(PlaceMarkCommand { x, y })),
+        })),
     }
 }
 

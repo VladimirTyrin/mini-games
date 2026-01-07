@@ -9,6 +9,8 @@ mod constants;
 mod command_sender;
 mod offline;
 mod username_prompt;
+mod replay_playback;
+mod file_association;
 
 pub use command_sender::CommandSender;
 
@@ -35,6 +37,10 @@ struct Args {
 
     #[arg(long)]
     random_client_id: bool,
+
+    /// Replay file to open on startup
+    #[arg(value_name = "REPLAY_FILE")]
+    replay_file: Option<std::path::PathBuf>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,6 +67,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     init_logger(prefix);
+
+    if !config.file_association_registered {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if file_association::register_file_association(&exe_path).is_ok() {
+                config.file_association_registered = true;
+                let _ = config_manager.set_config(&config);
+            }
+        }
+    }
+
+    let startup_replay_file = args.replay_file.clone();
 
     let shared_state = SharedState::new();
     let (command_tx, command_rx) = mpsc::unbounded_channel();
@@ -103,14 +120,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "Mini Games Client",
         options,
-        Box::new(|_cc| {
-            Ok(Box::new(MenuApp::new(
+        Box::new(move |_cc| {
+            let mut app = MenuApp::new(
                 client_id,
                 shared_state,
                 command_sender,
                 disconnect_timeout,
                 config_manager
-            )))
+            );
+
+            if let Some(replay_path) = startup_replay_file {
+                app.open_replay_file(&replay_path);
+            }
+
+            Ok(Box::new(app))
         }),
     )?;
 

@@ -5,6 +5,7 @@ use crate::state::PlayAgainStatus;
 use crate::CommandSender;
 use common::{GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
+use std::path::PathBuf;
 
 pub enum GameUi {
     Snake(snake::SnakeGameUi),
@@ -48,7 +49,8 @@ impl GameUi {
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
         command_sender: &CommandSender,
-    ) {
+        replay_path: Option<&PathBuf>,
+    ) -> bool {
         match self {
             GameUi::Snake(ui) => ui.render_game_over(
                 egui_ui,
@@ -61,8 +63,9 @@ impl GameUi {
                 play_again_status,
                 is_observer,
                 command_sender,
+                replay_path,
             ),
-            GameUi::TicTacToe(_) => {}
+            GameUi::TicTacToe(_) => false,
         }
     }
 
@@ -78,9 +81,10 @@ impl GameUi {
         play_again_status: &PlayAgainStatus,
         is_observer: bool,
         command_sender: &CommandSender,
-    ) {
+        replay_path: Option<&PathBuf>,
+    ) -> bool {
         match self {
-            GameUi::Snake(_) => {}
+            GameUi::Snake(_) => false,
             GameUi::TicTacToe(ui) => ui.render_game_over(
                 egui_ui,
                 ctx,
@@ -92,6 +96,7 @@ impl GameUi {
                 play_again_status,
                 is_observer,
                 command_sender,
+                replay_path,
             ),
         }
     }

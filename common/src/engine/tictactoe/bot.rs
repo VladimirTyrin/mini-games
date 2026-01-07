@@ -1,8 +1,8 @@
 use super::board::get_available_moves;
 use super::game_state::{Mark, TicTacToeGameState};
 use super::types::Position;
+use crate::engine::session::SessionRng;
 use crate::proto::tictactoe::TicTacToeBotType;
-use rand::prelude::IndexedRandom;
 
 pub struct BotInput {
     pub board: Vec<Vec<Mark>>,
@@ -20,20 +20,25 @@ impl BotInput {
     }
 }
 
-pub fn calculate_move(bot_type: TicTacToeBotType, input: BotInput) -> Option<Position> {
+pub fn calculate_move(bot_type: TicTacToeBotType, input: BotInput, rng: &mut SessionRng) -> Option<Position> {
     match bot_type {
-        TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(&input),
+        TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(&input, rng),
         TicTacToeBotType::TictactoeBotTypeMinimax => calculate_minimax_move(&input),
         _ => None,
     }
 }
 
-fn calculate_random_move(input: &BotInput) -> Option<Position> {
+fn calculate_random_move(input: &BotInput, rng: &mut SessionRng) -> Option<Position> {
     let available_moves = get_available_moves(&input.board);
-    available_moves.choose(&mut rand::rng()).map(|&(x, y)| Position::new(x, y))
+    if available_moves.is_empty() {
+        return None;
+    }
+    let idx = rng.random_range(0..available_moves.len());
+    let (x, y) = available_moves[idx];
+    Some(Position::new(x, y))
 }
 
-fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
+pub fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
     let bot_mark = input.current_mark;
     let available_moves = get_available_moves(&input.board);
 

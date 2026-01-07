@@ -135,23 +135,27 @@ pub async fn grpc_client_task(
                             MenuCommand::CreateLobby { name, config } => {
                                 let (max_players, settings) = match config {
                                     crate::state::LobbyConfig::Snake(snake_config) => {
-                                        (snake_config.max_players, Some(common::create_lobby_request::Settings::Snake(SnakeLobbySettings {
-                                            field_width: snake_config.field_width,
-                                            field_height: snake_config.field_height,
-                                            wall_collision_mode: snake_config.wall_collision_mode.into(),
-                                            tick_interval_ms: snake_config.tick_interval_ms,
-                                            max_food_count: snake_config.max_food_count,
-                                            food_spawn_probability: snake_config.food_spawn_probability,
-                                            dead_snake_behavior: snake_config.dead_snake_behavior.into(),
-                                        })))
+                                        (snake_config.max_players, Some(common::LobbySettings {
+                                            settings: Some(common::lobby_settings::Settings::Snake(SnakeLobbySettings {
+                                                field_width: snake_config.field_width,
+                                                field_height: snake_config.field_height,
+                                                wall_collision_mode: snake_config.wall_collision_mode.into(),
+                                                tick_interval_ms: snake_config.tick_interval_ms,
+                                                max_food_count: snake_config.max_food_count,
+                                                food_spawn_probability: snake_config.food_spawn_probability,
+                                                dead_snake_behavior: snake_config.dead_snake_behavior.into(),
+                                            })),
+                                        }))
                                     }
                                     crate::state::LobbyConfig::TicTacToe(ttt_config) => {
-                                        (2, Some(common::create_lobby_request::Settings::Tictactoe(common::proto::tictactoe::TicTacToeLobbySettings {
-                                            field_width: ttt_config.field_width,
-                                            field_height: ttt_config.field_height,
-                                            win_count: ttt_config.win_count,
-                                            first_player: 1,
-                                        })))
+                                        (2, Some(common::LobbySettings {
+                                            settings: Some(common::lobby_settings::Settings::Tictactoe(common::proto::tictactoe::TicTacToeLobbySettings {
+                                                field_width: ttt_config.field_width,
+                                                field_height: ttt_config.field_height,
+                                                win_count: ttt_config.win_count,
+                                                first_player: 1,
+                                            })),
+                                        }))
                                     }
                                 };
 
@@ -501,6 +505,30 @@ pub async fn grpc_client_task(
                                 common::server_message::Message::ObserverBecamePlayer(notification) => {
                                     if let Some(observer) = &notification.observer {
                                         shared_state.add_event_log(format!("{} became a player", observer.player_id));
+                                    }
+                                }
+                                common::server_message::Message::ReplayFile(notification) => {
+                                    log!("Received replay file: {} ({} bytes)",
+                                         notification.suggested_file_name,
+                                         notification.content.len());
+
+                                    let config = config_manager.get_config().unwrap_or_default();
+                                    if config.replays.save {
+                                        let replay_dir = std::path::Path::new(&config.replays.location);
+                                        if let Err(e) = std::fs::create_dir_all(replay_dir) {
+                                            log!("Failed to create replay directory: {}", e);
+                                        } else {
+                                            let file_path = replay_dir.join(&notification.suggested_file_name);
+                                            match std::fs::write(&file_path, &notification.content) {
+                                                Ok(_) => {
+                                                    log!("Replay saved to: {}", file_path.display());
+                                                    shared_state.set_last_replay_path(Some(file_path));
+                                                }
+                                                Err(e) => {
+                                                    log!("Failed to save replay: {}", e);
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
