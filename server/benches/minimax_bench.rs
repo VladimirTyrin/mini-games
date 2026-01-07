@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion, SamplingMode};
 use std::time::Duration;
+use common::engine::session::SessionRng;
 use common::engine::tictactoe::{calculate_move, BotInput, Mark};
 use common::proto::tictactoe::TicTacToeBotType;
 
@@ -12,6 +13,7 @@ fn bench_minimax_10_moves() {
     let win_count = 5;
     let mut current_mark = Mark::X;
 
+    let mut session_rng = SessionRng::from_random();
     for _ in 0..10 {
         let input = BotInput {
             board: board.clone(),
@@ -19,7 +21,7 @@ fn bench_minimax_10_moves() {
             current_mark,
         };
 
-        if let Some(pos) = calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input) {
+        if let Some(pos) = calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input, &mut session_rng) {
             board[pos.y][pos.x] = current_mark;
             current_mark = current_mark.opponent().unwrap();
         } else {
@@ -35,7 +37,8 @@ fn bench_minimax_single_move_empty_board() {
         win_count: 5,
         current_mark: Mark::X,
     };
-    calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input);
+    let mut session_rng = SessionRng::from_random();
+    calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input, &mut session_rng);
 }
 
 fn bench_minimax_single_move_mid_game() {
@@ -57,7 +60,8 @@ fn bench_minimax_single_move_mid_game() {
         win_count: 5,
         current_mark: Mark::X,
     };
-    calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input);
+    let mut session_rng = SessionRng::from_random();
+    calculate_move(TicTacToeBotType::TictactoeBotTypeMinimax, input, &mut session_rng);
 }
 
 
