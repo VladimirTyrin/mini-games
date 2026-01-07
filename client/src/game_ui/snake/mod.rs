@@ -84,6 +84,7 @@ impl SnakeGameUi {
         client_id: &str,
         is_observer: bool,
         command_sender: &CommandSender,
+        force_show_dead: bool,
     ) {
         if let Some(game_state_update) = game_state {
             let state = match &game_state_update.state {
@@ -132,7 +133,7 @@ impl SnakeGameUi {
                     ui.allocate_painter(egui::Vec2::new(canvas_width, canvas_height), egui::Sense::hover());
 
                 let rect = response.rect;
-                let show_dead_snakes = matches!(
+                let show_dead_snakes = force_show_dead || matches!(
                     common::proto::snake::DeadSnakeBehavior::try_from(state.dead_snake_behavior),
                     Ok(common::proto::snake::DeadSnakeBehavior::StayOnField)
                 );

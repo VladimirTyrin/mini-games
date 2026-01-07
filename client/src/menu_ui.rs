@@ -1144,6 +1144,7 @@ impl MenuApp {
         current_tick: u64,
         total_ticks: u64,
         replay_version: &str,
+        is_finished: bool,
     ) {
         if self.game_ui.is_none() {
             if let Some(state) = game_state {
@@ -1217,6 +1218,15 @@ impl MenuApp {
             } else {
                 ui.label(format!("v{}", replay_version));
             }
+
+            if is_finished {
+                ui.separator();
+                if ui.button("🔄 Watch Again (R)").clicked() {
+                    if let Some(ref sender) = self.replay_command_sender {
+                        let _ = sender.send(ReplayCommand::Restart);
+                    }
+                }
+            }
         });
 
         if version_mismatch {
@@ -1241,13 +1251,18 @@ impl MenuApp {
                     let _ = sender.send(cmd);
                 }
             }
+            if is_finished && i.key_pressed(egui::Key::R) {
+                if let Some(ref sender) = self.replay_command_sender {
+                    let _ = sender.send(ReplayCommand::Restart);
+                }
+            }
         });
 
         ui.separator();
 
         if let Some(game_ui) = &mut self.game_ui {
             let dummy_sender = CommandSender::Grpc(mpsc::unbounded_channel().0);
-            game_ui.render_game(ui, ctx, "replay", game_state, &self.client_id, true, &dummy_sender);
+            game_ui.render_game(ui, ctx, "replay", game_state, &self.client_id, true, &dummy_sender, is_finished);
         } else {
             ui.centered_and_justified(|ui| {
                 ui.label("Loading replay...");
@@ -1382,7 +1397,7 @@ impl eframe::App for MenuApp {
                         } else {
                             &self.command_sender
                         };
-                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, sender);
+                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, sender, false);
                     }
                 }
                 AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status, is_observer } => {
@@ -1428,8 +1443,8 @@ impl eframe::App for MenuApp {
                 AppState::ReplayList { replays } => {
                     self.render_replay_list(ui, ctx, &replays);
                 }
-                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks, replay_version } => {
-                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks, &replay_version);
+                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks, replay_version, is_finished } => {
+                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks, &replay_version, is_finished);
                 }
             }
         });

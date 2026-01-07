@@ -30,9 +30,10 @@ impl GameUi {
         client_id: &str,
         is_observer: bool,
         command_sender: &CommandSender,
+        force_show_dead: bool,
     ) {
         match self {
-            GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
+            GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender, force_show_dead),
             GameUi::TicTacToe(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
         }
     }

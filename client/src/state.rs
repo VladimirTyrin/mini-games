@@ -120,6 +120,7 @@ pub enum AppState {
         current_tick: u64,
         total_ticks: u64,
         replay_version: String,
+        is_finished: bool,
     },
 }
 
