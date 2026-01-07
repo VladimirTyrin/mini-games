@@ -8,7 +8,7 @@ use crate::CommandSender;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
 use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode, ReplayGame};
 use common::{LobbyDetails, LobbyInfo};
-use common::replay::{load_replay, REPLAY_FILE_EXTENSION};
+use common::replay::{load_replay_metadata, REPLAY_FILE_EXTENSION};
 use eframe::egui;
 use egui::{Align, Layout};
 use ringbuffer::{AllocRingBuffer, RingBuffer};
@@ -938,25 +938,38 @@ impl MenuApp {
             if path.is_file() {
                 if let Some(ext) = path.extension() {
                     if ext == REPLAY_FILE_EXTENSION {
-                        if let Ok(replay) = load_replay(&path) {
-                            let game = ReplayGame::try_from(replay.game).unwrap_or(ReplayGame::Unspecified);
-                            let players: Vec<String> = replay.players.iter()
-                                .map(|p| {
-                                    if p.is_bot {
-                                        format!("{} (Bot)", p.player_id)
-                                    } else {
-                                        p.player_id.clone()
-                                    }
-                                })
-                                .collect();
+                        match load_replay_metadata(&path) {
+                            Ok(metadata) => {
+                                let Ok(game) = ReplayGame::try_from(metadata.game) else {
+                                    common::log!("Skipping replay with unknown game type {}: {}", metadata.game, path.display());
+                                    continue;
+                                };
+                                if game == ReplayGame::Unspecified {
+                                    common::log!("Skipping replay with unspecified game type: {}", path.display());
+                                    continue;
+                                }
 
-                            replays.push(ReplayInfo {
-                                file_path: path,
-                                game,
-                                timestamp_ms: replay.game_started_timestamp_ms,
-                                players,
-                                engine_version: replay.engine_version,
-                            });
+                                let players: Vec<String> = metadata.players.iter()
+                                    .map(|p| {
+                                        if p.is_bot {
+                                            format!("{} (Bot)", p.player_id)
+                                        } else {
+                                            p.player_id.clone()
+                                        }
+                                    })
+                                    .collect();
+
+                                replays.push(ReplayInfo {
+                                    file_path: path,
+                                    game,
+                                    timestamp_ms: metadata.game_started_timestamp_ms,
+                                    players,
+                                    engine_version: metadata.engine_version,
+                                });
+                            }
+                            Err(e) => {
+                                common::log!("Failed to load replay metadata from {}: {}", path.display(), e);
+                            }
                         }
                     }
                 }

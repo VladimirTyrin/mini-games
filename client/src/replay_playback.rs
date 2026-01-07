@@ -36,12 +36,12 @@ pub async fn run_replay_playback(
         }
     };
 
-    let replay_version = replay.engine_version.clone();
+    let player = ReplayPlayer::new(replay);
+    let replay_version = player.engine_version().to_string();
     if replay_version != VERSION {
         common::log!("Warning: Replay version {} differs from client version {}", replay_version, VERSION);
     }
 
-    let player = ReplayPlayer::new(replay);
     let game = player.game();
 
     match game {

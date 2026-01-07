@@ -27,7 +27,7 @@ pub mod proto {
         TicTacToeGameEndReason, TicTacToeInGameCommand, PlaceMarkCommand,
         TicTacToeGameState, CellMark, MarkType, GameStatus,
     };
-    pub use replay::{Game as ReplayGame, PlayerAction, PlayerActionContent, PlayerDisconnected, ReplayV1};
+    pub use replay::{Game as ReplayGame, PlayerAction, PlayerActionContent, PlayerDisconnected, ReplayV1, ReplayV1Metadata, ReplayV1Header};
     pub use replay::player_action_content;
 }
 

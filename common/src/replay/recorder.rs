@@ -1,5 +1,5 @@
 use crate::{
-    PlayerIdentity, ReplayV1, PlayerAction, PlayerActionContent,
+    PlayerIdentity, ReplayV1, ReplayV1Metadata, PlayerAction, PlayerActionContent,
     player_action_content, ReplayGame, InGameCommand, PlayerDisconnected,
     lobby_settings,
 };
@@ -76,12 +76,14 @@ impl ReplayRecorder {
         actions.sort_by_key(|a| a.tick);
 
         ReplayV1 {
-            engine_version: std::mem::take(&mut self.engine_version),
-            game_started_timestamp_ms: self.game_started_timestamp_ms,
-            game: self.game.into(),
-            seed: self.seed,
-            lobby_settings: self.lobby_settings.take().map(|s| crate::LobbySettings { settings: Some(s) }),
-            players: std::mem::take(&mut self.players),
+            metadata: Some(ReplayV1Metadata {
+                engine_version: std::mem::take(&mut self.engine_version),
+                game_started_timestamp_ms: self.game_started_timestamp_ms,
+                game: self.game.into(),
+                seed: self.seed,
+                lobby_settings: self.lobby_settings.take().map(|s| crate::LobbySettings { settings: Some(s) }),
+                players: std::mem::take(&mut self.players),
+            }),
             actions,
         }
     }

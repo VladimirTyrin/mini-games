@@ -25,13 +25,21 @@ message PlayerAction {
     PlayerActionContent content = 3;
 }
 
-message ReplayV1 {
+message ReplayV1Metadata {
     string engine_version = 1;
     int64 game_started_timestamp_ms = 2;
     Game game = 3;
     uint64 seed = 4;
     game_service.LobbySettings lobby_settings = 5;
     repeated game_service.PlayerIdentity players = 6;
-    reserved 7 to 9;
+}
+
+message ReplayV1Header {
+    ReplayV1Metadata metadata = 1;
+}
+
+message ReplayV1 {
+    ReplayV1Metadata metadata = 1;
+    reserved 2 to 9;
     repeated PlayerAction actions = 10;
 }

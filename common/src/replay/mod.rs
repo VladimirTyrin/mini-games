@@ -3,7 +3,7 @@ pub mod file_io;
 pub mod player;
 
 pub use recorder::ReplayRecorder;
-pub use file_io::{save_replay, load_replay, save_replay_to_bytes, generate_replay_filename};
+pub use file_io::{save_replay, load_replay, load_replay_metadata, save_replay_to_bytes, generate_replay_filename};
 pub use player::ReplayPlayer;
 
 pub const REPLAY_FILE_EXTENSION: &str = "minigamesreplay";

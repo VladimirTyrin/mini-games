@@ -1,4 +1,4 @@
-use crate::{ReplayV1, PlayerAction, PlayerIdentity, lobby_settings, ReplayGame};
+use crate::{ReplayV1, ReplayV1Metadata, PlayerAction, PlayerIdentity, lobby_settings, ReplayGame};
 
 pub struct ReplayPlayer {
     replay: ReplayV1,
@@ -13,32 +13,36 @@ impl ReplayPlayer {
         }
     }
 
+    fn metadata(&self) -> &ReplayV1Metadata {
+        self.replay.metadata.as_ref().expect("Replay must have metadata")
+    }
+
     pub fn engine_version(&self) -> &str {
-        &self.replay.engine_version
+        &self.metadata().engine_version
     }
 
     pub fn game(&self) -> ReplayGame {
-        ReplayGame::try_from(self.replay.game).unwrap_or(ReplayGame::Unspecified)
+        ReplayGame::try_from(self.metadata().game).unwrap_or(ReplayGame::Unspecified)
     }
 
     pub fn seed(&self) -> u64 {
-        self.replay.seed
+        self.metadata().seed
     }
 
     pub fn lobby_settings(&self) -> Option<&lobby_settings::Settings> {
-        self.replay.lobby_settings.as_ref().and_then(|s| s.settings.as_ref())
+        self.metadata().lobby_settings.as_ref().and_then(|s| s.settings.as_ref())
     }
 
     pub fn players(&self) -> &[PlayerIdentity] {
-        &self.replay.players
+        &self.metadata().players
     }
 
     pub fn get_player(&self, index: i32) -> Option<&PlayerIdentity> {
-        self.replay.players.get(index as usize)
+        self.metadata().players.get(index as usize)
     }
 
     pub fn game_started_timestamp_ms(&self) -> i64 {
-        self.replay.game_started_timestamp_ms
+        self.metadata().game_started_timestamp_ms
     }
 
     pub fn total_actions(&self) -> usize {
@@ -103,15 +107,17 @@ mod tests {
 
     fn create_test_replay() -> ReplayV1 {
         ReplayV1 {
-            engine_version: "1.0.0".to_string(),
-            game_started_timestamp_ms: 1234567890,
-            game: ReplayGame::Snake.into(),
-            seed: 42,
-            lobby_settings: None,
-            players: vec![
-                PlayerIdentity { player_id: "player1".to_string(), is_bot: false },
-                PlayerIdentity { player_id: "player2".to_string(), is_bot: false },
-            ],
+            metadata: Some(ReplayV1Metadata {
+                engine_version: "1.0.0".to_string(),
+                game_started_timestamp_ms: 1234567890,
+                game: ReplayGame::Snake.into(),
+                seed: 42,
+                lobby_settings: None,
+                players: vec![
+                    PlayerIdentity { player_id: "player1".to_string(), is_bot: false },
+                    PlayerIdentity { player_id: "player2".to_string(), is_bot: false },
+                ],
+            }),
             actions: vec![
                 PlayerAction {
                     tick: 1,

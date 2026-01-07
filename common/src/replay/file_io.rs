@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::io::{Read, Write};
 use prost::Message;
-use crate::{ReplayV1, ReplayGame};
+use crate::{ReplayV1, ReplayV1Header, ReplayV1Metadata, ReplayGame};
 use super::{REPLAY_VERSION, REPLAY_FILE_EXTENSION};
 
 #[derive(Debug)]
@@ -81,6 +81,33 @@ pub fn load_replay_from_bytes(bytes: &[u8]) -> Result<ReplayV1, ReplayError> {
     Ok(replay)
 }
 
+pub fn load_replay_metadata(path: &Path) -> Result<ReplayV1Metadata, ReplayError> {
+    let mut file = std::fs::File::open(path)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    load_replay_metadata_from_bytes(&buffer)
+}
+
+pub fn load_replay_metadata_from_bytes(bytes: &[u8]) -> Result<ReplayV1Metadata, ReplayError> {
+    if bytes.is_empty() {
+        return Err(ReplayError::EmptyFile);
+    }
+
+    let version = bytes[0];
+    if version != REPLAY_VERSION {
+        return Err(ReplayError::UnsupportedVersion {
+            found: version,
+            expected: REPLAY_VERSION,
+        });
+    }
+
+    let header = ReplayV1Header::decode(&bytes[1..])?;
+    header.metadata.ok_or_else(|| {
+        ReplayError::DecodeError(prost::DecodeError::new("Missing metadata in replay header"))
+    })
+}
+
 pub fn generate_replay_filename(game: ReplayGame, version: &str) -> String {
     let now = chrono::Local::now();
     let timestamp = now.format("%Y%m%d%H%M%S");
@@ -104,26 +131,55 @@ mod tests {
     #[test]
     fn test_save_load_replay_bytes() {
         let replay = ReplayV1 {
-            engine_version: "1.0.0".to_string(),
-            game_started_timestamp_ms: 1234567890,
-            game: ReplayGame::Snake.into(),
-            seed: 42,
-            lobby_settings: None,
-            players: vec![
-                PlayerIdentity { player_id: "player1".to_string(), is_bot: false },
-                PlayerIdentity { player_id: "bot1".to_string(), is_bot: true },
-            ],
+            metadata: Some(ReplayV1Metadata {
+                engine_version: "1.0.0".to_string(),
+                game_started_timestamp_ms: 1234567890,
+                game: ReplayGame::Snake.into(),
+                seed: 42,
+                lobby_settings: None,
+                players: vec![
+                    PlayerIdentity { player_id: "player1".to_string(), is_bot: false },
+                    PlayerIdentity { player_id: "bot1".to_string(), is_bot: true },
+                ],
+            }),
             actions: vec![],
         };
 
         let bytes = save_replay_to_bytes(&replay);
         let loaded = load_replay_from_bytes(&bytes).unwrap();
+        let loaded_meta = loaded.metadata.unwrap();
+        let replay_meta = replay.metadata.unwrap();
 
-        assert_eq!(loaded.engine_version, replay.engine_version);
-        assert_eq!(loaded.game_started_timestamp_ms, replay.game_started_timestamp_ms);
-        assert_eq!(loaded.game, replay.game);
-        assert_eq!(loaded.seed, replay.seed);
-        assert_eq!(loaded.players.len(), 2);
+        assert_eq!(loaded_meta.engine_version, replay_meta.engine_version);
+        assert_eq!(loaded_meta.game_started_timestamp_ms, replay_meta.game_started_timestamp_ms);
+        assert_eq!(loaded_meta.game, replay_meta.game);
+        assert_eq!(loaded_meta.seed, replay_meta.seed);
+        assert_eq!(loaded_meta.players.len(), 2);
+    }
+
+    #[test]
+    fn test_load_replay_metadata() {
+        let replay = ReplayV1 {
+            metadata: Some(ReplayV1Metadata {
+                engine_version: "2.0.0".to_string(),
+                game_started_timestamp_ms: 9999999999,
+                game: ReplayGame::Tictactoe.into(),
+                seed: 123,
+                lobby_settings: None,
+                players: vec![
+                    PlayerIdentity { player_id: "alice".to_string(), is_bot: false },
+                ],
+            }),
+            actions: vec![],
+        };
+
+        let bytes = save_replay_to_bytes(&replay);
+        let metadata = load_replay_metadata_from_bytes(&bytes).unwrap();
+
+        assert_eq!(metadata.engine_version, "2.0.0");
+        assert_eq!(metadata.game, ReplayGame::Tictactoe as i32);
+        assert_eq!(metadata.seed, 123);
+        assert_eq!(metadata.players.len(), 1);
     }
 
     #[test]
