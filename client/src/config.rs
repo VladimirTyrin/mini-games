@@ -8,10 +8,19 @@ pub enum GameType {
     TicTacToe,
 }
 
-const CONFIG_FILE: &str = "mini_games_client_config.yaml";
+const CONFIG_FILE_NAME: &str = "mini_games_client_config.yaml";
+
+fn get_config_path() -> String {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            return exe_dir.join(CONFIG_FILE_NAME).to_string_lossy().into_owned();
+        }
+    }
+    CONFIG_FILE_NAME.to_string()
+}
 
 pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer> {
-    ConfigManager::from_yaml_file(CONFIG_FILE)
+    ConfigManager::from_yaml_file(&get_config_path())
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]

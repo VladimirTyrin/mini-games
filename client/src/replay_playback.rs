@@ -219,7 +219,7 @@ async fn run_tictactoe_replay(
 
     update_tictactoe_watching_state(&shared_state, &game_state, &players, is_paused, current_action, total_actions, &replay_version);
 
-    let move_delay = Duration::from_millis(1000);
+    let move_delay = Duration::from_millis(500);
     let mut move_timer = tokio::time::interval(move_delay);
 
     loop {
@@ -255,7 +255,7 @@ async fn run_tictactoe_replay(
                     }
                     ReplayCommand::SetSpeed(speed) => {
                         let adjusted_delay = Duration::from_millis(
-                            (1000.0 / speed.clamp(0.25, 4.0)) as u64
+                            (500.0 / speed.clamp(0.25, 4.0)) as u64
                         );
                         move_timer = tokio::time::interval(adjusted_delay);
                     }

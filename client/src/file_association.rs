@@ -1,44 +1,38 @@
 #[cfg(target_os = "windows")]
 mod windows_impl {
     use std::path::Path;
+    use std::process::Command;
 
     pub fn register_file_association(exe_path: &Path) -> Result<(), String> {
-        use std::process::Command;
-
         let extension = "minigamesreplay";
         let prog_id = "MiniGames.Replay";
         let description = "Mini Games Replay File";
 
         let exe_path_str = exe_path.to_string_lossy();
+        let open_command = format!("\"{}\" \"%1\"", exe_path_str);
+        let icon_value = format!("\"{}\",0", exe_path_str);
 
-        let commands = [
-            format!(
-                r#"reg add "HKCU\Software\Classes\.{}" /ve /d "{}" /f"#,
-                extension, prog_id
-            ),
-            format!(
-                r#"reg add "HKCU\Software\Classes\{}" /ve /d "{}" /f"#,
-                prog_id, description
-            ),
-            format!(
-                r#"reg add "HKCU\Software\Classes\{}\shell\open\command" /ve /d "\"{}\" \"%1\"" /f"#,
-                prog_id, exe_path_str
-            ),
-            format!(
-                r#"reg add "HKCU\Software\Classes\{}\DefaultIcon" /ve /d "\"{}\",0" /f"#,
-                prog_id, exe_path_str
-            ),
+        let key_ext = format!(r"HKCU\Software\Classes\.{}", extension);
+        let key_prog = format!(r"HKCU\Software\Classes\{}", prog_id);
+        let key_command = format!(r"HKCU\Software\Classes\{}\shell\open\command", prog_id);
+        let key_icon = format!(r"HKCU\Software\Classes\{}\DefaultIcon", prog_id);
+
+        let reg_commands: Vec<(&str, &str)> = vec![
+            (&key_ext, prog_id),
+            (&key_prog, description),
+            (&key_command, &open_command),
+            (&key_icon, &icon_value),
         ];
 
-        for cmd in &commands {
-            let output = Command::new("cmd")
-                .args(["/C", cmd])
+        for (key, value) in reg_commands {
+            let output = Command::new("reg")
+                .args(["add", key, "/ve", "/d", value, "/f"])
                 .output()
                 .map_err(|e| format!("Failed to execute reg command: {}", e))?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                common::log!("Registry command warning: {}", stderr);
+                common::log!("Registry command warning for {}: {}", key, stderr);
             }
         }
 
@@ -49,10 +43,8 @@ mod windows_impl {
     }
 
     fn notify_shell_change() {
-        use std::process::Command;
-
-        let _ = Command::new("cmd")
-            .args(["/C", "ie4uinit.exe", "-show"])
+        let _ = Command::new("ie4uinit.exe")
+            .arg("-show")
             .output();
     }
 
