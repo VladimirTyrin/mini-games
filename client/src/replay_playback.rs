@@ -36,8 +36,9 @@ pub async fn run_replay_playback(
         }
     };
 
-    if replay.engine_version != VERSION {
-        common::log!("Warning: Replay version {} differs from client version {}", replay.engine_version, VERSION);
+    let replay_version = replay.engine_version.clone();
+    if replay_version != VERSION {
+        common::log!("Warning: Replay version {} differs from client version {}", replay_version, VERSION);
     }
 
     let player = ReplayPlayer::new(replay);
@@ -45,10 +46,10 @@ pub async fn run_replay_playback(
 
     match game {
         ReplayGame::Snake => {
-            run_snake_replay(player, shared_state, &mut command_rx).await;
+            run_snake_replay(player, shared_state, &mut command_rx, replay_version).await;
         }
         ReplayGame::Tictactoe => {
-            run_tictactoe_replay(player, shared_state, &mut command_rx).await;
+            run_tictactoe_replay(player, shared_state, &mut command_rx, replay_version).await;
         }
         ReplayGame::Unspecified => {
             shared_state.set_error("Unknown game type in replay".to_string());
@@ -60,6 +61,7 @@ async fn run_snake_replay(
     mut player: ReplayPlayer,
     shared_state: SharedState,
     command_rx: &mut mpsc::UnboundedReceiver<ReplayCommand>,
+    replay_version: String,
 ) {
     let settings = match player.lobby_settings() {
         Some(lobby_settings::Settings::Snake(s)) => s.clone(),
@@ -113,7 +115,7 @@ async fn run_snake_replay(
 
     let total_ticks = estimate_total_ticks(&player);
 
-    update_watching_state(&shared_state, &game_state, &players, is_paused, current_tick, total_ticks);
+    update_watching_state(&shared_state, &game_state, &players, is_paused, current_tick, total_ticks, &replay_version);
 
     let mut tick_timer = tokio::time::interval(tick_interval);
 
@@ -132,7 +134,7 @@ async fn run_snake_replay(
                 game_state.update(&mut rng);
                 current_tick += 1;
 
-                update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks);
+                update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick.min(total_ticks), total_ticks, &replay_version);
 
                 let alive_count = game_state.snakes.values().filter(|s| s.is_alive()).count();
                 let game_over = if total_players == 1 {
@@ -150,11 +152,11 @@ async fn run_snake_replay(
                 match cmd {
                     ReplayCommand::Pause => {
                         is_paused = true;
-                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks);
+                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks, &replay_version);
                     }
                     ReplayCommand::Resume => {
                         is_paused = false;
-                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks);
+                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks, &replay_version);
                     }
                     ReplayCommand::Stop => {
                         break;
@@ -176,6 +178,7 @@ async fn run_tictactoe_replay(
     mut player: ReplayPlayer,
     shared_state: SharedState,
     command_rx: &mut mpsc::UnboundedReceiver<ReplayCommand>,
+    replay_version: String,
 ) {
     let settings = match player.lobby_settings() {
         Some(lobby_settings::Settings::Tictactoe(s)) => s.clone(),
@@ -214,7 +217,7 @@ async fn run_tictactoe_replay(
     let mut current_action: u64 = 0;
     let mut is_paused = false;
 
-    update_tictactoe_watching_state(&shared_state, &game_state, &players, is_paused, current_action, total_actions);
+    update_tictactoe_watching_state(&shared_state, &game_state, &players, is_paused, current_action, total_actions, &replay_version);
 
     let move_delay = Duration::from_millis(1000);
     let mut move_timer = tokio::time::interval(move_delay);
@@ -229,7 +232,7 @@ async fn run_tictactoe_replay(
                 if let Some(action) = player.next_action() {
                     apply_tictactoe_action(&mut game_state, action, &player_map);
                     current_action += 1;
-                    update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions);
+                    update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action.min(total_actions), total_actions, &replay_version);
                 }
 
                 if player.is_finished() || game_state.status != common::engine::tictactoe::GameStatus::InProgress {
@@ -241,11 +244,11 @@ async fn run_tictactoe_replay(
                 match cmd {
                     ReplayCommand::Pause => {
                         is_paused = true;
-                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions);
+                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions, &replay_version);
                     }
                     ReplayCommand::Resume => {
                         is_paused = false;
-                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions);
+                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions, &replay_version);
                     }
                     ReplayCommand::Stop => {
                         break;
@@ -367,6 +370,7 @@ fn update_watching_state(
     is_paused: bool,
     current_tick: u64,
     total_ticks: u64,
+    replay_version: &str,
 ) {
     let proto_state = build_snake_proto_state(game_state, players, current_tick);
     let state_update = GameStateUpdate {
@@ -378,6 +382,7 @@ fn update_watching_state(
         is_paused,
         current_tick,
         total_ticks,
+        replay_version: replay_version.to_string(),
     });
 }
 
@@ -388,6 +393,7 @@ fn update_tictactoe_watching_state(
     is_paused: bool,
     current_action: u64,
     total_actions: u64,
+    replay_version: &str,
 ) {
     let player_x_is_bot = players.iter()
         .find(|p| p.player_id == game_state.player_x.to_string())
@@ -412,6 +418,7 @@ fn update_tictactoe_watching_state(
         is_paused,
         current_tick: current_action,
         total_ticks: total_actions,
+        replay_version: replay_version.to_string(),
     });
 }
 

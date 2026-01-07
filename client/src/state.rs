@@ -119,6 +119,7 @@ pub enum AppState {
         is_paused: bool,
         current_tick: u64,
         total_ticks: u64,
+        replay_version: String,
     },
 }
 

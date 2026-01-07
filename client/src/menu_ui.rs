@@ -1025,7 +1025,7 @@ impl MenuApp {
                         };
 
                         let datetime = chrono::DateTime::from_timestamp_millis(replay.timestamp_ms)
-                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                            .map(|dt| dt.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S").to_string())
                             .unwrap_or_else(|| "Unknown date".to_string());
 
                         let players_str = replay.players.join(", ");
@@ -1130,6 +1130,7 @@ impl MenuApp {
         is_paused: bool,
         current_tick: u64,
         total_ticks: u64,
+        replay_version: &str,
     ) {
         if self.game_ui.is_none() {
             if let Some(state) = game_state {
@@ -1144,6 +1145,8 @@ impl MenuApp {
                 }
             }
         }
+
+        let version_mismatch = replay_version != common::version::VERSION;
 
         ui.horizontal(|ui| {
             if ui.button("⬅ Back (Esc)").clicked() {
@@ -1190,7 +1193,25 @@ impl MenuApp {
                 0.0
             };
             ui.label(format!("Progress: {}/{} ({:.0}%)", current_tick, total_ticks, progress * 100.0));
+
+            ui.separator();
+
+            if version_mismatch {
+                ui.colored_label(
+                    egui::Color32::YELLOW,
+                    format!("Replay v{} / Client v{}", replay_version, common::version::VERSION)
+                );
+            } else {
+                ui.label(format!("v{}", replay_version));
+            }
         });
+
+        if version_mismatch {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                "Warning: Replay was recorded with a different version. Playback issues may occur."
+            );
+        }
 
         ctx.input(|i| {
             if i.key_pressed(egui::Key::Escape) {
@@ -1394,8 +1415,8 @@ impl eframe::App for MenuApp {
                 AppState::ReplayList { replays } => {
                     self.render_replay_list(ui, ctx, &replays);
                 }
-                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks } => {
-                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks);
+                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks, replay_version } => {
+                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks, &replay_version);
                 }
             }
         });
