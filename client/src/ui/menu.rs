@@ -1,8 +1,8 @@
+use super::colors::generate_color_from_client_id;
+use super::game::GameUi;
+use super::sprites::Sprites;
 use crate::config::{Config, GameType, SnakeLobbyConfig};
-use crate::game_ui::GameUi;
-use crate::sprites::Sprites;
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig, ReplayInfo};
-use crate::colors::generate_color_from_client_id;
 use crate::replay_playback::{ReplayCommand, run_replay_playback};
 use crate::CommandSender;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};

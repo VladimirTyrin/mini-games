@@ -1,6 +1,6 @@
-use crate::sprites::Sprites;
+use super::super::sprites::{Sprites, Sprite};
+use super::super::colors::generate_color_from_client_id;
 use crate::state::{GameCommand, SnakeGameCommand, MenuCommand, ClientCommand, PlayAgainStatus};
-use crate::colors::generate_color_from_client_id;
 use crate::CommandSender;
 use common::{proto::snake::{Direction, SnakeGameEndReason, SnakeGameEndInfo}, SnakePosition, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;
@@ -46,7 +46,7 @@ impl SnakeGameUi {
     fn get_or_create_texture(
         &mut self,
         ctx: &egui::Context,
-        sprite: crate::sprites::Sprite,
+        sprite: Sprite,
         cache_key: String,
     ) -> egui::TextureHandle {
         if let Some(texture) = self.texture_cache.get(&cache_key) {
@@ -563,7 +563,7 @@ impl SnakeGameUi {
         &mut self,
         painter: &egui::Painter,
         ctx: &egui::Context,
-        sprite: crate::sprites::Sprite,
+        sprite: Sprite,
         grid_x: i32,
         grid_y: i32,
         canvas_min: egui::Pos2,

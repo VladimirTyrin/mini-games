@@ -1,5 +1,5 @@
+use super::super::colors::generate_color_from_client_id;
 use crate::state::{ClientCommand, GameCommand, MenuCommand, PlayAgainStatus, TicTacToeGameCommand};
-use crate::colors::generate_color_from_client_id;
 use crate::CommandSender;
 use common::{proto::tictactoe::TicTacToeGameEndInfo, GameStateUpdate, ScoreEntry, PlayerIdentity};
 use eframe::egui;

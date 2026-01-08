@@ -1,6 +1,3 @@
-pub mod snake;
-pub mod tictactoe;
-
 use crate::state::PlayAgainStatus;
 use crate::CommandSender;
 use common::{GameStateUpdate, ScoreEntry, PlayerIdentity};
@@ -8,17 +5,17 @@ use eframe::egui;
 use std::path::PathBuf;
 
 pub enum GameUi {
-    Snake(snake::SnakeGameUi),
-    TicTacToe(tictactoe::TicTacToeGameUi),
+    Snake(super::snake::SnakeGameUi),
+    TicTacToe(super::tictactoe::TicTacToeGameUi),
 }
 
 impl GameUi {
     pub fn new_snake() -> Self {
-        GameUi::Snake(snake::SnakeGameUi::new())
+        GameUi::Snake(super::snake::SnakeGameUi::new())
     }
 
     pub fn new_tictactoe() -> Self {
-        GameUi::TicTacToe(tictactoe::TicTacToeGameUi::new())
+        GameUi::TicTacToe(super::tictactoe::TicTacToeGameUi::new())
     }
 
     pub fn render_game(

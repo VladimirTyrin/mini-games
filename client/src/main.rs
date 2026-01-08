@@ -1,30 +1,26 @@
-mod state;
-mod grpc_client;
-mod menu_ui;
-mod sprites;
-mod game_ui;
-mod config;
-mod colors;
-mod constants;
 mod command_sender;
-mod offline;
-mod username_prompt;
-mod replay_playback;
+mod config;
+mod constants;
 mod file_association;
+mod grpc_client;
+mod offline;
+mod replay_playback;
+mod state;
+mod ui;
 
 pub use command_sender::CommandSender;
 
 use clap::Parser;
 use common::{id_generator::generate_client_id, log};
-use eframe::egui;
-use tokio::sync::mpsc;
-use std::time::Duration;
-
-use grpc_client::grpc_client_task;
 use common::logger::init_logger;
-use state::SharedState;
-use menu_ui::MenuApp;
+use eframe::egui;
+use std::time::Duration;
+use tokio::sync::mpsc;
+
 use crate::config::get_config_manager;
+use grpc_client::grpc_client_task;
+use state::SharedState;
+use ui::{MenuApp, prompt_for_username};
 
 #[derive(Parser)]
 #[command(name = "mini_games_client")]
@@ -54,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(ref id) = config.client_id {
         id.clone()
     } else {
-        let username = username_prompt::prompt_for_username()
+        let username = prompt_for_username()
             .ok_or("Username input was cancelled")?;
         config.client_id = Some(username.clone());
         config_manager.set_config(&config)?;

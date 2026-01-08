@@ -37,7 +37,7 @@ impl Sprites {
 
     pub fn load() -> Self {
         let sprite_sheet = image::load_from_memory_with_format(
-            include_bytes!("../assets/sprites.png"),
+            include_bytes!("../../assets/sprites.png"),
             ImageFormat::Png,
         )
         .expect("invalid sprite PNG")

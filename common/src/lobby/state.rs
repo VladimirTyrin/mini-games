@@ -1,92 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use crate::{
-    LobbyInfo, LobbyDetails, PlayerInfo, ClientId, LobbyId, PlayerId, BotId,
-    SnakeLobbySettings, SnakeBotType, TicTacToeLobbySettings, TicTacToeBotType,
-    lobby_details, lobby_settings, add_bot_request,
-    validate_lobby_settings::ValidateLobbySettings,
-};
+use crate::{LobbyInfo, LobbyDetails, PlayerInfo, ClientId, LobbyId, PlayerId, BotId};
 use crate::id_generator::generate_client_id;
-
-#[derive(Debug, Clone)]
-pub enum LobbySettings {
-    Snake(SnakeLobbySettings),
-    TicTacToe(TicTacToeLobbySettings),
-}
-
-impl LobbySettings {
-    pub fn validate(&self, max_players: u32) -> Result<(), String> {
-        match self {
-            LobbySettings::Snake(s) => s.validate(max_players),
-            LobbySettings::TicTacToe(t) => t.validate(max_players),
-        }
-    }
-
-    pub fn to_proto(&self) -> Option<lobby_details::Settings> {
-        match self {
-            LobbySettings::Snake(s) => Some(lobby_details::Settings::Snake(*s)),
-            LobbySettings::TicTacToe(t) => Some(lobby_details::Settings::Tictactoe(*t)),
-        }
-    }
-
-    pub fn to_info_proto(&self) -> Option<crate::proto::game_service::LobbySettings> {
-        Some(crate::proto::game_service::LobbySettings {
-            settings: Some(match self {
-                LobbySettings::Snake(s) => lobby_settings::Settings::Snake(*s),
-                LobbySettings::TicTacToe(t) => lobby_settings::Settings::Tictactoe(*t),
-            }),
-        })
-    }
-
-    pub fn from_proto(settings: Option<lobby_settings::Settings>) -> Result<Self, String> {
-        match settings {
-            Some(lobby_settings::Settings::Snake(s)) => Ok(LobbySettings::Snake(s)),
-            Some(lobby_settings::Settings::Tictactoe(t)) => Ok(LobbySettings::TicTacToe(t)),
-            None => Err("No settings provided".to_string()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BotType {
-    Snake(SnakeBotType),
-    TicTacToe(TicTacToeBotType),
-}
-
-impl BotType {
-    pub fn from_proto(bot_type: Option<add_bot_request::BotType>) -> Result<Self, String> {
-        match bot_type {
-            Some(add_bot_request::BotType::SnakeBot(t)) => Ok(BotType::Snake(
-                SnakeBotType::try_from(t).map_err(|_| "Invalid snake bot type")?
-            )),
-            Some(add_bot_request::BotType::TictactoeBot(t)) => Ok(BotType::TicTacToe(
-                TicTacToeBotType::try_from(t).map_err(|_| "Invalid tictactoe bot type")?
-            )),
-            None => Err("No bot type provided".to_string()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlayerIdentity {
-    Player(PlayerId),
-    Bot { id: BotId, bot_type: BotType },
-}
-
-impl PlayerIdentity {
-    pub fn client_id(&self) -> String {
-        match self {
-            PlayerIdentity::Player(id) => id.to_string(),
-            PlayerIdentity::Bot { id, .. } => id.to_string(),
-        }
-    }
-
-    pub fn to_proto(&self) -> crate::PlayerIdentity {
-        crate::PlayerIdentity {
-            player_id: self.client_id(),
-            is_bot: matches!(self, PlayerIdentity::Bot { .. }),
-        }
-    }
-}
+use super::{LobbySettings, BotType, PlayerIdentity};
 
 #[derive(Debug, Clone)]
 pub struct Lobby {
@@ -166,14 +81,14 @@ impl Lobby {
             });
         }
 
-        let observers: Vec<crate::PlayerIdentity> = self.observers.iter()
-            .map(|id| crate::PlayerIdentity {
+        let observers: Vec<crate::proto::game_service::PlayerIdentity> = self.observers.iter()
+            .map(|id| crate::proto::game_service::PlayerIdentity {
                 player_id: id.to_string(),
                 is_bot: false,
             })
             .collect();
 
-        let creator_identity = crate::PlayerIdentity {
+        let creator_identity = crate::proto::game_service::PlayerIdentity {
             player_id: self.creator_id.to_string(),
             is_bot: false,
         };
