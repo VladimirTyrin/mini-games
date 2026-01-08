@@ -6,7 +6,7 @@ use crate::colors::generate_color_from_client_id;
 use crate::replay_playback::{ReplayCommand, run_replay_playback};
 use crate::CommandSender;
 use common::config::{ConfigManager, FileContentConfigProvider, YamlConfigSerializer};
-use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode, ReplayGame};
+use common::{proto::snake::{Direction, SnakeBotType}, WallCollisionMode, ReplayGame, log};
 use common::{LobbyDetails, LobbyInfo};
 use common::replay::{load_replay_metadata, REPLAY_FILE_EXTENSION};
 use eframe::egui;
@@ -221,22 +221,23 @@ impl MenuApp {
             });
         });
 
-        if let Some(response) = response_opt {
-            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                let message = self.chat_input.trim();
-                if !message.is_empty() {
-                    let command = match location {
-                        ChatLocation::LobbyList => ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
-                            message: message.to_string(),
-                        }),
-                        ChatLocation::InLobby => ClientCommand::Menu(MenuCommand::InLobbyChatMessage {
-                            message: message.to_string(),
-                        }),
-                    };
-                    self.command_sender.send(command);
-                    self.chat_input.clear();
-                    response.request_focus();
-                }
+        if let Some(response) = response_opt
+            && response.lost_focus()
+            && ui.input(|i| i.key_pressed(egui::Key::Enter))
+        {
+            let message = self.chat_input.trim();
+            if !message.is_empty() {
+                let command = match location {
+                    ChatLocation::LobbyList => ClientCommand::Menu(MenuCommand::LobbyListChatMessage {
+                        message: message.to_string(),
+                    }),
+                    ChatLocation::InLobby => ClientCommand::Menu(MenuCommand::InLobbyChatMessage {
+                        message: message.to_string(),
+                    }),
+                };
+                self.command_sender.send(command);
+                self.chat_input.clear();
+                response.request_focus();
             }
         }
     }
@@ -666,7 +667,7 @@ impl MenuApp {
         let has_enough_players = if is_tictactoe_lobby {
             details.players.len() == 2
         } else {
-            details.players.len() >= 1
+            !details.players.is_empty()
         };
 
         let is_self_observer = details.observers.iter()
@@ -949,42 +950,41 @@ impl MenuApp {
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
-                    if ext == REPLAY_FILE_EXTENSION {
-                        match load_replay_metadata(&path) {
-                            Ok(metadata) => {
-                                let Ok(game) = ReplayGame::try_from(metadata.game) else {
-                                    common::log!("Skipping replay with unknown game type {}: {}", metadata.game, path.display());
-                                    continue;
-                                };
-                                if game == ReplayGame::Unspecified {
-                                    common::log!("Skipping replay with unspecified game type: {}", path.display());
-                                    continue;
-                                }
-
-                                let players: Vec<String> = metadata.players.iter()
-                                    .map(|p| {
-                                        if p.is_bot {
-                                            format!("{} (Bot)", p.player_id)
-                                        } else {
-                                            p.player_id.clone()
-                                        }
-                                    })
-                                    .collect();
-
-                                replays.push(ReplayInfo {
-                                    file_path: path,
-                                    game,
-                                    timestamp_ms: metadata.game_started_timestamp_ms,
-                                    players,
-                                    engine_version: metadata.engine_version,
-                                });
-                            }
-                            Err(e) => {
-                                common::log!("Failed to load replay metadata from {}: {}", path.display(), e);
-                            }
+            if path.is_file()
+                && let Some(ext) = path.extension()
+                && ext == REPLAY_FILE_EXTENSION
+            {
+                match load_replay_metadata(&path) {
+                    Ok(metadata) => {
+                        let Ok(game) = ReplayGame::try_from(metadata.game) else {
+                            common::log!("Skipping replay with unknown game type {}: {}", metadata.game, path.display());
+                            continue;
+                        };
+                        if game == ReplayGame::Unspecified {
+                            common::log!("Skipping replay with unspecified game type: {}", path.display());
+                            continue;
                         }
+
+                        let players: Vec<String> = metadata.players.iter()
+                            .map(|p| {
+                                if p.is_bot {
+                                    format!("{} (Bot)", p.player_id)
+                                } else {
+                                    p.player_id.clone()
+                                }
+                            })
+                            .collect();
+
+                        replays.push(ReplayInfo {
+                            file_path: path,
+                            game,
+                            timestamp_ms: metadata.game_started_timestamp_ms,
+                            players,
+                            engine_version: metadata.engine_version,
+                        });
+                    }
+                    Err(e) => {
+                        common::log!("Failed to load replay metadata from {}: {}", path.display(), e);
                     }
                 }
             }
@@ -1122,16 +1122,16 @@ impl MenuApp {
         }
     }
 
-    pub fn open_replay_file(&mut self, path: &PathBuf) {
+    pub fn open_replay_file(&mut self, path: &std::path::Path) {
         self.play_replay(path);
     }
 
-    fn play_replay(&mut self, path: &PathBuf) {
+    fn play_replay(&mut self, path: &std::path::Path) {
         let (tx, rx) = mpsc::unbounded_channel();
         self.replay_command_sender = Some(tx);
         self.game_ui = None;
 
-        let file_path = path.clone();
+        let file_path = path.to_path_buf();
         let shared_state = self.shared_state.clone();
 
         std::thread::spawn(move || {
@@ -1143,8 +1143,10 @@ impl MenuApp {
     }
 
     fn stop_replay(&mut self) {
-        if let Some(sender) = self.replay_command_sender.take() {
-            let _ = sender.send(ReplayCommand::Stop);
+        if let Some(sender) = self.replay_command_sender.take()
+            && let Err(e) = sender.send(ReplayCommand::Stop)
+        {
+            log!("[replay] Failed to send stop command: {}", e);
         }
         self.game_ui = None;
     }
@@ -1160,17 +1162,17 @@ impl MenuApp {
         replay_version: &str,
         is_finished: bool,
     ) {
-        if self.game_ui.is_none() {
-            if let Some(state) = game_state {
-                match &state.state {
-                    Some(common::game_state_update::State::Snake(_)) => {
-                        self.game_ui = Some(GameUi::new_snake());
-                    }
-                    Some(common::game_state_update::State::Tictactoe(_)) => {
-                        self.game_ui = Some(GameUi::new_tictactoe());
-                    }
-                    None => {}
+        if self.game_ui.is_none()
+            && let Some(state) = game_state
+        {
+            match &state.state {
+                Some(common::game_state_update::State::Snake(_)) => {
+                    self.game_ui = Some(GameUi::new_snake());
                 }
+                Some(common::game_state_update::State::Tictactoe(_)) => {
+                    self.game_ui = Some(GameUi::new_tictactoe());
+                }
+                None => {}
             }
         }
 
@@ -1185,17 +1187,17 @@ impl MenuApp {
             ui.separator();
 
             if is_paused {
-                if ui.button("▶ Play (Space)").clicked() {
-                    if let Some(ref sender) = self.replay_command_sender {
-                        let _ = sender.send(ReplayCommand::Resume);
-                    }
+                if ui.button("▶ Play (Space)").clicked()
+                    && let Some(ref sender) = self.replay_command_sender
+                    && let Err(e) = sender.send(ReplayCommand::Resume)
+                {
+                    log!("[replay] Failed to send resume command: {}", e);
                 }
-            } else {
-                if ui.button("⏸ Pause (Space)").clicked() {
-                    if let Some(ref sender) = self.replay_command_sender {
-                        let _ = sender.send(ReplayCommand::Pause);
-                    }
-                }
+            } else if ui.button("⏸ Pause (Space)").clicked()
+                && let Some(ref sender) = self.replay_command_sender
+                && let Err(e) = sender.send(ReplayCommand::Pause)
+            {
+                log!("[replay] Failed to send pause command: {}", e);
             }
 
             ui.separator();
@@ -1207,8 +1209,10 @@ impl MenuApp {
                 let selected = (self.replay_speed - speed).abs() < 0.01;
                 if ui.selectable_label(selected, &label).clicked() {
                     self.replay_speed = speed;
-                    if let Some(ref sender) = self.replay_command_sender {
-                        let _ = sender.send(ReplayCommand::SetSpeed(speed));
+                    if let Some(ref sender) = self.replay_command_sender
+                        && let Err(e) = sender.send(ReplayCommand::SetSpeed(speed))
+                    {
+                        log!("[replay] Failed to send speed command: {}", e);
                     }
                 }
             }
@@ -1235,10 +1239,11 @@ impl MenuApp {
 
             if is_finished {
                 ui.separator();
-                if ui.button("🔄 Watch Again (R)").clicked() {
-                    if let Some(ref sender) = self.replay_command_sender {
-                        let _ = sender.send(ReplayCommand::Restart);
-                    }
+                if ui.button("🔄 Watch Again (R)").clicked()
+                    && let Some(ref sender) = self.replay_command_sender
+                    && let Err(e) = sender.send(ReplayCommand::Restart)
+                {
+                    log!("[replay] Failed to send restart command: {}", e);
                 }
             }
         });
@@ -1255,20 +1260,24 @@ impl MenuApp {
                 self.stop_replay();
                 self.open_replay_list();
             }
-            if i.key_pressed(egui::Key::Space) {
-                if let Some(ref sender) = self.replay_command_sender {
-                    let cmd = if is_paused {
-                        ReplayCommand::Resume
-                    } else {
-                        ReplayCommand::Pause
-                    };
-                    let _ = sender.send(cmd);
+            if i.key_pressed(egui::Key::Space)
+                && let Some(ref sender) = self.replay_command_sender
+            {
+                let cmd = if is_paused {
+                    ReplayCommand::Resume
+                } else {
+                    ReplayCommand::Pause
+                };
+                if let Err(e) = sender.send(cmd) {
+                    log!("[replay] Failed to send pause/resume command: {}", e);
                 }
             }
-            if is_finished && i.key_pressed(egui::Key::R) {
-                if let Some(ref sender) = self.replay_command_sender {
-                    let _ = sender.send(ReplayCommand::Restart);
-                }
+            if is_finished
+                && i.key_pressed(egui::Key::R)
+                && let Some(ref sender) = self.replay_command_sender
+                && let Err(e) = sender.send(ReplayCommand::Restart)
+            {
+                log!("[replay] Failed to send restart command: {}", e);
             }
         });
 
@@ -1442,16 +1451,16 @@ impl eframe::App for MenuApp {
                             }
                         };
                     }
-                    if watch_replay_clicked {
-                        if let Some(path) = replay_path {
-                            let sender = if self.offline_command_sender.is_some() {
-                                self.offline_command_sender.as_ref().unwrap()
-                            } else {
-                                &self.command_sender
-                            };
-                            sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
-                            self.play_replay(&path);
-                        }
+                    if watch_replay_clicked
+                        && let Some(path) = replay_path
+                    {
+                        let sender = if self.offline_command_sender.is_some() {
+                            self.offline_command_sender.as_ref().unwrap()
+                        } else {
+                            &self.command_sender
+                        };
+                        sender.send(ClientCommand::Menu(MenuCommand::LeaveLobby));
+                        self.play_replay(&path);
                     }
                 }
                 AppState::ReplayList { replays } => {

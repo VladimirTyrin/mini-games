@@ -89,18 +89,18 @@ pub async fn local_game_task(
             }
 
             ClientCommand::Menu(MenuCommand::BecomeObserver) => {
-                if let Some(ref mut l) = lobby {
-                    if l.player_to_observer(&player_id) {
-                        update_lobby_ui(&shared_state, l);
-                    }
+                if let Some(ref mut l) = lobby
+                    && l.player_to_observer(&player_id)
+                {
+                    update_lobby_ui(&shared_state, l);
                 }
             }
 
             ClientCommand::Menu(MenuCommand::BecomePlayer) => {
-                if let Some(ref mut l) = lobby {
-                    if l.observer_to_player(&player_id) {
-                        update_lobby_ui(&shared_state, l);
-                    }
+                if let Some(ref mut l) = lobby
+                    && l.observer_to_player(&player_id)
+                {
+                    update_lobby_ui(&shared_state, l);
                 }
             }
 

@@ -9,7 +9,7 @@ use common::games::SessionRng;
 use common::replay::{load_replay, ReplayPlayer};
 use common::{
     ReplayGame, GameStateUpdate, game_state_update, PlayerAction, player_action_content,
-    in_game_command, lobby_settings, SnakePosition,
+    in_game_command, lobby_settings, SnakePosition, log,
     proto::snake::SnakeGameState as ProtoSnakeGameState,
     PlayerId,
 };
@@ -76,7 +76,7 @@ async fn run_snake_replay(
     replay_version: String,
 ) -> bool {
     let settings = match player.lobby_settings() {
-        Some(lobby_settings::Settings::Snake(s)) => s.clone(),
+        Some(lobby_settings::Settings::Snake(s)) => *s,
         _ => {
             shared_state.set_error("Invalid snake settings in replay".to_string());
             return false;
@@ -127,7 +127,7 @@ async fn run_snake_replay(
 
     let total_ticks = estimate_total_ticks(&player);
 
-    update_watching_state(&shared_state, &game_state, &players, is_paused, current_tick, total_ticks, &replay_version, false);
+    update_watching_state(&shared_state, &game_state, players, is_paused, current_tick, total_ticks, &replay_version, false);
 
     let mut tick_timer = tokio::time::interval(tick_interval);
 
@@ -154,7 +154,7 @@ async fn run_snake_replay(
                 };
                 let is_finished = game_over || player.is_finished();
 
-                update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick.min(total_ticks), total_ticks, &replay_version, is_finished);
+                update_watching_state(&shared_state, &game_state, player.players(), is_paused, current_tick.min(total_ticks), total_ticks, &replay_version, is_finished);
 
                 if is_finished {
                     loop {
@@ -170,11 +170,11 @@ async fn run_snake_replay(
                 match cmd {
                     ReplayCommand::Pause => {
                         is_paused = true;
-                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks, &replay_version, false);
+                        update_watching_state(&shared_state, &game_state, player.players(), is_paused, current_tick, total_ticks, &replay_version, false);
                     }
                     ReplayCommand::Resume => {
                         is_paused = false;
-                        update_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_tick, total_ticks, &replay_version, false);
+                        update_watching_state(&shared_state, &game_state, player.players(), is_paused, current_tick, total_ticks, &replay_version, false);
                     }
                     ReplayCommand::Stop => {
                         return false;
@@ -202,7 +202,7 @@ async fn run_tictactoe_replay(
     replay_version: String,
 ) -> bool {
     let settings = match player.lobby_settings() {
-        Some(lobby_settings::Settings::Tictactoe(s)) => s.clone(),
+        Some(lobby_settings::Settings::Tictactoe(s)) => *s,
         _ => {
             shared_state.set_error("Invalid tictactoe settings in replay".to_string());
             return false;
@@ -238,7 +238,7 @@ async fn run_tictactoe_replay(
     let mut current_action: u64 = 0;
     let mut is_paused = false;
 
-    update_tictactoe_watching_state(&shared_state, &game_state, &players, is_paused, current_action, total_actions, &replay_version, false);
+    update_tictactoe_watching_state(&shared_state, &game_state, players, is_paused, current_action, total_actions, &replay_version, false);
 
     let move_delay = Duration::from_millis(500);
     let mut move_timer = tokio::time::interval(move_delay);
@@ -256,7 +256,7 @@ async fn run_tictactoe_replay(
                 }
 
                 let is_finished = player.is_finished() || game_state.status != GameStatus::InProgress;
-                update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
+                update_tictactoe_watching_state(&shared_state, &game_state, player.players(), is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
 
                 if is_finished {
                     loop {
@@ -272,11 +272,11 @@ async fn run_tictactoe_replay(
                 match cmd {
                     ReplayCommand::Pause => {
                         is_paused = true;
-                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions, &replay_version, false);
+                        update_tictactoe_watching_state(&shared_state, &game_state, player.players(), is_paused, current_action, total_actions, &replay_version, false);
                     }
                     ReplayCommand::Resume => {
                         is_paused = false;
-                        update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action, total_actions, &replay_version, false);
+                        update_tictactoe_watching_state(&shared_state, &game_state, player.players(), is_paused, current_action, total_actions, &replay_version, false);
                     }
                     ReplayCommand::Stop => {
                         return false;
@@ -315,21 +315,25 @@ fn apply_snake_action(
 
     match inner {
         player_action_content::Content::Command(cmd) => {
-            if let Some(in_game_command::Command::Snake(snake_cmd)) = &cmd.command {
-                if let Some(common::proto::snake::snake_in_game_command::Command::Turn(turn)) = &snake_cmd.command {
-                    let direction = match common::proto::snake::Direction::try_from(turn.direction) {
-                        Ok(common::proto::snake::Direction::Up) => Direction::Up,
-                        Ok(common::proto::snake::Direction::Down) => Direction::Down,
-                        Ok(common::proto::snake::Direction::Left) => Direction::Left,
-                        Ok(common::proto::snake::Direction::Right) => Direction::Right,
-                        _ => return,
-                    };
-                    game_state.set_snake_direction(player_id, direction);
+            if let Some(in_game_command::Command::Snake(snake_cmd)) = &cmd.command
+                && let Some(common::proto::snake::snake_in_game_command::Command::Turn(turn)) = &snake_cmd.command
+            {
+                let direction = match common::proto::snake::Direction::try_from(turn.direction) {
+                    Ok(common::proto::snake::Direction::Up) => Direction::Up,
+                    Ok(common::proto::snake::Direction::Down) => Direction::Down,
+                    Ok(common::proto::snake::Direction::Left) => Direction::Left,
+                    Ok(common::proto::snake::Direction::Right) => Direction::Right,
+                    _ => return,
+                };
+                if let Err(e) = game_state.set_snake_direction(player_id, direction) {
+                    log!("[replay] Failed to set direction for {}: {}", player_id, e);
                 }
             }
         }
         player_action_content::Content::Disconnected(_) => {
-            game_state.kill_snake(player_id, DeathReason::PlayerDisconnected);
+            if let Err(e) = game_state.kill_snake(player_id, DeathReason::PlayerDisconnected) {
+                log!("[replay] Failed to kill snake {}: {}", player_id, e);
+            }
         }
     }
 }
@@ -351,12 +355,12 @@ fn apply_tictactoe_action(
         return;
     };
 
-    if let player_action_content::Content::Command(cmd) = inner {
-        if let Some(in_game_command::Command::Tictactoe(ttt_cmd)) = &cmd.command {
-            if let Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(place)) = &ttt_cmd.command {
-                let _ = game_state.place_mark(player_id, place.x as usize, place.y as usize);
-            }
-        }
+    if let player_action_content::Content::Command(cmd) = inner
+        && let Some(in_game_command::Command::Tictactoe(ttt_cmd)) = &cmd.command
+        && let Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(place)) = &ttt_cmd.command
+        && let Err(e) = game_state.place_mark(player_id, place.x as usize, place.y as usize)
+    {
+        log!("[replay] Failed to place mark for {} at ({}, {}): {}", player_id, place.x, place.y, e);
     }
 }
 

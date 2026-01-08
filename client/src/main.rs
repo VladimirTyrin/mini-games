@@ -15,7 +15,7 @@ mod file_association;
 pub use command_sender::CommandSender;
 
 use clap::Parser;
-use common::id_generator::generate_client_id;
+use common::{id_generator::generate_client_id, log};
 use eframe::egui;
 use tokio::sync::mpsc;
 use std::time::Duration;
@@ -68,12 +68,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     init_logger(prefix);
 
-    if !config.file_association_registered {
-        if let Ok(exe_path) = std::env::current_exe() {
-            if file_association::register_file_association(&exe_path).is_ok() {
-                config.file_association_registered = true;
-                let _ = config_manager.set_config(&config);
-            }
+    if !config.file_association_registered
+        && let Ok(exe_path) = std::env::current_exe()
+        && file_association::register_file_association(&exe_path).is_ok()
+    {
+        config.file_association_registered = true;
+        if let Err(e) = config_manager.set_config(&config) {
+            log!("Failed to save file association config: {}", e);
         }
     }
 

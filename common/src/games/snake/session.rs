@@ -6,7 +6,7 @@ use tokio::time::interval;
 
 use crate::{
     BotId, ClientId, GameOverNotification, GameStateUpdate, PlayerIdentity, PlayerId, ScoreEntry,
-    SnakePosition, InGameCommand, in_game_command, game_over_notification, game_state_update,
+    SnakePosition, InGameCommand, in_game_command, game_over_notification, game_state_update, log,
     proto::snake::{
         Direction as ProtoDirection, SnakeGameEndInfo, SnakeGameEndReason,
         SnakeGameState as ProtoSnakeGameState, SnakeInGameCommand, snake_in_game_command,
@@ -22,6 +22,7 @@ use super::types::{DeadSnakeBehavior, DeathReason, Direction, FieldSize, Point, 
 
 #[derive(Clone)]
 pub struct SnakeSessionState {
+    pub session_id: String,
     pub game_state: Arc<Mutex<SnakeGameState>>,
     pub tick: Arc<Mutex<u64>>,
     pub rng: Arc<Mutex<SessionRng>>,
@@ -71,6 +72,7 @@ impl SnakeSessionState {
         }
 
         Self {
+            session_id: config.session_id.clone(),
             game_state: Arc::new(Mutex::new(game_state)),
             tick: Arc::new(Mutex::new(0u64)),
             rng: Arc::new(Mutex::new(rng)),
@@ -109,7 +111,9 @@ impl SnakeSession {
                     if let Some(direction) =
                         BotController::calculate_move(*snake_bot_type, &player_id, &game_state, &mut rng)
                     {
-                        game_state.set_snake_direction(&player_id, direction);
+                        if let Err(e) = game_state.set_snake_direction(&player_id, direction) {
+                            log!("[session:{}] Bot {} failed to set direction: {}", session_state.session_id, player_id, e);
+                        }
 
                         if let Some(ref recorder) = session_state.replay_recorder {
                             let mut recorder = recorder.lock().await;
@@ -185,7 +189,9 @@ impl SnakeSession {
 
         let mut state_guard = state.game_state.lock().await;
         let player_id = PlayerId::new(client_id.to_string());
-        state_guard.set_snake_direction(&player_id, direction);
+        if let Err(e) = state_guard.set_snake_direction(&player_id, direction) {
+            log!("[session:{}] Player {} failed to set direction: {}", state.session_id, player_id, e);
+        }
     }
 
     pub async fn handle_kill_snake(
@@ -195,7 +201,9 @@ impl SnakeSession {
     ) {
         let mut state_guard = state.game_state.lock().await;
         let player_id = PlayerId::new(client_id.to_string());
-        state_guard.kill_snake(&player_id, reason);
+        if let Err(e) = state_guard.kill_snake(&player_id, reason) {
+            log!("[session:{}] Failed to kill snake {}: {}", state.session_id, player_id, e);
+        }
     }
 }
 

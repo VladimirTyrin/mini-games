@@ -81,13 +81,16 @@ pub fn prompt_for_username() -> Option<String> {
         ..Default::default()
     };
 
-    let _ = eframe::run_native(
+    if let Err(e) = eframe::run_native(
         "Enter Username",
         options,
         Box::new(move |_cc| {
             Ok(Box::new(UsernamePromptApp::new(result_clone)))
         }),
-    );
+    ) {
+        // Logger is not initialized yet at this point
+        eprintln!("Failed to run username prompt dialog: {}", e);
+    }
 
     Arc::try_unwrap(result)
         .ok()

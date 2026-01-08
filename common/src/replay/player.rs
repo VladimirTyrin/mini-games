@@ -76,7 +76,7 @@ impl ReplayPlayer {
         while self.current_action_index < self.replay.actions.len() {
             let action = &self.replay.actions[self.current_action_index];
             if action.tick == tick {
-                actions.push(action.clone());
+                actions.push(*action);
                 self.current_action_index += 1;
             } else if action.tick > tick {
                 break;

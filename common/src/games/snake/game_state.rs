@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{log, PlayerId};
 use crate::games::SessionRng;
-use super::snake::Snake;
+use super::entity::Snake;
 use super::types::{DeadSnakeBehavior, DeathReason, Direction, FieldSize, Point, WallCollisionMode};
 
 #[derive(Clone, Debug)]
@@ -62,22 +62,33 @@ impl SnakeGameState {
         self.player_order.sort();
     }
 
-    pub fn kill_snake(&mut self, player_id: &PlayerId, reason: DeathReason) {
-        if let Some(snake) = self.snakes.get_mut(player_id)
-            && snake.is_alive()
-        {
-            snake.death_reason = Some(reason);
-            self.game_end_reason = Some(reason);
+    pub fn kill_snake(&mut self, player_id: &PlayerId, reason: DeathReason) -> Result<(), String> {
+        let snake = self.snakes.get_mut(player_id)
+            .ok_or_else(|| format!("Player {} not found", player_id))?;
+
+        if !snake.is_alive() {
+            return Err(format!("Player {} is already dead", player_id));
         }
+
+        snake.death_reason = Some(reason);
+        self.game_end_reason = Some(reason);
+        Ok(())
     }
 
-    pub fn set_snake_direction(&mut self, player_id: &PlayerId, direction: Direction) {
-        if let Some(snake) = self.snakes.get_mut(player_id)
-            && snake.is_alive()
-            && !direction.is_opposite(&snake.direction)
-        {
-            snake.pending_direction = Some(direction);
+    pub fn set_snake_direction(&mut self, player_id: &PlayerId, direction: Direction) -> Result<(), String> {
+        let snake = self.snakes.get_mut(player_id)
+            .ok_or_else(|| format!("Player {} not found", player_id))?;
+
+        if !snake.is_alive() {
+            return Err(format!("Player {} is dead", player_id));
         }
+
+        if direction.is_opposite(&snake.direction) {
+            return Err("Cannot turn 180 degrees".to_string());
+        }
+
+        snake.pending_direction = Some(direction);
+        Ok(())
     }
 
     pub fn update(&mut self, rng: &mut SessionRng) {

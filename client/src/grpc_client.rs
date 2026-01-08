@@ -61,7 +61,9 @@ pub async fn grpc_client_task(
             Ok(client) => {
                 let mut config = config_manager.get_config().unwrap_or_default();
                 config.server.address = Some(server_address.clone());
-                let _ = config_manager.set_config(&config);
+                if let Err(e) = config_manager.set_config(&config) {
+                    log!("Failed to save server address to config: {}", e);
+                }
                 shared_state.set_connection_failed(false);
                 client
             },
@@ -545,9 +547,11 @@ pub async fn grpc_client_task(
         }
     }
 
-    let _ = tx.send(new_client_message(
+    if let Err(e) = tx.send(new_client_message(
         client_message::Message::Disconnect(DisconnectRequest {})
-    )).await;
+    )).await {
+        log!("Failed to send disconnect request: {}", e);
+    }
 
     break;
     }

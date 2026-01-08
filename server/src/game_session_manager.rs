@@ -4,7 +4,6 @@ use tokio::sync::Mutex;
 
 use common::{ClientId, LobbyId, PlayerId, log, ServerMessage, server_message, InGameCommand, ReplayFileReadyNotification};
 use common::games::{GameResolver, GameSession, GameSessionConfig, ReplayMode};
-use common::games::snake::{DeathReason, SnakeSession};
 use common::replay::{generate_replay_filename, save_replay_to_bytes, REPLAY_VERSION};
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::LobbyManager;
@@ -272,7 +271,7 @@ impl GameSessionManager {
         GameResolver::handle_command(&session, client_id, command).await;
     }
 
-    pub async fn kill_snake(&self, client_id: &ClientId, reason: DeathReason) {
+    pub async fn handle_player_disconnect(&self, client_id: &ClientId) {
         let mapping = self.client_to_session.lock().await;
         let session_id = match mapping.get(client_id) {
             Some(id) => id.clone(),
@@ -282,23 +281,9 @@ impl GameSessionManager {
 
         let sessions = self.sessions.lock().await;
         if let Some(session) = sessions.get(&session_id) {
-            if let Some(state) = session.snake_state() {
-                let state = state.clone();
-                drop(sessions);
-
-                if reason == DeathReason::PlayerDisconnected {
-                    if let Some(ref recorder) = state.replay_recorder {
-                        let current_tick = *state.tick.lock().await;
-                        let mut recorder = recorder.lock().await;
-                        if let Some(player_index) = recorder.find_player_index(&client_id.to_string())
-                        {
-                            recorder.record_disconnect(current_tick as i64, player_index);
-                        }
-                    }
-                }
-
-                SnakeSession::handle_kill_snake(&state, client_id, reason).await;
-            }
+            let session = session.clone();
+            drop(sessions);
+            GameResolver::handle_player_disconnect(&session, client_id).await;
         }
     }
 }

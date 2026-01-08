@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Notify};
 
 use crate::{
     BotId, ClientId, GameOverNotification, GameStateUpdate, InGameCommand, PlayerIdentity,
-    PlayerId, ScoreEntry, game_over_notification, game_state_update, in_game_command,
+    PlayerId, ScoreEntry, game_over_notification, game_state_update, in_game_command, log,
     proto::tictactoe::{
         PlaceMarkCommand, TicTacToeGameEndInfo, TicTacToeGameEndReason, TicTacToeBotType,
         TicTacToeInGameCommand, tic_tac_toe_in_game_command,
@@ -20,6 +20,7 @@ use super::win_detector::check_win_with_line;
 
 #[derive(Clone)]
 pub struct TicTacToeSessionState {
+    pub session_id: String,
     pub game_state: Arc<Mutex<TicTacToeGameState>>,
     pub rng: Arc<Mutex<SessionRng>>,
     pub bots: HashMap<BotId, BotType>,
@@ -59,6 +60,7 @@ impl TicTacToeSessionState {
         );
 
         Ok(Self {
+            session_id: config.session_id.clone(),
             game_state: Arc::new(Mutex::new(game_state)),
             rng: Arc::new(Mutex::new(rng)),
             bots: config.bots.clone(),
@@ -117,23 +119,35 @@ impl TicTacToeSession {
 
         let mut state_guard = state.game_state.lock().await;
         let player_id = PlayerId::new(client_id.to_string());
-        if state_guard
-            .place_mark(&player_id, x as usize, y as usize)
-            .is_ok()
-        {
-            drop(state_guard);
+        match state_guard.place_mark(&player_id, x as usize, y as usize) {
+            Ok(()) => {
+                drop(state_guard);
 
-            if let Some(ref recorder) = state.replay_recorder {
-                let mut recorder = recorder.lock().await;
-                if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
-                    let turn = recorder.actions_count() as i64;
-                    let in_game_command = create_place_command(x, y);
-                    recorder.record_command(turn, player_index, in_game_command);
+                if let Some(ref recorder) = state.replay_recorder {
+                    let mut recorder = recorder.lock().await;
+                    if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
+                        let turn = recorder.actions_count() as i64;
+                        let in_game_command = create_place_command(x, y);
+                        recorder.record_command(turn, player_index, in_game_command);
+                    }
                 }
-            }
 
-            state.turn_notify.notify_one();
+                state.turn_notify.notify_one();
+            }
+            Err(e) => {
+                log!("[session:{}] Player {} failed to place mark at ({}, {}): {}", state.session_id, player_id, x, y, e);
+            }
         }
+    }
+
+    pub async fn handle_player_disconnect(state: &TicTacToeSessionState, client_id: &ClientId) {
+        let mut game_state = state.game_state.lock().await;
+        let player_id = PlayerId::new(client_id.to_string());
+        if let Err(e) = game_state.forfeit(&player_id) {
+            log!("[session:{}] Player {} failed to forfeit: {}", state.session_id, player_id, e);
+        }
+        drop(game_state);
+        state.turn_notify.notify_one();
     }
 }
 
@@ -164,16 +178,19 @@ async fn play_bot_turn(session_state: &TicTacToeSessionState) {
         }
         TicTacToeBotType::TictactoeBotTypeMinimax => {
             drop(game_state);
+            let session_id = session_state.session_id.clone();
             let result =
                 tokio::task::spawn_blocking(move || calculate_minimax_move(&bot_input)).await;
 
             if let Ok(Some(pos)) = result {
                 let mut game_state = session_state.game_state.lock().await;
-                if game_state
-                    .place_mark(&current_player, pos.x, pos.y)
-                    .is_ok()
-                {
-                    record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+                match game_state.place_mark(&current_player, pos.x, pos.y) {
+                    Ok(()) => {
+                        record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+                    }
+                    Err(e) => {
+                        log!("[session:{}] Bot {} failed to place mark at ({}, {}): {}", session_id, current_player, pos.x, pos.y, e);
+                    }
                 }
             }
             return;
@@ -182,12 +199,14 @@ async fn play_bot_turn(session_state: &TicTacToeSessionState) {
     };
 
     if let Some(pos) = calculated_move {
-        if game_state
-            .place_mark(&current_player, pos.x, pos.y)
-            .is_ok()
-        {
-            drop(game_state);
-            record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+        match game_state.place_mark(&current_player, pos.x, pos.y) {
+            Ok(()) => {
+                drop(game_state);
+                record_bot_move(session_state, &current_player, pos.x, pos.y).await;
+            }
+            Err(e) => {
+                log!("[session:{}] Bot {} failed to place mark at ({}, {}): {}", session_state.session_id, current_player, pos.x, pos.y, e);
+            }
         }
     }
 }

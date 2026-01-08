@@ -43,9 +43,12 @@ mod windows_impl {
     }
 
     fn notify_shell_change() {
-        let _ = Command::new("ie4uinit.exe")
+        if let Err(e) = Command::new("ie4uinit.exe")
             .arg("-show")
-            .output();
+            .output()
+        {
+            common::log!("Failed to notify shell about icon change: {}", e);
+        }
     }
 
 }

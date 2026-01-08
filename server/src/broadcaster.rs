@@ -2,7 +2,7 @@ use tokio::sync::{mpsc, Mutex};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
-use common::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification};
+use common::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification, log};
 use common::games::GameBroadcaster;
 
 pub type ClientSender = mpsc::Sender<Result<ServerMessage, Status>>;
@@ -15,6 +15,12 @@ pub struct Broadcaster {
 impl std::fmt::Debug for Broadcaster {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Broadcaster").finish()
+    }
+}
+
+impl Default for Broadcaster {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -37,17 +43,22 @@ impl Broadcaster {
         let clients = self.clients.lock().await;
         for player in &lobby_details.players {
             if let Some(identity) = &player.identity
-                && !identity.is_bot {
-                    let client_id = ClientId::new(identity.player_id.clone());
-                    if let Some(sender) = clients.get(&client_id) {
-                        let _ = sender.send(Ok(message.clone())).await;
-                    }
+                && !identity.is_bot
+            {
+                let client_id = ClientId::new(identity.player_id.clone());
+                if let Some(sender) = clients.get(&client_id)
+                    && let Err(e) = sender.send(Ok(message.clone())).await
+                {
+                    log!("[lobby:{}] Failed to send to client {}: {}", lobby_details.lobby_id, client_id, e);
                 }
+            }
         }
         for observer in &lobby_details.observers {
             let client_id = ClientId::new(observer.player_id.clone());
-            if let Some(sender) = clients.get(&client_id) {
-                let _ = sender.send(Ok(message.clone())).await;
+            if let Some(sender) = clients.get(&client_id)
+                && let Err(e) = sender.send(Ok(message.clone())).await
+            {
+                log!("[lobby:{}] Failed to send to observer {}: {}", lobby_details.lobby_id, client_id, e);
             }
         }
     }
@@ -61,35 +72,44 @@ impl Broadcaster {
         let clients = self.clients.lock().await;
         for player in &lobby_details.players {
             if let Some(identity) = &player.identity
-                && !identity.is_bot {
-                    let client_id = ClientId::new(identity.player_id.clone());
-                    if &client_id != except
-                        && let Some(sender) = clients.get(&client_id) {
-                            let _ = sender.send(Ok(message.clone())).await;
-                        }
+                && !identity.is_bot
+            {
+                let client_id = ClientId::new(identity.player_id.clone());
+                if &client_id != except
+                    && let Some(sender) = clients.get(&client_id)
+                    && let Err(e) = sender.send(Ok(message.clone())).await
+                {
+                    log!("[lobby:{}] Failed to send to client {}: {}", lobby_details.lobby_id, client_id, e);
                 }
+            }
         }
         for observer in &lobby_details.observers {
             let client_id = ClientId::new(observer.player_id.clone());
             if &client_id != except
-                && let Some(sender) = clients.get(&client_id) {
-                    let _ = sender.send(Ok(message.clone())).await;
-                }
+                && let Some(sender) = clients.get(&client_id)
+                && let Err(e) = sender.send(Ok(message.clone())).await
+            {
+                log!("[lobby:{}] Failed to send to observer {}: {}", lobby_details.lobby_id, client_id, e);
+            }
         }
     }
 
     pub async fn broadcast_to_all(&self, message: ServerMessage) {
         let clients = self.clients.lock().await;
-        for (_, sender) in clients.iter() {
-            let _ = sender.send(Ok(message.clone())).await;
+        for (client_id, sender) in clients.iter() {
+            if let Err(e) = sender.send(Ok(message.clone())).await {
+                log!("Failed to broadcast to client {}: {}", client_id, e);
+            }
         }
     }
 
-    pub async fn broadcast_to_clients(&self, client_ids: &Vec<ClientId>, message: ServerMessage) {
+    pub async fn broadcast_to_clients(&self, client_ids: &[ClientId], message: ServerMessage) {
         let clients = self.clients.lock().await;
         for client_id in client_ids {
-            if let Some(sender) = clients.get(client_id) {
-                let _ = sender.send(Ok(message.clone())).await;
+            if let Some(sender) = clients.get(client_id)
+                && let Err(e) = sender.send(Ok(message.clone())).await
+            {
+                log!("Failed to send to client {}: {}", client_id, e);
             }
         }
     }

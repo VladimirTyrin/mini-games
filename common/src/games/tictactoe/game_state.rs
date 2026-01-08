@@ -126,6 +126,21 @@ impl TicTacToeGameState {
         }
     }
 
+    pub fn forfeit(&mut self, player_id: &PlayerId) -> Result<(), String> {
+        if self.status != GameStatus::InProgress {
+            return Err("Game is already over".to_string());
+        }
+        if player_id == &self.player_x {
+            self.status = GameStatus::OWon;
+            Ok(())
+        } else if player_id == &self.player_o {
+            self.status = GameStatus::XWon;
+            Ok(())
+        } else {
+            Err(format!("Player {} is not in this game", player_id))
+        }
+    }
+
     pub fn to_proto_state(
         &self,
         player_x_is_bot: bool,

@@ -11,10 +11,10 @@ pub enum GameType {
 const CONFIG_FILE_NAME: &str = "mini_games_client_config.yaml";
 
 fn get_config_path() -> String {
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            return exe_dir.join(CONFIG_FILE_NAME).to_string_lossy().into_owned();
-        }
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        return exe_dir.join(CONFIG_FILE_NAME).to_string_lossy().into_owned();
     }
     CONFIG_FILE_NAME.to_string()
 }
@@ -68,10 +68,10 @@ pub struct ServerConfig {
 
 impl Validate for ServerConfig {
     fn validate(&self) -> Result<(), String> {
-        if let Some(address) = &self.address {
-            if address.is_empty() {
-                return Err("server address must not be empty if provided".to_string());
-            }
+        if let Some(address) = &self.address
+            && address.is_empty()
+        {
+            return Err("server address must not be empty if provided".to_string());
         }
         if self.disconnect_timeout_ms == 0 {
             return Err("disconnect_timeout_ms must be greater than 0".to_string());

@@ -308,21 +308,21 @@ fn eval_delta_before_move(
             }
 
             let old_score = if opp_count == 0 {
-                (bot_count * bot_count) as i32
+                bot_count * bot_count
             } else if bot_count == 0 {
-                -((opp_count * opp_count) as i32)
+                -(opp_count * opp_count)
             } else {
                 0
             };
 
             let new_score = if move_mark == bot_mark {
                 if opp_count == 0 {
-                    ((bot_count + 1) * (bot_count + 1)) as i32
+                    (bot_count + 1) * (bot_count + 1)
                 } else {
                     0
                 }
             } else if bot_count == 0 {
-                -(((opp_count + 1) * (opp_count + 1)) as i32)
+                -((opp_count + 1) * (opp_count + 1))
             } else {
                 0
             };
@@ -394,5 +394,5 @@ fn check_line_threat(
         }
     }
 
-    (count * count) as i32
+    count * count
 }

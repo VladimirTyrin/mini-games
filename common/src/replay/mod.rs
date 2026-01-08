@@ -114,12 +114,12 @@ mod integration_tests {
             }
 
             if let Some(dir) = BotController::calculate_move(SnakeBotType::Efficient, &player1, &game_state, &mut bot_rng) {
-                game_state.set_snake_direction(&player1, dir);
+                game_state.set_snake_direction(&player1, dir).expect("Failed to set snake direction in test");
                 recorder.record_command(tick, 0, create_snake_command(dir));
             }
 
             if let Some(dir) = BotController::calculate_move(SnakeBotType::Efficient, &player2, &game_state, &mut bot_rng) {
-                game_state.set_snake_direction(&player2, dir);
+                game_state.set_snake_direction(&player2, dir).expect("Failed to set snake direction in test");
                 recorder.record_command(tick, 1, create_snake_command(dir));
             }
 
@@ -163,7 +163,7 @@ mod integration_tests {
                             if let Some(snake_in_game_command::Command::Turn(turn)) = &snake_cmd.command {
                                 let dir = proto_to_direction(turn.direction);
                                 let player_id = &player_map[action.player_index as usize];
-                                replay_game_state.set_snake_direction(player_id, dir);
+                                replay_game_state.set_snake_direction(player_id, dir).expect("Failed to set direction in replay test");
                             }
                         }
                     }
@@ -228,7 +228,7 @@ mod integration_tests {
             if let Some(pos) = calculate_move(TicTacToeBotType::TictactoeBotTypeRandom, bot_input, &mut rng) {
                 let cmd = create_tictactoe_command(pos.x as u32, pos.y as u32);
                 recorder.record_command(turn, player_index, cmd);
-                let _ = game_state.place_mark(&current, pos.x, pos.y);
+                game_state.place_mark(&current, pos.x, pos.y).expect("Failed to place mark in test");
             }
 
             turn += 1;
@@ -260,7 +260,7 @@ mod integration_tests {
                     if let Some(in_game_command::Command::Tictactoe(ttt_cmd)) = &cmd.command {
                         if let Some(tic_tac_toe_in_game_command::Command::Place(place)) = &ttt_cmd.command {
                             let player_id = &player_map[action.player_index as usize];
-                            let _ = replay_game_state.place_mark(player_id, place.x as usize, place.y as usize);
+                            replay_game_state.place_mark(player_id, place.x as usize, place.y as usize).expect("Failed to place mark in replay test");
                         }
                     }
                 }

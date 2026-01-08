@@ -1,4 +1,5 @@
 use tokio::sync::mpsc;
+use common::log;
 use crate::state::ClientCommand;
 
 #[derive(Clone)]
@@ -9,10 +10,12 @@ pub enum CommandSender {
 
 impl CommandSender {
     pub fn send(&self, cmd: ClientCommand) {
-        let tx = match self {
-            Self::Grpc(tx) => tx,
-            Self::Local(tx) => tx,
+        let (tx, channel_type) = match self {
+            Self::Grpc(tx) => (tx, "grpc"),
+            Self::Local(tx) => (tx, "local"),
         };
-        let _ = tx.send(cmd);
+        if let Err(e) = tx.send(cmd) {
+            log!("Failed to send command to {} channel: {}", channel_type, e);
+        }
     }
 }

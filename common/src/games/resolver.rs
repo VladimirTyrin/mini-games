@@ -1,7 +1,7 @@
 use crate::{ClientId, GameOverNotification, InGameCommand, in_game_command};
 use crate::games::{
     GameBroadcaster, GameSession, GameSessionConfig, LobbySettings, ReplayMode,
-    snake::SnakeSession,
+    snake::{DeathReason, SnakeSession},
     tictactoe::TicTacToeSession,
 };
 
@@ -48,6 +48,24 @@ impl GameResolver {
                 TicTacToeSession::handle_command(state, client_id, cmd).await;
             }
             _ => {}
+        }
+    }
+
+    pub async fn handle_player_disconnect(session: &GameSession, client_id: &ClientId) {
+        match session {
+            GameSession::Snake(state) => {
+                if let Some(ref recorder) = state.replay_recorder {
+                    let current_tick = *state.tick.lock().await;
+                    let mut recorder = recorder.lock().await;
+                    if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
+                        recorder.record_disconnect(current_tick as i64, player_index);
+                    }
+                }
+                SnakeSession::handle_kill_snake(state, client_id, DeathReason::PlayerDisconnected).await;
+            }
+            GameSession::TicTacToe(state) => {
+                TicTacToeSession::handle_player_disconnect(state, client_id).await;
+            }
         }
     }
 }

@@ -23,6 +23,12 @@ pub struct LobbyManager {
     state: Arc<Mutex<LobbyManagerState>>,
 }
 
+impl Default for LobbyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LobbyManager {
     pub fn new() -> Self {
         Self {
@@ -115,10 +121,8 @@ impl LobbyManager {
             if !lobby.add_observer(player_id) {
                 return Err("Already in lobby".to_string());
             }
-        } else {
-            if !lobby.add_player(player_id) {
-                return Err("Lobby is full or already joined".to_string());
-            }
+        } else if !lobby.add_player(player_id) {
+            return Err("Lobby is full or already joined".to_string());
         }
 
         let lobby_details = lobby.to_details();

@@ -67,7 +67,7 @@ impl GameService for GrpcService {
                                     ),
                                 })),
                             };
-                            let _ = tx.send(Ok(error_msg)).await;
+                            Self::send_to_client(&tx, error_msg, client_id_opt.as_ref()).await;
                             break;
                         }
 
@@ -75,14 +75,14 @@ impl GameService for GrpcService {
                             match message {
                                 client_message::Message::Connect(connect_req) => {
                                     if client_id_opt.is_some() {
-                                        let _ = tx.send(Ok(Self::make_error_response("Already connected".to_string()))).await;
+                                        Self::send_to_client(&tx, Self::make_error_response("Already connected".to_string()), client_id_opt.as_ref()).await;
                                         continue;
                                     }
 
                                     let client_id = ClientId::new(connect_req.client_id);
 
                                     if !lobby_manager.add_client(&client_id).await {
-                                        let _ = tx.send(Ok(Self::make_error_response("Client ID already connected".to_string()))).await;
+                                        Self::send_to_client(&tx, Self::make_error_response("Client ID already connected".to_string()), Some(&client_id)).await;
                                         break;
                                     }
 
@@ -179,7 +179,7 @@ impl GameService for GrpcService {
                                             client_timestamp_ms: req.client_timestamp_ms,
                                         })),
                                     };
-                                    let _ = tx.send(Ok(pong)).await;
+                                    Self::send_to_client(&tx, pong, client_id_opt.as_ref()).await;
                                 }
                                 client_message::Message::LobbyListChat(req) => {
                                     if let Some(client_id) = &client_id_opt {
@@ -270,11 +270,22 @@ impl GameService for GrpcService {
 }
 
 impl GrpcService {
+    async fn send_to_client(
+        tx: &mpsc::Sender<Result<ServerMessage, Status>>,
+        message: ServerMessage,
+        client_id: Option<&ClientId>,
+    ) {
+        if let Err(e) = tx.send(Ok(message)).await {
+            let client_str = client_id.map_or("unknown".to_string(), |id| id.to_string());
+            log!("[client:{}] Failed to send message: {}", client_str, e);
+        }
+    }
+
     async fn send_not_connected_error(
         tx: &mpsc::Sender<Result<ServerMessage, Status>>,
         action: &str,
     ) {
-        let _ = tx.send(Ok(Self::make_error_response(format!("Not connected: cannot {}", action)))).await;
+        Self::send_to_client(tx, Self::make_error_response(format!("Not connected: cannot {}", action)), None).await;
     }
 
     fn make_error_response(message: String) -> ServerMessage {
@@ -303,7 +314,7 @@ impl GrpcService {
     async fn handle_list_lobbies(
         lobby_manager: &LobbyManager,
         tx: &mpsc::Sender<Result<ServerMessage, Status>>,
-        _client_id: &ClientId,
+        client_id: &ClientId,
     ) {
         let lobbies = lobby_manager.list_lobbies().await;
         let response = ServerMessage {
@@ -311,7 +322,7 @@ impl GrpcService {
                 lobbies,
             })),
         };
-        let _ = tx.send(Ok(response)).await;
+        Self::send_to_client(tx, response, Some(client_id)).await;
     }
 
     async fn handle_create_lobby(
@@ -324,7 +335,7 @@ impl GrpcService {
         let settings = match crate::lobby_manager::LobbySettings::from_proto(request.settings.and_then(|s| s.settings)) {
             Ok(s) => s,
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
                 return;
             }
         };
@@ -341,12 +352,12 @@ impl GrpcService {
                         details: Some(lobby_details.clone()),
                     })),
                 };
-                let _ = tx.send(Ok(response)).await;
+                Self::send_to_client(tx, response, Some(client_id)).await;
 
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -367,7 +378,7 @@ impl GrpcService {
                         details: Some(lobby_details.clone()),
                     })),
                 };
-                let _ = tx.send(Ok(response)).await;
+                Self::send_to_client(tx, response, Some(client_id)).await;
 
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
 
@@ -394,7 +405,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -414,7 +425,7 @@ impl GrpcService {
                         lobbies: lobby_manager.list_lobbies().await,
                     })),
                 };
-                let _ = tx.send(Ok(response)).await;
+                Self::send_to_client(tx, response, Some(client_id)).await;
 
                 match leave_state {
                     LobbyStateAfterLeave::HostLeft { kicked_players } => {
@@ -455,7 +466,7 @@ impl GrpcService {
                 }
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -492,7 +503,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -507,7 +518,7 @@ impl GrpcService {
         let bot_type = match BotType::from_proto(request.bot_type) {
             Ok(bt) => bt,
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
                 return;
             }
         };
@@ -535,7 +546,7 @@ impl GrpcService {
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -558,7 +569,7 @@ impl GrpcService {
                             message: "You were kicked from the lobby".to_string(),
                         })),
                     };
-                    broadcaster.broadcast_to_clients(&vec![kicked_client_id], kick_msg).await;
+                    broadcaster.broadcast_to_clients(&[kicked_client_id], kick_msg).await;
                 }
 
                 broadcaster.broadcast_to_lobby(
@@ -582,7 +593,7 @@ impl GrpcService {
                 Self::notify_lobby_list_update(lobby_manager, broadcaster).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -617,7 +628,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -652,7 +663,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -688,7 +699,7 @@ impl GrpcService {
                 ).await;
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -720,7 +731,7 @@ impl GrpcService {
                 }
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -792,7 +803,7 @@ impl GrpcService {
                     }
             }
             Err(e) => {
-                let _ = tx.send(Ok(Self::make_error_response(e))).await;
+                Self::send_to_client(tx, Self::make_error_response(e), Some(client_id)).await;
             }
         }
     }
@@ -814,7 +825,7 @@ impl GrpcService {
         lobby_manager.remove_client(client_id).await;
         broadcaster.unregister(client_id).await;
 
-        session_manager.kill_snake(client_id, common::games::snake::DeathReason::PlayerDisconnected).await;
+        session_manager.handle_player_disconnect(client_id).await;
 
         if let Ok(leave_state) = lobby_manager.leave_lobby(client_id).await {
             use crate::lobby_manager::LobbyStateAfterLeave;
