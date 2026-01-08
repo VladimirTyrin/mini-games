@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package game_service;
 
-import "snake.proto";
-import "tictactoe.proto";
+import "games/snake.proto";
+import "games/tictactoe.proto";
 
 service GameService {
     rpc GameStream(stream ClientMessage) returns (stream ServerMessage);

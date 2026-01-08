@@ -15,9 +15,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile_protos(
             &[
                 "proto/game_service.proto",
-                "proto/snake.proto",
-                "proto/tictactoe.proto",
                 "proto/replay.proto",
+                "proto/games/snake.proto",
+                "proto/games/tictactoe.proto",
             ],
             &["proto"],
         )?;
