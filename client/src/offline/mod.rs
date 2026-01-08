@@ -4,19 +4,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
-use common::engine::session::{GameBroadcaster, GameSessionConfig};
-use common::engine::session::snake_session::{
-    SnakeSessionSettings,
-    create_session as create_snake_session,
-    run_game_loop as run_snake_game_loop,
+use common::games::{GameBroadcaster, GameResolver, GameSession, GameSessionConfig};
+use common::games::snake::{
+    SnakeSessionSettings, SnakeSessionState, SnakeSession,
+    WallCollisionMode as SnakeWallCollisionMode, DeadSnakeBehavior as SnakeDeadSnakeBehavior,
 };
-use common::engine::session::tictactoe_session::{
-    TicTacToeSessionSettings,
-    create_session as create_tictactoe_session,
-    run_game_loop as run_tictactoe_game_loop,
+use common::games::tictactoe::{
+    TicTacToeSessionSettings, TicTacToeSessionState, TicTacToeSession, FirstPlayerMode,
 };
-use common::engine::snake::Direction;
-use common::engine::tictactoe::FirstPlayerMode;
 use common::identifiers::{BotId, ClientId, LobbyId, PlayerId};
 use common::lobby::{Lobby, LobbySettings, BotType as LobbyBotType};
 use common::replay::{ReplayRecorder, save_replay, generate_replay_filename};
@@ -264,9 +259,9 @@ async fn run_snake_game(
         players,
     )));
 
-    let session_state = create_snake_session(&game_config, &settings, Some(seed), Some(replay_recorder.clone()));
-    let game_state_arc = session_state.game_state.clone();
-    let tick_arc = session_state.tick.clone();
+    let session_state = SnakeSessionState::create(&game_config, &settings, seed, Some(replay_recorder.clone()));
+    let session_for_commands = GameSession::Snake(session_state.clone());
+    let client_id = ClientId::new(player_id_str.clone());
 
     let replay_recorder_for_save = replay_recorder.clone();
     let save_replays = replay_config.save;
@@ -274,7 +269,7 @@ async fn run_snake_game(
     let shared_state_for_path = shared_state.clone();
 
     let mut game_handle = tokio::spawn(async move {
-        run_snake_game_loop(game_config, session_state, broadcaster).await
+        SnakeSession::run(game_config, session_state, broadcaster).await
     });
 
     loop {
@@ -310,7 +305,7 @@ async fn run_snake_game(
             Some(command) = command_rx.recv() => {
                 match command {
                     ClientCommand::Game(GameCommand::Snake(SnakeGameCommand::SendTurn { direction })) => {
-                        let command = InGameCommand {
+                        let in_game_command = InGameCommand {
                             command: Some(in_game_command::Command::Snake(
                                 common::SnakeInGameCommand {
                                     command: Some(common::proto::snake::snake_in_game_command::Command::Turn(
@@ -319,17 +314,7 @@ async fn run_snake_game(
                                 }
                             )),
                         };
-
-                        let current_tick = *tick_arc.lock().await;
-                        let mut recorder = replay_recorder.lock().await;
-                        if let Some(player_index) = recorder.find_player_index(&player_id_str) {
-                            recorder.record_command(current_tick as i64, player_index, command);
-                        }
-                        drop(recorder);
-
-                        let engine_dir = proto_direction_to_engine(direction);
-                        let mut gs = game_state_arc.lock().await;
-                        gs.set_snake_direction(player_id, engine_dir);
+                        GameResolver::handle_command(&session_for_commands, &client_id, in_game_command).await;
                     }
                     ClientCommand::Menu(MenuCommand::LeaveLobby) => {
                         break;
@@ -397,13 +382,13 @@ async fn run_tictactoe_game(
         players,
     )));
 
-    let session_state = match create_tictactoe_session(&game_config, &settings, Some(seed), Some(replay_recorder.clone())) {
+    let session_state = match TicTacToeSessionState::create(&game_config, &settings, seed, Some(replay_recorder.clone())) {
         Ok(s) => s,
         Err(_) => return,
     };
 
-    let game_state_arc = session_state.game_state.clone();
-    let turn_notify = session_state.turn_notify.clone();
+    let session_for_commands = GameSession::TicTacToe(session_state.clone());
+    let client_id = ClientId::new(player_id_str.clone());
 
     let replay_recorder_for_save = replay_recorder.clone();
     let save_replays = replay_config.save;
@@ -411,7 +396,7 @@ async fn run_tictactoe_game(
     let shared_state_for_path = shared_state.clone();
 
     let mut game_handle = tokio::spawn(async move {
-        run_tictactoe_game_loop(game_config, session_state, broadcaster).await
+        TicTacToeSession::run(game_config, session_state, broadcaster).await
     });
 
     loop {
@@ -447,7 +432,7 @@ async fn run_tictactoe_game(
             Some(command) = command_rx.recv() => {
                 match command {
                     ClientCommand::Game(GameCommand::TicTacToe(TicTacToeGameCommand::PlaceMark { x, y })) => {
-                        let command = InGameCommand {
+                        let in_game_command = InGameCommand {
                             command: Some(in_game_command::Command::Tictactoe(
                                 common::TicTacToeInGameCommand {
                                     command: Some(common::proto::tictactoe::tic_tac_toe_in_game_command::Command::Place(
@@ -456,20 +441,7 @@ async fn run_tictactoe_game(
                                 }
                             )),
                         };
-
-                        let mut gs = game_state_arc.lock().await;
-                        if gs.place_mark(player_id, x as usize, y as usize).is_ok() {
-                            drop(gs);
-
-                            let mut recorder = replay_recorder.lock().await;
-                            let turn = recorder.actions_count() as i64;
-                            if let Some(player_index) = recorder.find_player_index(&player_id_str) {
-                                recorder.record_command(turn, player_index, command);
-                            }
-                            drop(recorder);
-
-                            turn_notify.notify_one();
-                        }
+                        GameResolver::handle_command(&session_for_commands, &client_id, in_game_command).await;
                     }
                     ClientCommand::Menu(MenuCommand::LeaveLobby) => {
                         break;
@@ -481,30 +453,20 @@ async fn run_tictactoe_game(
     }
 }
 
-fn proto_direction_to_engine(dir: common::proto::snake::Direction) -> Direction {
-    match dir {
-        common::proto::snake::Direction::Up => Direction::Up,
-        common::proto::snake::Direction::Down => Direction::Down,
-        common::proto::snake::Direction::Left => Direction::Left,
-        common::proto::snake::Direction::Right => Direction::Right,
-        common::proto::snake::Direction::Unspecified => Direction::Up,
-    }
-}
-
-fn config_wall_mode_to_engine(mode: common::WallCollisionMode) -> common::engine::snake::WallCollisionMode {
+fn config_wall_mode_to_engine(mode: common::WallCollisionMode) -> SnakeWallCollisionMode {
     match mode {
-        common::WallCollisionMode::WrapAround => common::engine::snake::WallCollisionMode::WrapAround,
+        common::WallCollisionMode::WrapAround => SnakeWallCollisionMode::WrapAround,
         common::WallCollisionMode::Death | common::WallCollisionMode::Unspecified => {
-            common::engine::snake::WallCollisionMode::Death
+            SnakeWallCollisionMode::Death
         }
     }
 }
 
-fn config_dead_snake_to_engine(behavior: common::DeadSnakeBehavior) -> common::engine::snake::DeadSnakeBehavior {
+fn config_dead_snake_to_engine(behavior: common::DeadSnakeBehavior) -> SnakeDeadSnakeBehavior {
     match behavior {
-        common::DeadSnakeBehavior::StayOnField => common::engine::snake::DeadSnakeBehavior::StayOnField,
+        common::DeadSnakeBehavior::StayOnField => SnakeDeadSnakeBehavior::StayOnField,
         common::DeadSnakeBehavior::Disappear | common::DeadSnakeBehavior::Unspecified => {
-            common::engine::snake::DeadSnakeBehavior::Disappear
+            SnakeDeadSnakeBehavior::Disappear
         }
     }
 }

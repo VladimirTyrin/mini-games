@@ -1,5 +1,5 @@
 use crate::proto::tictactoe::TicTacToeLobbySettings;
-use super::ValidateLobbySettings;
+use crate::validate_lobby_settings::ValidateLobbySettings;
 
 impl ValidateLobbySettings for TicTacToeLobbySettings {
     fn validate(&self, max_players: u32) -> Result<(), String> {

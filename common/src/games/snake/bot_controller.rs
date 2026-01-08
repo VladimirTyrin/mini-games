@@ -1,6 +1,7 @@
 use crate::{PlayerId, SnakeBotType};
-use crate::engine::session::SessionRng;
-use super::game_state::{GameState, Direction, Point, WallCollisionMode, DeadSnakeBehavior};
+use crate::games::SessionRng;
+use super::game_state::SnakeGameState;
+use super::types::{DeadSnakeBehavior, Direction, Point, WallCollisionMode};
 
 pub struct BotController;
 
@@ -8,7 +9,7 @@ impl BotController {
     pub fn calculate_move(
         bot_type: SnakeBotType,
         player_id: &PlayerId,
-        state: &GameState,
+        state: &SnakeGameState,
         rng: &mut SessionRng,
     ) -> Option<Direction> {
         match bot_type {
@@ -18,7 +19,11 @@ impl BotController {
         }
     }
 
-    fn efficient_pathfinding(player_id: &PlayerId, state: &GameState, rng: &mut SessionRng) -> Option<Direction> {
+    fn efficient_pathfinding(
+        player_id: &PlayerId,
+        state: &SnakeGameState,
+        rng: &mut SessionRng,
+    ) -> Option<Direction> {
         let snake = state.snakes.get(player_id)?;
         if !snake.is_alive() {
             return None;
@@ -36,19 +41,24 @@ impl BotController {
 
         for dir in valid_directions {
             if let Some(next_pos) = Self::calculate_next_position(head, dir, state)
-                && Self::is_safe_position(next_pos, player_id, state) {
-                    let distance = Self::manhattan_distance(next_pos, nearest_food, state);
-                    if distance < best_distance {
-                        best_distance = distance;
-                        best_dir = Some(dir);
-                    }
+                && Self::is_safe_position(next_pos, player_id, state)
+            {
+                let distance = Self::manhattan_distance(next_pos, nearest_food, state);
+                if distance < best_distance {
+                    best_distance = distance;
+                    best_dir = Some(dir);
                 }
+            }
         }
 
         best_dir.or_else(|| Self::random_valid_move(player_id, state, rng))
     }
 
-    fn random_valid_move(player_id: &PlayerId, state: &GameState, rng: &mut SessionRng) -> Option<Direction> {
+    fn random_valid_move(
+        player_id: &PlayerId,
+        state: &SnakeGameState,
+        rng: &mut SessionRng,
+    ) -> Option<Direction> {
         let snake = state.snakes.get(player_id)?;
         if !snake.is_alive() {
             return None;
@@ -78,19 +88,26 @@ impl BotController {
     }
 
     fn get_valid_directions(current: Direction) -> Vec<Direction> {
-        vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right]
-            .into_iter()
-            .filter(|d| !d.is_opposite(&current))
-            .collect()
+        vec![
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ]
+        .into_iter()
+        .filter(|d| !d.is_opposite(&current))
+        .collect()
     }
 
-    fn find_nearest_food(from: Point, state: &GameState) -> Option<Point> {
-        state.food_set.iter()
+    fn find_nearest_food(from: Point, state: &SnakeGameState) -> Option<Point> {
+        state
+            .food_set
+            .iter()
             .min_by_key(|food| Self::manhattan_distance(from, **food, state) as i32)
             .copied()
     }
 
-    fn manhattan_distance(a: Point, b: Point, state: &GameState) -> f32 {
+    fn manhattan_distance(a: Point, b: Point, state: &SnakeGameState) -> f32 {
         let dx = (a.x as i32 - b.x as i32).abs();
         let dy = (a.y as i32 - b.y as i32).abs();
 
@@ -114,30 +131,42 @@ impl BotController {
     fn calculate_next_position(
         from: Point,
         direction: Direction,
-        state: &GameState,
+        state: &SnakeGameState,
     ) -> Option<Point> {
         match state.wall_collision_mode {
-            WallCollisionMode::Death => {
-                match direction {
-                    Direction::Up if from.y > 0 => Some(Point::new(from.x, from.y - 1)),
-                    Direction::Down if from.y < state.field_size.height - 1 => Some(Point::new(from.x, from.y + 1)),
-                    Direction::Left if from.x > 0 => Some(Point::new(from.x - 1, from.y)),
-                    Direction::Right if from.x < state.field_size.width - 1 => Some(Point::new(from.x + 1, from.y)),
-                    _ => None,
+            WallCollisionMode::Death => match direction {
+                Direction::Up if from.y > 0 => Some(Point::new(from.x, from.y - 1)),
+                Direction::Down if from.y < state.field_size.height - 1 => {
+                    Some(Point::new(from.x, from.y + 1))
                 }
-            }
-            WallCollisionMode::WrapAround => {
-                match direction {
-                    Direction::Up => Some(Point::new(from.x, GameState::wrapping_dec(from.y, state.field_size.height))),
-                    Direction::Down => Some(Point::new(from.x, GameState::wrapping_inc(from.y, state.field_size.height))),
-                    Direction::Left => Some(Point::new(GameState::wrapping_dec(from.x, state.field_size.width), from.y)),
-                    Direction::Right => Some(Point::new(GameState::wrapping_inc(from.x, state.field_size.width), from.y)),
+                Direction::Left if from.x > 0 => Some(Point::new(from.x - 1, from.y)),
+                Direction::Right if from.x < state.field_size.width - 1 => {
+                    Some(Point::new(from.x + 1, from.y))
                 }
-            }
+                _ => None,
+            },
+            WallCollisionMode::WrapAround => match direction {
+                Direction::Up => Some(Point::new(
+                    from.x,
+                    SnakeGameState::wrapping_dec(from.y, state.field_size.height),
+                )),
+                Direction::Down => Some(Point::new(
+                    from.x,
+                    SnakeGameState::wrapping_inc(from.y, state.field_size.height),
+                )),
+                Direction::Left => Some(Point::new(
+                    SnakeGameState::wrapping_dec(from.x, state.field_size.width),
+                    from.y,
+                )),
+                Direction::Right => Some(Point::new(
+                    SnakeGameState::wrapping_inc(from.x, state.field_size.width),
+                    from.y,
+                )),
+            },
         }
     }
 
-    fn is_safe_position(pos: Point, player_id: &PlayerId, state: &GameState) -> bool {
+    fn is_safe_position(pos: Point, player_id: &PlayerId, state: &SnakeGameState) -> bool {
         for (id, snake) in &state.snakes {
             let should_check = match state.dead_snake_behavior {
                 DeadSnakeBehavior::Disappear => snake.is_alive(),

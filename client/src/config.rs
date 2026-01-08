@@ -122,6 +122,21 @@ impl Validate for SnakeLobbyConfig {
     }
 }
 
+impl Default for SnakeLobbyConfig {
+    fn default() -> Self {
+        Self {
+            max_players: 4,
+            field_width: 15,
+            field_height: 15,
+            wall_collision_mode: WallCollisionMode::WrapAround,
+            dead_snake_behavior: DeadSnakeBehavior::Disappear,
+            tick_interval_ms: 200,
+            max_food_count: 1,
+            food_spawn_probability: 1.0,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct TicTacToeLobbyConfig {
     pub field_width: u32,
@@ -148,6 +163,16 @@ impl Validate for TicTacToeLobbyConfig {
     }
 }
 
+impl Default for TicTacToeLobbyConfig {
+    fn default() -> Self {
+        Self {
+            field_width: 3,
+            field_height: 3,
+            win_count: 3,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -156,21 +181,8 @@ impl Default for Config {
                 disconnect_timeout_ms: 200,
             },
             last_game: None,
-            snake: SnakeLobbyConfig {
-                max_players: 4,
-                field_width: 15,
-                field_height: 15,
-                wall_collision_mode: WallCollisionMode::WrapAround,
-                dead_snake_behavior: DeadSnakeBehavior::Disappear,
-                tick_interval_ms: 200,
-                max_food_count: 1,
-                food_spawn_probability: 1.0,
-            },
-            tictactoe: TicTacToeLobbyConfig {
-                field_width: 3,
-                field_height: 3,
-                win_count: 3,
-            },
+            snake: SnakeLobbyConfig::default(),
+            tictactoe: TicTacToeLobbyConfig::default(),
             replays: ReplayConfig {
                 save: true,
                 location: "minigamesreplays".to_string(),

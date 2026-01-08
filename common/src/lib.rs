@@ -36,10 +36,10 @@ pub mod logger;
 pub mod identifiers;
 pub mod config;
 pub mod version;
-pub mod validation;
-pub mod engine;
+pub mod validate_lobby_settings;
 pub mod lobby;
 pub mod replay;
+pub mod games;
 
 pub use proto::*;
 pub use identifiers::*;

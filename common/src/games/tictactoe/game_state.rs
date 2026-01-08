@@ -1,56 +1,7 @@
 use crate::PlayerId;
-use crate::engine::session::SessionRng;
-use super::types::Position;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mark {
-    Empty,
-    X,
-    O,
-}
-
-impl Mark {
-    pub fn to_proto(self) -> i32 {
-        match self {
-            Mark::Empty => 1,
-            Mark::X => 2,
-            Mark::O => 3,
-        }
-    }
-
-    pub fn opponent(&self) -> Option<Mark> {
-        match self {
-            Mark::X => Some(Mark::O),
-            Mark::O => Some(Mark::X),
-            Mark::Empty => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GameStatus {
-    InProgress,
-    XWon,
-    OWon,
-    Draw,
-}
-
-impl GameStatus {
-    pub fn to_proto(self) -> i32 {
-        match self {
-            GameStatus::InProgress => 1,
-            GameStatus::XWon => 2,
-            GameStatus::OWon => 3,
-            GameStatus::Draw => 4,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FirstPlayerMode {
-    Random,
-    Host,
-}
+use crate::games::SessionRng;
+use super::types::{FirstPlayerMode, GameStatus, Mark, Position};
+use super::win_detector::check_win;
 
 #[derive(Debug)]
 pub struct TicTacToeGameState {
@@ -147,8 +98,6 @@ impl TicTacToeGameState {
     }
 
     fn check_game_over(&mut self) {
-        use super::win_detector::check_win;
-
         if let Some(winner_mark) = check_win(&self.board, self.win_count) {
             self.status = match winner_mark {
                 Mark::X => GameStatus::XWon,
@@ -183,7 +132,8 @@ impl TicTacToeGameState {
         player_o_is_bot: bool,
         current_player_is_bot: bool,
     ) -> crate::proto::tictactoe::TicTacToeGameState {
-        let board: Vec<crate::proto::tictactoe::CellMark> = self.board
+        let board: Vec<crate::proto::tictactoe::CellMark> = self
+            .board
             .iter()
             .enumerate()
             .flat_map(|(y, row)| {

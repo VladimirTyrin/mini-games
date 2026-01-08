@@ -3,9 +3,9 @@ use std::time::Duration;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-use common::engine::snake::{GameState as SnakeGameState, Direction, FieldSize, WallCollisionMode, DeadSnakeBehavior, Point, DeathReason};
-use common::engine::tictactoe::{TicTacToeGameState, FirstPlayerMode};
-use common::engine::session::SessionRng;
+use common::games::snake::{SnakeGameState, Direction, FieldSize, WallCollisionMode, DeadSnakeBehavior, Point, DeathReason};
+use common::games::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus};
+use common::games::SessionRng;
 use common::replay::{load_replay, ReplayPlayer};
 use common::{
     ReplayGame, GameStateUpdate, game_state_update, PlayerAction, player_action_content,
@@ -255,7 +255,7 @@ async fn run_tictactoe_replay(
                     current_action += 1;
                 }
 
-                let is_finished = player.is_finished() || game_state.status != common::engine::tictactoe::GameStatus::InProgress;
+                let is_finished = player.is_finished() || game_state.status != GameStatus::InProgress;
                 update_tictactoe_watching_state(&shared_state, &game_state, &player.players(), is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
 
                 if is_finished {

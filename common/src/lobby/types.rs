@@ -3,7 +3,7 @@ use crate::{
     LobbyInfo, LobbyDetails, PlayerInfo, ClientId, LobbyId, PlayerId, BotId,
     SnakeLobbySettings, SnakeBotType, TicTacToeLobbySettings, TicTacToeBotType,
     lobby_details, lobby_settings, add_bot_request,
-    validation::ValidateLobbySettings,
+    validate_lobby_settings::ValidateLobbySettings,
 };
 use crate::id_generator::generate_client_id;
 

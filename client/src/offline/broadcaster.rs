@@ -1,6 +1,6 @@
 use common::identifiers::ClientId;
 use common::{GameOverNotification, GameStateUpdate};
-use common::engine::session::GameBroadcaster;
+use common::games::GameBroadcaster;
 use crate::state::{AppState, GameEndInfo, PlayAgainStatus, SharedState};
 
 #[derive(Clone)]

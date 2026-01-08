@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
 use common::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification};
-use common::engine::session::GameBroadcaster;
+use common::games::GameBroadcaster;
 
 pub type ClientSender = mpsc::Sender<Result<ServerMessage, Status>>;
 

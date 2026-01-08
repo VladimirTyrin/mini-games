@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion, SamplingMode};
 use std::time::Duration;
-use common::engine::session::SessionRng;
-use common::engine::tictactoe::{calculate_move, BotInput, Mark};
+use common::games::SessionRng;
+use common::games::tictactoe::{calculate_move, BotInput, Mark};
 use common::proto::tictactoe::TicTacToeBotType;
 
 fn create_empty_board(width: usize, height: usize) -> Vec<Vec<Mark>> {

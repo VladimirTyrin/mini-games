@@ -1,4 +1,4 @@
-use super::game_state::Mark;
+use super::types::Mark;
 
 pub fn get_available_moves(board: &[Vec<Mark>]) -> Vec<(usize, usize)> {
     let mut moves = Vec::new();

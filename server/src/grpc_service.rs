@@ -802,15 +802,7 @@ impl GrpcService {
         client_id: &ClientId,
         in_game_cmd: common::InGameCommand,
     ) {
-        match &in_game_cmd.command {
-            Some(common::in_game_command::Command::Snake(_)) => {
-                session_manager.handle_snake_command(client_id, in_game_cmd).await;
-            }
-            Some(common::in_game_command::Command::Tictactoe(_)) => {
-                session_manager.handle_tictactoe_command(client_id, in_game_cmd).await;
-            }
-            None => {}
-        }
+        session_manager.handle_command(client_id, in_game_cmd).await;
     }
 
     async fn handle_client_disconnected(
@@ -822,7 +814,7 @@ impl GrpcService {
         lobby_manager.remove_client(client_id).await;
         broadcaster.unregister(client_id).await;
 
-        session_manager.kill_snake(client_id, crate::games::snake::DeathReason::PlayerDisconnected).await;
+        session_manager.kill_snake(client_id, common::games::snake::DeathReason::PlayerDisconnected).await;
 
         if let Ok(leave_state) = lobby_manager.leave_lobby(client_id).await {
             use crate::lobby_manager::LobbyStateAfterLeave;

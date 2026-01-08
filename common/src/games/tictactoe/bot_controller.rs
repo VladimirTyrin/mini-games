@@ -1,8 +1,8 @@
-use super::board::get_available_moves;
-use super::game_state::{Mark, TicTacToeGameState};
-use super::types::Position;
-use crate::engine::session::SessionRng;
+use crate::games::SessionRng;
 use crate::proto::tictactoe::TicTacToeBotType;
+use super::board::get_available_moves;
+use super::game_state::TicTacToeGameState;
+use super::types::{Mark, Position};
 
 pub struct BotInput {
     pub board: Vec<Vec<Mark>>,
@@ -20,7 +20,11 @@ impl BotInput {
     }
 }
 
-pub fn calculate_move(bot_type: TicTacToeBotType, input: BotInput, rng: &mut SessionRng) -> Option<Position> {
+pub fn calculate_move(
+    bot_type: TicTacToeBotType,
+    input: BotInput,
+    rng: &mut SessionRng,
+) -> Option<Position> {
     match bot_type {
         TicTacToeBotType::TictactoeBotTypeRandom => calculate_random_move(&input, rng),
         TicTacToeBotType::TictactoeBotTypeMinimax => calculate_minimax_move(&input),
@@ -210,7 +214,11 @@ fn minimax(
                 }
             }
         }
-        if max_eval == i32::MIN { 0 } else { max_eval }
+        if max_eval == i32::MIN {
+            0
+        } else {
+            max_eval
+        }
     } else {
         let opponent_mark = bot_mark.opponent().unwrap();
         let mut min_eval = i32::MAX;
@@ -220,7 +228,8 @@ fn minimax(
                     continue;
                 }
 
-                let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, opponent_mark);
+                let delta =
+                    eval_delta_before_move(board, bot_mark, win_count, x, y, opponent_mark);
                 board[y][x] = opponent_mark;
                 let eval = minimax(
                     board,
@@ -244,7 +253,11 @@ fn minimax(
                 }
             }
         }
-        if min_eval == i32::MAX { 0 } else { min_eval }
+        if min_eval == i32::MAX {
+            0
+        } else {
+            min_eval
+        }
     }
 }
 
@@ -269,9 +282,15 @@ fn eval_delta_before_move(
             let end_x = start_x + dx * (win_count as isize - 1);
             let end_y = start_y + dy * (win_count as isize - 1);
 
-            if start_x < 0 || start_y < 0 || end_x < 0 || end_y < 0
-                || start_x >= width as isize || start_y >= height as isize
-                || end_x >= width as isize || end_y >= height as isize {
+            if start_x < 0
+                || start_y < 0
+                || end_x < 0
+                || end_y < 0
+                || start_x >= width as isize
+                || start_y >= height as isize
+                || end_x >= width as isize
+                || end_y >= height as isize
+            {
                 continue;
             }
 
@@ -302,12 +321,10 @@ fn eval_delta_before_move(
                 } else {
                     0
                 }
+            } else if bot_count == 0 {
+                -(((opp_count + 1) * (opp_count + 1)) as i32)
             } else {
-                if bot_count == 0 {
-                    -(((opp_count + 1) * (opp_count + 1)) as i32)
-                } else {
-                    0
-                }
+                0
             };
 
             delta += new_score - old_score;
@@ -368,8 +385,8 @@ fn check_line_threat(
     let mut count = 0;
 
     for i in 0..win_count {
-        let cell = board[start_y.wrapping_add_signed(dy * i as isize)]
-                       [start_x.wrapping_add_signed(dx * i as isize)];
+        let cell =
+            board[start_y.wrapping_add_signed(dy * i as isize)][start_x.wrapping_add_signed(dx * i as isize)];
         if cell == mark {
             count += 1;
         } else if cell != Mark::Empty {

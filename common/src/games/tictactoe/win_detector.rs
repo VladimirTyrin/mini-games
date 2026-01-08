@@ -1,5 +1,4 @@
-use super::game_state::Mark;
-use super::types::{Position, WinningLine};
+use super::types::{Mark, Position, WinningLine};
 
 pub fn check_win(board: &[Vec<Mark>], win_count: usize) -> Option<Mark> {
     check_win_with_line(board, win_count).map(|line| line.mark)
@@ -73,7 +72,13 @@ fn check_vertical(board: &[Vec<Mark>], x: usize, y: usize, mark: Mark, win_count
     true
 }
 
-fn check_diagonal_down_right(board: &[Vec<Mark>], x: usize, y: usize, mark: Mark, win_count: usize) -> bool {
+fn check_diagonal_down_right(
+    board: &[Vec<Mark>],
+    x: usize,
+    y: usize,
+    mark: Mark,
+    win_count: usize,
+) -> bool {
     let height = board.len();
     let width = board[0].len();
     if x + win_count > width || y + win_count > height {
@@ -88,7 +93,13 @@ fn check_diagonal_down_right(board: &[Vec<Mark>], x: usize, y: usize, mark: Mark
     true
 }
 
-fn check_diagonal_down_left(board: &[Vec<Mark>], x: usize, y: usize, mark: Mark, win_count: usize) -> bool {
+fn check_diagonal_down_left(
+    board: &[Vec<Mark>],
+    x: usize,
+    y: usize,
+    mark: Mark,
+    win_count: usize,
+) -> bool {
     let height = board.len();
     if x + 1 < win_count || y + win_count > height {
         return false;

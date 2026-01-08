@@ -17,9 +17,9 @@ mod integration_tests {
         proto::tictactoe::{TicTacToeInGameCommand, tic_tac_toe_in_game_command, PlaceMarkCommand},
         lobby_settings, SnakeBotType, TicTacToeBotType,
     };
-    use crate::engine::snake::{GameState as SnakeGameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, BotController};
-    use crate::engine::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus, calculate_move, BotInput};
-    use crate::engine::session::SessionRng;
+    use crate::games::snake::{SnakeGameState, FieldSize, WallCollisionMode, DeadSnakeBehavior, Direction, Point, BotController};
+    use crate::games::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus, calculate_move, BotInput};
+    use crate::games::SessionRng;
     use super::{ReplayRecorder, ReplayPlayer};
 
     fn direction_to_proto(dir: Direction) -> i32 {

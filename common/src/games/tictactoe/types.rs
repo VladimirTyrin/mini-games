@@ -1,4 +1,52 @@
-use super::game_state::Mark;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mark {
+    Empty,
+    X,
+    O,
+}
+
+impl Mark {
+    pub fn to_proto(self) -> i32 {
+        match self {
+            Mark::Empty => 1,
+            Mark::X => 2,
+            Mark::O => 3,
+        }
+    }
+
+    pub fn opponent(&self) -> Option<Mark> {
+        match self {
+            Mark::X => Some(Mark::O),
+            Mark::O => Some(Mark::X),
+            Mark::Empty => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameStatus {
+    InProgress,
+    XWon,
+    OWon,
+    Draw,
+}
+
+impl GameStatus {
+    pub fn to_proto(self) -> i32 {
+        match self {
+            GameStatus::InProgress => 1,
+            GameStatus::XWon => 2,
+            GameStatus::OWon => 3,
+            GameStatus::Draw => 4,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FirstPlayerMode {
+    Random,
+    Host,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Position {

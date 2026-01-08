@@ -1,5 +1,5 @@
 use crate::proto::snake::SnakeLobbySettings;
-use super::ValidateLobbySettings;
+use crate::validate_lobby_settings::ValidateLobbySettings;
 
 impl ValidateLobbySettings for SnakeLobbySettings {
     fn validate(&self, max_players: u32) -> Result<(), String> {
