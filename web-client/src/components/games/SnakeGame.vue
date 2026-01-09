@@ -10,9 +10,12 @@ const canvasRef = ref<HTMLCanvasElement | null>(null);
 const containerRef = ref<HTMLDivElement | null>(null);
 const spritesImage = ref<HTMLImageElement | null>(null);
 const spritesLoaded = ref(false);
+const containerSize = ref({ width: 0, height: 0 });
 
 const SPRITE_SIZE = 64;
-const CELL_SIZE = 32;
+const BASE_CELL_SIZE = 32;
+const MIN_CELL_SIZE = 16;
+const MAX_CELL_SIZE = 48;
 
 const BACKGROUND_COLOR = "#88ff88";
 const DEAD_SNAKE_COLOR = { r: 128, g: 128, b: 128 };
@@ -78,14 +81,27 @@ function generateColorFromClientId(clientId: string): { r: number; g: number; b:
 
 const state = computed(() => gameStore.snakeState);
 
+const cellSize = computed(() => {
+  if (!state.value || containerSize.value.width === 0) return BASE_CELL_SIZE;
+
+  const availableWidth = containerSize.value.width - 288 - 24;
+  const availableHeight = containerSize.value.height - 80;
+
+  const cellByWidth = Math.floor(availableWidth / state.value.fieldWidth);
+  const cellByHeight = Math.floor(availableHeight / state.value.fieldHeight);
+
+  const size = Math.min(cellByWidth, cellByHeight);
+  return Math.max(MIN_CELL_SIZE, Math.min(MAX_CELL_SIZE, size));
+});
+
 const canvasWidth = computed(() => {
   if (!state.value) return 400;
-  return state.value.fieldWidth * CELL_SIZE;
+  return state.value.fieldWidth * cellSize.value;
 });
 
 const canvasHeight = computed(() => {
   if (!state.value) return 400;
-  return state.value.fieldHeight * CELL_SIZE;
+  return state.value.fieldHeight * cellSize.value;
 });
 
 const sortedSnakes = computed(() => {
@@ -241,7 +257,7 @@ function drawSpriteTinted(
 
   offCtx.putImageData(imageData, 0, 0);
 
-  ctx.drawImage(offscreen, x, y, CELL_SIZE, CELL_SIZE);
+  ctx.drawImage(offscreen, x, y, cellSize.value, cellSize.value);
 }
 
 function drawSpriteUntinted(
@@ -258,7 +274,7 @@ function drawSpriteUntinted(
     SPRITE_SIZE,
     SPRITE_SIZE,
     x, y,
-    CELL_SIZE, CELL_SIZE
+    cellSize.value, cellSize.value
   );
 }
 
@@ -281,13 +297,14 @@ function draw(): void {
 
 function drawFallback(ctx: CanvasRenderingContext2D): void {
   if (!state.value) return;
+  const size = cellSize.value;
 
   ctx.fillStyle = "#ef4444";
   for (const food of state.value.food) {
-    const x = food.x * CELL_SIZE + CELL_SIZE / 2;
-    const y = food.y * CELL_SIZE + CELL_SIZE / 2;
+    const x = food.x * size + size / 2;
+    const y = food.y * size + size / 2;
     ctx.beginPath();
-    ctx.arc(x, y, CELL_SIZE / 2 - 2, 0, Math.PI * 2);
+    ctx.arc(x, y, size / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -296,10 +313,10 @@ function drawFallback(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = color;
     for (const segment of snake.segments) {
       ctx.fillRect(
-        segment.x * CELL_SIZE + 2,
-        segment.y * CELL_SIZE + 2,
-        CELL_SIZE - 4,
-        CELL_SIZE - 4
+        segment.x * size + 2,
+        segment.y * size + 2,
+        size - 4,
+        size - 4
       );
     }
   }
@@ -307,9 +324,10 @@ function drawFallback(ctx: CanvasRenderingContext2D): void {
 
 function drawFood(ctx: CanvasRenderingContext2D): void {
   if (!state.value) return;
+  const size = cellSize.value;
 
   for (const food of state.value.food) {
-    drawSpriteUntinted(ctx, SPRITES.apple, food.x * CELL_SIZE, food.y * CELL_SIZE);
+    drawSpriteUntinted(ctx, SPRITES.apple, food.x * size, food.y * size);
   }
 }
 
@@ -318,6 +336,7 @@ function drawSnakes(ctx: CanvasRenderingContext2D): void {
 
   const fieldWidth = state.value.fieldWidth;
   const fieldHeight = state.value.fieldHeight;
+  const size = cellSize.value;
 
   for (const snake of state.value.snakes) {
     const color = getSnakeColor(snake.identity?.playerId, snake.alive);
@@ -329,8 +348,8 @@ function drawSnakes(ctx: CanvasRenderingContext2D): void {
       const segment = segments[i];
       if (!segment) continue;
 
-      const x = segment.x * CELL_SIZE;
-      const y = segment.y * CELL_SIZE;
+      const x = segment.x * size;
+      const y = segment.y * size;
 
       let sprite: SpriteCoord;
 
@@ -416,18 +435,47 @@ function loadSprites(): void {
   img.src = import.meta.env.BASE_URL + "sprites.png";
 }
 
+let resizeObserver: ResizeObserver | null = null;
+
+function updateContainerSize(): void {
+  if (containerRef.value) {
+    containerSize.value = {
+      width: containerRef.value.clientWidth,
+      height: window.innerHeight - 120,
+    };
+  }
+}
+
 watch(state, () => {
+  draw();
+});
+
+watch(cellSize, () => {
   draw();
 });
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
   loadSprites();
+
+  updateContainerSize();
+  resizeObserver = new ResizeObserver(() => {
+    updateContainerSize();
+    draw();
+  });
+  if (containerRef.value) {
+    resizeObserver.observe(containerRef.value);
+  }
+
   draw();
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
 });
 </script>
 

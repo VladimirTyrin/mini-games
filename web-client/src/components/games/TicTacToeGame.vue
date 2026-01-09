@@ -1,13 +1,88 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useGameStore } from "../../stores/game";
 import { useConnectionStore } from "../../stores/connection";
 import { MarkType, GameStatus } from "../../proto/games/tictactoe_pb";
+import type { WinningLine } from "../../proto/games/tictactoe_pb";
+
+const props = defineProps<{
+  showWinningLine?: boolean;
+}>();
 
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
 
+const containerRef = ref<HTMLDivElement | null>(null);
+const containerSize = ref({ width: 0, height: 0 });
+
 const state = computed(() => gameStore.tictactoeState);
+
+const winningLine = computed((): WinningLine | null => {
+  if (!props.showWinningLine) return null;
+  const gameInfo = gameStore.gameOver?.gameInfo;
+  if (gameInfo?.case !== "tictactoeInfo") return null;
+  return gameInfo.value.winningLine ?? null;
+});
+
+const BASE_CELL_SIZE = 48;
+const MIN_CELL_SIZE = 24;
+const MAX_CELL_SIZE = 64;
+const GAP_SIZE = 4;
+
+const cellSize = computed(() => {
+  if (!state.value || containerSize.value.width === 0) return BASE_CELL_SIZE;
+
+  const sidebarWidth = 288;
+  const padding = 48;
+  const availableWidth = containerSize.value.width - sidebarWidth - padding;
+  const availableHeight = containerSize.value.height - 100;
+
+  const totalGapsX = (state.value.fieldWidth - 1) * GAP_SIZE;
+  const totalGapsY = (state.value.fieldHeight - 1) * GAP_SIZE;
+
+  const cellByWidth = Math.floor((availableWidth - totalGapsX) / state.value.fieldWidth);
+  const cellByHeight = Math.floor((availableHeight - totalGapsY) / state.value.fieldHeight);
+
+  const size = Math.min(cellByWidth, cellByHeight);
+  return Math.max(MIN_CELL_SIZE, Math.min(MAX_CELL_SIZE, size));
+});
+
+const fontSize = computed(() => {
+  const size = cellSize.value;
+  if (size >= 48) return "text-4xl";
+  if (size >= 36) return "text-3xl";
+  if (size >= 28) return "text-2xl";
+  return "text-xl";
+});
+
+interface LineCoords {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+const winningLineCoords = computed((): LineCoords | null => {
+  if (!winningLine.value) return null;
+  const line = winningLine.value;
+  const size = cellSize.value;
+  return {
+    x1: line.startX * (size + GAP_SIZE) + size / 2,
+    y1: line.startY * (size + GAP_SIZE) + size / 2,
+    x2: line.endX * (size + GAP_SIZE) + size / 2,
+    y2: line.endY * (size + GAP_SIZE) + size / 2,
+  };
+});
+
+const gridWidth = computed(() => {
+  if (!state.value) return 0;
+  return state.value.fieldWidth * cellSize.value + (state.value.fieldWidth - 1) * GAP_SIZE;
+});
+
+const gridHeight = computed(() => {
+  if (!state.value) return 0;
+  return state.value.fieldHeight * cellSize.value + (state.value.fieldHeight - 1) * GAP_SIZE;
+});
 
 const isMyTurn = computed(() => {
   if (!state.value || !connectionStore.clientId) return false;
@@ -97,39 +172,87 @@ function getCellClasses(x: number, y: number): Record<string, boolean> {
     "bg-gray-600": isLastMove(x, y),
   };
 }
+
+let resizeObserver: ResizeObserver | null = null;
+
+function updateContainerSize(): void {
+  if (containerRef.value) {
+    containerSize.value = {
+      width: containerRef.value.clientWidth,
+      height: window.innerHeight - 120,
+    };
+  }
+}
+
+onMounted(() => {
+  updateContainerSize();
+  resizeObserver = new ResizeObserver(() => {
+    updateContainerSize();
+  });
+  if (containerRef.value) {
+    resizeObserver.observe(containerRef.value);
+  }
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+});
 </script>
 
 <template>
-  <div class="flex flex-col lg:flex-row gap-6 items-start">
+  <div ref="containerRef" class="flex flex-col lg:flex-row gap-4 items-start">
     <div class="flex-shrink-0">
-      <div class="bg-gray-800 p-4 rounded-lg">
-        <div
-          v-if="state"
-          class="grid gap-2"
-          :style="{
-            gridTemplateColumns: `repeat(${state.fieldWidth}, 80px)`,
-          }"
-        >
-          <button
-            v-for="cell in gridCells"
-            :key="cell.key"
-            class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center text-5xl font-bold transition-colors"
-            :class="getCellClasses(cell.x, cell.y)"
-            @click="handleCellClick(cell.x, cell.y)"
+      <div class="bg-gray-800 p-3 rounded-lg">
+        <div v-if="state" class="relative">
+          <div
+            class="grid"
+            :style="{
+              gridTemplateColumns: `repeat(${state.fieldWidth}, ${cellSize}px)`,
+              gap: `${GAP_SIZE}px`,
+            }"
           >
-            <span
-              v-if="getCellMark(cell.x, cell.y) === MarkType.X"
-              class="text-blue-400"
+            <button
+              v-for="cell in gridCells"
+              :key="cell.key"
+              class="bg-gray-700 rounded flex items-center justify-center font-bold transition-colors"
+              :class="[getCellClasses(cell.x, cell.y), fontSize]"
+              :style="{ width: `${cellSize}px`, height: `${cellSize}px` }"
+              @click="handleCellClick(cell.x, cell.y)"
             >
-              X
-            </span>
-            <span
-              v-else-if="getCellMark(cell.x, cell.y) === MarkType.O"
-              class="text-red-400"
-            >
-              O
-            </span>
-          </button>
+              <span
+                v-if="getCellMark(cell.x, cell.y) === MarkType.X"
+                class="text-blue-400"
+              >
+                X
+              </span>
+              <span
+                v-else-if="getCellMark(cell.x, cell.y) === MarkType.O"
+                class="text-red-400"
+              >
+                O
+              </span>
+            </button>
+          </div>
+
+          <svg
+            v-if="winningLineCoords"
+            class="absolute inset-0 pointer-events-none"
+            :width="gridWidth"
+            :height="gridHeight"
+          >
+            <line
+              :x1="winningLineCoords.x1"
+              :y1="winningLineCoords.y1"
+              :x2="winningLineCoords.x2"
+              :y2="winningLineCoords.y2"
+              stroke="#facc15"
+              :stroke-width="Math.max(4, cellSize / 10)"
+              stroke-linecap="round"
+            />
+          </svg>
         </div>
       </div>
 

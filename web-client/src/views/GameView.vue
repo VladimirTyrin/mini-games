@@ -99,21 +99,26 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <main class="container mx-auto px-4 py-6">
+    <main class="container mx-auto px-4 py-6 relative">
       <div v-if="!gameType" class="text-center py-12">
         <p class="text-gray-400 text-lg">No active game. Redirecting...</p>
       </div>
 
-      <div v-else-if="isGameOver">
-        <GameOver />
-      </div>
+      <div v-else class="relative">
+        <div v-if="gameType === 'snake'">
+          <SnakeGame />
+        </div>
 
-      <div v-else-if="gameType === 'snake'">
-        <SnakeGame />
-      </div>
+        <div v-else-if="gameType === 'tictactoe'">
+          <TicTacToeGame :show-winning-line="isGameOver" />
+        </div>
 
-      <div v-else-if="gameType === 'tictactoe'">
-        <TicTacToeGame />
+        <div
+          v-if="isGameOver"
+          class="absolute inset-0 flex items-center justify-center bg-black/60"
+        >
+          <GameOver />
+        </div>
       </div>
     </main>
   </div>
