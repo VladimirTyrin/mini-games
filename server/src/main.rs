@@ -1,16 +1,18 @@
-use tonic::transport::Server;
-use common::{
-    proto::game_service::game_service_server::GameServiceServer,
-    logger,
-    log,
-    ServerMessage, server_message,
-    ServerShuttingDownNotification,
-};
+mod broadcaster;
+mod game_session_manager;
+mod grpc_service;
+mod lobby_manager;
+
+use broadcaster::Broadcaster;
 use clap::Parser;
-use mini_games_server::grpc_service::GrpcService;
-use mini_games_server::lobby_manager::LobbyManager;
-use mini_games_server::broadcaster::Broadcaster;
-use mini_games_server::game_session_manager::GameSessionManager;
+use common::{
+    log, logger, server_message, ServerMessage, ServerShuttingDownNotification,
+    proto::game_service::game_service_server::GameServiceServer,
+};
+use game_session_manager::GameSessionManager;
+use grpc_service::GrpcService;
+use lobby_manager::LobbyManager;
+use tonic::transport::Server;
 
 #[derive(Parser)]
 #[command(name = "mini_games_server")]

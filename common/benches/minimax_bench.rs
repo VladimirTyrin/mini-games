@@ -43,7 +43,6 @@ fn bench_minimax_single_move_empty_board() {
 
 fn bench_minimax_single_move_mid_game() {
     let mut board = create_empty_board(15, 15);
-    // Set up a mid-game position with ~20 moves played
     let moves = [
         (7, 7, Mark::X), (8, 7, Mark::O), (7, 8, Mark::X), (8, 8, Mark::O),
         (6, 6, Mark::X), (9, 9, Mark::O), (5, 5, Mark::X), (10, 10, Mark::O),

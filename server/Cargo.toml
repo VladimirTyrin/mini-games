@@ -6,17 +6,9 @@ edition.workspace = true
 [lints]
 workspace = true
 
-[lib]
-name = "mini_games_server"
-path = "src/lib.rs"
-
 [[bin]]
 name = "mini_games_server"
 path = "src/main.rs"
-
-[[bench]]
-name = "minimax_bench"
-harness = false
 
 [dependencies]
 common = { path = "../common" }
@@ -26,5 +18,3 @@ tokio.workspace = true
 tokio-stream.workspace = true
 rand.workspace = true
 
-[dev-dependencies]
-criterion.workspace = true

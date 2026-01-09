@@ -1,12 +1,9 @@
-pub(crate) use common::config::{ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
-use common::{WallCollisionMode, DeadSnakeBehavior};
+use common::config::{ConfigManager, FileContentConfigProvider, Validate, YamlConfigSerializer};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
-pub enum GameType {
-    Snake,
-    TicTacToe,
-}
+use super::{
+    GameType, ReplayConfig, ServerConfig, SnakeLobbyConfig, TicTacToeLobbyConfig,
+};
 
 const CONFIG_FILE_NAME: &str = "mini_games_client_config.yaml";
 
@@ -19,7 +16,8 @@ fn get_config_path() -> String {
     CONFIG_FILE_NAME.to_string()
 }
 
-pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer> {
+pub fn get_config_manager() -> ConfigManager<FileContentConfigProvider, Config, YamlConfigSerializer>
+{
     ConfigManager::from_yaml_file(&get_config_path())
 }
 
@@ -42,134 +40,6 @@ impl Validate for Config {
         self.tictactoe.validate()?;
         self.replays.validate()?;
         Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct ReplayConfig {
-    pub save: bool,
-    pub location: String,
-}
-
-impl Validate for ReplayConfig {
-    fn validate(&self) -> Result<(), String> {
-        if self.location.is_empty() {
-            return Err("replay location must not be empty".to_string());
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct ServerConfig {
-    pub address: Option<String>,
-    pub disconnect_timeout_ms: u32,
-}
-
-impl Validate for ServerConfig {
-    fn validate(&self) -> Result<(), String> {
-        if let Some(address) = &self.address
-            && address.is_empty()
-        {
-            return Err("server address must not be empty if provided".to_string());
-        }
-        if self.disconnect_timeout_ms == 0 {
-            return Err("disconnect_timeout_ms must be greater than 0".to_string());
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct SnakeLobbyConfig {
-    pub max_players: u32,
-    pub field_width: u32,
-    pub field_height: u32,
-    pub wall_collision_mode: WallCollisionMode,
-    pub dead_snake_behavior: DeadSnakeBehavior,
-    pub tick_interval_ms: u32,
-    pub max_food_count: u32,
-    pub food_spawn_probability: f32,
-}
-
-impl Validate for SnakeLobbyConfig {
-    fn validate(&self) -> Result<(), String> {
-        if self.max_players == 0 {
-            return Err("max_players must be greater than 0".to_string());
-        }
-        if self.max_players > 16 {
-            return Err("max_players must not exceed 16".to_string());
-        }
-        if self.field_width < 5 || self.field_height < 5 {
-            return Err("field dimensions must be at least 5x5".to_string());
-        }
-        if self.field_width > 50 || self.field_height > 50 {
-            return Err("field dimensions must not exceed 50x50".to_string());
-        }
-        if self.tick_interval_ms < 50 {
-            return Err("tick_interval_ms must be at least 50".to_string());
-        }
-        if self.tick_interval_ms > 1000 {
-            return Err("tick_interval_ms must not exceed 1000".to_string());
-        }
-        if self.max_food_count < 1 {
-            return Err("max_food_count must be at least 1".to_string());
-        }
-        if self.food_spawn_probability <= 0.0 || self.food_spawn_probability > 1.0 {
-            return Err("food_spawn_probability must be greater than 0 and at most 1".to_string());
-        }
-        Ok(())
-    }
-}
-
-impl Default for SnakeLobbyConfig {
-    fn default() -> Self {
-        Self {
-            max_players: 4,
-            field_width: 15,
-            field_height: 15,
-            wall_collision_mode: WallCollisionMode::WrapAround,
-            dead_snake_behavior: DeadSnakeBehavior::Disappear,
-            tick_interval_ms: 200,
-            max_food_count: 1,
-            food_spawn_probability: 1.0,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
-pub struct TicTacToeLobbyConfig {
-    pub field_width: u32,
-    pub field_height: u32,
-    pub win_count: u32,
-}
-
-impl Validate for TicTacToeLobbyConfig {
-    fn validate(&self) -> Result<(), String> {
-        if self.field_width < 3 || self.field_height < 3 {
-            return Err("TicTacToe field dimensions must be at least 3x3".to_string());
-        }
-        if self.field_width > 20 || self.field_height > 20 {
-            return Err("TicTacToe field dimensions must not exceed 20x20".to_string());
-        }
-        let min_dimension = self.field_width.min(self.field_height);
-        if self.win_count < 3 || self.win_count > min_dimension {
-            return Err(format!(
-                "win_count must be between 3 and {} (minimum field dimension)",
-                min_dimension
-            ));
-        }
-        Ok(())
-    }
-}
-
-impl Default for TicTacToeLobbyConfig {
-    fn default() -> Self {
-        Self {
-            field_width: 3,
-            field_height: 3,
-            win_count: 3,
-        }
     }
 }
 
@@ -248,7 +118,10 @@ mod tests {
 
     #[test]
     fn test_default_config_can_be_serialized_and_deserialized_manager() {
-        let config = Config { client_id: Some(generate_client_id()), ..Config::default() };
+        let config = Config {
+            client_id: Some(generate_client_id()),
+            ..Config::default()
+        };
         let serializer = YamlConfigSerializer::new();
         let file_path = get_temp_file_path();
         dbg!(&file_path);
@@ -291,18 +164,19 @@ mod tests {
             lobby:
               max_players: 4
               field_width: 5
-              field_height: 5 
+              field_height: 5
               wall_collision_mode: WrapAround
         "#;
 
         let file_path = get_temp_file_path();
         let content_provider = FileContentConfigProvider::new(file_path);
-        content_provider.set_config_content(invalid_config_content).unwrap();
+        content_provider
+            .set_config_content(invalid_config_content)
+            .unwrap();
 
         let serializer = YamlConfigSerializer::new();
         let manager: ConfigManager<_, Config, _> = ConfigManager::new(content_provider, serializer);
         let get_result = manager.get_config();
         assert!(get_result.is_err());
     }
-
 }
