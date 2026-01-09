@@ -57,8 +57,11 @@ export class GameClient {
   }
 
   async connect(url: string, clientId: string): Promise<void> {
+    console.log("[Client] Connecting to", url);
     await this.ws.connect(url);
+    console.log("[Client] WebSocket open, sending ConnectRequest and ListLobbiesRequest for", clientId);
     this.sendConnectRequest(clientId);
+    this.listLobbies();
   }
 
   disconnect(): void {
@@ -195,6 +198,7 @@ export class GameClient {
   private handleServerMessage(message: ServerMessage): void {
     if (message.message.case === "error") {
       const error = message.message.value;
+      console.error("[WS] Server error:", error.code, error.message);
       if (error.code === ErrorCode.VERSION_MISMATCH) {
         this.onError?.("Version mismatch. Please refresh the page.");
         return;

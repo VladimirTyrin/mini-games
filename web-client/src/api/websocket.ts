@@ -101,13 +101,17 @@ export class WebSocketClient {
   }
 
   private handleMessage(event: MessageEvent): void {
+    console.log("[WS raw] Received message, size:", (event.data as ArrayBuffer).byteLength);
+
     if (!this.onMessage) {
+      console.warn("[WS raw] No message handler set");
       return;
     }
 
     try {
       const data = new Uint8Array(event.data as ArrayBuffer);
       const message = fromBinary(ServerMessageSchema, data);
+      console.log("[WS raw] Decoded message type:", message.message.case);
       this.onMessage(message);
     } catch (error) {
       console.error("Failed to deserialize server message:", error);

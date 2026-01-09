@@ -41,6 +41,8 @@ export const useConnectionStore = defineStore("connection", () => {
     const gameStore = useGameStore();
     const chatStore = useChatStore();
 
+    console.log("[WS] Received message:", msg.message.case);
+
     switch (msg.message.case) {
       case "connect":
         if (!msg.message.value.success) {
@@ -50,6 +52,7 @@ export const useConnectionStore = defineStore("connection", () => {
         break;
 
       case "lobbyList":
+        console.log("[WS] Received lobbyList with", msg.message.value.lobbies.length, "lobbies");
         lobbyStore.handleLobbyList(msg.message.value);
         break;
 
@@ -86,6 +89,7 @@ export const useConnectionStore = defineStore("connection", () => {
         break;
 
       case "lobbyListUpdate":
+        console.log("[WS] Received lobbyListUpdate notification, refreshing...");
         lobbyStore.refreshLobbies();
         break;
 
