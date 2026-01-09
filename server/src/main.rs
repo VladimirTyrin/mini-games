@@ -2,6 +2,10 @@ mod broadcaster;
 mod game_session_manager;
 mod grpc_service;
 mod lobby_manager;
+mod web_server;
+mod ws_handler;
+
+use std::path::PathBuf;
 
 use broadcaster::Broadcaster;
 use clap::Parser;
@@ -19,6 +23,9 @@ use tonic::transport::Server;
 struct Args {
     #[arg(long)]
     use_log_prefix: bool,
+
+    #[arg(long, default_value = "./web-client/dist")]
+    static_files_path: PathBuf,
 }
 
 #[tokio::main]
@@ -37,9 +44,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broadcaster = Broadcaster::new();
     let session_manager = GameSessionManager::new(broadcaster.clone(), lobby_manager.clone());
 
-    let service = GrpcService::new(lobby_manager, broadcaster.clone(), session_manager);
+    let service = GrpcService::new(lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
 
-    log!("Mini Games Server listening on {}", addr);
+    log!("Mini Games Server - gRPC on {}, Web/WebSocket on 0.0.0.0:5000", addr);
 
     let broadcaster_clone = broadcaster.clone();
     let shutdown_signal = async move {
@@ -62,10 +69,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     };
 
-    Server::builder()
+    let grpc_server = Server::builder()
         .add_service(GameServiceServer::new(service))
-        .serve_with_shutdown(addr, shutdown_signal)
-        .await?;
+        .serve_with_shutdown(addr, shutdown_signal);
+
+    let web_server = web_server::run_web_server(
+        lobby_manager,
+        broadcaster,
+        session_manager,
+        args.static_files_path,
+    );
+
+    tokio::select! {
+        result = grpc_server => {
+            if let Err(e) = result {
+                log!("gRPC server error: {}", e);
+            }
+        }
+        () = web_server => {
+            log!("Web server stopped");
+        }
+    }
 
     log!("Server shut down gracefully");
 

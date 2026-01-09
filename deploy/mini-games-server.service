@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/mini-games-server
-ExecStart=/opt/mini-games-server/mini_games_server
+ExecStart=/opt/mini-games-server/mini_games_server --static-files-path /opt/mini-games-server/web-client/dist
 Restart=always
 RestartSec=5
 StandardOutput=journal

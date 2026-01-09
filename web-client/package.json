@@ -1,0 +1,28 @@
+{
+  "name": "mini-games-web-client",
+  "version": "0.7.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "generate:proto": "node build/generate-proto.js"
+  },
+  "dependencies": {
+    "vue": "^3.5",
+    "vue-router": "^4.5",
+    "pinia": "^3.0",
+    "@bufbuild/protobuf": "^2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2",
+    "typescript": "~5.6",
+    "vite": "^6.0",
+    "vue-tsc": "^2.2",
+    "tailwindcss": "^4.0",
+    "@tailwindcss/vite": "^4.0",
+    "@bufbuild/buf": "^1.47",
+    "@bufbuild/protoc-gen-es": "^2.0",
+    "toml": "^3.0"
+  }
+}
