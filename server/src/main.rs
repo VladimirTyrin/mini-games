@@ -2,6 +2,7 @@ mod broadcaster;
 mod game_session_manager;
 mod grpc_service;
 mod lobby_manager;
+mod message_handler;
 mod web_server;
 mod ws_handler;
 
