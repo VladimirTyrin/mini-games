@@ -55,9 +55,9 @@ function getDefaultSnakeSettings(): SnakeDefaults {
 
 function getDefaultTicTacToeSettings(): TicTacToeDefaults {
   return {
-    fieldWidth: 3,
-    fieldHeight: 3,
-    winCount: 3,
+    fieldWidth: 15,
+    fieldHeight: 15,
+    winCount: 5,
     firstPlayer: FirstPlayerMode.RANDOM,
   };
 }

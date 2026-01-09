@@ -96,6 +96,10 @@ function kickPlayer(playerId: string): void {
   lobbyStore.kickPlayer(playerId);
 }
 
+function makeObserver(playerId: string): void {
+  lobbyStore.makePlayerObserver(playerId);
+}
+
 function handleBecomeObserver(): void {
   lobbyStore.becomeObserver();
 }
@@ -323,14 +327,23 @@ onUnmounted(() => {
                   </span>
                 </div>
 
-                <!-- Kick Button (Host only, not for self) -->
-                <button
-                  v-if="isHost && !isCurrentPlayer(player.identity?.playerId)"
-                  class="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
-                  @click="kickPlayer(player.identity?.playerId ?? '')"
-                >
-                  Kick
-                </button>
+                <!-- Host Controls (not for self) -->
+                <div v-if="isHost && !isCurrentPlayer(player.identity?.playerId)" class="flex gap-1">
+                  <button
+                    v-if="!player.identity?.isBot"
+                    class="px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded text-sm transition-colors"
+                    @click="makeObserver(player.identity?.playerId ?? '')"
+                    title="Move to observers"
+                  >
+                    Observe
+                  </button>
+                  <button
+                    class="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
+                    @click="kickPlayer(player.identity?.playerId ?? '')"
+                  >
+                    Kick
+                  </button>
+                </div>
               </div>
 
               <div
@@ -399,10 +412,11 @@ onUnmounted(() => {
           </div>
 
           <!-- Player Controls -->
-          <div v-if="!isObserver" class="bg-gray-800 rounded-lg p-4">
+          <div v-if="!isObserver || isHost" class="bg-gray-800 rounded-lg p-4">
             <h2 class="text-xl font-semibold mb-4">Controls</h2>
             <div class="flex gap-4">
               <button
+                v-if="!isObserver"
                 :class="[
                   'px-6 py-3 rounded-lg font-medium transition-colors',
                   isReady
@@ -429,7 +443,15 @@ onUnmounted(() => {
               </button>
             </div>
             <p v-if="isHost && !canStart" class="text-gray-400 mt-2 text-sm">
-              All players must be ready and at least 2 players required to start.
+              <template v-if="!lobby.players.every(p => p.ready)">
+                All players must be ready.
+              </template>
+              <template v-else-if="gameType === 'tictactoe' && lobby.players.length !== 2">
+                TicTacToe requires exactly 2 players.
+              </template>
+              <template v-else-if="lobby.players.length < 1">
+                At least 1 player required.
+              </template>
             </p>
           </div>
         </div>

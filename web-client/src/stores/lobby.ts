@@ -54,8 +54,15 @@ export const useLobbyStore = defineStore("lobby", () => {
   const canStart = computed(() => {
     if (!currentLobby.value || !isHost.value) return false;
     const players = currentLobby.value.players;
-    if (players.length < 2) return false;
-    return players.every((p) => p.ready);
+    const allReady = players.every((p) => p.ready);
+    if (!allReady) return false;
+
+    const isTicTacToe = currentLobby.value.settings.case === "tictactoe";
+    if (isTicTacToe) {
+      return players.length === 2;
+    } else {
+      return players.length >= 1;
+    }
   });
 
   const gameType = computed(() => {
@@ -140,6 +147,10 @@ export const useLobbyStore = defineStore("lobby", () => {
 
   function becomePlayer(): void {
     gameClient.becomePlayer();
+  }
+
+  function makePlayerObserver(playerId: string): void {
+    gameClient.makePlayerObserver(playerId);
   }
 
   function handleLobbyList(response: LobbyListResponse): void {
@@ -281,6 +292,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     kickPlayer,
     becomeObserver,
     becomePlayer,
+    makePlayerObserver,
     handleLobbyList,
     handleLobbyCreated,
     handleLobbyJoined,

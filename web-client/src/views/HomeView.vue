@@ -126,7 +126,7 @@ function handleCreateLobby() {
       deadSnakeBehavior: snakeDeadSnakeBehavior.value,
     });
   } else {
-    lobbyStore.createTicTacToeLobby(newLobbyName.value.trim(), newLobbyMaxPlayers.value, {
+    lobbyStore.createTicTacToeLobby(newLobbyName.value.trim(), 2, {
       fieldWidth: tttFieldWidth.value,
       fieldHeight: tttFieldHeight.value,
       winCount: tttWinCount.value,
@@ -165,7 +165,15 @@ watch(
 <template>
   <div class="min-h-screen bg-slate-900 text-white p-6">
     <div class="max-w-4xl mx-auto">
-      <h1 class="text-4xl font-bold mb-8 text-center">Mini Games</h1>
+      <div class="flex justify-between items-center mb-8">
+        <h1 class="text-4xl font-bold">Mini Games</h1>
+        <router-link
+          to="/settings"
+          class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+        >
+          Settings
+        </router-link>
+      </div>
 
       <template v-if="!isConnected">
         <div class="bg-slate-800 rounded-lg p-6 max-w-md mx-auto">
@@ -276,7 +284,10 @@ watch(
       class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
       @click.self="closeCreateDialog"
     >
-      <div class="bg-slate-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div
+        class="bg-slate-800 rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        @click.stop
+      >
         <h2 class="text-xl font-semibold mb-4">Create Lobby</h2>
 
         <div class="space-y-4">
@@ -321,7 +332,7 @@ watch(
             </div>
           </div>
 
-          <div>
+          <div v-if="newLobbyGameType === 'snake'">
             <label for="maxPlayers" class="block text-sm font-medium text-slate-300 mb-2">
               Max Players
             </label>
@@ -329,7 +340,7 @@ watch(
               id="maxPlayers"
               v-model.number="newLobbyMaxPlayers"
               type="number"
-              min="2"
+              min="1"
               max="10"
               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -457,7 +468,7 @@ watch(
                     v-model.number="tttFieldWidth"
                     type="number"
                     min="3"
-                    max="10"
+                    max="20"
                     class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -471,7 +482,7 @@ watch(
                     v-model.number="tttFieldHeight"
                     type="number"
                     min="3"
-                    max="10"
+                    max="20"
                     class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -485,7 +496,7 @@ watch(
                     v-model.number="tttWinCount"
                     type="number"
                     min="3"
-                    max="10"
+                    max="15"
                     class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>

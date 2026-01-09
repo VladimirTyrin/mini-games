@@ -1,4 +1,5 @@
 use crate::{lobby_details, lobby_settings, ReplayGame};
+use crate::config::Validate;
 use crate::games::{GameSession, GameSessionConfig, ReplayMode};
 
 pub trait LobbySettings: Send + Sync {

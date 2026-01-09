@@ -19,6 +19,7 @@ import {
   ListLobbiesRequestSchema,
   LobbyListChatMessageSchema,
   type LobbySettings,
+  MakePlayerObserverRequestSchema,
   MarkReadyRequestSchema,
   PingRequestSchema,
   PlayAgainRequestSchema,
@@ -134,6 +135,13 @@ export class GameClient {
     this.sendMessage({
       case: "becomePlayer",
       value: create(BecomePlayerFromObserverRequestSchema, {}),
+    });
+  }
+
+  makePlayerObserver(playerId: string): void {
+    this.sendMessage({
+      case: "makeObserver",
+      value: create(MakePlayerObserverRequestSchema, { playerId }),
     });
   }
 
