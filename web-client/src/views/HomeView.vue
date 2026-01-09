@@ -163,7 +163,7 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-900 text-white p-6">
+  <div class="bg-slate-900 text-white p-6">
     <div class="max-w-4xl mx-auto">
       <div class="flex justify-between items-center mb-8">
         <h1 class="text-4xl font-bold">Mini Games</h1>

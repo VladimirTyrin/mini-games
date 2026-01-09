@@ -92,7 +92,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-900 text-white p-6">
+  <div class="bg-slate-900 text-white p-6">
     <div class="max-w-2xl mx-auto">
       <div class="flex items-center justify-between mb-8">
         <h1 class="text-3xl font-bold">Settings</h1>

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useGameStore, Direction } from "../../stores/game";
 import { useConnectionStore } from "../../stores/connection";
+import { DeadSnakeBehavior } from "../../proto/games/snake_pb";
 
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
@@ -13,9 +14,9 @@ const spritesLoaded = ref(false);
 const containerSize = ref({ width: 0, height: 0 });
 
 const SPRITE_SIZE = 64;
-const BASE_CELL_SIZE = 32;
-const MIN_CELL_SIZE = 16;
-const MAX_CELL_SIZE = 48;
+const BASE_CELL_SIZE = 48;
+const MIN_CELL_SIZE = 24;
+const MAX_CELL_SIZE = 80;
 
 const BACKGROUND_COLOR = "#88ff88";
 const DEAD_SNAKE_COLOR = { r: 128, g: 128, b: 128 };
@@ -117,6 +118,12 @@ const mySnake = computed(() => {
 });
 
 const isAlive = computed(() => mySnake.value?.alive ?? false);
+
+const showDeadSnakes = computed(() => {
+  if (!state.value) return false;
+  if (gameStore.isGameOver) return true;
+  return state.value.deadSnakeBehavior === DeadSnakeBehavior.STAY_ON_FIELD;
+});
 
 const snakeColors = computed(() => {
   const colors: Map<string, { r: number; g: number; b: number }> = new Map();
@@ -309,6 +316,8 @@ function drawFallback(ctx: CanvasRenderingContext2D): void {
   }
 
   for (const snake of state.value.snakes) {
+    if (!snake.alive && !showDeadSnakes.value) continue;
+
     const color = getSnakeColorHex(snake.identity?.playerId, snake.alive);
     ctx.fillStyle = color;
     for (const segment of snake.segments) {
@@ -339,6 +348,8 @@ function drawSnakes(ctx: CanvasRenderingContext2D): void {
   const size = cellSize.value;
 
   for (const snake of state.value.snakes) {
+    if (!snake.alive && !showDeadSnakes.value) continue;
+
     const color = getSnakeColor(snake.identity?.playerId, snake.alive);
     const segments = snake.segments;
 

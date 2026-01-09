@@ -234,7 +234,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="lobby" class="min-h-screen bg-gray-900 text-white p-4">
+  <div v-if="lobby" class="bg-gray-900 text-white p-4">
     <div class="max-w-6xl mx-auto">
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
@@ -553,7 +553,7 @@ onUnmounted(() => {
   </div>
 
   <!-- Loading/Redirect State -->
-  <div v-else class="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+  <div v-else class="bg-gray-900 text-white flex items-center justify-center">
     <p class="text-gray-400">Loading lobby...</p>
   </div>
 </template>
