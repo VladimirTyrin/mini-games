@@ -73,15 +73,15 @@ fn minimax_bench(c: &mut Criterion) {
         .measurement_time(Duration::from_secs(240));
 
     group.bench_function("10_moves", |b| {
-        b.iter(|| bench_minimax_10_moves())
+        b.iter(bench_minimax_10_moves)
     });
 
     group.bench_function("single_move_empty", |b| {
-        b.iter(|| bench_minimax_single_move_empty_board())
+        b.iter(bench_minimax_single_move_empty_board)
     });
 
     group.bench_function("single_move_mid_game", |b| {
-        b.iter(|| bench_minimax_single_move_mid_game())
+        b.iter(bench_minimax_single_move_mid_game)
     });
 
     group.finish();

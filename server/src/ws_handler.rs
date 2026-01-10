@@ -18,10 +18,10 @@ pub async fn handle_websocket(socket: WebSocket, state: WebServerState) {
         while let Some(result) = rx.recv().await {
             if let Ok(msg) = result {
                 let mut buf = Vec::new();
-                if msg.encode(&mut buf).is_ok() {
-                    if ws_sender.send(Message::Binary(buf.into())).await.is_err() {
-                        break;
-                    }
+                if msg.encode(&mut buf).is_ok()
+                    && ws_sender.send(Message::Binary(buf.into())).await.is_err()
+                {
+                    break;
                 }
             }
         }

@@ -863,35 +863,34 @@ impl MessageHandler {
                     ready_player_ids: _,
                     pending_player_ids,
                 } = status
+                    && pending_player_ids.is_empty()
                 {
-                    if pending_player_ids.is_empty() {
-                        let host_id =
-                            ClientId::new(lobby_details.creator.as_ref().unwrap().player_id.clone());
-                        if let Ok(lobby_id) = self.lobby_manager.start_game(&host_id).await {
-                            let session_id = lobby_id.to_string();
+                    let host_id =
+                        ClientId::new(lobby_details.creator.as_ref().unwrap().player_id.clone());
+                    if let Ok(lobby_id) = self.lobby_manager.start_game(&host_id).await {
+                        let session_id = lobby_id.to_string();
 
-                            if let Some(updated_lobby_details) =
-                                self.lobby_manager.get_lobby_details(&lobby_id).await
-                            {
-                                self.broadcaster
-                                    .broadcast_to_lobby(
-                                        &updated_lobby_details,
-                                        ServerMessage {
-                                            message: Some(server_message::Message::GameStarting(
-                                                common::GameStartingNotification {
-                                                    session_id: session_id.clone(),
-                                                },
-                                            )),
-                                        },
-                                    )
-                                    .await;
+                        if let Some(updated_lobby_details) =
+                            self.lobby_manager.get_lobby_details(&lobby_id).await
+                        {
+                            self.broadcaster
+                                .broadcast_to_lobby(
+                                    &updated_lobby_details,
+                                    ServerMessage {
+                                        message: Some(server_message::Message::GameStarting(
+                                            common::GameStartingNotification {
+                                                session_id: session_id.clone(),
+                                            },
+                                        )),
+                                    },
+                                )
+                                .await;
 
-                                self.session_manager
-                                    .create_session(session_id.clone(), updated_lobby_details.clone())
-                                    .await;
+                            self.session_manager
+                                .create_session(session_id.clone(), updated_lobby_details.clone())
+                                .await;
 
-                                self.notify_lobby_list_update().await;
-                            }
+                            self.notify_lobby_list_update().await;
                         }
                     }
                 }

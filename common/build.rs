@@ -14,12 +14,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile_protos(
             &[
-                "proto/game_service.proto",
-                "proto/replay.proto",
-                "proto/games/snake.proto",
-                "proto/games/tictactoe.proto",
+                "../proto/game_service.proto",
+                "../proto/replay.proto",
+                "../proto/games/snake.proto",
+                "../proto/games/tictactoe.proto",
             ],
-            &["proto"],
+            &["../proto"],
         )?;
     
     Ok(())

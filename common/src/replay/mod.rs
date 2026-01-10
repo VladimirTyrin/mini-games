@@ -148,7 +148,7 @@ mod integration_tests {
 
         let mut replay_rng = SessionRng::new(player.seed());
 
-        let player_map = vec![player1.clone(), player2.clone()];
+        let player_map = [player1.clone(), player2.clone()];
 
         let mut replay_tick = 0i64;
         let mut action_idx = 0;
@@ -157,16 +157,14 @@ mod integration_tests {
         while replay_tick < tick {
             while action_idx < actions.len() && actions[action_idx].tick == replay_tick {
                 let action = &actions[action_idx];
-                if let Some(content) = &action.content {
-                    if let Some(crate::player_action_content::Content::Command(cmd)) = &content.content {
-                        if let Some(in_game_command::Command::Snake(snake_cmd)) = &cmd.command {
-                            if let Some(snake_in_game_command::Command::Turn(turn)) = &snake_cmd.command {
-                                let dir = proto_to_direction(turn.direction);
-                                let player_id = &player_map[action.player_index as usize];
-                                replay_game_state.set_snake_direction(player_id, dir).expect("Failed to set direction in replay test");
-                            }
-                        }
-                    }
+                if let Some(content) = &action.content
+                    && let Some(crate::player_action_content::Content::Command(cmd)) = &content.content
+                    && let Some(in_game_command::Command::Snake(snake_cmd)) = &cmd.command
+                    && let Some(snake_in_game_command::Command::Turn(turn)) = &snake_cmd.command
+                {
+                    let dir = proto_to_direction(turn.direction);
+                    let player_id = &player_map[action.player_index as usize];
+                    replay_game_state.set_snake_direction(player_id, dir).expect("Failed to set direction in replay test");
                 }
                 action_idx += 1;
             }
@@ -237,7 +235,7 @@ mod integration_tests {
             }
         }
 
-        let original_status = game_state.status.clone();
+        let original_status = game_state.status;
         let original_winner = game_state.get_winner();
 
         let replay = recorder.finalize();
@@ -251,19 +249,17 @@ mod integration_tests {
             &mut replay_rng,
         );
 
-        let player_map = vec![player1.clone(), player2.clone()];
+        let player_map = [player1.clone(), player2.clone()];
         let actions = player.replay_ref().actions.clone();
 
         for action in &actions {
-            if let Some(content) = &action.content {
-                if let Some(crate::player_action_content::Content::Command(cmd)) = &content.content {
-                    if let Some(in_game_command::Command::Tictactoe(ttt_cmd)) = &cmd.command {
-                        if let Some(tic_tac_toe_in_game_command::Command::Place(place)) = &ttt_cmd.command {
-                            let player_id = &player_map[action.player_index as usize];
-                            replay_game_state.place_mark(player_id, place.x as usize, place.y as usize).expect("Failed to place mark in replay test");
-                        }
-                    }
-                }
+            if let Some(content) = &action.content
+                && let Some(crate::player_action_content::Content::Command(cmd)) = &content.content
+                && let Some(in_game_command::Command::Tictactoe(ttt_cmd)) = &cmd.command
+                && let Some(tic_tac_toe_in_game_command::Command::Place(place)) = &ttt_cmd.command
+            {
+                let player_id = &player_map[action.player_index as usize];
+                replay_game_state.place_mark(player_id, place.x as usize, place.y as usize).expect("Failed to place mark in replay test");
             }
         }
 

@@ -5,4 +5,4 @@ plugins:
     opt:
       - target=ts
 inputs:
-  - directory: ../common/proto
+  - directory: ../proto
