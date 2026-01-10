@@ -96,22 +96,21 @@ export class WebSocketClient {
       return;
     }
 
+    console.log("[WS >>>]", message.message.case, message.message.value);
     const binary = toBinary(ClientMessageSchema, message);
     this.socket.send(binary);
   }
 
   private handleMessage(event: MessageEvent): void {
-    console.log("[WS raw] Received message, size:", (event.data as ArrayBuffer).byteLength);
-
     if (!this.onMessage) {
-      console.warn("[WS raw] No message handler set");
+      console.warn("[WS <<<] No message handler set");
       return;
     }
 
     try {
       const data = new Uint8Array(event.data as ArrayBuffer);
       const message = fromBinary(ServerMessageSchema, data);
-      console.log("[WS raw] Decoded message type:", message.message.case);
+      console.log("[WS <<<]", message.message.case, message.message.value);
       this.onMessage(message);
     } catch (error) {
       console.error("Failed to deserialize server message:", error);
