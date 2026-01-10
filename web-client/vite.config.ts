@@ -13,7 +13,7 @@ function getVersionFromCargoToml(): string {
 }
 
 export default defineConfig({
-  base: "/ui/",
+  base: process.env.VITE_BASE_PATH ?? "/ui/",
   plugins: [vue(), tailwindcss()],
   define: {
     __APP_VERSION__: JSON.stringify(getVersionFromCargoToml()),
