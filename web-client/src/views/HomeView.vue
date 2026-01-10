@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useConnectionStore } from "../stores/connection";
 import { useLobbyStore } from "../stores/lobby";
@@ -146,20 +146,6 @@ watch(
   }
 );
 
-onMounted(() => {
-  if (connectionStore.isConnected) {
-    lobbyStore.refreshLobbies();
-  }
-});
-
-watch(
-  () => connectionStore.isConnected,
-  (connected) => {
-    if (connected) {
-      lobbyStore.refreshLobbies();
-    }
-  }
-);
 </script>
 
 <template>
