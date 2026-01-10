@@ -59,8 +59,24 @@ export class GameClient {
   async connect(url: string, clientId: string): Promise<void> {
     console.log("[Client] Connecting to", url);
     await this.ws.connect(url);
-    console.log("[Client] WebSocket open, sending ConnectRequest and ListLobbiesRequest for", clientId);
-    this.sendConnectRequest(clientId);
+    console.log("[Client] WebSocket open, sending ConnectRequest for", clientId);
+
+    await new Promise<void>((resolve, reject) => {
+      const originalHandler = this.ws.onMessage;
+      this.ws.onMessage = (message) => {
+        if (message.message.case === "connect") {
+          this.ws.onMessage = originalHandler;
+          console.log("[Client] Connected, now listing lobbies");
+          resolve();
+        } else if (message.message.case === "error") {
+          this.ws.onMessage = originalHandler;
+          reject(new Error(message.message.value.message));
+        }
+        originalHandler?.(message);
+      };
+      this.sendConnectRequest(clientId);
+    });
+
     this.listLobbies();
   }
 

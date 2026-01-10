@@ -88,6 +88,13 @@ impl MessageHandler {
                 self.broadcaster.register(client_id.clone(), tx.clone()).await;
                 *client_id_opt = Some(client_id.clone());
                 log!("Client connected: {}", client_id);
+
+                let response = ServerMessage {
+                    message: Some(server_message::Message::Connect(common::ConnectResponse {
+                        success: true,
+                    })),
+                };
+                send_to_client(tx, response, Some(&client_id)).await;
             }
             client_message::Message::Disconnect(_) => {
                 if let Some(client_id) = client_id_opt {
