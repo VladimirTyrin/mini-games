@@ -4,6 +4,7 @@ set -euo pipefail
 
 REMOTE_HOST="185.157.212.124"
 REMOTE_USER="root"
+DOMAIN="braintvsminigames.xyz"
 SERVICE_NAME="mini-games-server"
 DEPLOY_DIR="/opt/mini-games-server"
 BINARY_NAME="mini_games_server"
@@ -12,6 +13,7 @@ WEB_CLIENT_DIR="web-client"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_FILE="${SCRIPT_DIR}/deploy/mini-games-server.service"
+NGINX_CONF="${SCRIPT_DIR}/deploy/nginx.conf"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_CLIENT_DIST="${SCRIPT_DIR}/${WEB_CLIENT_DIR}/dist"
 
@@ -21,7 +23,7 @@ if [[ ! -d "node_modules" ]]; then
     echo "==> Installing npm dependencies..."
     npm install
 fi
-npm run build
+VITE_SERVER_URL="wss://${DOMAIN}/ws" npm run build
 cd "${SCRIPT_DIR}"
 
 if [[ ! -d "${WEB_CLIENT_DIST}" ]]; then
@@ -69,6 +71,20 @@ scp -r "${WEB_CLIENT_DIST}" "${REMOTE_USER}@${REMOTE_HOST}:${DEPLOY_DIR}/web-cli
 echo "==> Copying systemd service file..."
 scp "${SERVICE_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
 
+echo "==> Ensuring nginx is installed..."
+ssh "${REMOTE_USER}@${REMOTE_HOST}" bash <<'NGINX_INSTALL'
+set -euo pipefail
+if ! command -v nginx &> /dev/null; then
+    echo "==> Installing nginx..."
+    apt-get update
+    apt-get install -y nginx
+fi
+mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+NGINX_INSTALL
+
+echo "==> Copying nginx config..."
+scp "${NGINX_CONF}" "${REMOTE_USER}@${REMOTE_HOST}:/etc/nginx/sites-available/${DOMAIN}"
+
 ssh "${REMOTE_USER}@${REMOTE_HOST}" bash <<EOF
 set -euo pipefail
 
@@ -96,13 +112,46 @@ else
     journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
     exit 1
 fi
+
+echo "==> Setting up SSL..."
+if [[ ! -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem ]]; then
+    echo "==> SSL certificate not found. Obtaining with certbot..."
+    if ! command -v certbot &> /dev/null; then
+        echo "==> Installing certbot..."
+        apt-get update
+        apt-get install -y certbot
+    fi
+
+    echo "==> Stopping nginx for standalone certificate..."
+    systemctl stop nginx || true
+
+    certbot certonly --standalone -d ${DOMAIN} --non-interactive --agree-tos --email admin@${DOMAIN} || {
+        echo "Error: certbot failed. You may need to run it manually."
+        echo "Make sure DNS is pointing to this server, then run:"
+        echo "  certbot certonly --standalone -d ${DOMAIN}"
+        exit 1
+    }
+fi
+
+echo "==> Enabling nginx site..."
+ln -sf /etc/nginx/sites-available/${DOMAIN} /etc/nginx/sites-enabled/${DOMAIN}
+rm -f /etc/nginx/sites-enabled/default
+
+echo "==> Testing nginx config..."
+nginx -t
+
+echo "==> Starting nginx..."
+systemctl enable nginx
+systemctl start nginx
 EOF
 
 echo "==> Deployment completed successfully!"
-echo "==> gRPC server:  ${REMOTE_HOST}:5001"
-echo "==> Web client:   http://${REMOTE_HOST}:5000/ui/"
+echo "==> Web client:   https://${DOMAIN}/"
+echo "==> gRPC server:  https://${DOMAIN}:5443"
 echo ""
 echo "Useful commands:"
 echo "  View logs:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'journalctl -u ${SERVICE_NAME} -f'"
+echo "  Nginx logs:   ssh ${REMOTE_USER}@${REMOTE_HOST} 'tail -f /var/log/nginx/error.log'"
 echo "  Stop service: ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl stop ${SERVICE_NAME}'"
 echo "  Restart:      ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl restart ${SERVICE_NAME}'"
+echo "  Renew SSL:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'certbot renew'"

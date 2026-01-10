@@ -32,11 +32,13 @@ export interface StoredConfig {
 }
 
 function getDefaultServerUrl(): string {
+  if (import.meta.env.VITE_SERVER_URL) {
+    return import.meta.env.VITE_SERVER_URL;
+  }
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.hostname;
-    const port = "5000";
-    return `${protocol}//${host}:${port}/ws`;
+    return `${protocol}//${host}/ws`;
   }
   return "ws://localhost:5000/ws";
 }
