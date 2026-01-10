@@ -45,6 +45,7 @@ jobs:
         working-directory: web-client
         env:
           VITE_BASE_PATH: /mini-games/
+          VITE_SERVER_URL: wss://braintvsminigames.xyz/ws
         run: npm run build
 
       - name: Setup Pages
