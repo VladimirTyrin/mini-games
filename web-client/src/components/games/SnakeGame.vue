@@ -529,7 +529,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="flex flex-col lg:flex-row gap-6">
+  <div ref="containerRef" class="flex flex-col lg:flex-row gap-6 items-center lg:items-start">
     <div class="flex-shrink-0">
       <div
         class="border-2 border-gray-600 rounded-lg overflow-hidden"

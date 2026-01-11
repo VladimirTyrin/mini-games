@@ -149,8 +149,6 @@ watch(
 );
 
 function handleKeyDown(event: KeyboardEvent): void {
-  const isCtrl = event.ctrlKey || event.metaKey;
-
   if (showCreateDialog.value) {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -162,8 +160,7 @@ function handleKeyDown(event: KeyboardEvent): void {
     return;
   }
 
-  if (isConnected.value && isCtrl && (event.key === "n" || event.key === "N")) {
-    event.preventDefault();
+  if (isConnected.value && (event.key === "n" || event.key === "N")) {
     openCreateDialog();
   }
 }
@@ -238,7 +235,7 @@ onUnmounted(() => {
               @click="openCreateDialog"
               class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded transition-colors"
             >
-              Create Lobby<template v-if="!deviceStore.isTouchDevice"> (Ctrl+N)</template>
+              Create Lobby<template v-if="!deviceStore.isTouchDevice"> (N)</template>
             </button>
           </div>
         </div>
