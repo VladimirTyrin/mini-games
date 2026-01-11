@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useConnectionStore } from "../stores/connection";
 import { useLobbyStore } from "../stores/lobby";
@@ -146,6 +146,25 @@ watch(
   }
 );
 
+function handleKeyDown(event: KeyboardEvent): void {
+  if (!showCreateDialog.value) return;
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleCreateLobby();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeCreateDialog();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
+});
 </script>
 
 <template>

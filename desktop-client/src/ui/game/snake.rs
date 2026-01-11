@@ -543,13 +543,13 @@ impl SnakeGameUi {
         ctx.input(|i| {
             let mut new_direction = None;
 
-            if i.key_pressed(egui::Key::ArrowUp) {
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::W) {
                 new_direction = Some(Direction::Up);
-            } else if i.key_pressed(egui::Key::ArrowDown) {
+            } else if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::S) {
                 new_direction = Some(Direction::Down);
-            } else if i.key_pressed(egui::Key::ArrowLeft) {
+            } else if i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::A) {
                 new_direction = Some(Direction::Left);
-            } else if i.key_pressed(egui::Key::ArrowRight) {
+            } else if i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::D) {
                 new_direction = Some(Direction::Right);
             }
 
