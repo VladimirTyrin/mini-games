@@ -279,61 +279,14 @@ impl MessageHandler {
     }
 
     pub async fn handle_client_disconnected(&self, client_id: &ClientId) {
+        if let Ok(leave_state) = self.lobby_manager.leave_lobby(client_id).await {
+            self.broadcast_leave_lobby_result(client_id, leave_state)
+                .await;
+        }
+
         self.lobby_manager.remove_client(client_id).await;
         self.broadcaster.unregister(client_id).await;
         self.session_manager.handle_player_disconnect(client_id).await;
-
-        if let Ok(leave_state) = self.lobby_manager.leave_lobby(client_id).await {
-            match leave_state {
-                LobbyStateAfterLeave::HostLeft { kicked_players } => {
-                    self.broadcaster
-                        .broadcast_to_clients(
-                            &kicked_players,
-                            ServerMessage {
-                                message: Some(server_message::Message::LobbyClosed(
-                                    common::LobbyClosedNotification {
-                                        message: "Lobby closed".to_string(),
-                                    },
-                                )),
-                            },
-                        )
-                        .await;
-                    self.notify_lobby_list_update().await;
-                }
-                LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
-                    self.broadcaster
-                        .broadcast_to_lobby(
-                            &updated_details,
-                            ServerMessage {
-                                message: Some(server_message::Message::PlayerLeft(
-                                    common::PlayerLeftNotification {
-                                        player: Some(common::PlayerIdentity {
-                                            player_id: client_id.to_string(),
-                                            is_bot: false,
-                                        }),
-                                    },
-                                )),
-                            },
-                        )
-                        .await;
-
-                    self.broadcaster
-                        .broadcast_to_lobby(
-                            &updated_details,
-                            ServerMessage {
-                                message: Some(server_message::Message::LobbyUpdate(
-                                    common::LobbyUpdateNotification {
-                                        details: Some(updated_details.clone()),
-                                    },
-                                )),
-                            },
-                        )
-                        .await;
-
-                    self.notify_lobby_list_update().await;
-                }
-            }
-        }
     }
 
     async fn notify_lobby_list_update(&self) {
@@ -464,58 +417,82 @@ impl MessageHandler {
                 };
                 self.broadcaster.send_to_client(client_id, response).await;
 
-                match leave_state {
-                    LobbyStateAfterLeave::HostLeft { kicked_players } => {
-                        self.broadcaster
-                            .broadcast_to_clients(
-                                &kicked_players,
-                                ServerMessage {
-                                    message: Some(server_message::Message::LobbyClosed(
-                                        common::LobbyClosedNotification {
-                                            message: "Lobby closed".to_string(),
-                                        },
-                                    )),
-                                },
-                            )
-                            .await;
-                        self.notify_lobby_list_update().await;
-                    }
-                    LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
-                        self.broadcaster
-                            .broadcast_to_lobby(
-                                &updated_details,
-                                ServerMessage {
-                                    message: Some(server_message::Message::PlayerLeft(
-                                        common::PlayerLeftNotification {
-                                            player: Some(common::PlayerIdentity {
-                                                player_id: client_id.to_string(),
-                                                is_bot: false,
-                                            }),
-                                        },
-                                    )),
-                                },
-                            )
-                            .await;
-
-                        self.broadcaster
-                            .broadcast_to_lobby(
-                                &updated_details,
-                                ServerMessage {
-                                    message: Some(server_message::Message::LobbyUpdate(
-                                        common::LobbyUpdateNotification {
-                                            details: Some(updated_details.clone()),
-                                        },
-                                    )),
-                                },
-                            )
-                            .await;
-
-                        self.notify_lobby_list_update().await;
-                    }
-                }
+                self.broadcast_leave_lobby_result(client_id, leave_state)
+                    .await;
             }
             Err(e) => {
                 self.send_error(client_id, e).await;
+            }
+        }
+    }
+
+    async fn broadcast_leave_lobby_result(
+        &self,
+        client_id: &ClientId,
+        leave_state: LobbyStateAfterLeave,
+    ) {
+        match leave_state {
+            LobbyStateAfterLeave::HostLeft { kicked_players } => {
+                self.broadcaster
+                    .broadcast_to_clients(
+                        &kicked_players,
+                        ServerMessage {
+                            message: Some(server_message::Message::LobbyClosed(
+                                common::LobbyClosedNotification {
+                                    message: "Lobby closed".to_string(),
+                                },
+                            )),
+                        },
+                    )
+                    .await;
+                self.notify_lobby_list_update().await;
+            }
+            LobbyStateAfterLeave::LobbyStillActive { updated_details } => {
+                self.broadcaster
+                    .broadcast_to_lobby(
+                        &updated_details,
+                        ServerMessage {
+                            message: Some(server_message::Message::PlayerLeft(
+                                common::PlayerLeftNotification {
+                                    player: Some(common::PlayerIdentity {
+                                        player_id: client_id.to_string(),
+                                        is_bot: false,
+                                    }),
+                                },
+                            )),
+                        },
+                    )
+                    .await;
+
+                self.broadcaster
+                    .broadcast_to_lobby(
+                        &updated_details,
+                        ServerMessage {
+                            message: Some(server_message::Message::LobbyUpdate(
+                                common::LobbyUpdateNotification {
+                                    details: Some(updated_details.clone()),
+                                },
+                            )),
+                        },
+                    )
+                    .await;
+
+                self.broadcaster
+                    .broadcast_to_lobby(
+                        &updated_details,
+                        ServerMessage {
+                            message: Some(server_message::Message::PlayAgainStatus(
+                                common::PlayAgainStatusNotification {
+                                    ready_players: vec![],
+                                    pending_players: vec![],
+                                    available: false,
+                                },
+                            )),
+                        },
+                    )
+                    .await;
+
+                self.notify_lobby_list_update().await;
             }
         }
     }
