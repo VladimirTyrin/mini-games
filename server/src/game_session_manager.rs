@@ -60,6 +60,15 @@ impl GameSessionManager {
 
         let human_players: Vec<PlayerId> = lobby.players.keys().cloned().collect();
 
+        let players_str: Vec<String> = human_players.iter().map(|p| p.to_string()).collect();
+        let bots_str: Vec<String> = lobby.bots.keys().map(|b| format!("{} [BOT]", b)).collect();
+        let all_participants: Vec<String> = players_str.into_iter().chain(bots_str).collect();
+        log!(
+            "Game starting in lobby '{}': [{}]",
+            session_id,
+            all_participants.join(", ")
+        );
+
         let config = GameSessionConfig {
             session_id: session_id.clone(),
             human_players: human_players.clone(),
@@ -127,6 +136,44 @@ impl GameSessionManager {
         config: &GameSessionConfig,
         notification: common::GameOverNotification,
     ) {
+        let winner_str = notification
+            .winner
+            .as_ref()
+            .map(|w| {
+                if w.is_bot {
+                    format!("{} [BOT]", w.player_id)
+                } else {
+                    w.player_id.clone()
+                }
+            })
+            .unwrap_or_else(|| "Draw".to_string());
+
+        let scores_str: Vec<String> = notification
+            .scores
+            .iter()
+            .map(|s| {
+                let name = s
+                    .identity
+                    .as_ref()
+                    .map(|i| {
+                        if i.is_bot {
+                            format!("{} [BOT]", i.player_id)
+                        } else {
+                            i.player_id.clone()
+                        }
+                    })
+                    .unwrap_or_else(|| "Unknown".to_string());
+                format!("{}: {}", name, s.score)
+            })
+            .collect();
+
+        log!(
+            "Game over in lobby '{}': winner={}, scores=[{}]",
+            config.session_id,
+            winner_str,
+            scores_str.join(", ")
+        );
+
         let client_ids: Vec<ClientId> = config
             .human_players
             .iter()
