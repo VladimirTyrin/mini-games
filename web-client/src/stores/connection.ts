@@ -5,6 +5,7 @@ import { useConfigStore } from "./config";
 import { useLobbyStore } from "./lobby";
 import { useGameStore } from "./game";
 import { useChatStore } from "./chat";
+import { useToastStore } from "./toast";
 
 const CLIENT_ID_STORAGE_KEY = "mini_games_client_id";
 
@@ -34,6 +35,8 @@ export const useConnectionStore = defineStore("connection", () => {
 
   gameClient.onError = (message) => {
     error.value = message;
+    const toastStore = useToastStore();
+    toastStore.error(message);
   };
 
   gameClient.onServerMessage = (msg) => {
@@ -46,7 +49,11 @@ export const useConnectionStore = defineStore("connection", () => {
     switch (msg.message.case) {
       case "connect":
         if (!msg.message.value.success) {
-          error.value = "Connection rejected by server";
+          const errorMessage =
+            msg.message.value.errorMessage || "Connection rejected by server";
+          error.value = errorMessage;
+          const toastStore = useToastStore();
+          toastStore.error(errorMessage);
           disconnect();
         }
         break;

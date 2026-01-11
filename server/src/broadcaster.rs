@@ -113,6 +113,15 @@ impl Broadcaster {
             }
         }
     }
+
+    pub async fn send_to_client(&self, client_id: &ClientId, message: ServerMessage) {
+        let clients = self.clients.lock().await;
+        if let Some(sender) = clients.get(client_id)
+            && let Err(e) = sender.send(Ok(message)).await
+        {
+            log!("Failed to send to client {}: {}", client_id, e);
+        }
+    }
 }
 
 impl GameBroadcaster for Broadcaster {

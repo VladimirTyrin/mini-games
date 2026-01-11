@@ -44,16 +44,18 @@ impl MessageHandler {
     ) -> HandleResult {
         let server_version = common::version::get_version();
         if client_message.version != server_version {
+            let error_text = format!(
+                "Version mismatch: client version '{}', server version '{}'",
+                client_message.version, server_version
+            );
+            log!("[pre-auth] Error: {}", error_text);
             let error_msg = ServerMessage {
                 message: Some(server_message::Message::Error(ErrorResponse {
                     code: ErrorCode::VersionMismatch.into(),
-                    message: format!(
-                        "Version mismatch: client version '{}', server version '{}'",
-                        client_message.version, server_version
-                    ),
+                    message: error_text,
                 })),
             };
-            send_to_client(tx, error_msg, client_id_opt.as_ref()).await;
+            send_via_tx(tx, error_msg).await;
             return HandleResult::Disconnect;
         }
 
@@ -64,24 +66,23 @@ impl MessageHandler {
         match message {
             client_message::Message::Connect(connect_req) => {
                 if client_id_opt.is_some() {
-                    send_to_client(
-                        tx,
-                        make_error_response("Already connected".to_string()),
-                        client_id_opt.as_ref(),
-                    )
-                    .await;
+                    log!("[pre-auth] Error: Already connected");
+                    send_via_tx(tx, make_error_response("Already connected".to_string())).await;
                     return HandleResult::Continue;
                 }
 
                 let client_id = ClientId::new(connect_req.client_id);
 
                 if !self.lobby_manager.add_client(&client_id).await {
-                    send_to_client(
-                        tx,
-                        make_error_response("Client ID already connected".to_string()),
-                        Some(&client_id),
-                    )
-                    .await;
+                    let error_text = "Client ID already connected. Only one connection per client ID is allowed.";
+                    log!("[connect:{}] Error: {}", client_id, error_text);
+                    let response = ServerMessage {
+                        message: Some(server_message::Message::Connect(common::ConnectResponse {
+                            success: false,
+                            error_message: error_text.to_string(),
+                        })),
+                    };
+                    send_via_tx(tx, response).await;
                     return HandleResult::Disconnect;
                 }
 
@@ -92,9 +93,10 @@ impl MessageHandler {
                 let response = ServerMessage {
                     message: Some(server_message::Message::Connect(common::ConnectResponse {
                         success: true,
+                        error_message: String::new(),
                     })),
                 };
-                send_to_client(tx, response, Some(&client_id)).await;
+                self.broadcaster.send_to_client(&client_id, response).await;
             }
             client_message::Message::Disconnect(_) => {
                 if let Some(client_id) = client_id_opt {
@@ -105,49 +107,49 @@ impl MessageHandler {
             }
             client_message::Message::ListLobbies(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_list_lobbies(tx, client_id).await;
+                    self.handle_list_lobbies(client_id).await;
                 } else {
                     send_not_connected_error(tx, "list lobbies").await;
                 }
             }
             client_message::Message::CreateLobby(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_create_lobby(tx, client_id, req).await;
+                    self.handle_create_lobby(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "create lobby").await;
                 }
             }
             client_message::Message::JoinLobby(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_join_lobby(tx, client_id, req).await;
+                    self.handle_join_lobby(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "join lobby").await;
                 }
             }
             client_message::Message::LeaveLobby(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_leave_lobby(tx, client_id).await;
+                    self.handle_leave_lobby(client_id).await;
                 } else {
                     send_not_connected_error(tx, "leave lobby").await;
                 }
             }
             client_message::Message::MarkReady(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_mark_ready(tx, client_id, req).await;
+                    self.handle_mark_ready(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "mark ready").await;
                 }
             }
             client_message::Message::StartGame(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_start_game(tx, client_id).await;
+                    self.handle_start_game(client_id).await;
                 } else {
                     send_not_connected_error(tx, "start game").await;
                 }
             }
             client_message::Message::PlayAgain(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_play_again(tx, client_id).await;
+                    self.handle_play_again(client_id).await;
                 } else {
                     send_not_connected_error(tx, "play again").await;
                 }
@@ -161,26 +163,29 @@ impl MessageHandler {
             }
             client_message::Message::AddBot(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_add_bot(tx, client_id, req).await;
+                    self.handle_add_bot(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "add bot").await;
                 }
             }
             client_message::Message::KickFromLobby(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_kick_from_lobby(tx, client_id, req).await;
+                    self.handle_kick_from_lobby(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "kick from lobby").await;
                 }
             }
             client_message::Message::Ping(req) => {
-                let pong = ServerMessage {
-                    message: Some(server_message::Message::Pong(common::PongResponse {
-                        ping_id: req.ping_id,
-                        client_timestamp_ms: req.client_timestamp_ms,
-                    })),
-                };
-                send_to_client(tx, pong, client_id_opt.as_ref()).await;
+                if let Some(client_id) = client_id_opt {
+                    let pong = ServerMessage {
+                        message: Some(server_message::Message::Pong(common::PongResponse {
+                            ping_id: req.ping_id,
+                            client_timestamp_ms: req.client_timestamp_ms,
+                        })),
+                    };
+                    self.broadcaster.send_to_client(client_id, pong).await;
+                }
+                return HandleResult::Continue;
             }
             client_message::Message::LobbyListChat(req) => {
                 if let Some(client_id) = client_id_opt {
@@ -233,28 +238,44 @@ impl MessageHandler {
             }
             client_message::Message::BecomeObserver(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_become_observer(tx, client_id).await;
+                    self.handle_become_observer(client_id).await;
                 } else {
                     send_not_connected_error(tx, "become observer").await;
                 }
             }
             client_message::Message::BecomePlayer(_) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_become_player(tx, client_id).await;
+                    self.handle_become_player(client_id).await;
                 } else {
                     send_not_connected_error(tx, "become player").await;
                 }
             }
             client_message::Message::MakeObserver(req) => {
                 if let Some(client_id) = client_id_opt {
-                    self.handle_make_player_observer(tx, client_id, req).await;
+                    self.handle_make_player_observer(client_id, req).await;
                 } else {
                     send_not_connected_error(tx, "make player observer").await;
                 }
             }
         }
 
+        if let Some(client_id) = client_id_opt {
+            self.lobby_manager.update_client_activity(client_id).await;
+
+            if let Some(lobby_details) = self.lobby_manager.get_client_lobby(client_id).await {
+                let lobby_id = common::LobbyId::new(lobby_details.lobby_id);
+                self.lobby_manager.update_lobby_activity(&lobby_id).await;
+            }
+        }
+
         HandleResult::Continue
+    }
+
+    async fn send_error(&self, client_id: &ClientId, message: String) {
+        log!("[client:{}] Error: {}", client_id, message);
+        self.broadcaster
+            .send_to_client(client_id, make_error_response(message))
+            .await;
     }
 
     pub async fn handle_client_disconnected(&self, client_id: &ClientId) {
@@ -329,28 +350,23 @@ impl MessageHandler {
             .await;
     }
 
-    async fn handle_list_lobbies(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_list_lobbies(&self, client_id: &ClientId) {
         let lobbies = self.lobby_manager.list_lobbies().await;
         let response = ServerMessage {
             message: Some(server_message::Message::LobbyList(common::LobbyListResponse {
                 lobbies,
             })),
         };
-        send_to_client(tx, response, Some(client_id)).await;
+        self.broadcaster.send_to_client(client_id, response).await;
     }
 
-    async fn handle_create_lobby(
-        &self,
-        tx: &ClientSender,
-        client_id: &ClientId,
-        request: common::CreateLobbyRequest,
-    ) {
+    async fn handle_create_lobby(&self, client_id: &ClientId, request: common::CreateLobbyRequest) {
         let settings = match crate::lobby_manager::LobbySettings::from_proto(
             request.settings.and_then(|s| s.settings),
         ) {
             Ok(s) => s,
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
                 return;
             }
         };
@@ -373,21 +389,16 @@ impl MessageHandler {
                         },
                     )),
                 };
-                send_to_client(tx, response, Some(client_id)).await;
+                self.broadcaster.send_to_client(client_id, response).await;
                 self.notify_lobby_list_update().await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_join_lobby(
-        &self,
-        tx: &ClientSender,
-        client_id: &ClientId,
-        request: common::JoinLobbyRequest,
-    ) {
+    async fn handle_join_lobby(&self, client_id: &ClientId, request: common::JoinLobbyRequest) {
         let lobby_id = common::LobbyId::new(request.lobby_id);
 
         match self
@@ -403,7 +414,7 @@ impl MessageHandler {
                         },
                     )),
                 };
-                send_to_client(tx, response, Some(client_id)).await;
+                self.broadcaster.send_to_client(client_id, response).await;
 
                 self.notify_lobby_list_update().await;
 
@@ -438,12 +449,12 @@ impl MessageHandler {
                     .await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_leave_lobby(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_leave_lobby(&self, client_id: &ClientId) {
         match self.lobby_manager.leave_lobby(client_id).await {
             Ok(leave_state) => {
                 let response = ServerMessage {
@@ -451,7 +462,7 @@ impl MessageHandler {
                         lobbies: self.lobby_manager.list_lobbies().await,
                     })),
                 };
-                send_to_client(tx, response, Some(client_id)).await;
+                self.broadcaster.send_to_client(client_id, response).await;
 
                 match leave_state {
                     LobbyStateAfterLeave::HostLeft { kicked_players } => {
@@ -504,17 +515,12 @@ impl MessageHandler {
                 }
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_mark_ready(
-        &self,
-        tx: &ClientSender,
-        client_id: &ClientId,
-        request: common::MarkReadyRequest,
-    ) {
+    async fn handle_mark_ready(&self, client_id: &ClientId, request: common::MarkReadyRequest) {
         match self.lobby_manager.mark_ready(client_id, request.ready).await {
             Ok(lobby_details) => {
                 self.broadcaster
@@ -548,21 +554,16 @@ impl MessageHandler {
                     .await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_add_bot(
-        &self,
-        tx: &ClientSender,
-        client_id: &ClientId,
-        request: common::AddBotRequest,
-    ) {
+    async fn handle_add_bot(&self, client_id: &ClientId, request: common::AddBotRequest) {
         let bot_type = match BotType::from_proto(request.bot_type) {
             Ok(bt) => bt,
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
                 return;
             }
         };
@@ -598,17 +599,12 @@ impl MessageHandler {
                 self.notify_lobby_list_update().await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_kick_from_lobby(
-        &self,
-        tx: &ClientSender,
-        client_id: &ClientId,
-        request: common::KickFromLobbyRequest,
-    ) {
+    async fn handle_kick_from_lobby(&self, client_id: &ClientId, request: common::KickFromLobbyRequest) {
         match self
             .lobby_manager
             .kick_from_lobby(client_id, request.player_id)
@@ -617,7 +613,6 @@ impl MessageHandler {
             Ok((lobby_details, kicked_identity, is_bot)) => {
                 if !is_bot {
                     let kicked_client_id = ClientId::new(kicked_identity.client_id());
-                    self.broadcaster.unregister(&kicked_client_id).await;
 
                     let kick_msg = ServerMessage {
                         message: Some(server_message::Message::LobbyClosed(
@@ -627,8 +622,10 @@ impl MessageHandler {
                         )),
                     };
                     self.broadcaster
-                        .broadcast_to_clients(&[kicked_client_id], kick_msg)
+                        .send_to_client(&kicked_client_id, kick_msg)
                         .await;
+
+                    self.broadcaster.unregister(&kicked_client_id).await;
                 }
 
                 self.broadcaster
@@ -660,12 +657,12 @@ impl MessageHandler {
                 self.notify_lobby_list_update().await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_become_observer(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_become_observer(&self, client_id: &ClientId) {
         match self.lobby_manager.become_observer(client_id).await {
             Ok(lobby_details) => {
                 self.broadcaster
@@ -698,12 +695,12 @@ impl MessageHandler {
                     .await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_become_player(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_become_player(&self, client_id: &ClientId) {
         match self.lobby_manager.become_player(client_id).await {
             Ok(lobby_details) => {
                 self.broadcaster
@@ -736,14 +733,13 @@ impl MessageHandler {
                     .await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
     async fn handle_make_player_observer(
         &self,
-        tx: &ClientSender,
         client_id: &ClientId,
         request: common::MakePlayerObserverRequest,
     ) {
@@ -783,12 +779,12 @@ impl MessageHandler {
                     .await;
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_start_game(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_start_game(&self, client_id: &ClientId) {
         match self.lobby_manager.start_game(client_id).await {
             Ok(lobby_id) => {
                 let session_id = lobby_id.to_string();
@@ -815,12 +811,12 @@ impl MessageHandler {
                 }
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 
-    async fn handle_play_again(&self, tx: &ClientSender, client_id: &ClientId) {
+    async fn handle_play_again(&self, client_id: &ClientId) {
         match self.lobby_manager.vote_play_again(client_id).await {
             Ok((lobby_id, status)) => {
                 let lobby_details = match self.lobby_manager.get_lobby_details(&lobby_id).await {
@@ -903,30 +899,22 @@ impl MessageHandler {
                 }
             }
             Err(e) => {
-                send_to_client(tx, make_error_response(e), Some(client_id)).await;
+                self.send_error(client_id, e).await;
             }
         }
     }
 }
 
-pub async fn send_to_client(
-    tx: &ClientSender,
-    message: ServerMessage,
-    client_id: Option<&ClientId>,
-) {
+async fn send_via_tx(tx: &ClientSender, message: ServerMessage) {
     if let Err(e) = tx.send(Ok(message)).await {
-        let client_str = client_id.map_or("unknown".to_string(), |id| id.to_string());
-        log!("[client:{}] Failed to send message: {}", client_str, e);
+        log!("Failed to send message via tx: {}", e);
     }
 }
 
 async fn send_not_connected_error(tx: &ClientSender, action: &str) {
-    send_to_client(
-        tx,
-        make_error_response(format!("Not connected: cannot {}", action)),
-        None,
-    )
-    .await;
+    let error_msg = format!("Not connected: cannot {}", action);
+    log!("[pre-auth] Error: {}", error_msg);
+    send_via_tx(tx, make_error_response(error_msg)).await;
 }
 
 fn make_error_response(message: String) -> ServerMessage {

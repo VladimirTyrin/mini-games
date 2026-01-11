@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use common::{LobbyInfo, LobbyDetails, ClientId, LobbyId, PlayerId, BotId};
 use common::id_generator::generate_client_id;
@@ -16,6 +17,8 @@ struct LobbyManagerState {
     clients_not_in_lobby: HashSet<ClientId>,
     next_bot_id: u64,
     next_lobby_id: u64,
+    last_client_activity: HashMap<ClientId, Instant>,
+    last_lobby_activity: HashMap<LobbyId, Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +41,8 @@ impl LobbyManager {
                 clients_not_in_lobby: HashSet::new(),
                 next_bot_id: 1,
                 next_lobby_id: 1,
+                last_client_activity: HashMap::new(),
+                last_lobby_activity: HashMap::new(),
             })),
         }
     }
@@ -50,17 +55,61 @@ impl LobbyManager {
         }
 
         state.clients_not_in_lobby.insert(client_id.clone());
+        state.last_client_activity.insert(client_id.clone(), Instant::now());
         true
     }
 
     pub async fn remove_client(&self, client_id: &ClientId) {
         let mut state = self.state.lock().await;
         state.clients_not_in_lobby.remove(client_id);
+        state.last_client_activity.remove(client_id);
     }
 
     pub async fn get_clients_not_in_lobbies(&self) -> Vec<ClientId> {
         let state = self.state.lock().await;
         state.clients_not_in_lobby.iter().cloned().collect()
+    }
+
+    pub async fn update_client_activity(&self, client_id: &ClientId) {
+        let mut state = self.state.lock().await;
+        state.last_client_activity.insert(client_id.clone(), Instant::now());
+    }
+
+    pub async fn update_lobby_activity(&self, lobby_id: &LobbyId) {
+        let mut state = self.state.lock().await;
+        state.last_lobby_activity.insert(lobby_id.clone(), Instant::now());
+    }
+
+    pub async fn get_inactive_clients(&self, timeout: Duration) -> Vec<ClientId> {
+        let state = self.state.lock().await;
+        let now = Instant::now();
+
+        state.last_client_activity
+            .iter()
+            .filter(|(_, last_activity)| now.duration_since(**last_activity) > timeout)
+            .map(|(client_id, _)| client_id.clone())
+            .collect()
+    }
+
+    pub async fn get_inactive_lobbies(&self, timeout: Duration) -> Vec<LobbyId> {
+        let state = self.state.lock().await;
+        let now = Instant::now();
+
+        state.last_lobby_activity
+            .iter()
+            .filter(|(_, last_activity)| now.duration_since(**last_activity) > timeout)
+            .map(|(lobby_id, _)| lobby_id.clone())
+            .collect()
+    }
+
+    pub async fn get_lobby_players(&self, lobby_id: &LobbyId) -> Vec<ClientId> {
+        let state = self.state.lock().await;
+
+        state.client_to_lobby
+            .iter()
+            .filter(|(_, lid)| *lid == lobby_id)
+            .map(|(cid, _)| cid.clone())
+            .collect()
     }
 
     pub async fn create_lobby(&self, name: String, max_players: u32, settings: LobbySettings, creator_id: ClientId) -> Result<LobbyDetails, String> {
@@ -83,8 +132,9 @@ impl LobbyManager {
         let details = lobby.to_details();
 
         state.lobbies.insert(lobby_id.clone(), lobby);
-        state.client_to_lobby.insert(creator_id.clone(), lobby_id);
+        state.client_to_lobby.insert(creator_id.clone(), lobby_id.clone());
         state.clients_not_in_lobby.remove(&creator_id);
+        state.last_lobby_activity.insert(lobby_id, Instant::now());
 
         Ok(details)
     }
@@ -181,6 +231,7 @@ impl LobbyManager {
                     state.clients_not_in_lobby.insert(kicked_id.clone());
                 }
                 state.lobbies.remove(&lobby_id);
+                state.last_lobby_activity.remove(&lobby_id);
             }
             LobbyStateAfterLeave::LobbyStillActive { .. } => {}
         }

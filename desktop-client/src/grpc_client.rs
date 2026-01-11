@@ -491,13 +491,29 @@ pub async fn grpc_client_task(
                                         }
                                     }
                                 }
-                                common::server_message::Message::Connect(_) => {
+                                common::server_message::Message::Connect(response) => {
+                                    if !response.success {
+                                        let error_msg = if response.error_message.is_empty() {
+                                            "Connection rejected by server".to_string()
+                                        } else {
+                                            response.error_message.clone()
+                                        };
+                                        shared_state.set_error(error_msg);
+                                        shared_state.set_connection_failed(true);
+                                        break;
+                                    }
                                 }
                                 common::server_message::Message::LobbyCreated(_) => {
                                 }
                                 common::server_message::Message::LobbyJoined(_) => {
                                 }
-                                common::server_message::Message::Kicked(_) => {
+                                common::server_message::Message::Kicked(notification) => {
+                                    shared_state.set_error(format!("Kicked: {}", notification.reason));
+                                    if tx.send(new_client_message(
+                                        client_message::Message::ListLobbies(ListLobbiesRequest {})
+                                    )).await.is_err() {
+                                        break;
+                                    }
                                 }
                                 common::server_message::Message::PlayerBecameObserver(notification) => {
                                     if let Some(player) = &notification.player {

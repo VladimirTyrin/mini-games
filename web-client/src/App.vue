@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ToastContainer from "./components/ui/ToastContainer.vue";
+
 declare const __APP_VERSION__: string;
 const version = __APP_VERSION__;
 </script>
@@ -8,6 +10,7 @@ const version = __APP_VERSION__;
     <div class="flex-grow overflow-auto">
       <router-view />
     </div>
+    <ToastContainer />
     <footer class="flex-shrink-0 bg-gray-800 border-t border-gray-700 py-3 px-4 text-center text-sm text-gray-400">
       <span class="text-gray-500">v{{ version }}</span>
       <span class="mx-2">|</span>

@@ -2,10 +2,12 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useGameStore, Direction } from "../../stores/game";
 import { useConnectionStore } from "../../stores/connection";
+import { useDeviceStore } from "../../stores/device";
 import { DeadSnakeBehavior } from "../../proto/games/snake_pb";
 
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
+const deviceStore = useDeviceStore();
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -427,6 +429,42 @@ function handleKeyDown(event: KeyboardEvent): void {
   }
 }
 
+const SWIPE_THRESHOLD = 30;
+let touchStartX = 0;
+let touchStartY = 0;
+
+function handleTouchStart(event: TouchEvent): void {
+  const touch = event.touches[0];
+  if (touch) {
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+  }
+}
+
+function handleTouchEnd(event: TouchEvent): void {
+  if (!isAlive.value) return;
+
+  const touch = event.changedTouches[0];
+  if (!touch) return;
+
+  const deltaX = touch.clientX - touchStartX;
+  const deltaY = touch.clientY - touchStartY;
+
+  const absX = Math.abs(deltaX);
+  const absY = Math.abs(deltaY);
+
+  if (absX < SWIPE_THRESHOLD && absY < SWIPE_THRESHOLD) return;
+
+  let direction: Direction;
+  if (absX > absY) {
+    direction = deltaX > 0 ? Direction.RIGHT : Direction.LEFT;
+  } else {
+    direction = deltaY > 0 ? Direction.DOWN : Direction.UP;
+  }
+
+  gameStore.sendSnakeCommand(direction);
+}
+
 function formatPlayerName(playerId: string, isBot: boolean): string {
   if (isBot) return `${playerId} [BOT]`;
   return playerId;
@@ -501,16 +539,23 @@ onUnmounted(() => {
           ref="canvasRef"
           :width="canvasWidth"
           :height="canvasHeight"
-          class="block"
+          class="block touch-none"
+          @touchstart="handleTouchStart"
+          @touchend="handleTouchEnd"
         />
       </div>
 
       <div class="mt-4 text-center text-gray-400 text-sm">
         <template v-if="isAlive">
-          Use <span class="font-mono bg-gray-700 px-1 rounded">Arrow Keys</span>
-          or
-          <span class="font-mono bg-gray-700 px-1 rounded">WASD</span>
-          to move
+          <template v-if="deviceStore.isTouchDevice">
+            Swipe to change direction
+          </template>
+          <template v-else>
+            Use <span class="font-mono bg-gray-700 px-1 rounded">Arrow Keys</span>
+            or
+            <span class="font-mono bg-gray-700 px-1 rounded">WASD</span>
+            to move
+          </template>
         </template>
         <template v-else>
           <span class="text-red-400">You have been eliminated</span>

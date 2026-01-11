@@ -4,11 +4,13 @@ import { useRouter } from "vue-router";
 import { useGameStore } from "../../stores/game";
 import { useConnectionStore } from "../../stores/connection";
 import { useLobbyStore } from "../../stores/lobby";
+import { useDeviceStore } from "../../stores/device";
 
 const router = useRouter();
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
 const lobbyStore = useLobbyStore();
+const deviceStore = useDeviceStore();
 
 const gameOver = computed(() => gameStore.gameOver);
 const playAgainStatus = computed(() => gameStore.playAgainStatus);
@@ -173,7 +175,7 @@ function handleLeave(): void {
           class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
           @click="handlePlayAgain"
         >
-          Play Again (Enter)
+          Play Again<template v-if="!deviceStore.isTouchDevice"> (Enter)</template>
         </button>
 
         <button
@@ -195,7 +197,7 @@ function handleLeave(): void {
           class="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
           @click="handleLeave"
         >
-          Leave Game (Escape)
+          Leave Game<template v-if="!deviceStore.isTouchDevice"> (Escape)</template>
         </button>
       </div>
     </div>

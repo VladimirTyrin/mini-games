@@ -5,6 +5,8 @@ import { useLobbyStore } from "../stores/lobby";
 import { useConnectionStore } from "../stores/connection";
 import { useGameStore } from "../stores/game";
 import { useChatStore, type ChatMessage } from "../stores/chat";
+import { useToastStore } from "../stores/toast";
+import { useDeviceStore } from "../stores/device";
 import { SnakeBotType, WallCollisionMode, DeadSnakeBehavior } from "../proto/games/snake_pb";
 import { TicTacToeBotType, FirstPlayerMode } from "../proto/games/tictactoe_pb";
 
@@ -13,8 +15,9 @@ const lobbyStore = useLobbyStore();
 const connectionStore = useConnectionStore();
 const gameStore = useGameStore();
 const chatStore = useChatStore();
+const toastStore = useToastStore();
+const deviceStore = useDeviceStore();
 
-const showBotDropdown = ref(false);
 const chatInput = ref("");
 const chatContainer = ref<HTMLElement | null>(null);
 
@@ -33,21 +36,6 @@ const gameTypeBadge = computed(() => {
   return { text: "Unknown", class: "bg-gray-600" };
 });
 
-const snakeBotTypes = [
-  { value: SnakeBotType.EFFICIENT, label: "Efficient Bot" },
-  { value: SnakeBotType.RANDOM, label: "Random Bot" },
-];
-
-const tictactoeBotTypes = [
-  { value: TicTacToeBotType.TICTACTOE_BOT_TYPE_MINIMAX, label: "Minimax Bot" },
-  { value: TicTacToeBotType.TICTACTOE_BOT_TYPE_RANDOM, label: "Random Bot" },
-];
-
-const availableBotTypes = computed(() => {
-  if (gameType.value === "snake") return snakeBotTypes;
-  if (gameType.value === "tictactoe") return tictactoeBotTypes;
-  return [];
-});
 
 const canAddBot = computed(() => {
   if (!lobby.value || !isHost.value) return false;
@@ -83,13 +71,12 @@ function startGame(): void {
   }
 }
 
-function addBot(botType: SnakeBotType | TicTacToeBotType): void {
+function addBot(): void {
   if (gameType.value === "snake") {
-    lobbyStore.addSnakeBot(botType as SnakeBotType);
+    lobbyStore.addSnakeBot(SnakeBotType.EFFICIENT);
   } else if (gameType.value === "tictactoe") {
-    lobbyStore.addTicTacToeBot(botType as TicTacToeBotType);
+    lobbyStore.addTicTacToeBot(TicTacToeBotType.TICTACTOE_BOT_TYPE_MINIMAX);
   }
-  showBotDropdown.value = false;
 }
 
 function kickPlayer(playerId: string): void {
@@ -152,13 +139,6 @@ function getFirstPlayerModeLabel(mode: FirstPlayerMode): string {
   }
 }
 
-function handleClickOutside(event: MouseEvent): void {
-  const target = event.target as HTMLElement;
-  if (!target.closest(".bot-dropdown-container")) {
-    showBotDropdown.value = false;
-  }
-}
-
 function handleKeydown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement;
   const isInputFocused = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
@@ -194,7 +174,7 @@ watch(() => gameStore.isInGame, (inGame) => {
 
 watch(() => lobbyStore.kickReason, (reason) => {
   if (reason) {
-    alert(`You were kicked: ${reason}`);
+    toastStore.error(`You were kicked: ${reason}`);
     lobbyStore.clearKickReason();
     router.push("/");
   }
@@ -202,7 +182,7 @@ watch(() => lobbyStore.kickReason, (reason) => {
 
 watch(() => lobbyStore.closedMessage, (message) => {
   if (message) {
-    alert(`Lobby closed: ${message}`);
+    toastStore.error(`Lobby closed: ${message}`);
     lobbyStore.clearClosedMessage();
     router.push("/");
   }
@@ -222,13 +202,11 @@ onMounted(() => {
   if (!lobby.value) {
     router.push("/");
   }
-  document.addEventListener("click", handleClickOutside);
   document.addEventListener("keydown", handleKeydown);
   scrollChatToBottom();
 });
 
 onUnmounted(() => {
-  document.removeEventListener("click", handleClickOutside);
   document.removeEventListener("keydown", handleKeydown);
 });
 </script>
@@ -250,7 +228,7 @@ onUnmounted(() => {
           class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
           @click="leaveLobby"
         >
-          Leave Lobby (Esc)
+          Leave Lobby<template v-if="!deviceStore.isTouchDevice"> (Esc)</template>
         </button>
       </div>
 
@@ -265,27 +243,13 @@ onUnmounted(() => {
               </h2>
 
               <!-- Host Controls: Add Bot -->
-              <div v-if="isHost && canAddBot" class="relative bot-dropdown-container">
-                <button
-                  class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded transition-colors text-sm"
-                  @click.stop="showBotDropdown = !showBotDropdown"
-                >
-                  Add Bot
-                </button>
-                <div
-                  v-if="showBotDropdown"
-                  class="absolute right-0 mt-2 w-48 bg-gray-700 rounded-lg shadow-lg z-10"
-                >
-                  <button
-                    v-for="bot in availableBotTypes"
-                    :key="bot.value"
-                    class="w-full px-4 py-2 text-left hover:bg-gray-600 first:rounded-t-lg last:rounded-b-lg transition-colors"
-                    @click="addBot(bot.value)"
-                  >
-                    {{ bot.label }}
-                  </button>
-                </div>
-              </div>
+              <button
+                v-if="isHost && canAddBot"
+                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded transition-colors text-sm"
+                @click="addBot"
+              >
+                Add Bot
+              </button>
             </div>
 
             <div class="space-y-2">
@@ -425,7 +389,7 @@ onUnmounted(() => {
                 ]"
                 @click="toggleReady"
               >
-                {{ isReady ? "Not Ready (R)" : "Ready (R)" }}
+                {{ isReady ? "Not Ready" : "Ready" }}<template v-if="!deviceStore.isTouchDevice"> (R)</template>
               </button>
 
               <button
@@ -439,7 +403,7 @@ onUnmounted(() => {
                 ]"
                 @click="startGame"
               >
-                Start Game (Ctrl+S)
+                Start Game<template v-if="!deviceStore.isTouchDevice"> (Ctrl+S)</template>
               </button>
             </div>
             <p v-if="isHost && !canStart" class="text-gray-400 mt-2 text-sm">

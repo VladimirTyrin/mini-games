@@ -1,4 +1,6 @@
 mod broadcaster;
+mod cleanup_task;
+mod config;
 mod game_session_manager;
 mod grpc_service;
 mod lobby_manager;
@@ -46,6 +48,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_manager = GameSessionManager::new(broadcaster.clone(), lobby_manager.clone());
 
     let service = GrpcService::new(lobby_manager.clone(), broadcaster.clone(), session_manager.clone());
+
+    let cleanup_task = cleanup_task::CleanupTask::new(
+        lobby_manager.clone(),
+        broadcaster.clone(),
+        config::CLEANUP_CHECK_INTERVAL,
+        config::INACTIVITY_TIMEOUT,
+    );
+    tokio::spawn(async move {
+        cleanup_task.run().await;
+    });
 
     log!("Mini Games Server - gRPC on {}, Web/WebSocket on 0.0.0.0:5000", addr);
 

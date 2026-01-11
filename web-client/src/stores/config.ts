@@ -38,6 +38,9 @@ function getDefaultServerUrl(): string {
   if (typeof window !== "undefined") {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return `${protocol}//${host}:5000/ws`;
+    }
     return `${protocol}//${host}/ws`;
   }
   return "ws://localhost:5000/ws";

@@ -48,6 +48,10 @@ function handleKeyDown(event: KeyboardEvent): void {
   }
 }
 
+function handlePopState(): void {
+  window.history.pushState(null, "", window.location.href);
+}
+
 onMounted(() => {
   if (!gameType.value) {
     router.push("/");
@@ -55,10 +59,14 @@ onMounted(() => {
   }
 
   window.addEventListener("keydown", handleKeyDown);
+
+  window.history.pushState(null, "", window.location.href);
+  window.addEventListener("popstate", handlePopState);
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeyDown);
+  window.removeEventListener("popstate", handlePopState);
 });
 </script>
 

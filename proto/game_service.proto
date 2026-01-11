@@ -73,6 +73,7 @@ message ConnectRequest {
 
 message ConnectResponse {
     bool success = 1;
+    string error_message = 2;
 }
 
 message DisconnectRequest {}
@@ -81,6 +82,13 @@ enum ErrorCode {
     ERROR_CODE_UNSPECIFIED = 0;
     ERROR_CODE_VERSION_MISMATCH = 1;
     ERROR_CODE_GENERAL = 2;
+}
+
+enum KickReason {
+    KICK_REASON_UNSPECIFIED = 0;
+    KICK_REASON_HOST_KICKED = 1;
+    KICK_REASON_LOBBY_INACTIVITY = 2;
+    KICK_REASON_PLAYER_INACTIVITY = 3;
 }
 
 message ErrorResponse {
@@ -258,6 +266,7 @@ message ScoreEntry {
 
 message KickedFromLobbyNotification {
     string reason = 1;
+    KickReason kick_reason = 2;
 }
 
 message ServerShuttingDownNotification {

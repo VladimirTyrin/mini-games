@@ -65,9 +65,16 @@ export class GameClient {
       const originalHandler = this.ws.onMessage;
       this.ws.onMessage = (message) => {
         if (message.message.case === "connect") {
+          const response = message.message.value;
           this.ws.onMessage = originalHandler;
-          console.log("[Client] Connected, now listing lobbies");
-          resolve();
+          if (response.success) {
+            console.log("[Client] Connected, now listing lobbies");
+            resolve();
+          } else {
+            const errorMessage =
+              response.errorMessage || "Connection rejected by server";
+            reject(new Error(errorMessage));
+          }
         } else if (message.message.case === "error") {
           this.ws.onMessage = originalHandler;
           reject(new Error(message.message.value.message));
