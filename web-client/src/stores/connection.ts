@@ -6,6 +6,7 @@ import { useLobbyStore } from "./lobby";
 import { useGameStore } from "./game";
 import { useChatStore } from "./chat";
 import { useToastStore } from "./toast";
+import router from "../router";
 
 const CLIENT_ID_STORAGE_KEY = "mini_games_client_id";
 
@@ -13,6 +14,7 @@ export const useConnectionStore = defineStore("connection", () => {
   const state = ref<ConnectionState>("disconnected");
   const clientId = ref<string | null>(loadClientId());
   const error = ref<string | null>(null);
+  let previousState: ConnectionState = "disconnected";
 
   function loadClientId(): string | null {
     return localStorage.getItem(CLIENT_ID_STORAGE_KEY);
@@ -30,6 +32,22 @@ export const useConnectionStore = defineStore("connection", () => {
   const isConnected = computed(() => state.value === "connected");
 
   gameClient.onConnectionStateChange = (newState) => {
+    const toastStore = useToastStore();
+    const lobbyStore = useLobbyStore();
+    const gameStore = useGameStore();
+
+    if (previousState === "connected" && newState === "disconnected") {
+      toastStore.error("Connection lost");
+      lobbyStore.currentLobby = null;
+      gameStore.leaveGame();
+      router.push({ name: "home" });
+    } else if (newState === "reconnecting") {
+      toastStore.warning("Reconnecting...");
+    } else if (previousState === "reconnecting" && newState === "connected") {
+      toastStore.success("Reconnected");
+    }
+
+    previousState = newState;
     state.value = newState;
   };
 
@@ -149,7 +167,14 @@ export const useConnectionStore = defineStore("connection", () => {
     error.value = null;
 
     const configStore = useConfigStore();
-    await gameClient.connect(configStore.serverUrl, id);
+    try {
+      await gameClient.connect(configStore.serverUrl, id);
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "Failed to connect to server";
+      error.value = errorMessage;
+      const toastStore = useToastStore();
+      toastStore.error(errorMessage);
+    }
   }
 
   function disconnect(): void {

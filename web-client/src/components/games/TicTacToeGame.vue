@@ -25,17 +25,21 @@ const winningLine = computed((): WinningLine | null => {
 });
 
 const BASE_CELL_SIZE = 48;
-const MIN_CELL_SIZE = 24;
+const MIN_CELL_SIZE = 16;
 const MAX_CELL_SIZE = 64;
 const GAP_SIZE = 4;
+
+const isMobileLayout = computed(() => {
+  return containerSize.value.width < 1024;
+});
 
 const cellSize = computed(() => {
   if (!state.value || containerSize.value.width === 0) return BASE_CELL_SIZE;
 
-  const sidebarWidth = 288;
-  const padding = 48;
+  const padding = isMobileLayout.value ? 0 : 48;
+  const sidebarWidth = isMobileLayout.value ? 0 : 288;
   const availableWidth = containerSize.value.width - sidebarWidth - padding;
-  const availableHeight = containerSize.value.height - 100;
+  const availableHeight = containerSize.value.height - (isMobileLayout.value ? 200 : 100);
 
   const totalGapsX = (state.value.fieldWidth - 1) * GAP_SIZE;
   const totalGapsY = (state.value.fieldHeight - 1) * GAP_SIZE;
@@ -203,9 +207,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="flex flex-col lg:flex-row gap-4 items-start">
+  <div ref="containerRef" class="flex flex-col lg:flex-row gap-2 lg:gap-4 items-center lg:items-start w-full">
     <div class="flex-shrink-0">
-      <div class="bg-gray-800 p-3 rounded-lg">
+      <div class="bg-gray-800 p-0 lg:p-3 rounded-lg">
         <div v-if="state" class="relative">
           <div
             class="grid"
@@ -257,7 +261,7 @@ onUnmounted(() => {
       </div>
 
       <div
-        class="mt-4 text-center text-lg font-medium"
+        class="mt-2 lg:mt-4 text-center text-base lg:text-lg font-medium"
         :class="{
           'text-green-400': isMyTurn && gameInProgress,
           'text-gray-400': !isMyTurn && gameInProgress,
@@ -268,23 +272,23 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="flex-grow min-w-64">
-      <div class="bg-gray-800 rounded-lg p-4">
-        <h3 class="text-lg font-semibold mb-4 text-gray-200">Players</h3>
+    <div class="w-full lg:flex-grow lg:min-w-64">
+      <div class="bg-gray-800 rounded-lg p-3 lg:p-4">
+        <h3 class="text-base lg:text-lg font-semibold mb-3 lg:mb-4 text-gray-200">Players</h3>
 
-        <div v-if="state" class="space-y-3">
+        <div v-if="state" class="space-y-2 lg:space-y-3">
           <div
-            class="flex items-center justify-between p-3 rounded-lg"
+            class="flex items-center justify-between p-2 lg:p-3 rounded-lg"
             :class="{
               'bg-blue-900/30 ring-2 ring-blue-500':
                 state.currentPlayer?.playerId === state.playerX?.playerId && gameInProgress,
               'bg-gray-700': !(state.currentPlayer?.playerId === state.playerX?.playerId && gameInProgress),
             }"
           >
-            <div class="flex items-center gap-3">
-              <span class="text-3xl font-bold text-blue-400">X</span>
+            <div class="flex items-center gap-2 lg:gap-3">
+              <span class="text-2xl lg:text-3xl font-bold text-blue-400">X</span>
               <span
-                class="font-medium"
+                class="font-medium text-sm lg:text-base"
                 :class="{
                   'text-gray-200': state.playerX?.playerId === connectionStore.clientId,
                   'text-gray-400': state.playerX?.playerId !== connectionStore.clientId,
@@ -302,17 +306,17 @@ onUnmounted(() => {
           </div>
 
           <div
-            class="flex items-center justify-between p-3 rounded-lg"
+            class="flex items-center justify-between p-2 lg:p-3 rounded-lg"
             :class="{
               'bg-red-900/30 ring-2 ring-red-500':
                 state.currentPlayer?.playerId === state.playerO?.playerId && gameInProgress,
               'bg-gray-700': !(state.currentPlayer?.playerId === state.playerO?.playerId && gameInProgress),
             }"
           >
-            <div class="flex items-center gap-3">
-              <span class="text-3xl font-bold text-red-400">O</span>
+            <div class="flex items-center gap-2 lg:gap-3">
+              <span class="text-2xl lg:text-3xl font-bold text-red-400">O</span>
               <span
-                class="font-medium"
+                class="font-medium text-sm lg:text-base"
                 :class="{
                   'text-gray-200': state.playerO?.playerId === connectionStore.clientId,
                   'text-gray-400': state.playerO?.playerId !== connectionStore.clientId,
@@ -330,11 +334,11 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="myMark !== null" class="mt-4 pt-4 border-t border-gray-700">
-          <div class="text-sm text-gray-400">
+        <div v-if="myMark !== null" class="mt-3 lg:mt-4 pt-3 lg:pt-4 border-t border-gray-700">
+          <div class="text-xs lg:text-sm text-gray-400">
             <span>You are playing as </span>
             <span
-              class="font-bold text-lg"
+              class="font-bold text-base lg:text-lg"
               :class="{
                 'text-blue-400': myMark === MarkType.X,
                 'text-red-400': myMark === MarkType.O,

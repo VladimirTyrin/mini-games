@@ -545,17 +545,12 @@ onUnmounted(() => {
         />
       </div>
 
-      <div class="mt-4 text-center text-gray-400 text-sm">
+      <div v-if="!deviceStore.isTouchDevice" class="mt-4 text-center text-gray-400 text-sm">
         <template v-if="isAlive">
-          <template v-if="deviceStore.isTouchDevice">
-            Swipe to change direction
-          </template>
-          <template v-else>
-            Use <span class="font-mono bg-gray-700 px-1 rounded">Arrow Keys</span>
-            or
-            <span class="font-mono bg-gray-700 px-1 rounded">WASD</span>
-            to move
-          </template>
+          Use <span class="font-mono bg-gray-700 px-1 rounded">Arrow Keys</span>
+          or
+          <span class="font-mono bg-gray-700 px-1 rounded">WASD</span>
+          to move
         </template>
         <template v-else>
           <span class="text-red-400">You have been eliminated</span>

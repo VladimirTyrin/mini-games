@@ -64,7 +64,7 @@ export class WebSocketClient {
 
         this.socket.onerror = () => {
           if (this.connectionState === "connecting") {
-            reject(new Error("WebSocket connection failed"));
+            reject(new Error(`Failed to connect to ${this.url}`));
           }
         };
 
