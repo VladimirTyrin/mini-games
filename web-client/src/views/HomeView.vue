@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useConnectionStore } from "../stores/connection";
 import { useLobbyStore } from "../stores/lobby";
 import { useConfigStore } from "../stores/config";
+import { useDeviceStore } from "../stores/device";
 import {
   WallCollisionMode,
   DeadSnakeBehavior,
@@ -16,6 +17,7 @@ const router = useRouter();
 const connectionStore = useConnectionStore();
 const lobbyStore = useLobbyStore();
 const configStore = useConfigStore();
+const deviceStore = useDeviceStore();
 
 const username = ref("");
 const isConnecting = ref(false);
@@ -147,14 +149,22 @@ watch(
 );
 
 function handleKeyDown(event: KeyboardEvent): void {
-  if (!showCreateDialog.value) return;
+  const isCtrl = event.ctrlKey || event.metaKey;
 
-  if (event.key === "Enter") {
+  if (showCreateDialog.value) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleCreateLobby();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeCreateDialog();
+    }
+    return;
+  }
+
+  if (isConnected.value && isCtrl && (event.key === "n" || event.key === "N")) {
     event.preventDefault();
-    handleCreateLobby();
-  } else if (event.key === "Escape") {
-    event.preventDefault();
-    closeCreateDialog();
+    openCreateDialog();
   }
 }
 
@@ -228,7 +238,7 @@ onUnmounted(() => {
               @click="openCreateDialog"
               class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded transition-colors"
             >
-              Create Lobby
+              Create Lobby<template v-if="!deviceStore.isTouchDevice"> (Ctrl+N)</template>
             </button>
           </div>
         </div>

@@ -150,17 +150,44 @@ function handleKeydown(event: KeyboardEvent): void {
 
   if (isInputFocused) return;
 
-  if (event.key === "r" || event.key === "R") {
+  const isCtrl = event.ctrlKey || event.metaKey;
+
+  if (isCtrl && (event.key === "r" || event.key === "R")) {
+    event.preventDefault();
     if (!isObserver.value) {
       toggleReady();
     }
     return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && (event.key === "s" || event.key === "S")) {
+  if (isCtrl && (event.key === "o" || event.key === "O")) {
+    event.preventDefault();
+    if (!isObserver.value) {
+      handleBecomeObserver();
+    }
+    return;
+  }
+
+  if (isCtrl && (event.key === "p" || event.key === "P")) {
+    event.preventDefault();
+    if (isObserver.value && canBecomePlayer.value) {
+      handleBecomePlayer();
+    }
+    return;
+  }
+
+  if (isCtrl && (event.key === "s" || event.key === "S")) {
     event.preventDefault();
     if (isHost.value && canStart.value) {
       startGame();
+    }
+    return;
+  }
+
+  if (isCtrl && (event.key === "b" || event.key === "B")) {
+    event.preventDefault();
+    if (isHost.value && canAddBot.value) {
+      addBot();
     }
     return;
   }
@@ -248,7 +275,7 @@ onUnmounted(() => {
                 class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded transition-colors text-sm"
                 @click="addBot"
               >
-                Add Bot
+                Add Bot<template v-if="!deviceStore.isTouchDevice"> (Ctrl+B)</template>
               </button>
             </div>
 
@@ -357,14 +384,14 @@ onUnmounted(() => {
                 class="px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
                 @click="handleBecomeObserver"
               >
-                Become Observer
+                Become Observer<template v-if="!deviceStore.isTouchDevice"> (Ctrl+O)</template>
               </button>
               <button
                 v-if="isObserver && canBecomePlayer"
                 class="px-3 py-2 bg-green-600 hover:bg-green-700 rounded transition-colors"
                 @click="handleBecomePlayer"
               >
-                Become Player
+                Become Player<template v-if="!deviceStore.isTouchDevice"> (Ctrl+P)</template>
               </button>
               <span
                 v-if="isObserver && !canBecomePlayer"
@@ -389,7 +416,7 @@ onUnmounted(() => {
                 ]"
                 @click="toggleReady"
               >
-                {{ isReady ? "Not Ready" : "Ready" }}<template v-if="!deviceStore.isTouchDevice"> (R)</template>
+                {{ isReady ? "Not Ready" : "Ready" }}<template v-if="!deviceStore.isTouchDevice"> (Ctrl+R)</template>
               </button>
 
               <button
