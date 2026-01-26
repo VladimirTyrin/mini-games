@@ -7,11 +7,13 @@ public sealed class TicTacToeRunner
 {
     private readonly GameNetworkHandler _networkHandler;
     private readonly ITicTacToeBot _bot;
+    private readonly TicTacToeBotType _opponentType;
 
-    public TicTacToeRunner(GameNetworkHandler networkHandler, ITicTacToeBot bot)
+    public TicTacToeRunner(GameNetworkHandler networkHandler, ITicTacToeBot bot, TicTacToeBotType opponentType = TicTacToeBotType.Minimax)
     {
         _networkHandler = networkHandler;
         _bot = bot;
+        _opponentType = opponentType;
     }
     
     /// <summary>
@@ -42,7 +44,7 @@ public sealed class TicTacToeRunner
         {
             AddBot = new AddBotRequest
             {
-                TictactoeBot = TicTacToeBotType.Minimax
+                TictactoeBot = _opponentType
             }
         }, cancellationToken);
         

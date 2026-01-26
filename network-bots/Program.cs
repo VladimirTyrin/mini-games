@@ -1,52 +1,85 @@
 using MiniGameNetworkBot;
 using MiniGameNetworkBot.TicTacToe;
+using MiniGameNetworkBot.TicTacToe.LocalGame;
 
-var serverAddress = args.Contains("--local", StringComparer.OrdinalIgnoreCase)
-    ? "http://localhost:5001"
-    : "https://braintvsminigames.xyz:5443";
+var settings = Settings.Parse(args);
 
-var showUi = !args.Contains("--no-ui", StringComparer.OrdinalIgnoreCase);
-
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, eventArgs) =>
+if (settings.Mode == RunMode.Train)
 {
-    eventArgs.Cancel = true;
-    cts.Cancel();
-};
+    RunTraining(settings);
+    return;
+}
 
-await using var networkHandler = await GameNetworkHandler.ConnectAsync(serverAddress, CancellationToken.None);
+await RunGame(settings);
 
-var botTask = Task.Run(async () =>
+static void RunTraining(Settings settings)
 {
-    try
-    {
-        var bot = new TicTacToeMinimaxBot();
-        // ReSharper disable AccessToDisposedClosure
-        var runner = new TicTacToeRunner(networkHandler, bot);
-        var won = await runner.RunAsync(cts.Token);
-        // ReSharper restore AccessToDisposedClosure
-        Console.WriteLine(won ? "We won!" : "We lost!");
-    }
-    catch (OperationCanceledException)
-    {
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Bot error: {ex.Message}");
-    }
-});
+    Console.WriteLine("Starting curriculum training...");
+    Console.WriteLine($"  Games per iteration: {settings.GamesPerIteration}");
+    Console.WriteLine($"  Model path: {settings.ModelPath}");
 
-if (showUi)
+    var network = new PolicyValueNetwork();
+    var trainer = new SelfPlayTrainer(network);
+    trainer.TrainWithCurriculum(
+        gamesPerIteration: settings.GamesPerIteration,
+        epochs: 5);
+
+    network.SaveModel(settings.ModelPath);
+    Console.WriteLine($"Training complete! Model saved to {settings.ModelPath}");
+}
+
+static async Task RunGame(Settings settings)
 {
-    TicTacToeUi.Run(networkHandler, cts.Token);
-    await cts.CancelAsync();
-    await botTask.WaitAsync(TimeSpan.FromSeconds(2));
+    var bot = BotFactory.Create(settings.BotType, settings.ModelPath);
+    Console.WriteLine($"Using bot: {bot.Name}");
+
+    using var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, eventArgs) =>
+    {
+        eventArgs.Cancel = true;
+        cts.Cancel();
+    };
+
+    await using var networkHandler = await GameNetworkHandler.ConnectAsync(
+        settings.ServerAddress,
+        bot.Name,
+        CancellationToken.None);
+
+    var opponentType = BotFactory.ToServerBotType(settings.OpponentType);
+
+    var botTask = Task.Run(async () =>
+    {
+        try
+        {
+            var runner = new TicTacToeRunner(networkHandler, bot, opponentType);
+            var won = await runner.RunAsync(cts.Token);
+            Console.WriteLine(won ? "We won!" : "We lost!");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Bot error: {ex.Message}");
+        }
+        finally
+        {
+            if (bot is IDisposable disposable)
+                disposable.Dispose();
+        }
+    });
+
+    if (settings.ShowUi)
+    {
+        TicTacToeUi.Run(networkHandler, cts.Token);
+        await cts.CancelAsync();
+        await botTask.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+    else
+    {
+        await botTask.WaitAsync(cts.Token);
+    }
+
     await networkHandler.DisposeAsync();
     Environment.Exit(0);
 }
-else
-{
-    await botTask.WaitAsync(cts.Token);
-}
-
-

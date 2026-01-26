@@ -30,9 +30,9 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     private readonly ConcurrentDictionary<Guid, WaitContext> _waitContexts = new();
     private readonly ConcurrentDictionary<Guid, Channel<ServerMessage>> _subscribers = new();
     
-    public static async Task<GameNetworkHandler> ConnectAsync(string serverAddress, CancellationToken cancellationToken)
+    public static async Task<GameNetworkHandler> ConnectAsync(string serverAddress, string botName, CancellationToken cancellationToken)
     {
-        var handler = new GameNetworkHandler(serverAddress);
+        var handler = new GameNetworkHandler(serverAddress, botName);
         await handler.ConnectAsync(cancellationToken);
         return handler;
     }
@@ -99,15 +99,15 @@ public sealed class GameNetworkHandler : IAsyncDisposable
         }
     }
     
-    private GameNetworkHandler(string serverAddress)
+    private GameNetworkHandler(string serverAddress, string botName)
     {
         _grpcChannel = GrpcChannel.ForAddress(serverAddress);
         var client = new GameService.GameService.GameServiceClient(_grpcChannel.Intercept(new LoggingInterceptor()));
-        
+
         var call = client.GameStream();
         _streamWriter = call.RequestStream;
         _streamReader = call.ResponseStream;
-        ClientId = GenerateClientId();
+        ClientId = GenerateClientId(botName);
         
         var messageChannel = Channel.CreateUnbounded<ClientMessage>();
         _messageQueueReader = messageChannel.Reader;
@@ -209,9 +209,9 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     }
     
     
-    private static string GenerateClientId()
+    private static string GenerateClientId(string botName)
     {
-        return $"NetworkBot_{Guid.NewGuid().ToString("N")[..12]}";
+        return $"{botName}Bot_{Guid.NewGuid().ToString("N")[..8]}";
     }
 
     public async ValueTask DisposeAsync()

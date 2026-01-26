@@ -38,6 +38,7 @@ public partial class GameWindow : Window
 
         InitializeComponent();
 
+        Title = _botClientId;
         _boardCanvas.SizeChanged += (_, _) => RedrawBoard();
         Closed += (_, _) => _cts.Cancel();
 

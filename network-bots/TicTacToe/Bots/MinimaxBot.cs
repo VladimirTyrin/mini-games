@@ -3,12 +3,15 @@
 using System.Diagnostics;
 using Tictactoe;
 
-namespace MiniGameNetworkBot.TicTacToe;
+namespace MiniGameNetworkBot.TicTacToe.Bots;
 
-public sealed class TicTacToeMinimaxBot : ITicTacToeBot
+public sealed class MinimaxBot : ITicTacToeBot
 {
     [Conditional("BOT_DEBUG")]
-    private static void Log(string message) => Log(message);
+    private static void Log(string message) => Console.WriteLine(message);
+
+    public string Name => "Minimax";
+
     public PlaceMarkCommand Move(TicTacToeGameState gameState)
     {
         var board = ConvertBoard(gameState);
