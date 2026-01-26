@@ -1,9 +1,14 @@
+// #define BOT_DEBUG
+
+using System.Diagnostics;
 using Tictactoe;
 
 namespace MiniGameNetworkBot.TicTacToe;
 
 public sealed class TicTacToeMinimaxBot : ITicTacToeBot
 {
+    [Conditional("BOT_DEBUG")]
+    private static void Log(string message) => Log(message);
     public PlaceMarkCommand Move(TicTacToeGameState gameState)
     {
         var board = ConvertBoard(gameState);
@@ -57,7 +62,44 @@ public sealed class TicTacToeMinimaxBot : ITicTacToeBot
         if (availableMoves.Count == 0)
             throw new InvalidOperationException("No available moves");
 
-        var depthLimit = CalculateDepthLimit(board);
+        var opponentMark = GetOpponent(botMark);
+
+        var winningMove = FindWinningMove(board, botMark, winCount, availableMoves);
+        if (winningMove.HasValue)
+        {
+            Log($"[BOT] WINNING at ({winningMove.Value.X},{winningMove.Value.Y})");
+            return winningMove.Value;
+        }
+
+        var blockingMove = FindWinningMove(board, opponentMark, winCount, availableMoves);
+        if (blockingMove.HasValue)
+        {
+            Log($"[BOT] BLOCKING at ({blockingMove.Value.X},{blockingMove.Value.Y})");
+            return blockingMove.Value;
+        }
+
+        var openFourMove = FindOpenFourMove(board, botMark, winCount, availableMoves);
+        if (openFourMove.HasValue)
+        {
+            Log($"[BOT] OPEN-{winCount - 1} at ({openFourMove.Value.X},{openFourMove.Value.Y})");
+            return openFourMove.Value;
+        }
+
+        var blockOpenFour = FindOpenFourMove(board, opponentMark, winCount, availableMoves);
+        if (blockOpenFour.HasValue)
+        {
+            Log($"[BOT] BLOCK OPEN-{winCount - 1} at ({blockOpenFour.Value.X},{blockOpenFour.Value.Y})");
+            return blockOpenFour.Value;
+        }
+
+        var doubleBlockMove = FindDoubleBlockMove(board, opponentMark, winCount, availableMoves);
+        if (doubleBlockMove.HasValue)
+        {
+            Log($"[BOT] BLOCK DOUBLE at ({doubleBlockMove.Value.X},{doubleBlockMove.Value.Y})");
+            return doubleBlockMove.Value;
+        }
+
+        var depthLimit = CalculateDepthLimit(availableMoves.Count);
         var initialScore = EvaluateBoard(board, botMark, winCount);
 
         var results = new (int X, int Y, int Score)[availableMoves.Count];
@@ -87,46 +129,160 @@ public sealed class TicTacToeMinimaxBot : ITicTacToeBot
         return (bestResult.X, bestResult.Y);
     }
 
-    private static List<(int X, int Y)> GetAvailableMoves(MarkType[,] board)
+    private static (int X, int Y)? FindWinningMove(MarkType[,] board, MarkType mark, int winCount, List<(int X, int Y)> moves)
     {
-        var moves = new List<(int, int)>();
-        var height = board.GetLength(0);
-        var width = board.GetLength(1);
-
-        for (var y = 0; y < height; y++)
+        foreach (var (x, y) in moves)
         {
-            for (var x = 0; x < width; x++)
-            {
-                if (board[y, x] == MarkType.Empty)
-                    moves.Add((x, y));
-            }
+            board[y, x] = mark;
+            var winner = CheckWinAt(board, winCount, x, y);
+            board[y, x] = MarkType.Empty;
+
+            if (winner == mark)
+                return (x, y);
         }
 
-        return moves;
+        return null;
     }
 
-    private static int CalculateDepthLimit(MarkType[,] board)
+    private static (int X, int Y)? FindOpenFourMove(MarkType[,] board, MarkType mark, int winCount, List<(int X, int Y)> moves)
     {
-        var emptyCells = 0;
+        foreach (var (x, y) in moves)
+        {
+            board[y, x] = mark;
+            if (HasOpenThreat(board, mark, winCount, winCount - 1, x, y))
+            {
+                board[y, x] = MarkType.Empty;
+                return (x, y);
+            }
+            board[y, x] = MarkType.Empty;
+        }
+        return null;
+    }
+
+    private static (int X, int Y)? FindDoubleBlockMove(MarkType[,] board, MarkType opponentMark, int winCount, List<(int X, int Y)> moves)
+    {
+        foreach (var (x, y) in moves)
+        {
+            board[y, x] = opponentMark;
+            var winningMoves = CountWinningMoves(board, opponentMark, winCount, moves, x, y);
+            board[y, x] = MarkType.Empty;
+
+            if (winningMoves >= 2)
+                return (x, y);
+        }
+        return null;
+    }
+
+    private static int CountWinningMoves(MarkType[,] board, MarkType mark, int winCount, List<(int X, int Y)> moves, int excludeX, int excludeY)
+    {
+        var count = 0;
+        foreach (var (x, y) in moves)
+        {
+            if (x == excludeX && y == excludeY) continue;
+            if (board[y, x] != MarkType.Empty) continue;
+
+            board[y, x] = mark;
+            if (CheckWinAt(board, winCount, x, y) == mark)
+                count++;
+            board[y, x] = MarkType.Empty;
+        }
+        return count;
+    }
+
+    private static bool HasOpenThreat(MarkType[,] board, MarkType mark, int winCount, int requiredCount, int lastX, int lastY)
+    {
         var height = board.GetLength(0);
         var width = board.GetLength(1);
+        (int dx, int dy)[] directions = [(1, 0), (0, 1), (1, 1), (1, -1)];
+
+        foreach (var (dx, dy) in directions)
+        {
+            var count = 1;
+            var openEnds = 0;
+
+            int posEnd = 1, negEnd = 1;
+
+            for (var i = 1; i < winCount; i++)
+            {
+                var nx = lastX + dx * i;
+                var ny = lastY + dy * i;
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) break;
+                if (board[ny, nx] != mark) break;
+                count++;
+                posEnd = i + 1;
+            }
+
+            var checkX = lastX + dx * posEnd;
+            var checkY = lastY + dy * posEnd;
+            if (checkX >= 0 && checkY >= 0 && checkX < width && checkY < height && board[checkY, checkX] == MarkType.Empty)
+                openEnds++;
+
+            for (var i = 1; i < winCount; i++)
+            {
+                var nx = lastX - dx * i;
+                var ny = lastY - dy * i;
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) break;
+                if (board[ny, nx] != mark) break;
+                count++;
+                negEnd = i + 1;
+            }
+
+            checkX = lastX - dx * negEnd;
+            checkY = lastY - dy * negEnd;
+            if (checkX >= 0 && checkY >= 0 && checkX < width && checkY < height && board[checkY, checkX] == MarkType.Empty)
+                openEnds++;
+
+            if (count >= requiredCount && openEnds >= 2)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static List<(int X, int Y)> GetAvailableMoves(MarkType[,] board)
+    {
+        var height = board.GetLength(0);
+        var width = board.GetLength(1);
+        var hasAnyMark = false;
+        var nearMoves = new HashSet<(int, int)>();
 
         for (var y = 0; y < height; y++)
         {
             for (var x = 0; x < width; x++)
             {
                 if (board[y, x] == MarkType.Empty)
-                    emptyCells++;
+                    continue;
+
+                hasAnyMark = true;
+
+                for (var dy = -2; dy <= 2; dy++)
+                {
+                    for (var dx = -2; dx <= 2; dx++)
+                    {
+                        var nx = x + dx;
+                        var ny = y + dy;
+                        if (nx >= 0 && ny >= 0 && nx < width && ny < height && board[ny, nx] == MarkType.Empty)
+                            nearMoves.Add((nx, ny));
+                    }
+                }
             }
         }
 
-        return emptyCells switch
+        if (!hasAnyMark)
+            return [(width / 2, height / 2)];
+
+        return nearMoves.ToList();
+    }
+
+    private static int CalculateDepthLimit(int movesCount)
+    {
+        return movesCount switch
         {
-            <= 4 => emptyCells,
-            <= 9 => 5,
-            <= 16 => 4,
-            <= 49 => 3,
-            _ => 2
+            <= 4 => movesCount,
+            <= 9 => 6,
+            <= 16 => 5,
+            <= 36 => 4,
+            _ => 3
         };
     }
 
@@ -196,33 +352,26 @@ public sealed class TicTacToeMinimaxBot : ITicTacToeBot
         if (depth >= maxDepth)
             return currentScore;
 
-        var height = board.GetLength(0);
-        var width = board.GetLength(1);
+        var moves = GetAvailableMoves(board);
 
         if (isMaximizing)
         {
             var maxEval = int.MinValue;
-            for (var y = 0; y < height; y++)
+            foreach (var (x, y) in moves)
             {
-                for (var x = 0; x < width; x++)
-                {
-                    if (board[y, x] != MarkType.Empty)
-                        continue;
+                var delta = EvalDeltaBeforeMove(board, botMark, winCount, x, y, botMark);
+                board[y, x] = botMark;
 
-                    var delta = EvalDeltaBeforeMove(board, botMark, winCount, x, y, botMark);
-                    board[y, x] = botMark;
+                var eval = Minimax(
+                    board, winCount, depth + 1, maxDepth, false, botMark,
+                    alpha, beta, x, y, currentScore + delta);
 
-                    var eval = Minimax(
-                        board, winCount, depth + 1, maxDepth, false, botMark,
-                        alpha, beta, x, y, currentScore + delta);
+                board[y, x] = MarkType.Empty;
 
-                    board[y, x] = MarkType.Empty;
-
-                    maxEval = Math.Max(maxEval, eval);
-                    alpha = Math.Max(alpha, eval);
-                    if (beta <= alpha)
-                        return maxEval;
-                }
+                maxEval = Math.Max(maxEval, eval);
+                alpha = Math.Max(alpha, eval);
+                if (beta <= alpha)
+                    return maxEval;
             }
 
             return maxEval == int.MinValue ? 0 : maxEval;
@@ -232,27 +381,21 @@ public sealed class TicTacToeMinimaxBot : ITicTacToeBot
             var opponentMark = GetOpponent(botMark);
             var minEval = int.MaxValue;
 
-            for (var y = 0; y < height; y++)
+            foreach (var (x, y) in moves)
             {
-                for (var x = 0; x < width; x++)
-                {
-                    if (board[y, x] != MarkType.Empty)
-                        continue;
+                var delta = EvalDeltaBeforeMove(board, botMark, winCount, x, y, opponentMark);
+                board[y, x] = opponentMark;
 
-                    var delta = EvalDeltaBeforeMove(board, botMark, winCount, x, y, opponentMark);
-                    board[y, x] = opponentMark;
+                var eval = Minimax(
+                    board, winCount, depth + 1, maxDepth, true, botMark,
+                    alpha, beta, x, y, currentScore + delta);
 
-                    var eval = Minimax(
-                        board, winCount, depth + 1, maxDepth, true, botMark,
-                        alpha, beta, x, y, currentScore + delta);
+                board[y, x] = MarkType.Empty;
 
-                    board[y, x] = MarkType.Empty;
-
-                    minEval = Math.Min(minEval, eval);
-                    beta = Math.Min(beta, eval);
-                    if (beta <= alpha)
-                        return minEval;
-                }
+                minEval = Math.Min(minEval, eval);
+                beta = Math.Min(beta, eval);
+                if (beta <= alpha)
+                    return minEval;
             }
 
             return minEval == int.MaxValue ? 0 : minEval;
@@ -386,6 +529,29 @@ public sealed class TicTacToeMinimaxBot : ITicTacToeBot
                 return 0;
         }
 
-        return count * count;
+        if (count == 0)
+            return 0;
+
+        var openEnds = 0;
+        var beforeX = startX - dx;
+        var beforeY = startY - dy;
+        if (beforeX >= 0 && beforeY >= 0 && beforeX < width && beforeY < height && board[beforeY, beforeX] == MarkType.Empty)
+            openEnds++;
+
+        var afterX = endX + dx;
+        var afterY = endY + dy;
+        if (afterX >= 0 && afterY >= 0 && afterX < width && afterY < height && board[afterY, afterX] == MarkType.Empty)
+            openEnds++;
+
+        var score = 1 << (count * 2);
+
+        if (count == winCount - 1)
+            score *= openEnds == 2 ? 16 : 4;
+        else if (count == winCount - 2 && openEnds == 2)
+            score *= 8;
+        else if (openEnds == 2)
+            score *= 2;
+
+        return score;
     }
 }

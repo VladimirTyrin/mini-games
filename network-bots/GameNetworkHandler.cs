@@ -14,6 +14,8 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     
     public readonly string ClientId;
     
+    private volatile bool _disposed;
+    
     private readonly GrpcChannel _grpcChannel;
     private readonly IClientStreamWriter<ClientMessage> _streamWriter;
     private readonly IAsyncStreamReader<ServerMessage> _streamReader;
@@ -152,6 +154,11 @@ public sealed class GameNetworkHandler : IAsyncDisposable
                     throw new OperationCanceledException("Server is shutting down");
                 }
 
+                if (message.MessageCase is ServerMessage.MessageOneofCase.Error)
+                {
+                    throw new Exception($"Server error: {message.Error.Message}");
+                }
+
                 var contextsToRemove = new List<Guid>();
                 foreach (var waitContext in _waitContexts.Values)
                 {
@@ -193,8 +200,6 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     
     private async Task RunWriteLoopAsync()
     {
-        // We want to write all pending messages even if cancellation is requested
-        // ReSharper disable MethodSupportsCancellation
         while (await _messageQueueReader.WaitToReadAsync())
         {
             while (_messageQueueReader.TryRead(out var message))
@@ -202,7 +207,6 @@ public sealed class GameNetworkHandler : IAsyncDisposable
                 await _streamWriter.WriteAsync(message);
             }
         }
-        // ReSharper restore MethodSupportsCancellation
     }
     
     
@@ -213,14 +217,18 @@ public sealed class GameNetworkHandler : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
+        
         await EnqueueSendAsync(new ClientMessage
         {
             Disconnect = new DisconnectRequest()
         }, CancellationToken.None);
-        
-        await _cts.CancelAsync();
+
         _messageQueueWriter.Complete();
-        await Task.WhenAll(_readTask, _writeTask);
+        await _writeTask;
+        await _cts.CancelAsync();
+        await _readTask;
         _cts.Dispose();
         _grpcChannel.Dispose();
     }

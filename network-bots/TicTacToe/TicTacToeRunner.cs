@@ -31,7 +31,7 @@ public sealed class TicTacToeRunner
                     {
                         FieldHeight = 15,
                         FieldWidth = 15,
-                        FirstPlayer = FirstPlayerMode.Host,
+                        FirstPlayer = FirstPlayerMode.Random,
                         WinCount = 5
                     }
                 }
@@ -52,35 +52,42 @@ public sealed class TicTacToeRunner
             StartGame = new StartGameRequest()
         }, cancellationToken);
         
-        await foreach (var message in allMessagesEnumerable.WithCancellation(cancellationToken))
+        try
         {
-            if (message.GameOver is { } gameOver)
+            await foreach (var message in allMessagesEnumerable)
             {
-                return gameOver.Winner?.PlayerId == _networkHandler.ClientId;
-            }
-            
-            if (message.GameState is { Tictactoe: {} tictactoeState })
-            {
-                if (tictactoeState.CurrentPlayer?.PlayerId != _networkHandler.ClientId)
+                if (message.GameOver is { } gameOver)
                 {
-                    continue;
+                    return gameOver.Winner?.PlayerId == _networkHandler.ClientId;
                 }
 
-                var botMove = _bot.Move(tictactoeState);
-
-                await _networkHandler.EnqueueSendAsync(new ClientMessage
+                if (message.GameState is { Tictactoe: { } tictactoeState })
                 {
-                    InGame = new InGameCommand
+                    if (tictactoeState.CurrentPlayer?.PlayerId != _networkHandler.ClientId)
                     {
-                        Tictactoe = new TicTacToeInGameCommand
-                        {
-                            Place = botMove
-                        }
+                        continue;
                     }
-                }, cancellationToken);
+
+                    var botMove = _bot.Move(tictactoeState);
+
+                    await _networkHandler.EnqueueSendAsync(new ClientMessage
+                    {
+                        InGame = new InGameCommand
+                        {
+                            Tictactoe = new TicTacToeInGameCommand
+                            {
+                                Place = botMove
+                            }
+                        }
+                    }, cancellationToken);
+                }
             }
         }
-        
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
         throw new Exception("Unexpected end of game messages");
     }
 }

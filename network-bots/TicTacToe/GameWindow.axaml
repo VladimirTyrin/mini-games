@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MiniGameNetworkBot.TicTacToe.GameWindow"
+        Title="TicTacToe Bot"
+        Width="800" Height="700"
+        Background="#1e1e2e">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#313244" Padding="20,15">
+            <Grid ColumnDefinitions="*,Auto,*">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="15">
+                    <TextBlock Text="Bot:" Foreground="#cdd6f4" VerticalAlignment="Center" FontSize="16"/>
+                    <Border Background="#89b4fa" CornerRadius="5" Padding="10,5">
+                        <TextBlock x:Name="BotMarkText" Text="X" Foreground="#1e1e2e" FontWeight="Bold" FontSize="18"/>
+                    </Border>
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" x:Name="StatusText" Text="Connecting..."
+                           Foreground="#f9e2af" FontSize="18" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="15" HorizontalAlignment="Right">
+                    <TextBlock Text="Opponent:" Foreground="#cdd6f4" VerticalAlignment="Center" FontSize="16"/>
+                    <Border Background="#f38ba8" CornerRadius="5" Padding="10,5">
+                        <TextBlock x:Name="OpponentMarkText" Text="O" Foreground="#1e1e2e" FontWeight="Bold" FontSize="18"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Game Board -->
+        <Border Grid.Row="1" Margin="20" Background="#181825" CornerRadius="10">
+            <Canvas x:Name="BoardCanvas" />
+        </Border>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Background="#313244" Padding="20,15">
+            <Grid ColumnDefinitions="*,Auto,*">
+                <TextBlock Grid.Column="0" x:Name="MoveCountText" Text="Move: 0"
+                           Foreground="#a6adc8" FontSize="14" VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="1" x:Name="WinConditionText" Text="Win: 5 in a row"
+                           Foreground="#cdd6f4" FontSize="14" VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="2" x:Name="BoardSizeText" Text="Board: 15x15"
+                           Foreground="#a6adc8" FontSize="14" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
