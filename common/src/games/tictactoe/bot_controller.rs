@@ -44,20 +44,52 @@ fn calculate_random_move(input: &BotInput, rng: &mut SessionRng) -> Option<Posit
 
 pub fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
     let bot_mark = input.current_mark;
+    let opponent_mark = bot_mark.opponent()?;
     let available_moves = get_available_moves(&input.board);
 
     if available_moves.is_empty() {
         return None;
     }
 
-    let depth_limit = calculate_depth_limit(&input.board);
     let mut board = input.board.clone();
+
+    if let Some((x, y)) = find_winning_move(&mut board, bot_mark, input.win_count, &available_moves)
+    {
+        return Some(Position::new(x, y));
+    }
+
+    if let Some((x, y)) =
+        find_winning_move(&mut board, opponent_mark, input.win_count, &available_moves)
+    {
+        return Some(Position::new(x, y));
+    }
+
+    if let Some((x, y)) =
+        find_open_threat_move(&mut board, bot_mark, input.win_count, &available_moves)
+    {
+        return Some(Position::new(x, y));
+    }
+
+    if let Some((x, y)) =
+        find_open_threat_move(&mut board, opponent_mark, input.win_count, &available_moves)
+    {
+        return Some(Position::new(x, y));
+    }
+
+    if let Some((x, y)) =
+        find_double_block_move(&mut board, opponent_mark, input.win_count, &available_moves)
+    {
+        return Some(Position::new(x, y));
+    }
+
+    let depth_limit = calculate_depth_limit(available_moves.len());
     let initial_score = evaluate_board(&board, bot_mark, input.win_count);
 
     let mut best_move = None;
     let mut best_score = i32::MIN;
 
-    for (x, y) in available_moves {
+    for (x, y) in &available_moves {
+        let (x, y) = (*x, *y);
         let delta = eval_delta_before_move(&board, bot_mark, input.win_count, x, y, bot_mark);
         board[y][x] = bot_mark;
 
@@ -86,23 +118,166 @@ pub fn calculate_minimax_move(input: &BotInput) -> Option<Position> {
     best_move
 }
 
-fn calculate_depth_limit(board: &[Vec<Mark>]) -> usize {
-    let empty_cells = board
-        .iter()
-        .flat_map(|row| row.iter())
-        .filter(|&&cell| cell == Mark::Empty)
-        .count();
+fn find_winning_move(
+    board: &mut [Vec<Mark>],
+    mark: Mark,
+    win_count: usize,
+    moves: &[(usize, usize)],
+) -> Option<(usize, usize)> {
+    for &(x, y) in moves {
+        board[y][x] = mark;
+        let winner = check_win_at(board, win_count, x, y);
+        board[y][x] = Mark::Empty;
 
-    if empty_cells <= 4 {
-        empty_cells
-    } else if empty_cells <= 9 {
-        6
-    } else if empty_cells <= 16 {
-        4
-    } else if empty_cells <= 49 {
-        3
-    } else {
-        2
+        if winner == Some(mark) {
+            return Some((x, y));
+        }
+    }
+    None
+}
+
+fn find_open_threat_move(
+    board: &mut [Vec<Mark>],
+    mark: Mark,
+    win_count: usize,
+    moves: &[(usize, usize)],
+) -> Option<(usize, usize)> {
+    for &(x, y) in moves {
+        board[y][x] = mark;
+        if has_open_threat(board, mark, win_count, win_count - 1, x, y) {
+            board[y][x] = Mark::Empty;
+            return Some((x, y));
+        }
+        board[y][x] = Mark::Empty;
+    }
+    None
+}
+
+fn find_double_block_move(
+    board: &mut [Vec<Mark>],
+    opponent_mark: Mark,
+    win_count: usize,
+    moves: &[(usize, usize)],
+) -> Option<(usize, usize)> {
+    for &(x, y) in moves {
+        board[y][x] = opponent_mark;
+        let winning_moves = count_winning_moves(board, opponent_mark, win_count, moves, x, y);
+        board[y][x] = Mark::Empty;
+
+        if winning_moves >= 2 {
+            return Some((x, y));
+        }
+    }
+    None
+}
+
+fn count_winning_moves(
+    board: &mut [Vec<Mark>],
+    mark: Mark,
+    win_count: usize,
+    moves: &[(usize, usize)],
+    exclude_x: usize,
+    exclude_y: usize,
+) -> usize {
+    let mut count = 0;
+    for &(x, y) in moves {
+        if x == exclude_x && y == exclude_y {
+            continue;
+        }
+        if board[y][x] != Mark::Empty {
+            continue;
+        }
+
+        board[y][x] = mark;
+        if check_win_at(board, win_count, x, y) == Some(mark) {
+            count += 1;
+        }
+        board[y][x] = Mark::Empty;
+    }
+    count
+}
+
+fn has_open_threat(
+    board: &[Vec<Mark>],
+    mark: Mark,
+    win_count: usize,
+    required_count: usize,
+    last_x: usize,
+    last_y: usize,
+) -> bool {
+    let height = board.len();
+    let width = board[0].len();
+    let directions: [(isize, isize); 4] = [(1, 0), (0, 1), (1, 1), (1, -1)];
+
+    for (dx, dy) in directions {
+        let mut count = 1;
+        let mut open_ends = 0;
+
+        let mut pos_end = 1isize;
+        for i in 1..win_count as isize {
+            let nx = last_x as isize + dx * i;
+            let ny = last_y as isize + dy * i;
+            if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                break;
+            }
+            if board[ny as usize][nx as usize] != mark {
+                break;
+            }
+            count += 1;
+            pos_end = i + 1;
+        }
+
+        let check_x = last_x as isize + dx * pos_end;
+        let check_y = last_y as isize + dy * pos_end;
+        if check_x >= 0
+            && check_y >= 0
+            && check_x < width as isize
+            && check_y < height as isize
+            && board[check_y as usize][check_x as usize] == Mark::Empty
+        {
+            open_ends += 1;
+        }
+
+        let mut neg_end = 1isize;
+        for i in 1..win_count as isize {
+            let nx = last_x as isize - dx * i;
+            let ny = last_y as isize - dy * i;
+            if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                break;
+            }
+            if board[ny as usize][nx as usize] != mark {
+                break;
+            }
+            count += 1;
+            neg_end = i + 1;
+        }
+
+        let check_x = last_x as isize - dx * neg_end;
+        let check_y = last_y as isize - dy * neg_end;
+        if check_x >= 0
+            && check_y >= 0
+            && check_x < width as isize
+            && check_y < height as isize
+            && board[check_y as usize][check_x as usize] == Mark::Empty
+        {
+            open_ends += 1;
+        }
+
+        if count >= required_count && open_ends >= 2 {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn calculate_depth_limit(moves_count: usize) -> usize {
+    match moves_count {
+        0..=4 => moves_count,
+        5..=9 => 6,
+        10..=16 => 5,
+        17..=36 => 4,
+        _ => 3,
     }
 }
 
@@ -182,82 +357,63 @@ fn minimax(
         return current_score;
     }
 
+    let moves = get_available_moves(board);
+
     if is_maximizing {
         let mut max_eval = i32::MIN;
-        for y in 0..board.len() {
-            for x in 0..board[0].len() {
-                if board[y][x] != Mark::Empty {
-                    continue;
-                }
+        for (x, y) in moves {
+            let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, bot_mark);
+            board[y][x] = bot_mark;
+            let eval = minimax(
+                board,
+                win_count,
+                depth + 1,
+                max_depth,
+                false,
+                bot_mark,
+                alpha,
+                beta,
+                x,
+                y,
+                current_score + delta,
+            );
+            board[y][x] = Mark::Empty;
 
-                let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, bot_mark);
-                board[y][x] = bot_mark;
-                let eval = minimax(
-                    board,
-                    win_count,
-                    depth + 1,
-                    max_depth,
-                    false,
-                    bot_mark,
-                    alpha,
-                    beta,
-                    x,
-                    y,
-                    current_score + delta,
-                );
-                board[y][x] = Mark::Empty;
-
-                max_eval = max_eval.max(eval);
-                alpha = alpha.max(eval);
-                if beta <= alpha {
-                    return max_eval;
-                }
+            max_eval = max_eval.max(eval);
+            alpha = alpha.max(eval);
+            if beta <= alpha {
+                return max_eval;
             }
         }
-        if max_eval == i32::MIN {
-            0
-        } else {
-            max_eval
-        }
+        if max_eval == i32::MIN { 0 } else { max_eval }
     } else {
         let opponent_mark = bot_mark.opponent().unwrap();
         let mut min_eval = i32::MAX;
-        for y in 0..board.len() {
-            for x in 0..board[0].len() {
-                if board[y][x] != Mark::Empty {
-                    continue;
-                }
+        for (x, y) in moves {
+            let delta = eval_delta_before_move(board, bot_mark, win_count, x, y, opponent_mark);
+            board[y][x] = opponent_mark;
+            let eval = minimax(
+                board,
+                win_count,
+                depth + 1,
+                max_depth,
+                true,
+                bot_mark,
+                alpha,
+                beta,
+                x,
+                y,
+                current_score + delta,
+            );
+            board[y][x] = Mark::Empty;
 
-                let delta =
-                    eval_delta_before_move(board, bot_mark, win_count, x, y, opponent_mark);
-                board[y][x] = opponent_mark;
-                let eval = minimax(
-                    board,
-                    win_count,
-                    depth + 1,
-                    max_depth,
-                    true,
-                    bot_mark,
-                    alpha,
-                    beta,
-                    x,
-                    y,
-                    current_score + delta,
-                );
-                board[y][x] = Mark::Empty;
-
-                min_eval = min_eval.min(eval);
-                beta = beta.min(eval);
-                if beta <= alpha {
-                    return min_eval;
-                }
+            min_eval = min_eval.min(eval);
+            beta = beta.min(eval);
+            if beta <= alpha {
+                return min_eval;
             }
         }
-        if min_eval == i32::MAX {
-            0
-        } else {
-            min_eval
-        }
+        if min_eval == i32::MAX { 0 } else { min_eval }
     }
 }
 
@@ -385,8 +541,9 @@ fn check_line_threat(
     let mut count = 0;
 
     for i in 0..win_count {
-        let cell =
-            board[start_y.wrapping_add_signed(dy * i as isize)][start_x.wrapping_add_signed(dx * i as isize)];
+        let cx = start_x.wrapping_add_signed(dx * i as isize);
+        let cy = start_y.wrapping_add_signed(dy * i as isize);
+        let cell = board[cy][cx];
         if cell == mark {
             count += 1;
         } else if cell != Mark::Empty {
@@ -394,5 +551,42 @@ fn check_line_threat(
         }
     }
 
-    count * count
+    if count == 0 {
+        return 0;
+    }
+
+    let mut open_ends = 0;
+    let before_x = start_x as isize - dx;
+    let before_y = start_y as isize - dy;
+    if before_x >= 0
+        && before_y >= 0
+        && before_x < width as isize
+        && before_y < height as isize
+        && board[before_y as usize][before_x as usize] == Mark::Empty
+    {
+        open_ends += 1;
+    }
+
+    let after_x = end_x + dx;
+    let after_y = end_y + dy;
+    if after_x >= 0
+        && after_y >= 0
+        && after_x < width as isize
+        && after_y < height as isize
+        && board[after_y as usize][after_x as usize] == Mark::Empty
+    {
+        open_ends += 1;
+    }
+
+    let mut score = 1 << (count * 2);
+
+    if count == win_count - 1 {
+        score *= if open_ends == 2 { 16 } else { 4 };
+    } else if count == win_count - 2 && open_ends == 2 {
+        score *= 8;
+    } else if open_ends == 2 {
+        score *= 2;
+    }
+
+    score
 }

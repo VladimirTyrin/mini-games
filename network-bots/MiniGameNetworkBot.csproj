@@ -5,7 +5,22 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <CargoTomlPath>$(MSBuildProjectDirectory)\..\Cargo.toml</CargoTomlPath>
     </PropertyGroup>
+
+    <Target Name="GenerateVersionFromCargo" BeforeTargets="BeforeCompile">
+        <PropertyGroup>
+            <CargoContent>$([System.IO.File]::ReadAllText('$(CargoTomlPath)'))</CargoContent>
+            <VersionMatch>$([System.Text.RegularExpressions.Regex]::Match($(CargoContent), 'version\s*=\s*"([^"]+)"').Groups[1].Value)</VersionMatch>
+            <GeneratedVersionFile>$(IntermediateOutputPath)Version.g.cs</GeneratedVersionFile>
+        </PropertyGroup>
+        <WriteLinesToFile File="$(GeneratedVersionFile)"
+                          Lines="namespace MiniGameNetworkBot%3B%0Ainternal static class VersionInfo%0A{%0A    public const string ServerVersion = &quot;$(VersionMatch)&quot;%3B%0A}"
+                          Overwrite="true" />
+        <ItemGroup>
+            <Compile Include="$(GeneratedVersionFile)" />
+        </ItemGroup>
+    </Target>
 
     <ItemGroup>
       <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />

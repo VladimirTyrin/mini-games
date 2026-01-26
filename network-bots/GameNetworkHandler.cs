@@ -10,7 +10,6 @@ namespace MiniGameNetworkBot;
 
 public sealed class GameNetworkHandler : IAsyncDisposable
 {
-    private const string ServerVersion = "0.9.2";
     
     public readonly string ClientId;
     
@@ -42,7 +41,7 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     {
         try
         {
-            message.Version = ServerVersion;
+            message.Version = VersionInfo.ServerVersion;
             await _messageQueueWriter.WriteAsync(message, cancellationToken);
         }
         catch (ChannelClosedException)
