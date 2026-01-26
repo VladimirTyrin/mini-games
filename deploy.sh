@@ -2,6 +2,22 @@
 
 set -euo pipefail
 
+SHOW_REMOTE_COMMANDS=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -rc|--remote-commands)
+            SHOW_REMOTE_COMMANDS=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 [-rc|--remote-commands]" >&2
+            exit 1
+            ;;
+    esac
+done
+
 REMOTE_HOST="185.157.212.124"
 REMOTE_USER="root"
 DOMAIN="braintvsminigames.xyz"
@@ -16,6 +32,15 @@ SERVICE_FILE="${SCRIPT_DIR}/deploy/mini-games-server.service"
 NGINX_CONF="${SCRIPT_DIR}/deploy/nginx.conf"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_CLIENT_DIST="${SCRIPT_DIR}/${WEB_CLIENT_DIR}/dist"
+
+if [[ "${SHOW_REMOTE_COMMANDS}" == "true" ]]; then
+    echo "View logs:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'journalctl -u ${SERVICE_NAME} -f'"
+    echo "Nginx logs:   ssh ${REMOTE_USER}@${REMOTE_HOST} 'tail -f /var/log/nginx/error.log'"
+    echo "Stop service: ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl stop ${SERVICE_NAME}'"
+    echo "Restart:      ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl restart ${SERVICE_NAME}'"
+    echo "Renew SSL:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'certbot renew'"
+    exit 0
+fi
 
 echo "==> Building web client..."
 cd "${SCRIPT_DIR}/${WEB_CLIENT_DIR}"

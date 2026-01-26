@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="../proto/game_service.proto"
+                  Link="proto/game_service.proto"
+                  ProtoRoot="../proto"
+                  GrpcServices="Client"/>
+        <Protobuf Include="../proto/replay.proto"
+                  Link="proto/replay.proto"
+                  ProtoRoot="../proto"
+                  GrpcServices="None"/>
+        <Protobuf Include="../proto/games/snake.proto"
+                  Link="proto/games/snake.proto"
+                  ProtoRoot="../proto"
+                  GrpcServices="None"/>
+        <Protobuf Include="../proto/games/tictactoe.proto"
+                  Link="proto/games/tictactoe.proto"
+                  ProtoRoot="../proto"
+                  GrpcServices="None"/>
+    </ItemGroup>
+
+</Project>
