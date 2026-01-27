@@ -1,14 +1,8 @@
-using Tictactoe;
+using MiniGameNetworkBot.TicTacToe.Core;
 
 namespace MiniGameNetworkBot.TicTacToe.Bots;
 
-internal static class MarkTypeExtensions
-{
-    public static MarkType Opponent(this MarkType mark) =>
-        mark == MarkType.X ? MarkType.O : MarkType.X;
-}
-
-public sealed class MctsBot : ITicTacToeBot
+public sealed class MctsBot : IBot
 {
     private readonly int _simulationsPerMove;
     private readonly double _explorationConstant;
@@ -22,38 +16,34 @@ public sealed class MctsBot : ITicTacToeBot
 
     public string Name => "MCTS";
 
-    public PlaceMarkCommand Move(TicTacToeGameState gameState)
+    public (int X, int Y) GetMove(IBoardView boardView)
     {
-        var board = new Board(gameState);
-        var bestMove = CalculateMctsMove(board);
-        return new PlaceMarkCommand { X = (uint)bestMove.X, Y = (uint)bestMove.Y };
+        var board = new Board(boardView);
+        return CalculateMctsMove(board);
     }
 
     private (int X, int Y) CalculateMctsMove(Board board)
     {
-        var root = new MctsNode(null, (-1, -1), board.CurrentMark.Opponent());
+        var root = new MctsNode(null, (-1, -1), Opponent(board.CurrentMark));
         root.ExpandMoves(board.AvailableMoves);
 
         for (var i = 0; i < _simulationsPerMove; i++)
         {
             var node = root;
 
-            // Selection - traverse to leaf
             while (node.UntriedMoves.Count == 0 && node.Children.Count > 0)
             {
                 node = SelectChild(node);
-                var mark = node.PlayerMark;
-                board.Place(node.Move.X, node.Move.Y, mark);
+                board.Place(node.Move.X, node.Move.Y, node.PlayerMark);
             }
 
-            // Expansion
             if (node.UntriedMoves.Count > 0)
             {
                 var moveIdx = _random.Next(node.UntriedMoves.Count);
                 var move = node.UntriedMoves[moveIdx];
                 node.UntriedMoves.RemoveAt(moveIdx);
 
-                var childMark = node.PlayerMark.Opponent();
+                var childMark = Opponent(node.PlayerMark);
                 board.Place(move.X, move.Y, childMark);
 
                 var child = new MctsNode(node, move, childMark);
@@ -77,8 +67,7 @@ public sealed class MctsBot : ITicTacToeBot
                 node = child;
             }
 
-            // Simulation
-            MarkType? winner;
+            Mark? winner;
             if (node.IsTerminal)
             {
                 winner = node.TerminalWinner;
@@ -88,7 +77,6 @@ public sealed class MctsBot : ITicTacToeBot
                 winner = Simulate(board);
             }
 
-            // Backpropagation - unwind and update scores
             while (node != null)
             {
                 node.Visits++;
@@ -108,6 +96,8 @@ public sealed class MctsBot : ITicTacToeBot
         return bestChild?.Move ?? board.AvailableMoves[0];
     }
 
+    private static Mark Opponent(Mark mark) => mark == Mark.X ? Mark.O : Mark.X;
+
     private MctsNode SelectChild(MctsNode node)
     {
         var logParentVisits = Math.Log(node.Visits);
@@ -115,7 +105,7 @@ public sealed class MctsBot : ITicTacToeBot
             c.Wins / c.Visits + _explorationConstant * Math.Sqrt(logParentVisits / c.Visits))!;
     }
 
-    private MarkType? Simulate(Board board)
+    private Mark? Simulate(Board board)
     {
         var depth = 0;
 
@@ -147,15 +137,15 @@ public sealed class MctsBot : ITicTacToeBot
     {
         public MctsNode? Parent { get; }
         public (int X, int Y) Move { get; }
-        public MarkType PlayerMark { get; }
+        public Mark PlayerMark { get; }
         public List<MctsNode> Children { get; } = [];
         public List<(int X, int Y)> UntriedMoves { get; } = [];
         public int Visits { get; set; }
         public double Wins { get; set; }
         public bool IsTerminal { get; set; }
-        public MarkType? TerminalWinner { get; set; }
+        public Mark? TerminalWinner { get; set; }
 
-        public MctsNode(MctsNode? parent, (int X, int Y) move, MarkType playerMark)
+        public MctsNode(MctsNode? parent, (int X, int Y) move, Mark playerMark)
         {
             Parent = parent;
             Move = move;
@@ -170,37 +160,34 @@ public sealed class MctsBot : ITicTacToeBot
 
     private sealed class Board
     {
-        private readonly MarkType[,] _cells;
+        private readonly Mark[,] _cells;
         private readonly int _width;
         private readonly int _height;
         private readonly int _winCount;
         private readonly Stack<(int X, int Y, List<(int, int)> AddedMoves, List<(int, int)> RemovedMoves)> _history = new();
 
-        public MarkType BotMark { get; }
-        public MarkType CurrentMark { get; private set; }
+        public Mark BotMark { get; }
+        public Mark CurrentMark { get; private set; }
         public List<(int X, int Y)> AvailableMoves { get; }
 
-        public Board(TicTacToeGameState state)
+        public Board(IBoardView view)
         {
-            _width = (int)state.FieldWidth;
-            _height = (int)state.FieldHeight;
-            _winCount = (int)state.WinCount;
-            _cells = new MarkType[_height, _width];
+            _width = view.Width;
+            _height = view.Height;
+            _winCount = view.WinCount;
+            _cells = new Mark[_height, _width];
 
             for (var y = 0; y < _height; y++)
                 for (var x = 0; x < _width; x++)
-                    _cells[y, x] = MarkType.Empty;
+                    _cells[y, x] = view.GetCell(x, y);
 
-            foreach (var cell in state.Board)
-                _cells[cell.Y, cell.X] = cell.Mark;
+            BotMark = view.CurrentPlayer;
+            CurrentMark = view.CurrentPlayer;
 
-            BotMark = state.CurrentPlayer?.PlayerId == state.PlayerX?.PlayerId ? MarkType.X : MarkType.O;
-            CurrentMark = BotMark;
-
-            AvailableMoves = ComputeAvailableMoves();
+            AvailableMoves = view.GetAvailableMoves();
         }
 
-        public void Place(int x, int y, MarkType mark)
+        public void Place(int x, int y, Mark mark)
         {
             var removedMoves = new List<(int, int)>();
             var addedMoves = new List<(int, int)>();
@@ -217,7 +204,7 @@ public sealed class MctsBot : ITicTacToeBot
                     var nx = x + dx;
                     var ny = y + dy;
                     if (nx >= 0 && ny >= 0 && nx < _width && ny < _height &&
-                        _cells[ny, nx] == MarkType.Empty && !AvailableMoves.Contains((nx, ny)))
+                        _cells[ny, nx] == Mark.Empty && !AvailableMoves.Contains((nx, ny)))
                     {
                         AvailableMoves.Add((nx, ny));
                         addedMoves.Add((nx, ny));
@@ -226,14 +213,14 @@ public sealed class MctsBot : ITicTacToeBot
             }
 
             _history.Push((x, y, addedMoves, removedMoves));
-            CurrentMark = CurrentMark.Opponent();
+            CurrentMark = Opponent(CurrentMark);
         }
 
         public void Undo()
         {
             var (x, y, addedMoves, removedMoves) = _history.Pop();
 
-            _cells[y, x] = MarkType.Empty;
+            _cells[y, x] = Mark.Empty;
 
             foreach (var move in addedMoves)
                 AvailableMoves.Remove(move);
@@ -241,13 +228,13 @@ public sealed class MctsBot : ITicTacToeBot
             foreach (var move in removedMoves)
                 AvailableMoves.Add(move);
 
-            CurrentMark = CurrentMark.Opponent();
+            CurrentMark = Opponent(CurrentMark);
         }
 
         public bool CheckWinAt(int x, int y)
         {
             var mark = _cells[y, x];
-            if (mark == MarkType.Empty)
+            if (mark == Mark.Empty)
                 return false;
 
             ReadOnlySpan<(int dx, int dy)> directions = [(1, 0), (0, 1), (1, 1), (1, -1)];
@@ -279,43 +266,6 @@ public sealed class MctsBot : ITicTacToeBot
             }
 
             return false;
-        }
-
-        private List<(int X, int Y)> ComputeAvailableMoves()
-        {
-            var hasAnyMark = false;
-            var moves = new List<(int X, int Y)>();
-            var seen = new HashSet<(int, int)>();
-
-            for (var y = 0; y < _height; y++)
-            {
-                for (var x = 0; x < _width; x++)
-                {
-                    if (_cells[y, x] == MarkType.Empty)
-                        continue;
-
-                    hasAnyMark = true;
-
-                    for (var dy = -2; dy <= 2; dy++)
-                    {
-                        for (var dx = -2; dx <= 2; dx++)
-                        {
-                            var nx = x + dx;
-                            var ny = y + dy;
-                            if (nx >= 0 && ny >= 0 && nx < _width && ny < _height &&
-                                _cells[ny, nx] == MarkType.Empty && seen.Add((nx, ny)))
-                            {
-                                moves.Add((nx, ny));
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!hasAnyMark)
-                return [(_width / 2, _height / 2)];
-
-            return moves;
         }
     }
 }

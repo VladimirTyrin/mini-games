@@ -1,6 +1,7 @@
+using MiniGameNetworkBot.TicTacToe.Core;
 using Tictactoe;
 
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+namespace MiniGameNetworkBot.TicTacToe.Adapters;
 
 public sealed class ProtoStateView : IBoardView
 {

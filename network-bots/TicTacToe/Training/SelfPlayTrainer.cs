@@ -1,7 +1,8 @@
 using MiniGameNetworkBot.TicTacToe.Bots;
+using MiniGameNetworkBot.TicTacToe.Core;
 using static TorchSharp.torch;
 
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+namespace MiniGameNetworkBot.TicTacToe.Training;
 
 public enum TrainingOpponent
 {
@@ -20,7 +21,7 @@ public sealed class SelfPlayTrainer
     private readonly int _height;
     private readonly Random _random = new();
 
-    private readonly Dictionary<TrainingOpponent, ILocalBot> _opponents;
+    private readonly Dictionary<TrainingOpponent, IBot> _opponents;
     private readonly List<(TrainingOpponent Opponent, float Weight)> _opponentMix;
 
     public SelfPlayTrainer(PolicyValueNetwork network, double learningRate = 0.001)
@@ -35,11 +36,11 @@ public sealed class SelfPlayTrainer
 
         _optimizer = optim.Adam(_network.parameters(), lr: learningRate);
 
-        _opponents = new Dictionary<TrainingOpponent, ILocalBot>
+        _opponents = new Dictionary<TrainingOpponent, IBot>
         {
-            [TrainingOpponent.Random] = new LocalRandomBot(),
-            [TrainingOpponent.Minimax] = new LocalMinimaxBot(maxDepth: 1),
-            [TrainingOpponent.Mcts] = new BotAdapter(new MctsBot(simulationsPerMove: 1000))
+            [TrainingOpponent.Random] = new RandomBot(),
+            [TrainingOpponent.Minimax] = new MinimaxBot(maxDepth: 1),
+            [TrainingOpponent.Mcts] = new MctsBot(simulationsPerMove: 1000)
         };
 
         _opponentMix =
@@ -81,11 +82,9 @@ public sealed class SelfPlayTrainer
 
     public void TrainWithCurriculum(int gamesPerIteration = 100, int epochs = 5)
     {
-        // Phase 1: Imitation learning from minimax (depth 1 for speed)
         Console.WriteLine("\n[Curriculum] Phase 1: Imitation Learning from Minimax");
         TrainImitation(iterations: 30, positionsPerIteration: 1000, epochs: 5, minimaxDepth: 1);
 
-        // Phase 2: Self-play refinement with MCTS
         Console.WriteLine("\n[Curriculum] Phase 2: MCTS Self-Play Refinement");
         TrainAlphaZero(iterations: 20, gamesPerIteration: 30, mctsSimulations: 50, epochs: 3);
     }
@@ -96,7 +95,7 @@ public sealed class SelfPlayTrainer
         Console.WriteLine($"  Minimax depth: {minimaxDepth}");
         Console.WriteLine($"  Positions per iteration: {positionsPerIteration}");
 
-        var teacher = new LocalMinimaxBot(maxDepth: minimaxDepth);
+        var teacher = new MinimaxBot(maxDepth: minimaxDepth);
 
         for (var iter = 0; iter < iterations; iter++)
         {
@@ -115,7 +114,7 @@ public sealed class SelfPlayTrainer
         }
     }
 
-    private List<(float[] State, int Action, float Value)> CollectImitationData(int numPositions, ILocalBot teacher)
+    private List<(float[] State, int Action, float Value)> CollectImitationData(int numPositions, IBot teacher)
     {
         var data = new List<(float[] State, int Action, float Value)>();
 
@@ -123,7 +122,6 @@ public sealed class SelfPlayTrainer
         {
             var engine = new GameEngine(_width, _height);
 
-            // Play random moves to get diverse positions
             var randomMoves = _random.Next(0, 20);
             for (var i = 0; i < randomMoves && !engine.IsGameOver; i++)
             {
@@ -136,12 +134,10 @@ public sealed class SelfPlayTrainer
             if (engine.IsGameOver)
                 continue;
 
-            // Get teacher's move for this position
             var (teacherX, teacherY) = teacher.GetMove(engine);
             var state = engine.GetBoardState(engine.CurrentPlayer);
             var action = teacherY * _width + teacherX;
 
-            // Estimate value by playing out with teacher
             var simEngine = engine.Clone();
             simEngine.Place(teacherX, teacherY);
 
@@ -171,20 +167,19 @@ public sealed class SelfPlayTrainer
     {
         _network.eval();
 
-        var vsRandom = EvaluateAgainst(new LocalRandomBot(), 20);
+        var vsRandom = EvaluateAgainst(new RandomBot(), 20);
         Console.WriteLine($"Neural vs Random: {vsRandom * 100:F1}%");
 
-        var vsMinimax1 = EvaluateAgainst(new LocalMinimaxBot(maxDepth: 1), 20);
+        var vsMinimax1 = EvaluateAgainst(new MinimaxBot(maxDepth: 1), 20);
         Console.WriteLine($"Neural vs Minimax(d=1): {vsMinimax1 * 100:F1}%");
 
-        // Test hybrid bot
-        var hybridBot = new HybridNeuralLocalBot(_network);
-        var hybridVsMinimax = EvaluateAgainst(hybridBot, new LocalMinimaxBot(maxDepth: 1), 20);
+        var hybridBot = new HybridNeuralBot(_network);
+        var hybridVsMinimax = EvaluateAgainst(hybridBot, new MinimaxBot(maxDepth: 1), 20);
         Console.WriteLine($"Hybrid vs Minimax(d=1): {hybridVsMinimax * 100:F1}%");
 
         if (minimaxDepth >= 2)
         {
-            var vsMinimax2 = EvaluateAgainst(new LocalMinimaxBot(maxDepth: 2), 10);
+            var vsMinimax2 = EvaluateAgainst(new MinimaxBot(maxDepth: 2), 10);
             Console.WriteLine($"Neural vs Minimax(d=2): {vsMinimax2 * 100:F1}%");
         }
     }
@@ -198,11 +193,9 @@ public sealed class SelfPlayTrainer
         {
             Console.WriteLine($"\n=== Iteration {iter + 1}/{iterations} ===");
 
-            // Collect data using MCTS self-play
             var trainingData = CollectMctsData(gamesPerIteration, mctsSimulations);
             Console.WriteLine($"Collected {trainingData.Count} positions from {gamesPerIteration} games");
 
-            // Train on collected data
             var (policyLoss, valueLoss) = TrainOnMctsData(trainingData, epochs);
             Console.WriteLine($"Policy loss: {policyLoss:F4}, Value loss: {valueLoss:F4}");
 
@@ -228,7 +221,6 @@ public sealed class SelfPlayTrainer
                 var moves = engine.GetAvailableMoves();
                 if (moves.Count == 0) break;
 
-                // Get training data from MCTS (includes improved policy)
                 var mctsData = mcts.GetTrainingData(engine);
                 if (mctsData.Count > 0)
                 {
@@ -236,12 +228,10 @@ public sealed class SelfPlayTrainer
                     gameData.Add((state, action, engine.CurrentPlayer));
                 }
 
-                // Play the move
                 var move = mcts.GetBestMove(engine, temperature: 1.0f);
                 engine.Place(move.X, move.Y);
             }
 
-            // Assign final rewards
             foreach (var (state, action, player) in gameData)
             {
                 float reward;
@@ -273,7 +263,6 @@ public sealed class SelfPlayTrainer
 
         for (var epoch = 0; epoch < epochs; epoch++)
         {
-            // Shuffle
             for (var i = data.Count - 1; i > 0; i--)
             {
                 var j = _random.Next(i + 1);
@@ -329,18 +318,17 @@ public sealed class SelfPlayTrainer
     {
         _network.eval();
 
-        // Test with MCTS
         var mcts = new NeuralMcts(_network, simulations);
-        var mctsBot = new NeuralMctsLocalBot(mcts);
+        var mctsBot = new NeuralMctsBot(mcts);
 
-        var vsRandom = EvaluateAgainst(mctsBot, new LocalRandomBot(), 10);
+        var vsRandom = EvaluateAgainst(mctsBot, new RandomBot(), 10);
         Console.WriteLine($"MCTS+Neural vs Random: {vsRandom * 100:F1}%");
 
-        var vsMinimax = EvaluateAgainst(mctsBot, new LocalMinimaxBot(maxDepth: 1), 10);
+        var vsMinimax = EvaluateAgainst(mctsBot, new MinimaxBot(maxDepth: 1), 10);
         Console.WriteLine($"MCTS+Neural vs Minimax(d=1): {vsMinimax * 100:F1}%");
     }
 
-    private float EvaluateAgainst(ILocalBot bot, ILocalBot opponent, int numGames)
+    private float EvaluateAgainst(IBot bot, IBot opponent, int numGames)
     {
         var wins = 0;
 
@@ -367,14 +355,18 @@ public sealed class SelfPlayTrainer
         return (float)wins / numGames;
     }
 
-    private sealed class NeuralMctsLocalBot : ILocalBot
+    private sealed class NeuralMctsBot : IBot
     {
         private readonly NeuralMcts _mcts;
         public string Name => "MCTS+Neural";
 
-        public NeuralMctsLocalBot(NeuralMcts mcts) => _mcts = mcts;
+        public NeuralMctsBot(NeuralMcts mcts) => _mcts = mcts;
 
-        public (int X, int Y) GetMove(GameEngine engine) => _mcts.GetBestMove(engine, temperature: 0.1f);
+        public (int X, int Y) GetMove(IBoardView board)
+        {
+            var engine = board as GameEngine ?? GameEngine.FromBoard(board);
+            return _mcts.GetBestMove(engine, temperature: 0.1f);
+        }
     }
 
     private void TrainPhase(int maxIterations, int gamesPerIteration, int epochs, float targetWinRate, TrainingOpponent opponent)
@@ -479,7 +471,7 @@ public sealed class SelfPlayTrainer
         return data;
     }
 
-    private List<(float[] State, int Action, float Reward, Mark Player)> PlayAgainstOpponent(ILocalBot opponent)
+    private List<(float[] State, int Action, float Reward, Mark Player)> PlayAgainstOpponent(IBot opponent)
     {
         var data = new List<(float[] State, int Action, float Reward, Mark Player)>();
         var gameHistory = new List<(float[] State, int Action, Mark Player)>();
@@ -623,14 +615,14 @@ public sealed class SelfPlayTrainer
     {
         _network.eval();
 
-        var vsRandom = EvaluateAgainst(new LocalRandomBot(), 20);
+        var vsRandom = EvaluateAgainst(new RandomBot(), 20);
         Console.WriteLine($"Win rate vs Random: {vsRandom * 100:F1}%");
 
         var vsMinimax = EvaluateAgainst(_opponents[TrainingOpponent.Minimax], 10);
         Console.WriteLine($"Win rate vs Minimax: {vsMinimax * 100:F1}%");
     }
 
-    private float EvaluateAgainst(ILocalBot opponent, int numGames)
+    private float EvaluateAgainst(IBot opponent, int numGames)
     {
         var wins = 0;
 

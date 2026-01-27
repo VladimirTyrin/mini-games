@@ -1,4 +1,6 @@
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+using MiniGameNetworkBot.TicTacToe.Core;
+
+namespace MiniGameNetworkBot.TicTacToe.Training;
 
 public sealed class NeuralMcts
 {

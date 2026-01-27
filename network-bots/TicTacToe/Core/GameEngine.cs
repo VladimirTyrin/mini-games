@@ -1,4 +1,4 @@
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+namespace MiniGameNetworkBot.TicTacToe.Core;
 
 public enum Mark : byte
 {
@@ -116,6 +116,37 @@ public sealed class GameEngine : IBoardView
         _moveHistory.Clear();
         CurrentPlayer = Mark.X;
         Winner = null;
+    }
+
+    public static GameEngine FromBoard(IBoardView board)
+    {
+        var engine = new GameEngine(board.Width, board.Height, board.WinCount);
+
+        var xMoves = new List<(int X, int Y)>();
+        var oMoves = new List<(int X, int Y)>();
+
+        for (var y = 0; y < board.Height; y++)
+        {
+            for (var x = 0; x < board.Width; x++)
+            {
+                var cell = board.GetCell(x, y);
+                if (cell == Mark.X)
+                    xMoves.Add((x, y));
+                else if (cell == Mark.O)
+                    oMoves.Add((x, y));
+            }
+        }
+
+        var maxMoves = Math.Max(xMoves.Count, oMoves.Count);
+        for (var i = 0; i < maxMoves; i++)
+        {
+            if (i < xMoves.Count)
+                engine.Place(xMoves[i].X, xMoves[i].Y);
+            if (i < oMoves.Count)
+                engine.Place(oMoves[i].X, oMoves[i].Y);
+        }
+
+        return engine;
     }
 
     private bool CheckWinAt(int x, int y)

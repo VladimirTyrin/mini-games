@@ -2,7 +2,7 @@ using TorchSharp;
 using static TorchSharp.torch;
 using static TorchSharp.torch.nn;
 
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+namespace MiniGameNetworkBot.TicTacToe.Training;
 
 public sealed class PolicyValueNetwork : Module<Tensor, (Tensor Policy, Tensor Value)>
 {

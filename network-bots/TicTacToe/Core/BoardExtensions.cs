@@ -1,4 +1,4 @@
-namespace MiniGameNetworkBot.TicTacToe.LocalGame;
+namespace MiniGameNetworkBot.TicTacToe.Core;
 
 public static class BoardExtensions
 {

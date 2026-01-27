@@ -1,4 +1,6 @@
 using GameService;
+using MiniGameNetworkBot.TicTacToe.Adapters;
+using MiniGameNetworkBot.TicTacToe.Bots;
 using Tictactoe;
 
 namespace MiniGameNetworkBot.TicTacToe;
@@ -6,19 +8,16 @@ namespace MiniGameNetworkBot.TicTacToe;
 public sealed class TicTacToeRunner
 {
     private readonly GameNetworkHandler _networkHandler;
-    private readonly ITicTacToeBot _bot;
+    private readonly IBot _bot;
     private readonly TicTacToeBotType _opponentType;
 
-    public TicTacToeRunner(GameNetworkHandler networkHandler, ITicTacToeBot bot, TicTacToeBotType opponentType = TicTacToeBotType.Minimax)
+    public TicTacToeRunner(GameNetworkHandler networkHandler, IBot bot, TicTacToeBotType opponentType = TicTacToeBotType.Minimax)
     {
         _networkHandler = networkHandler;
         _bot = bot;
         _opponentType = opponentType;
     }
-    
-    /// <summary>
-    ///     true - won, false - lost, exception - error
-    /// </summary>
+
     public async Task<bool> RunAsync(CancellationToken cancellationToken)
     {
         await _networkHandler.EnqueueSendAsync(new ClientMessage
@@ -39,7 +38,7 @@ public sealed class TicTacToeRunner
                 }
             }
         }, cancellationToken);
-        
+
         await _networkHandler.EnqueueSendAsync(new ClientMessage
         {
             AddBot = new AddBotRequest
@@ -47,13 +46,13 @@ public sealed class TicTacToeRunner
                 TictactoeBot = _opponentType
             }
         }, cancellationToken);
-        
+
         var allMessagesEnumerable = _networkHandler.ReadAllFromThisMomentAsync(cancellationToken);
         await _networkHandler.EnqueueSendAsync(new ClientMessage
         {
             StartGame = new StartGameRequest()
         }, cancellationToken);
-        
+
         try
         {
             await foreach (var message in allMessagesEnumerable)
@@ -70,7 +69,8 @@ public sealed class TicTacToeRunner
                         continue;
                     }
 
-                    var botMove = _bot.Move(tictactoeState);
+                    var boardView = new ProtoStateView(tictactoeState);
+                    var (x, y) = _bot.GetMove(boardView);
 
                     await _networkHandler.EnqueueSendAsync(new ClientMessage
                     {
@@ -78,7 +78,7 @@ public sealed class TicTacToeRunner
                         {
                             Tictactoe = new TicTacToeInGameCommand
                             {
-                                Place = botMove
+                                Place = new PlaceMarkCommand { X = (uint)x, Y = (uint)y }
                             }
                         }
                     }, cancellationToken);
