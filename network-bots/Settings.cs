@@ -4,9 +4,6 @@ public enum BotType
 {
     Minimax,
     Mcts,
-    Gpu,
-    Neural,
-    NeuralMcts,
     Hybrid
 }
 
@@ -95,17 +92,17 @@ public sealed record Settings
             Options:
               --local                 Connect to localhost:5001
               --no-ui                 Disable UI window
-              --bot-type, -b TYPE     Bot type: Minimax, Mcts, Gpu, Neural, NeuralMcts, Hybrid (default: Minimax)
+              --bot-type, -b TYPE     Bot type: Minimax, Mcts, Hybrid (default: Minimax)
               --opponent, -o TYPE     Server opponent: Minimax, Random (default: Minimax)
-              --train                 Run self-play training for Neural bot
+              --train                 Run self-play training
               --model PATH            Neural model path (default: neural_model.dat)
               --iterations N          Training iterations (default: 50)
               --help, -h              Show this help
 
             Examples:
-              dotnet run -- --local --bot-type gpu --no-ui
+              dotnet run -- --local --bot-type hybrid --model neural_model.dat
               dotnet run -- --train --iterations 100
-              dotnet run -- --bot-type neural --opponent random
+              dotnet run -- --bot-type mcts --opponent random
             """);
     }
 }

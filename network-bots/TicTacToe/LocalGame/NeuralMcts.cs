@@ -27,7 +27,7 @@ public sealed class NeuralMcts
         // Quick check for immediate win
         foreach (var (x, y) in moves)
         {
-            if (IsWinningMove(engine, x, y, engine.CurrentPlayer))
+            if (TacticsEngine.IsWinningMove(engine, x, y, engine.CurrentPlayer))
                 return (x, y);
         }
 
@@ -35,7 +35,7 @@ public sealed class NeuralMcts
         var opponent = engine.CurrentPlayer == Mark.X ? Mark.O : Mark.X;
         foreach (var (x, y) in moves)
         {
-            if (IsWinningMove(engine, x, y, opponent))
+            if (TacticsEngine.IsWinningMove(engine, x, y, opponent))
                 return (x, y);
         }
 
@@ -200,44 +200,6 @@ public sealed class NeuralMcts
             var u = _explorationConstant * c.Prior * MathF.Sqrt(logParentVisits) / (1 + c.Visits);
             return q + u;
         })!;
-    }
-
-    private static bool IsWinningMove(GameEngine engine, int x, int y, Mark mark)
-    {
-        int[] dx = [1, 0, 1, 1];
-        int[] dy = [0, 1, 1, -1];
-
-        for (var d = 0; d < 4; d++)
-        {
-            var count = 1;
-
-            for (var i = 1; i < engine.WinCount; i++)
-            {
-                var nx = x + dx[d] * i;
-                var ny = y + dy[d] * i;
-                if (nx < 0 || ny < 0 || nx >= engine.Width || ny >= engine.Height)
-                    break;
-                if (engine.GetCell(nx, ny) != mark)
-                    break;
-                count++;
-            }
-
-            for (var i = 1; i < engine.WinCount; i++)
-            {
-                var nx = x - dx[d] * i;
-                var ny = y - dy[d] * i;
-                if (nx < 0 || ny < 0 || nx >= engine.Width || ny >= engine.Height)
-                    break;
-                if (engine.GetCell(nx, ny) != mark)
-                    break;
-                count++;
-            }
-
-            if (count >= engine.WinCount)
-                return true;
-        }
-
-        return false;
     }
 
     private sealed class MctsNode

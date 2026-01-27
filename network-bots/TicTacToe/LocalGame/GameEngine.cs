@@ -7,7 +7,7 @@ public enum Mark : byte
     O = 2
 }
 
-public sealed class GameEngine
+public sealed class GameEngine : IBoardView
 {
     private readonly Mark[,] _cells;
     private readonly Stack<(int X, int Y)> _moveHistory = new();
@@ -81,30 +81,7 @@ public sealed class GameEngine
         return moves.ToList();
     }
 
-    public float[] GetBoardState(Mark perspective)
-    {
-        var state = new float[3 * Height * Width];
-        var myMark = perspective;
-        var oppMark = perspective == Mark.X ? Mark.O : Mark.X;
-
-        for (var y = 0; y < Height; y++)
-        {
-            for (var x = 0; x < Width; x++)
-            {
-                var idx = y * Width + x;
-                var cell = _cells[y, x];
-
-                if (cell == myMark)
-                    state[idx] = 1f;
-                else if (cell == oppMark)
-                    state[Height * Width + idx] = 1f;
-                else
-                    state[2 * Height * Width + idx] = 1f;
-            }
-        }
-
-        return state;
-    }
+    public float[] GetBoardState(Mark perspective) => this.GetBoardStateForNetwork(perspective);
 
     public GameEngine Clone()
     {
@@ -119,6 +96,15 @@ public sealed class GameEngine
         clone.CurrentPlayer = CurrentPlayer;
         clone.Winner = Winner;
         return clone;
+    }
+
+    public Mark[,] ToArray()
+    {
+        var result = new Mark[Height, Width];
+        for (var y = 0; y < Height; y++)
+            for (var x = 0; x < Width; x++)
+                result[y, x] = _cells[y, x];
+        return result;
     }
 
     public void Reset()
