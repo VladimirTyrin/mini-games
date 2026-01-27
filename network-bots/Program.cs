@@ -75,45 +75,44 @@ static async Task RunGame(Settings settings)
         cts.Cancel();
     };
 
-    await using var networkHandler = await GameNetworkHandler.ConnectAsync(
+    var networkHandler = await GameNetworkHandler.ConnectAsync(
         settings.ServerAddress,
         bot.Name,
-        CancellationToken.None);
+        CancellationToken.None).ConfigureAwait(false);
 
-    var opponentType = BotFactory.ToServerBotType(settings.OpponentType);
-
-    var botTask = Task.Run(async () =>
+    try
     {
-        try
-        {
-            var runner = new TicTacToeRunner(networkHandler, bot, opponentType);
-            var won = await runner.RunAsync(cts.Token);
-            Console.WriteLine(won ? "We won!" : "We lost!");
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Bot error: {ex.Message}");
-        }
-        finally
-        {
-            if (bot is IDisposable disposable)
-                disposable.Dispose();
-        }
-    });
+        var opponentType = BotFactory.ToServerBotType(settings.OpponentType);
 
-    if (settings.ShowUi)
-    {
-        TicTacToeUi.Run(networkHandler, cts.Token);
-        await cts.CancelAsync();
-        await botTask.WaitAsync(TimeSpan.FromSeconds(2));
+        var botTask = Task.Run(async () =>
+        {
+            try
+            {
+                var runner = new TicTacToeRunner(networkHandler, bot, opponentType);
+                var won = await runner.RunAsync(cts.Token);
+                Console.WriteLine(won ? "We won!" : "We lost!");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Bot error: {ex.Message}");
+            }
+        });
+
+        if (settings.ShowUi)
+        {
+            TicTacToeUi.Run(networkHandler, cts.Token, () => cts.Cancel());
+            await botTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
+        else
+        {
+            await botTask.WaitAsync(cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
     }
-    else
+    finally
     {
-        await botTask.WaitAsync(cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        await networkHandler.DisposeAsync().ConfigureAwait(false);
     }
-
-    Environment.Exit(0);
 }

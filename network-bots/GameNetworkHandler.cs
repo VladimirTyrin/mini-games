@@ -33,7 +33,7 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     public static async Task<GameNetworkHandler> ConnectAsync(string serverAddress, string botName, CancellationToken cancellationToken)
     {
         var handler = new GameNetworkHandler(serverAddress, botName);
-        await handler.ConnectAsync(cancellationToken);
+        await handler.ConnectAsync(cancellationToken).ConfigureAwait(false);
         return handler;
     }
     
@@ -42,7 +42,7 @@ public sealed class GameNetworkHandler : IAsyncDisposable
         try
         {
             message.Version = VersionInfo.ServerVersion;
-            await _messageQueueWriter.WriteAsync(message, cancellationToken);
+            await _messageQueueWriter.WriteAsync(message, cancellationToken).ConfigureAwait(false);
         }
         catch (ChannelClosedException)
         {
@@ -87,7 +87,7 @@ public sealed class GameNetworkHandler : IAsyncDisposable
 
         try
         {
-            await foreach (var message in channel.Reader.ReadAllAsync(cancellationToken))
+            await foreach (var message in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 yield return message;
             }
@@ -121,7 +121,7 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     private async Task ConnectAsync(CancellationToken cancellationToken)
     {
         Console.WriteLine($"Connecting with clientId: {ClientId}");
-        
+
         var connectMessage = new ClientMessage
         {
             Connect = new ConnectRequest
@@ -132,10 +132,10 @@ public sealed class GameNetworkHandler : IAsyncDisposable
         var waitForConnectResponseTask = WaitForMessageOnceAsync(
             message => message.MessageCase is ServerMessage.MessageOneofCase.Connect,
             cancellationToken);
-        
-        await EnqueueSendAsync(connectMessage, cancellationToken);
-        
-        var responseMessage = await waitForConnectResponseTask;
+
+        await EnqueueSendAsync(connectMessage, cancellationToken).ConfigureAwait(false);
+
+        var responseMessage = await waitForConnectResponseTask.ConfigureAwait(false);
         if (!responseMessage.Connect.Success)
         {
             throw new Exception($"Failed to connect to server: {responseMessage.Connect.ErrorMessage}");
@@ -199,12 +199,18 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     
     private async Task RunWriteLoopAsync()
     {
-        while (await _messageQueueReader.WaitToReadAsync())
+        try
         {
-            while (_messageQueueReader.TryRead(out var message))
+            while (await _messageQueueReader.WaitToReadAsync().ConfigureAwait(false))
             {
-                await _streamWriter.WriteAsync(message);
+                while (_messageQueueReader.TryRead(out var message))
+                {
+                    await _streamWriter.WriteAsync(message).ConfigureAwait(false);
+                }
             }
+        }
+        catch
+        {
         }
     }
     
@@ -218,16 +224,16 @@ public sealed class GameNetworkHandler : IAsyncDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         await EnqueueSendAsync(new ClientMessage
         {
             Disconnect = new DisconnectRequest()
-        }, CancellationToken.None);
+        }, CancellationToken.None).ConfigureAwait(false);
 
         _messageQueueWriter.Complete();
-        await _writeTask;
-        await _cts.CancelAsync();
-        await _readTask;
+        await _writeTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        await _cts.CancelAsync().ConfigureAwait(false);
+        await _readTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         _cts.Dispose();
         _grpcChannel.Dispose();
     }

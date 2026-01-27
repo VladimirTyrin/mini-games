@@ -12,6 +12,7 @@ public static class BotFactory
             BotType.Minimax => new MinimaxBot(minimaxDepth),
             BotType.Mcts => new MctsBot(simulationsPerMove: 1000),
             BotType.Hybrid => CreateHybridBot(modelPath),
+            BotType.Random => new RandomBot(),
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown bot type")
         };
     }
@@ -34,6 +35,7 @@ public static class BotFactory
             BotType.Minimax => $"Minimax(d={minimaxDepth})",
             BotType.Mcts => "MCTS",
             BotType.Hybrid => "HybridNeural",
+            BotType.Random => "Random",
             _ => type.ToString()
         };
     }

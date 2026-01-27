@@ -23,9 +23,20 @@ public class App : Application
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             desktop.MainWindow = new GameWindow(NetworkHandler);
 
+            var isShuttingDown = false;
+
+            desktop.ShutdownRequested += (_, _) =>
+            {
+                if (isShuttingDown) return;
+                isShuttingDown = true;
+                TicTacToeUi.OnWindowClosed?.Invoke();
+            };
+
             ShutdownToken.Register(() =>
             {
-                Dispatcher.UIThread.InvokeAsync(() => desktop.MainWindow?.Close());
+                if (isShuttingDown) return;
+                isShuttingDown = true;
+                Dispatcher.UIThread.InvokeAsync(() => desktop.Shutdown());
             });
         }
 

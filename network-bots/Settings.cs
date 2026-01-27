@@ -4,7 +4,8 @@ public enum BotType
 {
     Minimax,
     Mcts,
-    Hybrid
+    Hybrid,
+    Random
 }
 
 public enum OpponentType
@@ -56,8 +57,14 @@ public sealed record Settings
                     break;
 
                 case "--bot-type" or "-b":
-                    if (i + 1 < args.Length && Enum.TryParse<BotType>(args[++i], ignoreCase: true, out var botType))
+                    if (i + 1 < args.Length)
+                    {
+                        if (!Enum.TryParse<BotType>(args[i + 1], ignoreCase: true, out var botType))
+                            throw new ArgumentException($"Invalid bot type: {args[i + 1]}. Valid types are: {string.Join(", ", Enum.GetValues<BotType>())}");
+
                         settings = settings with { BotType = botType };
+                    }
+
                     break;
 
                 case "--opponent" or "-o":
