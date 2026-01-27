@@ -112,9 +112,8 @@ static async Task RunGame(Settings settings)
     }
     else
     {
-        await botTask.WaitAsync(cts.Token);
+        await botTask.WaitAsync(cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
     }
 
-    await networkHandler.DisposeAsync();
     Environment.Exit(0);
 }
