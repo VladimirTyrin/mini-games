@@ -1,6 +1,6 @@
 pub const FIELD_WIDTH: usize = 9;
 pub const INITIAL_CELLS: usize = 42;
-pub const INITIAL_REFILLS: u32 = 3;
+pub const INITIAL_REFILLS: u32 = 5;
 pub const INITIAL_HINTS_LIMITED: u32 = 3;
 pub const HINT_BONUS_PER_REFILL: u32 = 1;
 

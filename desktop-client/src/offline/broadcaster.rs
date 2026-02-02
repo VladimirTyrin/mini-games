@@ -28,8 +28,8 @@ impl GameBroadcaster for LocalBroadcaster {
             Some(common::game_over_notification::GameInfo::TictactoeInfo(info)) => {
                 GameEndInfo::TicTacToe(info)
             }
-            Some(common::game_over_notification::GameInfo::NumbersMatchInfo(_)) => {
-                return;
+            Some(common::game_over_notification::GameInfo::NumbersMatchInfo(info)) => {
+                GameEndInfo::NumbersMatch(info)
             }
             None => return,
         };

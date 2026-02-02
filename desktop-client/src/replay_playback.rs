@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 
 use common::games::snake::{SnakeGameState, Direction, FieldSize, WallCollisionMode, DeadSnakeBehavior, Point, DeathReason};
 use common::games::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus};
+use common::games::numbers_match::{NumbersMatchGameState, HintMode, position_from_index};
 use common::games::SessionRng;
 use common::replay::{load_replay, ReplayPlayer};
 use common::{
@@ -58,8 +59,7 @@ pub async fn run_replay_playback(
                 run_tictactoe_replay(player, shared_state.clone(), &mut command_rx, replay_version.clone()).await
             }
             ReplayGame::NumbersMatch => {
-                shared_state.set_error("NumbersMatch replay not yet supported".to_string());
-                false
+                run_numbers_match_replay(player, shared_state.clone(), &mut command_rx, replay_version.clone()).await
             }
             ReplayGame::Unspecified => {
                 shared_state.set_error("Unknown game type in replay".to_string());
@@ -298,6 +298,148 @@ async fn run_tictactoe_replay(
             }
         }
     }
+}
+
+async fn run_numbers_match_replay(
+    mut player: ReplayPlayer,
+    shared_state: SharedState,
+    command_rx: &mut mpsc::UnboundedReceiver<ReplayCommand>,
+    replay_version: String,
+) -> bool {
+    let settings = match player.lobby_settings() {
+        Some(lobby_settings::Settings::NumbersMatch(s)) => *s,
+        _ => {
+            shared_state.set_error("Invalid numbers match settings in replay".to_string());
+            return false;
+        }
+    };
+
+    let hint_mode = match common::proto::numbers_match::HintMode::try_from(settings.hint_mode) {
+        Ok(common::proto::numbers_match::HintMode::Limited) => HintMode::Limited,
+        Ok(common::proto::numbers_match::HintMode::Unlimited) => HintMode::Unlimited,
+        Ok(common::proto::numbers_match::HintMode::Disabled) => HintMode::Disabled,
+        _ => HintMode::Limited,
+    };
+
+    let mut rng = SessionRng::new(player.seed());
+    let mut game_state = NumbersMatchGameState::new(&mut rng, hint_mode);
+
+    let total_actions = player.total_actions() as u64;
+    let mut current_action: u64 = 0;
+    let mut is_paused = false;
+
+    update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+
+    let move_delay = Duration::from_millis(300);
+    let mut move_timer = tokio::time::interval(move_delay);
+
+    loop {
+        tokio::select! {
+            _ = move_timer.tick() => {
+                if is_paused {
+                    continue;
+                }
+
+                if let Some(action) = player.next_action() {
+                    apply_numbers_match_action(&mut game_state, action);
+                    current_action += 1;
+                }
+
+                let is_finished = player.is_finished() || game_state.status() != common::games::numbers_match::GameStatus::InProgress;
+                update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
+
+                if is_finished {
+                    loop {
+                        match command_rx.recv().await {
+                            Some(ReplayCommand::Restart) => return true,
+                            Some(ReplayCommand::Stop) | None => return false,
+                            _ => continue,
+                        }
+                    }
+                }
+            }
+            Some(cmd) = command_rx.recv() => {
+                match cmd {
+                    ReplayCommand::Pause => {
+                        is_paused = true;
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                    }
+                    ReplayCommand::Resume => {
+                        is_paused = false;
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                    }
+                    ReplayCommand::Stop => {
+                        return false;
+                    }
+                    ReplayCommand::Restart => {
+                        return true;
+                    }
+                    ReplayCommand::SetSpeed(speed) => {
+                        let adjusted_delay = Duration::from_millis(
+                            (300.0 / speed.clamp(0.25, 4.0)) as u64
+                        );
+                        move_timer = tokio::time::interval(adjusted_delay);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn apply_numbers_match_action(
+    game_state: &mut NumbersMatchGameState,
+    action: &PlayerAction,
+) {
+    let Some(content) = &action.content else {
+        return;
+    };
+
+    let Some(inner) = &content.content else {
+        return;
+    };
+
+    if let player_action_content::Content::Command(cmd) = inner
+        && let Some(in_game_command::Command::NumbersMatch(nm_cmd)) = &cmd.command
+        && let Some(nm_inner) = &nm_cmd.command
+    {
+        match nm_inner {
+            common::proto::numbers_match::numbers_match_in_game_command::Command::RemovePair(remove) => {
+                let pos1 = position_from_index(remove.first_index);
+                let pos2 = position_from_index(remove.second_index);
+                let _ = game_state.remove_pair(pos1, pos2);
+            }
+            common::proto::numbers_match::numbers_match_in_game_command::Command::Refill(_) => {
+                let _ = game_state.refill();
+            }
+            common::proto::numbers_match::numbers_match_in_game_command::Command::RequestHint(_) => {
+                let _ = game_state.request_hint();
+            }
+        }
+    }
+}
+
+fn update_numbers_match_watching_state(
+    shared_state: &SharedState,
+    game_state: &NumbersMatchGameState,
+    is_paused: bool,
+    current_action: u64,
+    total_actions: u64,
+    replay_version: &str,
+    is_finished: bool,
+) {
+    let proto_state = game_state.to_proto();
+    let state_update = GameStateUpdate {
+        state: Some(game_state_update::State::NumbersMatch(proto_state)),
+    };
+
+    shared_state.set_state(AppState::WatchingReplay {
+        game_state: Some(state_update),
+        is_paused,
+        current_tick: current_action,
+        total_ticks: total_actions,
+        replay_version: replay_version.to_string(),
+        is_finished,
+    });
 }
 
 fn apply_snake_action(

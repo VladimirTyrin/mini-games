@@ -13,9 +13,18 @@ impl Board {
         let total_cells = row_count * FIELD_WIDTH;
         let mut cells = vec![Cell::empty(); total_cells];
 
-        for cell in cells.iter_mut().take(INITIAL_CELLS) {
-            cell.value = rng.random_range(1..=9);
-            cell.removed = false;
+        for i in 0..INITIAL_CELLS {
+            let col = i % FIELD_WIDTH;
+            let prev_value = if col > 0 { Some(cells[i - 1].value) } else { None };
+
+            loop {
+                let value = rng.random_range(1..=9);
+                if prev_value != Some(value) {
+                    cells[i].value = value;
+                    cells[i].removed = false;
+                    break;
+                }
+            }
         }
 
         Self { cells, row_count }
@@ -226,6 +235,7 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::games::session_rng::SessionRng;
 
     #[test]
     fn test_board_from_values_creates_correct_layout() {
@@ -399,5 +409,34 @@ mod tests {
         let board = Board::from_values(&[1, 0, 2, 0, 3, 0, 0, 0, 0]);
 
         assert_eq!(board.active_cell_count(), 3);
+    }
+
+    #[test]
+    fn test_fuzz_no_adjacent_horizontal_duplicates() {
+        for seed in 0..1000u64 {
+            let mut rng = SessionRng::new(seed);
+            let board = Board::new(&mut rng);
+
+            for row in 0..board.row_count() {
+                for col in 1..FIELD_WIDTH {
+                    let idx = row * FIELD_WIDTH + col;
+                    if idx >= INITIAL_CELLS {
+                        break;
+                    }
+
+                    let prev_idx = idx - 1;
+                    let prev_cell = &board.cells[prev_idx];
+                    let curr_cell = &board.cells[idx];
+
+                    if prev_cell.is_active() && curr_cell.is_active() {
+                        assert_ne!(
+                            prev_cell.value, curr_cell.value,
+                            "Seed {}: adjacent cells at row {}, cols {}-{} have same value {}",
+                            seed, row, col - 1, col, prev_cell.value
+                        );
+                    }
+                }
+            }
+        }
     }
 }
