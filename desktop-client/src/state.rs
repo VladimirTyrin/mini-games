@@ -1,5 +1,5 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, PlayerIdentity, ReplayGame};
-use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, proto::numbers_match::NumbersMatchGameEndInfo, PlayerIdentity, ReplayGame};
+use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig, NumbersMatchLobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
@@ -21,6 +21,7 @@ pub enum BotType {
 pub enum LobbyConfig {
     Snake(SnakeLobbyConfig),
     TicTacToe(TicTacToeLobbyConfig),
+    NumbersMatch(NumbersMatchLobbyConfig),
 }
 
 #[derive(Debug, Clone)]
@@ -53,9 +54,17 @@ pub enum TicTacToeGameCommand {
 }
 
 #[derive(Debug, Clone)]
+pub enum NumbersMatchGameCommand {
+    RemovePair { first_index: u32, second_index: u32 },
+    Refill,
+    RequestHint,
+}
+
+#[derive(Debug, Clone)]
 pub enum GameCommand {
     Snake(SnakeGameCommand),
     TicTacToe(TicTacToeGameCommand),
+    NumbersMatch(NumbersMatchGameCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +77,7 @@ pub enum ClientCommand {
 pub enum GameEndInfo {
     Snake(SnakeGameEndInfo),
     TicTacToe(TicTacToeGameEndInfo),
+    NumbersMatch(NumbersMatchGameEndInfo),
 }
 
 #[derive(Debug, Clone)]

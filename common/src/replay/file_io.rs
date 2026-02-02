@@ -115,6 +115,7 @@ pub fn generate_replay_filename(game: ReplayGame, version: &str) -> String {
     let game_name = match game {
         ReplayGame::Snake => "SNAKE",
         ReplayGame::Tictactoe => "TICTACTOE",
+        ReplayGame::NumbersMatch => "NUMBERSMATCH",
         ReplayGame::Unspecified => "UNKNOWN",
     };
 

@@ -4,6 +4,7 @@ package game_service;
 
 import "games/snake.proto";
 import "games/tictactoe.proto";
+import "games/numbers_match.proto";
 
 service GameService {
     rpc GameStream(stream ClientMessage) returns (stream ServerMessage);
@@ -106,6 +107,7 @@ message LobbySettings {
     oneof settings {
         snake.SnakeLobbySettings snake = 1;
         tictactoe.TicTacToeLobbySettings tictactoe = 2;
+        numbers_match.NumbersMatchLobbySettings numbers_match = 3;
     }
 }
 
@@ -188,6 +190,7 @@ message InGameCommand {
     oneof command {
         snake.SnakeInGameCommand snake = 1;
         tictactoe.TicTacToeInGameCommand tictactoe = 2;
+        numbers_match.NumbersMatchInGameCommand numbers_match = 3;
     }
 }
 
@@ -195,6 +198,7 @@ message GameStateUpdate {
     oneof state {
         snake.SnakeGameState snake = 1;
         tictactoe.TicTacToeGameState tictactoe = 2;
+        numbers_match.NumbersMatchGameState numbers_match = 3;
     }
 }
 
@@ -213,6 +217,7 @@ message LobbyDetails {
     oneof settings {
         snake.SnakeLobbySettings snake = 10;
         tictactoe.TicTacToeLobbySettings tictactoe = 11;
+        numbers_match.NumbersMatchLobbySettings numbers_match = 12;
     }
 }
 
@@ -256,6 +261,7 @@ message GameOverNotification {
     oneof game_info {
         snake.SnakeGameEndInfo snake_info = 10;
         tictactoe.TicTacToeGameEndInfo tictactoe_info = 11;
+        numbers_match.NumbersMatchGameEndInfo numbers_match_info = 12;
     }
 }
 

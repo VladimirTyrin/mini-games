@@ -6,6 +6,7 @@ import { useConnectionStore } from "../stores/connection";
 import { useLobbyStore } from "../stores/lobby";
 import SnakeGame from "../components/games/SnakeGame.vue";
 import TicTacToeGame from "../components/games/TicTacToeGame.vue";
+import NumbersMatchGame from "../components/games/NumbersMatchGame.vue";
 import GameOver from "../components/games/GameOver.vue";
 
 const router = useRouter();
@@ -25,6 +26,8 @@ const gameTitle = computed(() => {
       return "Snake";
     case "tictactoe":
       return "Tic Tac Toe";
+    case "numbersMatch":
+      return "Numbers Match";
     default:
       return "Game";
   }
@@ -119,6 +122,10 @@ onUnmounted(() => {
 
         <div v-else-if="gameType === 'tictactoe'">
           <TicTacToeGame :show-winning-line="isGameOver" />
+        </div>
+
+        <div v-else-if="gameType === 'numbersMatch'">
+          <NumbersMatchGame />
         </div>
 
         <div

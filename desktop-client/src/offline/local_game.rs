@@ -9,6 +9,7 @@ use crate::state::{
 use crate::constants::CHAT_BUFFER_SIZE;
 use ringbuffer::AllocRingBuffer;
 
+use super::numbers_match_runner::run_numbers_match_game;
 use super::snake_runner::run_snake_game;
 use super::tictactoe_runner::run_tictactoe_game;
 
@@ -129,6 +130,12 @@ fn create_lobby(
             };
             (LobbySettings::TicTacToe(ttt_settings), 2, LobbyConfig::TicTacToe(cfg))
         }
+        crate::state::LobbyConfig::NumbersMatch(cfg) => {
+            let nm_settings = common::NumbersMatchLobbySettings {
+                hint_mode: cfg.hint_mode.into(),
+            };
+            (LobbySettings::NumbersMatch(nm_settings), 1, LobbyConfig::NumbersMatch(cfg))
+        }
     };
 
     let creator_client_id = common::identifiers::ClientId::new(player_id.to_string());
@@ -183,6 +190,9 @@ async fn run_game(
         }
         LobbyConfig::TicTacToe(ref cfg) => {
             run_tictactoe_game(shared_state, command_rx, player_id, &lobby, cfg, &replay_config).await;
+        }
+        LobbyConfig::NumbersMatch(ref cfg) => {
+            run_numbers_match_game(shared_state, command_rx, player_id, &lobby, cfg, &replay_config).await;
         }
     }
 }

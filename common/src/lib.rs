@@ -8,6 +8,9 @@ pub mod proto {
     pub mod tictactoe {
         tonic::include_proto!("tictactoe");
     }
+    pub mod numbers_match {
+        tonic::include_proto!("numbers_match");
+    }
     pub mod replay {
         tonic::include_proto!("replay");
     }
@@ -26,6 +29,11 @@ pub mod proto {
         TicTacToeLobbySettings, TicTacToeBotType, FirstPlayerMode,
         TicTacToeGameEndReason, TicTacToeInGameCommand, PlaceMarkCommand,
         TicTacToeGameState, CellMark, MarkType, GameStatus,
+    };
+    pub use numbers_match::{
+        NumbersMatchLobbySettings, NumbersMatchInGameCommand, NumbersMatchGameState,
+        NumbersMatchGameEndReason, NumbersMatchGameEndInfo,
+        HintMode as ProtoHintMode,
     };
     pub use replay::{Game as ReplayGame, PlayerAction, PlayerActionContent, PlayerDisconnected, ReplayV1, ReplayV1Metadata, ReplayV1Header};
     pub use replay::player_action_content;

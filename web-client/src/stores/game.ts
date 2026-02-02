@@ -12,16 +12,24 @@ import type { SnakeGameState } from "../proto/games/snake_pb";
 import { Direction, SnakeInGameCommandSchema, TurnCommandSchema } from "../proto/games/snake_pb";
 import type { TicTacToeGameState } from "../proto/games/tictactoe_pb";
 import { TicTacToeInGameCommandSchema, PlaceMarkCommandSchema } from "../proto/games/tictactoe_pb";
+import type { NumbersMatchGameState } from "../proto/games/numbers_match_pb";
+import {
+  NumbersMatchInGameCommandSchema,
+  RemovePairCommandSchema,
+  RefillCommandSchema,
+  RequestHintCommandSchema,
+} from "../proto/games/numbers_match_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
 
-export type GameType = "snake" | "tictactoe" | null;
+export type GameType = "snake" | "tictactoe" | "numbersMatch" | null;
 
 export const useGameStore = defineStore("game", () => {
   const gameType = ref<GameType>(null);
   const sessionId = ref<string | null>(null);
   const snakeState = ref<SnakeGameState | null>(null);
   const tictactoeState = ref<TicTacToeGameState | null>(null);
+  const numbersMatchState = ref<NumbersMatchGameState | null>(null);
   const gameOver = ref<GameOverNotification | null>(null);
   const playAgainStatus = ref<PlayAgainStatusNotification | null>(null);
 
@@ -34,6 +42,7 @@ export const useGameStore = defineStore("game", () => {
   const currentState = computed(() => {
     if (gameType.value === "snake") return snakeState.value;
     if (gameType.value === "tictactoe") return tictactoeState.value;
+    if (gameType.value === "numbersMatch") return numbersMatchState.value;
     return null;
   });
 
@@ -78,6 +87,51 @@ export const useGameStore = defineStore("game", () => {
     gameClient.sendInGameCommand(command.command);
   }
 
+  function sendNumbersMatchRemovePair(firstIndex: number, secondIndex: number): void {
+    const command = create(InGameCommandSchema, {
+      command: {
+        case: "numbersMatch",
+        value: create(NumbersMatchInGameCommandSchema, {
+          command: {
+            case: "removePair",
+            value: create(RemovePairCommandSchema, { firstIndex, secondIndex }),
+          },
+        }),
+      },
+    });
+    gameClient.sendInGameCommand(command.command);
+  }
+
+  function sendNumbersMatchRefill(): void {
+    const command = create(InGameCommandSchema, {
+      command: {
+        case: "numbersMatch",
+        value: create(NumbersMatchInGameCommandSchema, {
+          command: {
+            case: "refill",
+            value: create(RefillCommandSchema, {}),
+          },
+        }),
+      },
+    });
+    gameClient.sendInGameCommand(command.command);
+  }
+
+  function sendNumbersMatchRequestHint(): void {
+    const command = create(InGameCommandSchema, {
+      command: {
+        case: "numbersMatch",
+        value: create(NumbersMatchInGameCommandSchema, {
+          command: {
+            case: "requestHint",
+            value: create(RequestHintCommandSchema, {}),
+          },
+        }),
+      },
+    });
+    gameClient.sendInGameCommand(command.command);
+  }
+
   function playAgain(): void {
     gameClient.playAgain();
   }
@@ -94,11 +148,19 @@ export const useGameStore = defineStore("game", () => {
         gameType.value = "snake";
         snakeState.value = update.state.value;
         tictactoeState.value = null;
+        numbersMatchState.value = null;
         break;
       case "tictactoe":
         gameType.value = "tictactoe";
         tictactoeState.value = update.state.value;
         snakeState.value = null;
+        numbersMatchState.value = null;
+        break;
+      case "numbersMatch":
+        gameType.value = "numbersMatch";
+        numbersMatchState.value = update.state.value;
+        snakeState.value = null;
+        tictactoeState.value = null;
         break;
     }
   }
@@ -124,6 +186,7 @@ export const useGameStore = defineStore("game", () => {
     sessionId.value = null;
     snakeState.value = null;
     tictactoeState.value = null;
+    numbersMatchState.value = null;
     gameOver.value = null;
     playAgainStatus.value = null;
   }
@@ -133,6 +196,7 @@ export const useGameStore = defineStore("game", () => {
     sessionId,
     snakeState,
     tictactoeState,
+    numbersMatchState,
     gameOver,
     playAgainStatus,
     isInGame,
@@ -142,6 +206,9 @@ export const useGameStore = defineStore("game", () => {
     hasVotedPlayAgain,
     sendSnakeCommand,
     sendTicTacToeCommand,
+    sendNumbersMatchRemovePair,
+    sendNumbersMatchRefill,
+    sendNumbersMatchRequestHint,
     playAgain,
     handleGameStarting,
     handleGameState,

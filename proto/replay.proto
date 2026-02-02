@@ -8,6 +8,7 @@ enum Game {
     GAME_UNSPECIFIED = 0;
     GAME_SNAKE = 1;
     GAME_TICTACTOE = 2;
+    GAME_NUMBERS_MATCH = 3;
 }
 
 message PlayerDisconnected {}

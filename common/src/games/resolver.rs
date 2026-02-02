@@ -1,6 +1,7 @@
 use crate::{ClientId, GameOverNotification, InGameCommand, in_game_command};
 use crate::games::{
     GameBroadcaster, GameSession, GameSessionConfig, LobbySettings, ReplayMode,
+    numbers_match::NumbersMatchSession,
     snake::{DeathReason, SnakeSession},
     tictactoe::TicTacToeSession,
 };
@@ -32,6 +33,9 @@ impl GameResolver {
         match session {
             GameSession::Snake(state) => SnakeSession::run(config, state, broadcaster).await,
             GameSession::TicTacToe(state) => TicTacToeSession::run(config, state, broadcaster).await,
+            GameSession::NumbersMatch(state) => {
+                NumbersMatchSession::run(&config, &state, &broadcaster).await
+            }
         }
     }
 
@@ -40,12 +44,15 @@ impl GameResolver {
         client_id: &ClientId,
         command: InGameCommand,
     ) {
-        match (session, &command.command) {
+        match (session, command.command) {
             (GameSession::Snake(state), Some(in_game_command::Command::Snake(cmd))) => {
-                SnakeSession::handle_command(state, client_id, cmd).await;
+                SnakeSession::handle_command(state, client_id, &cmd).await;
             }
             (GameSession::TicTacToe(state), Some(in_game_command::Command::Tictactoe(cmd))) => {
-                TicTacToeSession::handle_command(state, client_id, cmd).await;
+                TicTacToeSession::handle_command(state, client_id, &cmd).await;
+            }
+            (GameSession::NumbersMatch(state), Some(in_game_command::Command::NumbersMatch(cmd))) => {
+                NumbersMatchSession::handle_command(state, client_id, cmd).await;
             }
             _ => {}
         }
@@ -65,6 +72,9 @@ impl GameResolver {
             }
             GameSession::TicTacToe(state) => {
                 TicTacToeSession::handle_player_disconnect(state, client_id).await;
+            }
+            GameSession::NumbersMatch(state) => {
+                NumbersMatchSession::handle_player_disconnect(state).await;
             }
         }
     }

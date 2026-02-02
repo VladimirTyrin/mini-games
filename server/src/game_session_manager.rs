@@ -85,6 +85,9 @@ impl GameSessionManager {
             common::lobby::LobbySettings::TicTacToe(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
+            common::lobby::LobbySettings::NumbersMatch(settings) => {
+                GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
+            }
         };
 
         match game_session {

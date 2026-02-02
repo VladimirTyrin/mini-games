@@ -56,6 +56,13 @@ if [[ ! -d "${WEB_CLIENT_DIST}" ]]; then
     exit 1
 fi
 
+echo "==> Running tests (release mode)..."
+cargo test --release
+if [[ $? -ne 0 ]]; then
+    echo "Error: Tests failed" >&2
+    exit 1
+fi
+
 echo "==> Building server for Linux (${TARGET})..."
 if ! rustup target list --installed | grep -q "${TARGET}"; then
     echo "==> Installing Rust target: ${TARGET}"

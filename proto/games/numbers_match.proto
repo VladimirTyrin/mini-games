@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package numbers_match;
+
+message NumbersMatchLobbySettings {
+    HintMode hint_mode = 1;
+}
+
+enum HintMode {
+    HINT_MODE_UNSPECIFIED = 0;
+    HINT_MODE_LIMITED = 1;      // 3 initial + 1 per refill
+    HINT_MODE_UNLIMITED = 2;
+    HINT_MODE_DISABLED = 3;
+}
+
+message NumbersMatchInGameCommand {
+    oneof command {
+        RemovePairCommand remove_pair = 1;
+        RefillCommand refill = 2;
+        RequestHintCommand request_hint = 3;
+    }
+}
+
+message RemovePairCommand {
+    uint32 first_index = 1;
+    uint32 second_index = 2;
+}
+
+message RefillCommand {}
+
+message RequestHintCommand {}
+
+message NumbersMatchGameState {
+    repeated Cell cells = 1;
+    uint32 row_count = 2;
+    uint32 refills_remaining = 3;
+    optional uint32 hints_remaining = 4;  // None = unlimited
+    HintMode hint_mode = 5;
+    GameStatus status = 6;
+    repeated GameEvent events = 7;
+    optional HintResult current_hint = 8;
+}
+
+message Cell {
+    uint32 value = 1;   // 1-9, 0 = empty
+    bool removed = 2;
+}
+
+enum GameStatus {
+    GAME_STATUS_UNSPECIFIED = 0;
+    GAME_STATUS_IN_PROGRESS = 1;
+    GAME_STATUS_WON = 2;
+    GAME_STATUS_LOST = 3;
+}
+
+message GameEvent {
+    oneof event {
+        PairRemovedEvent pair_removed = 1;
+        RowsDeletedEvent rows_deleted = 2;
+        RefillEvent refill = 3;
+        HintShownEvent hint_shown = 4;
+    }
+}
+
+message PairRemovedEvent {
+    uint32 first_index = 1;
+    uint32 second_index = 2;
+}
+
+message RowsDeletedEvent {
+    repeated uint32 row_indices = 1;
+}
+
+message RefillEvent {
+    uint32 old_row_count = 1;
+    uint32 new_row_count = 2;
+    repeated uint32 added_values = 3;
+}
+
+message HintShownEvent {
+    HintResult hint = 1;
+}
+
+message HintResult {
+    oneof hint {
+        PairHint pair = 1;
+        RefillHint suggest_refill = 2;
+        NoMovesHint no_moves = 3;
+    }
+}
+
+message PairHint {
+    uint32 first_index = 1;
+    uint32 second_index = 2;
+}
+
+message RefillHint {}
+message NoMovesHint {}
+
+message NumbersMatchGameEndInfo {
+    NumbersMatchGameEndReason reason = 1;
+    uint32 pairs_removed = 2;
+    uint32 refills_used = 3;
+    uint32 hints_used = 4;
+}
+
+enum NumbersMatchGameEndReason {
+    NUMBERS_MATCH_GAME_END_REASON_UNSPECIFIED = 0;
+    NUMBERS_MATCH_GAME_END_REASON_WON = 1;
+    NUMBERS_MATCH_GAME_END_REASON_LOST = 2;
+    NUMBERS_MATCH_GAME_END_REASON_PLAYER_DISCONNECTED = 3;
+}

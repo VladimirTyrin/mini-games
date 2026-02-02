@@ -1,7 +1,7 @@
 use super::colors::generate_color_from_client_id;
 use super::game::GameUi;
 use super::sprites::Sprites;
-use crate::config::{Config, GameType, SnakeLobbyConfig};
+use crate::config::{Config, GameType, NumbersMatchLobbyConfig, SnakeLobbyConfig};
 use crate::state::{AppState, MenuCommand, ClientCommand, SharedState, LobbyConfig, ReplayInfo};
 use crate::replay_playback::{ReplayCommand, run_replay_playback};
 use crate::CommandSender;
@@ -93,6 +93,7 @@ pub struct MenuApp {
     selected_snake_bot_type: SnakeBotType,
     selected_ttt_bot_type: common::TicTacToeBotType,
     win_count_input: String,
+    selected_hint_mode: common::proto::numbers_match::HintMode,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -136,6 +137,7 @@ impl MenuApp {
             selected_snake_bot_type: SnakeBotType::Efficient,
             selected_ttt_bot_type: common::TicTacToeBotType::TictactoeBotTypeMinimax,
             win_count_input: config.tictactoe.win_count.to_string(),
+            selected_hint_mode: config.numbers_match.hint_mode,
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -149,6 +151,14 @@ impl MenuApp {
         }
     }
 
+    fn should_maximize_for_game(game_type: GameType) -> bool {
+        match game_type {
+            GameType::Snake => true,
+            GameType::TicTacToe => true,
+            GameType::NumbersMatch => false,
+        }
+    }
+
     fn handle_state_transition(
         &mut self,
         from: &Option<AppStateType>,
@@ -156,7 +166,20 @@ impl MenuApp {
         ctx: &egui::Context,
     ) {
         match (from, to) {
-            (_, AppStateType::InGame) | (_, AppStateType::WatchingReplay) => {
+            (_, AppStateType::InGame) => {
+                if Self::should_maximize_for_game(self.selected_game_type) {
+                    if self.normal_window_size.is_none() {
+                        self.normal_window_size = Some(
+                            ctx.input(|i| i.viewport().inner_rect)
+                                .map(|r| r.size())
+                                .unwrap_or(egui::vec2(600.0, 700.0))
+                        );
+                    }
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                }
+            }
+
+            (_, AppStateType::WatchingReplay) => {
                 if self.normal_window_size.is_none() {
                     self.normal_window_size = Some(
                         ctx.input(|i| i.viewport().inner_rect)
@@ -390,6 +413,9 @@ impl MenuApp {
                                 Some(common::lobby_settings::Settings::Tictactoe(s)) => {
                                     ("⭕", format!("{}x{}, {} to win", s.field_width, s.field_height, s.win_count))
                                 }
+                                Some(common::lobby_settings::Settings::NumbersMatch(_)) => {
+                                    ("🔢", "Single player puzzle".to_string())
+                                }
                                 None => ("❓", "Unknown".to_string()),
                             };
 
@@ -467,6 +493,9 @@ impl MenuApp {
                         self.field_height_input = config.tictactoe.field_height.to_string();
                         self.win_count_input = config.tictactoe.win_count.to_string();
                     }
+                    if ui.radio_value(&mut self.selected_game_type, GameType::NumbersMatch, "Numbers Match").clicked() {
+                        self.max_players_input = "1".to_string();
+                    }
                 });
 
                 ui.separator();
@@ -474,18 +503,20 @@ impl MenuApp {
                 ui.label("Lobby Name:");
                 ui.text_edit_singleline(&mut self.lobby_name_input);
 
-                ui.label("Max Players:");
-                let max_players_enabled = self.selected_game_type == GameType::Snake;
-                ui.add_enabled(max_players_enabled, egui::TextEdit::singleline(&mut self.max_players_input));
-                if self.selected_game_type == GameType::TicTacToe {
-                    ui.label("  (Fixed at 2 for TicTacToe)");
+                if self.selected_game_type != GameType::NumbersMatch {
+                    ui.label("Max Players:");
+                    let max_players_enabled = self.selected_game_type == GameType::Snake;
+                    ui.add_enabled(max_players_enabled, egui::TextEdit::singleline(&mut self.max_players_input));
+                    if self.selected_game_type == GameType::TicTacToe {
+                        ui.label("  (Fixed at 2 for TicTacToe)");
+                    }
+
+                    ui.label("Field Width:");
+                    ui.text_edit_singleline(&mut self.field_width_input);
+
+                    ui.label("Field Height:");
+                    ui.text_edit_singleline(&mut self.field_height_input);
                 }
-
-                ui.label("Field Width:");
-                ui.text_edit_singleline(&mut self.field_width_input);
-
-                ui.label("Field Height:");
-                ui.text_edit_singleline(&mut self.field_height_input);
 
                 match self.selected_game_type {
                     GameType::Snake => {
@@ -514,6 +545,14 @@ impl MenuApp {
                         ui.label("Win Count:");
                         ui.text_edit_singleline(&mut self.win_count_input);
                     }
+                    GameType::NumbersMatch => {
+                        ui.label("Hint Mode:");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut self.selected_hint_mode, common::proto::numbers_match::HintMode::Limited, "Limited");
+                            ui.radio_value(&mut self.selected_hint_mode, common::proto::numbers_match::HintMode::Unlimited, "Unlimited");
+                            ui.radio_value(&mut self.selected_hint_mode, common::proto::numbers_match::HintMode::Disabled, "Disabled");
+                        });
+                    }
                 }
 
                 ui.horizontal(|ui| {
@@ -537,28 +576,23 @@ impl MenuApp {
             });
 
         if create_lobby {
-            let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
-                return;
-            };
-
-            let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
-                return;
-            };
-
             let lobby_config = match self.selected_game_type {
                 GameType::Snake => {
+                    let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
+                        return;
+                    };
+                    let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
+                        return;
+                    };
                     let Some(max_players) = parse_u32_input(&self.max_players_input, "Max players", &self.shared_state) else {
                         return;
                     };
-
                     let Some(tick_interval_ms) = parse_u32_input(&self.tick_interval_input, "Tick interval", &self.shared_state) else {
                         return;
                     };
-
                     let Some(max_food_count) = parse_u32_input(&self.max_food_count_input, "Max food count", &self.shared_state) else {
                         return;
                     };
-
                     let Some(food_spawn_probability) = parse_f32_input(&self.food_spawn_probability_input, "Food spawn probability", &self.shared_state) else {
                         return;
                     };
@@ -582,6 +616,12 @@ impl MenuApp {
                     LobbyConfig::Snake(snake_config)
                 }
                 GameType::TicTacToe => {
+                    let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
+                        return;
+                    };
+                    let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
+                        return;
+                    };
                     let Some(win_count) = parse_u32_input(&self.win_count_input, "Win count", &self.shared_state) else {
                         return;
                     };
@@ -598,6 +638,18 @@ impl MenuApp {
                     self.config_manager.set_config(&config).ok();
 
                     LobbyConfig::TicTacToe(ttt_config)
+                }
+                GameType::NumbersMatch => {
+                    let nm_config = NumbersMatchLobbyConfig {
+                        hint_mode: self.selected_hint_mode,
+                    };
+
+                    let mut config = self.config_manager.get_config().unwrap();
+                    config.numbers_match = nm_config;
+                    config.last_game = Some(GameType::NumbersMatch);
+                    self.config_manager.set_config(&config).ok();
+
+                    LobbyConfig::NumbersMatch(nm_config)
                 }
             };
 
@@ -1042,12 +1094,14 @@ impl MenuApp {
                         let game_icon = match replay.game {
                             ReplayGame::Snake => "🐍",
                             ReplayGame::Tictactoe => "⭕",
+                            ReplayGame::NumbersMatch => "🔢",
                             ReplayGame::Unspecified => "❓",
                         };
 
                         let game_name = match replay.game {
                             ReplayGame::Snake => "Snake",
                             ReplayGame::Tictactoe => "TicTacToe",
+                            ReplayGame::NumbersMatch => "Numbers Match",
                             ReplayGame::Unspecified => "Unknown",
                         };
 
@@ -1171,6 +1225,9 @@ impl MenuApp {
                 }
                 Some(common::game_state_update::State::Tictactoe(_)) => {
                     self.game_ui = Some(GameUi::new_tictactoe());
+                }
+                Some(common::game_state_update::State::NumbersMatch(_)) => {
+                    self.game_ui = Some(GameUi::new_numbers_match());
                 }
                 None => {}
             }
@@ -1410,6 +1467,9 @@ impl eframe::App for MenuApp {
                                 Some(common::game_state_update::State::Tictactoe(_)) => {
                                     self.game_ui = Some(GameUi::new_tictactoe());
                                 }
+                                Some(common::game_state_update::State::NumbersMatch(_)) => {
+                                    self.game_ui = Some(GameUi::new_numbers_match());
+                                }
                                 None => {}
                             }
                         }
@@ -1432,6 +1492,9 @@ impl eframe::App for MenuApp {
                             crate::state::GameEndInfo::TicTacToe(_) => {
                                 self.game_ui = Some(GameUi::new_tictactoe());
                             }
+                            crate::state::GameEndInfo::NumbersMatch(_) => {
+                                self.game_ui = Some(GameUi::new_numbers_match());
+                            }
                         }
                     }
                     let replay_path = self.shared_state.get_last_replay_path();
@@ -1448,6 +1511,9 @@ impl eframe::App for MenuApp {
                             }
                             crate::state::GameEndInfo::TicTacToe(ttt_info) => {
                                 game_ui.render_game_over_tictactoe(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &ttt_info, &play_again_status, is_observer, sender, replay_path.as_ref())
+                            }
+                            crate::state::GameEndInfo::NumbersMatch(nm_info) => {
+                                game_ui.render_game_over_numbers_match(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &nm_info, &play_again_status, is_observer, sender, replay_path.as_ref())
                             }
                         };
                     }

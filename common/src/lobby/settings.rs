@@ -1,6 +1,6 @@
 use crate::{
     lobby_details, lobby_settings,
-    SnakeLobbySettings, TicTacToeLobbySettings,
+    NumbersMatchLobbySettings, SnakeLobbySettings, TicTacToeLobbySettings,
     validate_lobby_settings::ValidateLobbySettings,
 };
 
@@ -8,6 +8,7 @@ use crate::{
 pub enum LobbySettings {
     Snake(SnakeLobbySettings),
     TicTacToe(TicTacToeLobbySettings),
+    NumbersMatch(NumbersMatchLobbySettings),
 }
 
 impl LobbySettings {
@@ -15,6 +16,7 @@ impl LobbySettings {
         match self {
             LobbySettings::Snake(s) => s.validate(max_players),
             LobbySettings::TicTacToe(t) => t.validate(max_players),
+            LobbySettings::NumbersMatch(n) => n.validate(max_players),
         }
     }
 
@@ -22,6 +24,7 @@ impl LobbySettings {
         match self {
             LobbySettings::Snake(s) => Some(lobby_details::Settings::Snake(*s)),
             LobbySettings::TicTacToe(t) => Some(lobby_details::Settings::Tictactoe(*t)),
+            LobbySettings::NumbersMatch(n) => Some(lobby_details::Settings::NumbersMatch(*n)),
         }
     }
 
@@ -30,6 +33,7 @@ impl LobbySettings {
             settings: Some(match self {
                 LobbySettings::Snake(s) => lobby_settings::Settings::Snake(*s),
                 LobbySettings::TicTacToe(t) => lobby_settings::Settings::Tictactoe(*t),
+                LobbySettings::NumbersMatch(n) => lobby_settings::Settings::NumbersMatch(*n),
             }),
         })
     }
@@ -38,6 +42,7 @@ impl LobbySettings {
         match settings {
             Some(lobby_settings::Settings::Snake(s)) => Ok(LobbySettings::Snake(s)),
             Some(lobby_settings::Settings::Tictactoe(t)) => Ok(LobbySettings::TicTacToe(t)),
+            Some(lobby_settings::Settings::NumbersMatch(n)) => Ok(LobbySettings::NumbersMatch(n)),
             None => Err("No settings provided".to_string()),
         }
     }

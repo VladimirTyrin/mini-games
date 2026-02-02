@@ -10,8 +10,9 @@ import {
   DeadSnakeBehavior,
 } from "../proto/games/snake_pb";
 import { FirstPlayerMode } from "../proto/games/tictactoe_pb";
+import { HintMode } from "../proto/games/numbers_match_pb";
 
-type GameType = "snake" | "tictactoe";
+type GameType = "snake" | "tictactoe" | "numbersMatch";
 
 const router = useRouter();
 const connectionStore = useConnectionStore();
@@ -40,6 +41,8 @@ const tttFieldHeight = ref(configStore.tictactoeDefaults.fieldHeight);
 const tttWinCount = ref(configStore.tictactoeDefaults.winCount);
 const tttFirstPlayer = ref(configStore.tictactoeDefaults.firstPlayer);
 
+const nmHintMode = ref(configStore.numbersMatchDefaults.hintMode);
+
 const savedClientId = connectionStore.clientId;
 if (savedClientId) {
   username.value = savedClientId;
@@ -55,6 +58,7 @@ function getGameTypeLabel(lobby: (typeof lobbies.value)[0]): string {
   if (!settings) return "Unknown";
   if (settings.case === "snake") return "Snake";
   if (settings.case === "tictactoe") return "TicTacToe";
+  if (settings.case === "numbersMatch") return "Numbers Match";
   return "Unknown";
 }
 
@@ -63,6 +67,7 @@ function getGameTypeIcon(lobby: (typeof lobbies.value)[0]): string {
   if (!settings) return "?";
   if (settings.case === "snake") return "S";
   if (settings.case === "tictactoe") return "X";
+  if (settings.case === "numbersMatch") return "N";
   return "?";
 }
 
@@ -107,6 +112,8 @@ function openCreateDialog() {
   tttWinCount.value = configStore.tictactoeDefaults.winCount;
   tttFirstPlayer.value = configStore.tictactoeDefaults.firstPlayer;
 
+  nmHintMode.value = configStore.numbersMatchDefaults.hintMode;
+
   showCreateDialog.value = true;
 }
 
@@ -127,12 +134,16 @@ function handleCreateLobby() {
       foodSpawnProbability: snakeFoodSpawnProb.value,
       deadSnakeBehavior: snakeDeadSnakeBehavior.value,
     });
-  } else {
+  } else if (newLobbyGameType.value === "tictactoe") {
     lobbyStore.createTicTacToeLobby(newLobbyName.value.trim(), 2, {
       fieldWidth: tttFieldWidth.value,
       fieldHeight: tttFieldHeight.value,
       winCount: tttWinCount.value,
       firstPlayer: tttFirstPlayer.value,
+    });
+  } else if (newLobbyGameType.value === "numbersMatch") {
+    lobbyStore.createNumbersMatchLobby(newLobbyName.value.trim(), {
+      hintMode: nmHintMode.value,
     });
   }
 
@@ -255,7 +266,8 @@ onUnmounted(() => {
                 class="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold"
                 :class="{
                   'bg-green-600': getGameTypeIcon(lobby) === 'S',
-                  'bg-purple-600': getGameTypeIcon(lobby) === 'X',
+                  'bg-blue-600': getGameTypeIcon(lobby) === 'X',
+                  'bg-purple-600': getGameTypeIcon(lobby) === 'N',
                   'bg-slate-600': getGameTypeIcon(lobby) === '?',
                 }"
               >
@@ -335,11 +347,22 @@ onUnmounted(() => {
                 :class="[
                   'flex-1 py-2 px-4 rounded font-medium transition-colors',
                   newLobbyGameType === 'tictactoe'
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
                 ]"
               >
                 TicTacToe
+              </button>
+              <button
+                @click="newLobbyGameType = 'numbersMatch'"
+                :class="[
+                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
+                  newLobbyGameType === 'numbersMatch'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                ]"
+              >
+                Numbers
               </button>
             </div>
           </div>
@@ -527,6 +550,31 @@ onUnmounted(() => {
                   </select>
                 </div>
               </div>
+            </div>
+          </template>
+
+          <template v-if="newLobbyGameType === 'numbersMatch'">
+            <div class="border-t border-slate-700 pt-4">
+              <h3 class="text-lg font-medium mb-3">Numbers Match Settings</h3>
+
+              <div>
+                <label for="hintMode" class="block text-sm font-medium text-slate-300 mb-2">
+                  Hint Mode
+                </label>
+                <select
+                  id="hintMode"
+                  v-model.number="nmHintMode"
+                  class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option :value="HintMode.LIMITED">Limited (3 + 1 per refill)</option>
+                  <option :value="HintMode.UNLIMITED">Unlimited</option>
+                  <option :value="HintMode.DISABLED">Disabled</option>
+                </select>
+              </div>
+
+              <p class="text-slate-400 text-sm mt-4">
+                Single-player puzzle game. Match pairs of equal numbers or numbers that sum to 10.
+              </p>
             </div>
           </template>
         </div>

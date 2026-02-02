@@ -9,6 +9,7 @@ import { useToastStore } from "../stores/toast";
 import { useDeviceStore } from "../stores/device";
 import { SnakeBotType, WallCollisionMode, DeadSnakeBehavior } from "../proto/games/snake_pb";
 import { TicTacToeBotType, FirstPlayerMode } from "../proto/games/tictactoe_pb";
+import { HintMode } from "../proto/games/numbers_match_pb";
 
 const router = useRouter();
 const lobbyStore = useLobbyStore();
@@ -33,7 +34,12 @@ const chatMessages = computed(() => chatStore.inLobbyMessages);
 const gameTypeBadge = computed(() => {
   if (gameType.value === "snake") return { text: "Snake", class: "bg-green-600" };
   if (gameType.value === "tictactoe") return { text: "TicTacToe", class: "bg-blue-600" };
+  if (gameType.value === "numbersMatch") return { text: "Numbers Match", class: "bg-purple-600" };
   return { text: "Unknown", class: "bg-gray-600" };
+});
+
+const isSinglePlayerGame = computed(() => {
+  return gameType.value === "numbersMatch";
 });
 
 
@@ -135,6 +141,15 @@ function getFirstPlayerModeLabel(mode: FirstPlayerMode): string {
   switch (mode) {
     case FirstPlayerMode.RANDOM: return "Random";
     case FirstPlayerMode.HOST: return "Host";
+    default: return "Unknown";
+  }
+}
+
+function getHintModeLabel(mode: HintMode): string {
+  switch (mode) {
+    case HintMode.LIMITED: return "Limited (3 + 1 per refill)";
+    case HintMode.UNLIMITED: return "Unlimited";
+    case HintMode.DISABLED: return "Disabled";
     default: return "Unknown";
   }
 }
@@ -262,9 +277,9 @@ onUnmounted(() => {
                 Players ({{ lobby.players.length }}/{{ lobby.maxPlayers }})
               </h2>
 
-              <!-- Host Controls: Add Bot -->
+              <!-- Host Controls: Add Bot (hidden for single-player games) -->
               <button
-                v-if="isHost && canAddBot"
+                v-if="isHost && canAddBot && !isSinglePlayerGame"
                 class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded transition-colors text-sm"
                 @click="addBot"
               >
@@ -433,6 +448,9 @@ onUnmounted(() => {
               <template v-else-if="gameType === 'tictactoe' && lobby.players.length !== 2">
                 TicTacToe requires exactly 2 players.
               </template>
+              <template v-else-if="gameType === 'numbersMatch' && lobby.players.length !== 1">
+                Numbers Match is a single-player game.
+              </template>
               <template v-else-if="lobby.players.length < 1">
                 At least 1 player required.
               </template>
@@ -487,6 +505,17 @@ onUnmounted(() => {
               <div class="flex justify-between">
                 <span class="text-gray-400">First Player:</span>
                 <span>{{ getFirstPlayerModeLabel(lobby.settings.value.firstPlayer) }}</span>
+              </div>
+            </div>
+
+            <!-- NumbersMatch Settings -->
+            <div v-else-if="lobby.settings.case === 'numbersMatch'" class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-400">Hint Mode:</span>
+                <span>{{ getHintModeLabel(lobby.settings.value.hintMode) }}</span>
+              </div>
+              <div class="text-gray-500 text-xs mt-2">
+                Single-player puzzle game
               </div>
             </div>
           </div>

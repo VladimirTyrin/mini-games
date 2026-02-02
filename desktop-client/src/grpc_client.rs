@@ -159,6 +159,13 @@ pub async fn grpc_client_task(
                                             })),
                                         }))
                                     }
+                                    crate::state::LobbyConfig::NumbersMatch(nm_config) => {
+                                        (1, Some(common::LobbySettings {
+                                            settings: Some(common::lobby_settings::Settings::NumbersMatch(common::proto::numbers_match::NumbersMatchLobbySettings {
+                                                hint_mode: nm_config.hint_mode.into(),
+                                            })),
+                                        }))
+                                    }
                                 };
 
                                 Some(client_message::Message::CreateLobby(CreateLobbyRequest {
@@ -261,6 +268,44 @@ pub async fn grpc_client_task(
                                                             x,
                                                             y,
                                                         }
+                                                    ))
+                                                }
+                                            ))
+                                        }))
+                                    }
+                                }
+                            }
+                            GameCommand::NumbersMatch(nm_cmd) => {
+                                use crate::state::NumbersMatchGameCommand;
+                                match nm_cmd {
+                                    NumbersMatchGameCommand::RemovePair { first_index, second_index } => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::NumbersMatch(
+                                                common::NumbersMatchInGameCommand {
+                                                    command: Some(common::proto::numbers_match::numbers_match_in_game_command::Command::RemovePair(
+                                                        common::proto::numbers_match::RemovePairCommand { first_index, second_index }
+                                                    ))
+                                                }
+                                            ))
+                                        }))
+                                    }
+                                    NumbersMatchGameCommand::Refill => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::NumbersMatch(
+                                                common::NumbersMatchInGameCommand {
+                                                    command: Some(common::proto::numbers_match::numbers_match_in_game_command::Command::Refill(
+                                                        common::proto::numbers_match::RefillCommand {}
+                                                    ))
+                                                }
+                                            ))
+                                        }))
+                                    }
+                                    NumbersMatchGameCommand::RequestHint => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::NumbersMatch(
+                                                common::NumbersMatchInGameCommand {
+                                                    command: Some(common::proto::numbers_match::numbers_match_in_game_command::Command::RequestHint(
+                                                        common::proto::numbers_match::RequestHintCommand {}
                                                     ))
                                                 }
                                             ))
@@ -424,6 +469,9 @@ pub async fn grpc_client_task(
                                         }
                                         Some(common::game_over_notification::GameInfo::TictactoeInfo(info)) => {
                                             crate::state::GameEndInfo::TicTacToe(*info)
+                                        }
+                                        Some(common::game_over_notification::GameInfo::NumbersMatchInfo(info)) => {
+                                            crate::state::GameEndInfo::NumbersMatch(*info)
                                         }
                                         _ => crate::state::GameEndInfo::Snake(common::proto::snake::SnakeGameEndInfo {
                                             reason: common::proto::snake::SnakeGameEndReason::Unspecified as i32,

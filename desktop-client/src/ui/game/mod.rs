@@ -1,4 +1,5 @@
 mod game_ui;
+pub mod numbers_match;
 pub mod snake;
 pub mod tictactoe;
 

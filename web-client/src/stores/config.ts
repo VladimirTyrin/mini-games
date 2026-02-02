@@ -5,6 +5,7 @@ import {
   DeadSnakeBehavior,
 } from "../proto/games/snake_pb";
 import { FirstPlayerMode } from "../proto/games/tictactoe_pb";
+import { HintMode } from "../proto/games/numbers_match_pb";
 
 const CONFIG_STORAGE_KEY = "mini_games_config";
 
@@ -25,10 +26,15 @@ export interface TicTacToeDefaults {
   firstPlayer: FirstPlayerMode;
 }
 
+export interface NumbersMatchDefaults {
+  hintMode: HintMode;
+}
+
 export interface StoredConfig {
   serverUrl: string;
   snakeDefaults: SnakeDefaults;
   tictactoeDefaults: TicTacToeDefaults;
+  numbersMatchDefaults: NumbersMatchDefaults;
 }
 
 function getDefaultServerUrl(): string {
@@ -67,6 +73,12 @@ function getDefaultTicTacToeSettings(): TicTacToeDefaults {
   };
 }
 
+function getDefaultNumbersMatchSettings(): NumbersMatchDefaults {
+  return {
+    hintMode: HintMode.LIMITED,
+  };
+}
+
 function loadConfig(): StoredConfig | null {
   const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
   if (!stored) return null;
@@ -92,12 +104,16 @@ export const useConfigStore = defineStore("config", () => {
   const tictactoeDefaults = ref<TicTacToeDefaults>(
     storedConfig?.tictactoeDefaults ?? getDefaultTicTacToeSettings()
   );
+  const numbersMatchDefaults = ref<NumbersMatchDefaults>(
+    storedConfig?.numbersMatchDefaults ?? getDefaultNumbersMatchSettings()
+  );
 
   function persist(): void {
     saveConfig({
       serverUrl: serverUrl.value,
       snakeDefaults: snakeDefaults.value,
       tictactoeDefaults: tictactoeDefaults.value,
+      numbersMatchDefaults: numbersMatchDefaults.value,
     });
   }
 
@@ -116,10 +132,16 @@ export const useConfigStore = defineStore("config", () => {
     persist();
   }
 
+  function setNumbersMatchDefaults(defaults: Partial<NumbersMatchDefaults>): void {
+    numbersMatchDefaults.value = { ...numbersMatchDefaults.value, ...defaults };
+    persist();
+  }
+
   function reset(): void {
     serverUrl.value = getDefaultServerUrl();
     snakeDefaults.value = getDefaultSnakeSettings();
     tictactoeDefaults.value = getDefaultTicTacToeSettings();
+    numbersMatchDefaults.value = getDefaultNumbersMatchSettings();
     localStorage.removeItem(CONFIG_STORAGE_KEY);
   }
 
@@ -127,9 +149,11 @@ export const useConfigStore = defineStore("config", () => {
     serverUrl,
     snakeDefaults,
     tictactoeDefaults,
+    numbersMatchDefaults,
     setServerUrl,
     setSnakeDefaults,
     setTicTacToeDefaults,
+    setNumbersMatchDefaults,
     reset,
   };
 });

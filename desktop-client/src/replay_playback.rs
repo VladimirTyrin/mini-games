@@ -57,6 +57,10 @@ pub async fn run_replay_playback(
             ReplayGame::Tictactoe => {
                 run_tictactoe_replay(player, shared_state.clone(), &mut command_rx, replay_version.clone()).await
             }
+            ReplayGame::NumbersMatch => {
+                shared_state.set_error("NumbersMatch replay not yet supported".to_string());
+                false
+            }
             ReplayGame::Unspecified => {
                 shared_state.set_error("Unknown game type in replay".to_string());
                 false

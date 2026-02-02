@@ -7,6 +7,7 @@ mod resolver;
 mod session_config;
 mod session_rng;
 
+pub mod numbers_match;
 pub mod snake;
 pub mod tictactoe;
 

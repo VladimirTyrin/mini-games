@@ -20,6 +20,7 @@ import type {
 import { LobbySettingsSchema } from "../proto/game_service_pb";
 import { SnakeBotType, SnakeLobbySettingsSchema } from "../proto/games/snake_pb";
 import { TicTacToeBotType, TicTacToeLobbySettingsSchema } from "../proto/games/tictactoe_pb";
+import { NumbersMatchLobbySettingsSchema } from "../proto/games/numbers_match_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
 
@@ -57,9 +58,11 @@ export const useLobbyStore = defineStore("lobby", () => {
     const allReady = players.every((p) => p.ready);
     if (!allReady) return false;
 
-    const isTicTacToe = currentLobby.value.settings.case === "tictactoe";
-    if (isTicTacToe) {
+    const settingsCase = currentLobby.value.settings.case;
+    if (settingsCase === "tictactoe") {
       return players.length === 2;
+    } else if (settingsCase === "numbersMatch") {
+      return players.length === 1;
     } else {
       return players.length >= 1;
     }
@@ -108,6 +111,19 @@ export const useLobbyStore = defineStore("lobby", () => {
       },
     });
     gameClient.createLobby(lobbyName, maxPlayers, settings);
+  }
+
+  function createNumbersMatchLobby(
+    lobbyName: string,
+    nmSettings: Parameters<typeof create<typeof NumbersMatchLobbySettingsSchema>>[1]
+  ): void {
+    const settings = create(LobbySettingsSchema, {
+      settings: {
+        case: "numbersMatch",
+        value: create(NumbersMatchLobbySettingsSchema, nmSettings),
+      },
+    });
+    gameClient.createLobby(lobbyName, 1, settings);
   }
 
   function joinLobby(lobbyId: string, asObserver = false): void {
@@ -283,6 +299,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     createLobby,
     createSnakeLobby,
     createTicTacToeLobby,
+    createNumbersMatchLobby,
     joinLobby,
     leaveLobby,
     markReady,

@@ -357,6 +357,11 @@ impl LobbyManager {
                     return Err("Cannot start game with no players".to_string());
                 }
             }
+            LobbySettings::NumbersMatch(_) => {
+                if total_players != 1 {
+                    return Err(format!("NumbersMatch requires exactly 1 player, but {} are in the lobby", total_players));
+                }
+            }
         }
 
         lobby.start_game();

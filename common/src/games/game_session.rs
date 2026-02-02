@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::ReplayGame;
+use crate::games::numbers_match::NumbersMatchSessionState;
 use crate::games::snake::SnakeSessionState;
 use crate::games::tictactoe::TicTacToeSessionState;
 use crate::replay::ReplayRecorder;
@@ -10,6 +11,7 @@ use crate::replay::ReplayRecorder;
 pub enum GameSession {
     Snake(SnakeSessionState),
     TicTacToe(TicTacToeSessionState),
+    NumbersMatch(NumbersMatchSessionState),
 }
 
 impl GameSession {
@@ -17,6 +19,7 @@ impl GameSession {
         match self {
             GameSession::Snake(_) => ReplayGame::Snake,
             GameSession::TicTacToe(_) => ReplayGame::Tictactoe,
+            GameSession::NumbersMatch(_) => ReplayGame::NumbersMatch,
         }
     }
 
@@ -24,6 +27,7 @@ impl GameSession {
         match self {
             GameSession::Snake(state) => state.replay_recorder.clone(),
             GameSession::TicTacToe(state) => state.replay_recorder.clone(),
+            GameSession::NumbersMatch(state) => state.replay_recorder.clone(),
         }
     }
 
