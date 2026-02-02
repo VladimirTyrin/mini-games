@@ -5,6 +5,7 @@ package game_service;
 import "games/snake.proto";
 import "games/tictactoe.proto";
 import "games/numbers_match.proto";
+import "games/stack_attack.proto";
 
 service GameService {
     rpc GameStream(stream ClientMessage) returns (stream ServerMessage);
@@ -108,6 +109,7 @@ message LobbySettings {
         snake.SnakeLobbySettings snake = 1;
         tictactoe.TicTacToeLobbySettings tictactoe = 2;
         numbers_match.NumbersMatchLobbySettings numbers_match = 3;
+        stack_attack.StackAttackLobbySettings stack_attack = 4;
     }
 }
 
@@ -191,6 +193,7 @@ message InGameCommand {
         snake.SnakeInGameCommand snake = 1;
         tictactoe.TicTacToeInGameCommand tictactoe = 2;
         numbers_match.NumbersMatchInGameCommand numbers_match = 3;
+        stack_attack.StackAttackInGameCommand stack_attack = 4;
     }
 }
 
@@ -199,6 +202,7 @@ message GameStateUpdate {
         snake.SnakeGameState snake = 1;
         tictactoe.TicTacToeGameState tictactoe = 2;
         numbers_match.NumbersMatchGameState numbers_match = 3;
+        stack_attack.StackAttackGameState stack_attack = 4;
     }
 }
 
@@ -218,6 +222,7 @@ message LobbyDetails {
         snake.SnakeLobbySettings snake = 10;
         tictactoe.TicTacToeLobbySettings tictactoe = 11;
         numbers_match.NumbersMatchLobbySettings numbers_match = 12;
+        stack_attack.StackAttackLobbySettings stack_attack = 13;
     }
 }
 
@@ -262,6 +267,7 @@ message GameOverNotification {
         snake.SnakeGameEndInfo snake_info = 10;
         tictactoe.TicTacToeGameEndInfo tictactoe_info = 11;
         numbers_match.NumbersMatchGameEndInfo numbers_match_info = 12;
+        stack_attack.StackAttackGameEndInfo stack_attack_info = 13;
     }
 }
 

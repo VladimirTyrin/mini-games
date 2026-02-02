@@ -416,6 +416,9 @@ impl MenuApp {
                                 Some(common::lobby_settings::Settings::NumbersMatch(_)) => {
                                     ("🔢", "Single player puzzle".to_string())
                                 }
+                                Some(common::lobby_settings::Settings::StackAttack(_)) => {
+                                    ("📦", "Cooperative puzzle".to_string())
+                                }
                                 None => ("❓", "Unknown".to_string()),
                             };
 
@@ -1095,6 +1098,7 @@ impl MenuApp {
                             ReplayGame::Snake => "🐍",
                             ReplayGame::Tictactoe => "⭕",
                             ReplayGame::NumbersMatch => "🔢",
+                            ReplayGame::StackAttack => "📦",
                             ReplayGame::Unspecified => "❓",
                         };
 
@@ -1102,6 +1106,7 @@ impl MenuApp {
                             ReplayGame::Snake => "Snake",
                             ReplayGame::Tictactoe => "TicTacToe",
                             ReplayGame::NumbersMatch => "Numbers Match",
+                            ReplayGame::StackAttack => "Stack Attack",
                             ReplayGame::Unspecified => "Unknown",
                         };
 
@@ -1229,6 +1234,9 @@ impl MenuApp {
                 }
                 Some(common::game_state_update::State::NumbersMatch(_)) => {
                     self.game_ui = Some(GameUi::new_numbers_match());
+                }
+                Some(common::game_state_update::State::StackAttack(_)) => {
+                    // Stack Attack replay not yet implemented
                 }
                 None => {}
             }
@@ -1471,6 +1479,9 @@ impl eframe::App for MenuApp {
                                 Some(common::game_state_update::State::NumbersMatch(_)) => {
                                     self.game_ui = Some(GameUi::new_numbers_match());
                                 }
+                                Some(common::game_state_update::State::StackAttack(_)) => {
+                                    // Stack Attack desktop client not yet implemented
+                                }
                                 None => {}
                             }
                         }
@@ -1496,6 +1507,9 @@ impl eframe::App for MenuApp {
                             crate::state::GameEndInfo::NumbersMatch(_) => {
                                 self.game_ui = Some(GameUi::new_numbers_match());
                             }
+                            crate::state::GameEndInfo::StackAttack(_) => {
+                                // Stack Attack desktop client not yet implemented
+                            }
                         }
                     }
                     let replay_path = self.shared_state.get_last_replay_path();
@@ -1515,6 +1529,10 @@ impl eframe::App for MenuApp {
                             }
                             crate::state::GameEndInfo::NumbersMatch(nm_info) => {
                                 game_ui.render_game_over_numbers_match(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &nm_info, &play_again_status, is_observer, sender, replay_path.as_ref())
+                            }
+                            crate::state::GameEndInfo::StackAttack(_) => {
+                                // Stack Attack desktop client not yet implemented
+                                false
                             }
                         };
                     }

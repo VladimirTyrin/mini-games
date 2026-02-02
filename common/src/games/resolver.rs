@@ -3,6 +3,7 @@ use crate::games::{
     GameBroadcaster, GameSession, GameSessionConfig, LobbySettings, ReplayMode,
     numbers_match::NumbersMatchSession,
     snake::{DeathReason, SnakeSession},
+    stack_attack::StackAttackSession,
     tictactoe::TicTacToeSession,
 };
 
@@ -36,6 +37,9 @@ impl GameResolver {
             GameSession::NumbersMatch(state) => {
                 NumbersMatchSession::run(&config, &state, &broadcaster).await
             }
+            GameSession::StackAttack(state) => {
+                StackAttackSession::run(config, state, broadcaster).await
+            }
         }
     }
 
@@ -54,20 +58,18 @@ impl GameResolver {
             (GameSession::NumbersMatch(state), Some(in_game_command::Command::NumbersMatch(cmd))) => {
                 NumbersMatchSession::handle_command(state, client_id, cmd).await;
             }
+            (GameSession::StackAttack(state), Some(in_game_command::Command::StackAttack(cmd))) => {
+                StackAttackSession::handle_command(state, client_id, cmd).await;
+            }
             _ => {}
         }
     }
 
     pub async fn handle_player_disconnect(session: &GameSession, client_id: &ClientId) {
+        session.record_disconnect(client_id).await;
+
         match session {
             GameSession::Snake(state) => {
-                if let Some(ref recorder) = state.replay_recorder {
-                    let current_tick = *state.tick.lock().await;
-                    let mut recorder = recorder.lock().await;
-                    if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
-                        recorder.record_disconnect(current_tick as i64, player_index);
-                    }
-                }
                 SnakeSession::handle_kill_snake(state, client_id, DeathReason::PlayerDisconnected).await;
             }
             GameSession::TicTacToe(state) => {
@@ -75,6 +77,9 @@ impl GameResolver {
             }
             GameSession::NumbersMatch(state) => {
                 NumbersMatchSession::handle_player_disconnect(state).await;
+            }
+            GameSession::StackAttack(state) => {
+                StackAttackSession::handle_player_disconnect(state).await;
             }
         }
     }

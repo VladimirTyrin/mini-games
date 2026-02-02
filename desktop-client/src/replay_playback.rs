@@ -65,6 +65,10 @@ pub async fn run_replay_playback(
                 shared_state.set_error("Unknown game type in replay".to_string());
                 false
             }
+            ReplayGame::StackAttack => {
+                shared_state.set_error("Stack Attack replay not yet supported".to_string());
+                false
+            }
         };
 
         if !should_restart {
@@ -434,10 +438,9 @@ fn extract_remove_pair_indices(action: &PlayerAction) -> Option<(u32, u32)> {
     if let player_action_content::Content::Command(cmd) = inner
         && let Some(in_game_command::Command::NumbersMatch(nm_cmd)) = &cmd.command
         && let Some(nm_inner) = &nm_cmd.command
+        && let common::proto::numbers_match::numbers_match_in_game_command::Command::RemovePair(remove) = nm_inner
     {
-        if let common::proto::numbers_match::numbers_match_in_game_command::Command::RemovePair(remove) = nm_inner {
-            return Some((remove.first_index, remove.second_index));
-        }
+        return Some((remove.first_index, remove.second_index));
     }
     None
 }

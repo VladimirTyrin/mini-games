@@ -21,6 +21,7 @@ import { LobbySettingsSchema } from "../proto/game_service_pb";
 import { SnakeBotType, SnakeLobbySettingsSchema } from "../proto/games/snake_pb";
 import { TicTacToeBotType, TicTacToeLobbySettingsSchema } from "../proto/games/tictactoe_pb";
 import { NumbersMatchLobbySettingsSchema } from "../proto/games/numbers_match_pb";
+import { StackAttackLobbySettingsSchema } from "../proto/games/stack_attack_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
 
@@ -63,6 +64,8 @@ export const useLobbyStore = defineStore("lobby", () => {
       return players.length === 2;
     } else if (settingsCase === "numbersMatch") {
       return players.length === 1;
+    } else if (settingsCase === "stackAttack") {
+      return players.length >= 1 && players.length <= 4;
     } else {
       return players.length >= 1;
     }
@@ -124,6 +127,16 @@ export const useLobbyStore = defineStore("lobby", () => {
       },
     });
     gameClient.createLobby(lobbyName, 1, settings);
+  }
+
+  function createStackAttackLobby(lobbyName: string): void {
+    const settings = create(LobbySettingsSchema, {
+      settings: {
+        case: "stackAttack",
+        value: create(StackAttackLobbySettingsSchema, {}),
+      },
+    });
+    gameClient.createLobby(lobbyName, 4, settings);
   }
 
   function joinLobby(lobbyId: string, asObserver = false): void {
@@ -300,6 +313,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     createSnakeLobby,
     createTicTacToeLobby,
     createNumbersMatchLobby,
+    createStackAttackLobby,
     joinLobby,
     leaveLobby,
     markReady,

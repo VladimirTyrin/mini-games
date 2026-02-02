@@ -1,4 +1,4 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, proto::numbers_match::NumbersMatchGameEndInfo, PlayerIdentity, ReplayGame};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, proto::numbers_match::NumbersMatchGameEndInfo, proto::stack_attack::StackAttackGameEndInfo, PlayerIdentity, ReplayGame};
 use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig, NumbersMatchLobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
@@ -78,6 +78,8 @@ pub enum GameEndInfo {
     Snake(SnakeGameEndInfo),
     TicTacToe(TicTacToeGameEndInfo),
     NumbersMatch(NumbersMatchGameEndInfo),
+    #[allow(dead_code)]
+    StackAttack(StackAttackGameEndInfo),
 }
 
 #[derive(Debug, Clone)]

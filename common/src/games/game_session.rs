@@ -1,47 +1,85 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::ReplayGame;
+use crate::{ClientId, ReplayGame};
 use crate::games::numbers_match::NumbersMatchSessionState;
 use crate::games::snake::SnakeSessionState;
+use crate::games::stack_attack::StackAttackSessionState;
 use crate::games::tictactoe::TicTacToeSessionState;
 use crate::replay::ReplayRecorder;
+
+pub trait SessionState {
+    fn tick(&self) -> &Arc<Mutex<u64>>;
+    fn replay_recorder(&self) -> Option<&Arc<Mutex<ReplayRecorder>>>;
+}
+
+macro_rules! impl_session_state {
+    ($($type:ty),+) => {
+        $(
+            impl SessionState for $type {
+                fn tick(&self) -> &Arc<Mutex<u64>> {
+                    &self.tick
+                }
+                fn replay_recorder(&self) -> Option<&Arc<Mutex<ReplayRecorder>>> {
+                    self.replay_recorder.as_ref()
+                }
+            }
+        )+
+    };
+}
+
+impl_session_state!(
+    SnakeSessionState,
+    TicTacToeSessionState,
+    NumbersMatchSessionState,
+    StackAttackSessionState
+);
 
 #[derive(Clone)]
 pub enum GameSession {
     Snake(SnakeSessionState),
     TicTacToe(TicTacToeSessionState),
     NumbersMatch(NumbersMatchSessionState),
+    StackAttack(StackAttackSessionState),
 }
 
 impl GameSession {
+    fn state(&self) -> &dyn SessionState {
+        match self {
+            GameSession::Snake(s) => s,
+            GameSession::TicTacToe(s) => s,
+            GameSession::NumbersMatch(s) => s,
+            GameSession::StackAttack(s) => s,
+        }
+    }
+
     pub fn game_type(&self) -> ReplayGame {
         match self {
             GameSession::Snake(_) => ReplayGame::Snake,
             GameSession::TicTacToe(_) => ReplayGame::Tictactoe,
             GameSession::NumbersMatch(_) => ReplayGame::NumbersMatch,
+            GameSession::StackAttack(_) => ReplayGame::StackAttack,
         }
     }
 
     pub fn replay_recorder(&self) -> Option<Arc<Mutex<ReplayRecorder>>> {
-        match self {
-            GameSession::Snake(state) => state.replay_recorder.clone(),
-            GameSession::TicTacToe(state) => state.replay_recorder.clone(),
-            GameSession::NumbersMatch(state) => state.replay_recorder.clone(),
-        }
+        self.state().replay_recorder().cloned()
     }
 
-    pub fn snake_state(&self) -> Option<&SnakeSessionState> {
-        match self {
-            GameSession::Snake(state) => Some(state),
-            _ => None,
-        }
+    pub async fn current_tick(&self) -> u64 {
+        *self.state().tick().lock().await
     }
 
-    pub fn tictactoe_state(&self) -> Option<&TicTacToeSessionState> {
-        match self {
-            GameSession::TicTacToe(state) => Some(state),
-            _ => None,
+    pub async fn record_disconnect(&self, client_id: &ClientId) {
+        let Some(recorder) = self.state().replay_recorder() else {
+            return;
+        };
+
+        let tick = *self.state().tick().lock().await;
+
+        let mut recorder = recorder.lock().await;
+        if let Some(player_index) = recorder.find_player_index(client_id.as_str()) {
+            recorder.record_disconnect(tick as i64, player_index);
         }
     }
 }

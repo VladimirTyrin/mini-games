@@ -9,6 +9,7 @@ mod session_rng;
 
 pub mod numbers_match;
 pub mod snake;
+pub mod stack_attack;
 pub mod tictactoe;
 
 pub use bot_type::BotType;

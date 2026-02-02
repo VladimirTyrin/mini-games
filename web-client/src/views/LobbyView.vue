@@ -35,6 +35,7 @@ const gameTypeBadge = computed(() => {
   if (gameType.value === "snake") return { text: "Snake", class: "bg-green-600" };
   if (gameType.value === "tictactoe") return { text: "TicTacToe", class: "bg-blue-600" };
   if (gameType.value === "numbersMatch") return { text: "Numbers Match", class: "bg-purple-600" };
+  if (gameType.value === "stackAttack") return { text: "Stack Attack", class: "bg-orange-600" };
   return { text: "Unknown", class: "bg-gray-600" };
 });
 
@@ -451,6 +452,9 @@ onUnmounted(() => {
               <template v-else-if="gameType === 'numbersMatch' && lobby.players.length !== 1">
                 Numbers Match is a single-player game.
               </template>
+              <template v-else-if="gameType === 'stackAttack' && lobby.players.length > 4">
+                Stack Attack supports 1-4 players.
+              </template>
               <template v-else-if="lobby.players.length < 1">
                 At least 1 player required.
               </template>
@@ -516,6 +520,16 @@ onUnmounted(() => {
               </div>
               <div class="text-gray-500 text-xs mt-2">
                 Single-player puzzle game
+              </div>
+            </div>
+
+            <!-- StackAttack Settings -->
+            <div v-else-if="lobby.settings.case === 'stackAttack'" class="space-y-2 text-sm">
+              <div class="text-gray-400">
+                Cooperative multiplayer game. Push boxes dropped by cranes to clear lines.
+              </div>
+              <div class="text-gray-500 text-xs mt-2">
+                1-4 players
               </div>
             </div>
           </div>

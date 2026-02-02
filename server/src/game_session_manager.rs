@@ -88,6 +88,9 @@ impl GameSessionManager {
             common::lobby::LobbySettings::NumbersMatch(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
+            common::lobby::LobbySettings::StackAttack(settings) => {
+                GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
+            }
         };
 
         match game_session {

@@ -31,6 +31,9 @@ impl GameBroadcaster for LocalBroadcaster {
             Some(common::game_over_notification::GameInfo::NumbersMatchInfo(info)) => {
                 GameEndInfo::NumbersMatch(info)
             }
+            Some(common::game_over_notification::GameInfo::StackAttackInfo(info)) => {
+                GameEndInfo::StackAttack(info)
+            }
             None => return,
         };
 

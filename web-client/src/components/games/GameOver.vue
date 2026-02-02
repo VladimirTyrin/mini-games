@@ -17,7 +17,12 @@ const playAgainStatus = computed(() => gameStore.playAgainStatus);
 const canPlayAgain = computed(() => gameStore.canPlayAgain);
 const hasVotedPlayAgain = computed(() => gameStore.hasVotedPlayAgain);
 
+const gameType = computed(() => gameStore.gameType);
 const winner = computed(() => gameOver.value?.winner);
+
+const isCooperativeGame = computed(() => {
+  return gameType.value === "stackAttack" || gameType.value === "numbersMatch";
+});
 
 const isWinner = computed(() => {
   if (!winner.value || !connectionStore.clientId) return false;
@@ -25,6 +30,7 @@ const isWinner = computed(() => {
 });
 
 const isDraw = computed(() => {
+  if (isCooperativeGame.value) return false;
   return gameOver.value && !winner.value;
 });
 
@@ -34,6 +40,7 @@ const sortedScores = computed(() => {
 });
 
 const resultMessage = computed(() => {
+  if (isCooperativeGame.value) return "Game Over";
   if (isDraw.value) return "Draw!";
   if (isWinner.value) return "You Win!";
   if (winner.value) {
@@ -44,6 +51,7 @@ const resultMessage = computed(() => {
 });
 
 const resultClass = computed(() => {
+  if (isCooperativeGame.value) return "text-orange-400";
   if (isDraw.value) return "text-yellow-400";
   if (isWinner.value) return "text-green-400";
   return "text-red-400";

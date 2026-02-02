@@ -12,7 +12,7 @@ import {
 import { FirstPlayerMode } from "../proto/games/tictactoe_pb";
 import { HintMode } from "../proto/games/numbers_match_pb";
 
-type GameType = "snake" | "tictactoe" | "numbersMatch";
+type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack";
 
 const router = useRouter();
 const connectionStore = useConnectionStore();
@@ -59,6 +59,7 @@ function getGameTypeLabel(lobby: (typeof lobbies.value)[0]): string {
   if (settings.case === "snake") return "Snake";
   if (settings.case === "tictactoe") return "TicTacToe";
   if (settings.case === "numbersMatch") return "Numbers Match";
+  if (settings.case === "stackAttack") return "Stack Attack";
   return "Unknown";
 }
 
@@ -68,6 +69,7 @@ function getGameTypeIcon(lobby: (typeof lobbies.value)[0]): string {
   if (settings.case === "snake") return "S";
   if (settings.case === "tictactoe") return "X";
   if (settings.case === "numbersMatch") return "N";
+  if (settings.case === "stackAttack") return "A";
   return "?";
 }
 
@@ -145,6 +147,8 @@ function handleCreateLobby() {
     lobbyStore.createNumbersMatchLobby(newLobbyName.value.trim(), {
       hintMode: nmHintMode.value,
     });
+  } else if (newLobbyGameType.value === "stackAttack") {
+    lobbyStore.createStackAttackLobby(newLobbyName.value.trim());
   }
 
   showCreateDialog.value = false;
@@ -268,6 +272,7 @@ onUnmounted(() => {
                   'bg-green-600': getGameTypeIcon(lobby) === 'S',
                   'bg-blue-600': getGameTypeIcon(lobby) === 'X',
                   'bg-purple-600': getGameTypeIcon(lobby) === 'N',
+                  'bg-orange-600': getGameTypeIcon(lobby) === 'A',
                   'bg-slate-600': getGameTypeIcon(lobby) === '?',
                 }"
               >
@@ -363,6 +368,17 @@ onUnmounted(() => {
                 ]"
               >
                 Numbers
+              </button>
+              <button
+                @click="newLobbyGameType = 'stackAttack'"
+                :class="[
+                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
+                  newLobbyGameType === 'stackAttack'
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                ]"
+              >
+                Stack
               </button>
             </div>
           </div>
@@ -574,6 +590,18 @@ onUnmounted(() => {
 
               <p class="text-slate-400 text-sm mt-4">
                 Single-player puzzle game. Match pairs of equal numbers or numbers that sum to 10.
+              </p>
+            </div>
+          </template>
+
+          <template v-if="newLobbyGameType === 'stackAttack'">
+            <div class="border-t border-slate-700 pt-4">
+              <h3 class="text-lg font-medium mb-3">Stack Attack</h3>
+
+              <p class="text-slate-400 text-sm">
+                Cooperative multiplayer game. Workers push boxes dropped by cranes.
+                Clear horizontal lines of boxes to score points. Game over when a box
+                falls on a worker or boxes reach the ceiling.
               </p>
             </div>
           </template>

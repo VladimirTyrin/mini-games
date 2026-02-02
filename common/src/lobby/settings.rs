@@ -1,6 +1,6 @@
 use crate::{
     lobby_details, lobby_settings,
-    NumbersMatchLobbySettings, SnakeLobbySettings, TicTacToeLobbySettings,
+    NumbersMatchLobbySettings, SnakeLobbySettings, StackAttackLobbySettings, TicTacToeLobbySettings,
     validate_lobby_settings::ValidateLobbySettings,
 };
 
@@ -9,6 +9,7 @@ pub enum LobbySettings {
     Snake(SnakeLobbySettings),
     TicTacToe(TicTacToeLobbySettings),
     NumbersMatch(NumbersMatchLobbySettings),
+    StackAttack(StackAttackLobbySettings),
 }
 
 impl LobbySettings {
@@ -17,6 +18,7 @@ impl LobbySettings {
             LobbySettings::Snake(s) => s.validate(max_players),
             LobbySettings::TicTacToe(t) => t.validate(max_players),
             LobbySettings::NumbersMatch(n) => n.validate(max_players),
+            LobbySettings::StackAttack(s) => s.validate(max_players),
         }
     }
 
@@ -25,6 +27,7 @@ impl LobbySettings {
             LobbySettings::Snake(s) => Some(lobby_details::Settings::Snake(*s)),
             LobbySettings::TicTacToe(t) => Some(lobby_details::Settings::Tictactoe(*t)),
             LobbySettings::NumbersMatch(n) => Some(lobby_details::Settings::NumbersMatch(*n)),
+            LobbySettings::StackAttack(s) => Some(lobby_details::Settings::StackAttack(*s)),
         }
     }
 
@@ -34,6 +37,7 @@ impl LobbySettings {
                 LobbySettings::Snake(s) => lobby_settings::Settings::Snake(*s),
                 LobbySettings::TicTacToe(t) => lobby_settings::Settings::Tictactoe(*t),
                 LobbySettings::NumbersMatch(n) => lobby_settings::Settings::NumbersMatch(*n),
+                LobbySettings::StackAttack(s) => lobby_settings::Settings::StackAttack(*s),
             }),
         })
     }
@@ -43,6 +47,7 @@ impl LobbySettings {
             Some(lobby_settings::Settings::Snake(s)) => Ok(LobbySettings::Snake(s)),
             Some(lobby_settings::Settings::Tictactoe(t)) => Ok(LobbySettings::TicTacToe(t)),
             Some(lobby_settings::Settings::NumbersMatch(n)) => Ok(LobbySettings::NumbersMatch(n)),
+            Some(lobby_settings::Settings::StackAttack(s)) => Ok(LobbySettings::StackAttack(s)),
             None => Err("No settings provided".to_string()),
         }
     }

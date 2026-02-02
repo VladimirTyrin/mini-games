@@ -26,6 +26,7 @@ pub struct TicTacToeSessionState {
     pub bots: HashMap<BotId, BotType>,
     pub turn_notify: Arc<Notify>,
     pub replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
+    pub tick: Arc<Mutex<u64>>,
 }
 
 impl TicTacToeSessionState {
@@ -66,6 +67,7 @@ impl TicTacToeSessionState {
             bots: config.bots.clone(),
             turn_notify: Arc::new(Notify::new()),
             replay_recorder,
+            tick: Arc::new(Mutex::new(0)),
         })
     }
 }
@@ -123,14 +125,16 @@ impl TicTacToeSession {
             Ok(()) => {
                 drop(state_guard);
 
+                let mut tick = state.tick.lock().await;
                 if let Some(ref recorder) = state.replay_recorder {
                     let mut recorder = recorder.lock().await;
                     if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
-                        let turn = recorder.actions_count() as i64;
                         let in_game_command = create_place_command(x, y);
-                        recorder.record_command(turn, player_index, in_game_command);
+                        recorder.record_command(*tick as i64, player_index, in_game_command);
                     }
                 }
+                *tick += 1;
+                drop(tick);
 
                 state.turn_notify.notify_one();
             }
@@ -217,14 +221,15 @@ async fn record_bot_move(
     x: usize,
     y: usize,
 ) {
+    let mut tick = session_state.tick.lock().await;
     if let Some(ref recorder) = session_state.replay_recorder {
         let mut recorder = recorder.lock().await;
         if let Some(player_index) = recorder.find_player_index(&player_id.to_string()) {
-            let turn = recorder.actions_count() as i64;
             let command = create_place_command(x as u32, y as u32);
-            recorder.record_command(turn, player_index, command);
+            recorder.record_command(*tick as i64, player_index, command);
         }
     }
+    *tick += 1;
 }
 
 fn create_place_command(x: u32, y: u32) -> InGameCommand {

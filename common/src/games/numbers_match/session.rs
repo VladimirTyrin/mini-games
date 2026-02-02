@@ -23,6 +23,7 @@ pub struct NumbersMatchSessionState {
     pub action_notify: Arc<Notify>,
     pub replay_recorder: Option<Arc<Mutex<ReplayRecorder>>>,
     pub player_id: ClientId,
+    pub tick: Arc<Mutex<u64>>,
 }
 
 impl NumbersMatchSessionState {
@@ -48,6 +49,7 @@ impl NumbersMatchSessionState {
             action_notify: Arc::new(Notify::new()),
             replay_recorder,
             player_id,
+            tick: Arc::new(Mutex::new(0)),
         })
     }
 }
@@ -103,7 +105,7 @@ impl NumbersMatchSession {
             return;
         }
 
-        let Some(cmd) = command.command.clone() else {
+        let Some(cmd) = command.command else {
             return;
         };
 
@@ -124,16 +126,18 @@ impl NumbersMatchSession {
         };
 
         if result.is_ok() {
+            let mut tick = state.tick.lock().await;
             if let Some(ref recorder) = state.replay_recorder {
                 let mut recorder = recorder.lock().await;
                 if let Some(player_index) = recorder.find_player_index(&client_id.to_string()) {
-                    let action_num = recorder.actions_count() as i64;
                     let in_game_command = InGameCommand {
                         command: Some(in_game_command::Command::NumbersMatch(command)),
                     };
-                    recorder.record_command(action_num, player_index, in_game_command);
+                    recorder.record_command(*tick as i64, player_index, in_game_command);
                 }
             }
+            *tick += 1;
+            drop(tick);
 
             state.action_notify.notify_one();
         }

@@ -362,6 +362,15 @@ impl LobbyManager {
                     return Err(format!("NumbersMatch requires exactly 1 player, but {} are in the lobby", total_players));
                 }
             }
+            LobbySettings::StackAttack(_) => {
+                use common::games::stack_attack::settings::{MIN_PLAYERS, MAX_PLAYERS};
+                if total_players < MIN_PLAYERS {
+                    return Err(format!("Stack Attack requires at least {} player(s)", MIN_PLAYERS));
+                }
+                if total_players > MAX_PLAYERS {
+                    return Err(format!("Stack Attack allows at most {} players, but {} are in the lobby", MAX_PLAYERS, total_players));
+                }
+            }
         }
 
         lobby.start_game();

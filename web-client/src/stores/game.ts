@@ -19,10 +19,17 @@ import {
   RefillCommandSchema,
   RequestHintCommandSchema,
 } from "../proto/games/numbers_match_pb";
+import type { StackAttackGameState } from "../proto/games/stack_attack_pb";
+import {
+  HorizontalDirection,
+  StackAttackInGameCommandSchema,
+  MoveCommandSchema,
+  JumpCommandSchema,
+} from "../proto/games/stack_attack_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
 
-export type GameType = "snake" | "tictactoe" | "numbersMatch" | null;
+export type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack" | null;
 
 export const useGameStore = defineStore("game", () => {
   const gameType = ref<GameType>(null);
@@ -30,6 +37,7 @@ export const useGameStore = defineStore("game", () => {
   const snakeState = ref<SnakeGameState | null>(null);
   const tictactoeState = ref<TicTacToeGameState | null>(null);
   const numbersMatchState = ref<NumbersMatchGameState | null>(null);
+  const stackAttackState = ref<StackAttackGameState | null>(null);
   const gameOver = ref<GameOverNotification | null>(null);
   const playAgainStatus = ref<PlayAgainStatusNotification | null>(null);
 
@@ -43,6 +51,7 @@ export const useGameStore = defineStore("game", () => {
     if (gameType.value === "snake") return snakeState.value;
     if (gameType.value === "tictactoe") return tictactoeState.value;
     if (gameType.value === "numbersMatch") return numbersMatchState.value;
+    if (gameType.value === "stackAttack") return stackAttackState.value;
     return null;
   });
 
@@ -132,6 +141,36 @@ export const useGameStore = defineStore("game", () => {
     gameClient.sendInGameCommand(command.command);
   }
 
+  function sendStackAttackMove(direction: HorizontalDirection): void {
+    const command = create(InGameCommandSchema, {
+      command: {
+        case: "stackAttack",
+        value: create(StackAttackInGameCommandSchema, {
+          command: {
+            case: "move",
+            value: create(MoveCommandSchema, { direction }),
+          },
+        }),
+      },
+    });
+    gameClient.sendInGameCommand(command.command);
+  }
+
+  function sendStackAttackJump(): void {
+    const command = create(InGameCommandSchema, {
+      command: {
+        case: "stackAttack",
+        value: create(StackAttackInGameCommandSchema, {
+          command: {
+            case: "jump",
+            value: create(JumpCommandSchema, {}),
+          },
+        }),
+      },
+    });
+    gameClient.sendInGameCommand(command.command);
+  }
+
   function playAgain(): void {
     gameClient.playAgain();
   }
@@ -149,18 +188,28 @@ export const useGameStore = defineStore("game", () => {
         snakeState.value = update.state.value;
         tictactoeState.value = null;
         numbersMatchState.value = null;
+        stackAttackState.value = null;
         break;
       case "tictactoe":
         gameType.value = "tictactoe";
         tictactoeState.value = update.state.value;
         snakeState.value = null;
         numbersMatchState.value = null;
+        stackAttackState.value = null;
         break;
       case "numbersMatch":
         gameType.value = "numbersMatch";
         numbersMatchState.value = update.state.value;
         snakeState.value = null;
         tictactoeState.value = null;
+        stackAttackState.value = null;
+        break;
+      case "stackAttack":
+        gameType.value = "stackAttack";
+        stackAttackState.value = update.state.value;
+        snakeState.value = null;
+        tictactoeState.value = null;
+        numbersMatchState.value = null;
         break;
     }
   }
@@ -187,6 +236,7 @@ export const useGameStore = defineStore("game", () => {
     snakeState.value = null;
     tictactoeState.value = null;
     numbersMatchState.value = null;
+    stackAttackState.value = null;
     gameOver.value = null;
     playAgainStatus.value = null;
   }
@@ -197,6 +247,7 @@ export const useGameStore = defineStore("game", () => {
     snakeState,
     tictactoeState,
     numbersMatchState,
+    stackAttackState,
     gameOver,
     playAgainStatus,
     isInGame,
@@ -209,6 +260,8 @@ export const useGameStore = defineStore("game", () => {
     sendNumbersMatchRemovePair,
     sendNumbersMatchRefill,
     sendNumbersMatchRequestHint,
+    sendStackAttackMove,
+    sendStackAttackJump,
     playAgain,
     handleGameStarting,
     handleGameState,
@@ -218,4 +271,4 @@ export const useGameStore = defineStore("game", () => {
   };
 });
 
-export { Direction };
+export { Direction, HorizontalDirection };
