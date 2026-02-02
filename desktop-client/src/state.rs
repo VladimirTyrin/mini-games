@@ -131,6 +131,7 @@ pub enum AppState {
         total_ticks: u64,
         replay_version: String,
         is_finished: bool,
+        highlighted_pair: Option<(u32, u32)>,
     },
 }
 

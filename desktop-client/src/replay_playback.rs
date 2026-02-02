@@ -327,28 +327,72 @@ async fn run_numbers_match_replay(
     let total_actions = player.total_actions() as u64;
     let mut current_action: u64 = 0;
     let mut is_paused = false;
+    let mut replay_speed = 1.0_f32;
+    let mut pending_highlight: Option<(u32, u32)> = None;
 
-    update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+    update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false, None);
 
-    let move_delay = Duration::from_millis(300);
-    let mut move_timer = tokio::time::interval(move_delay);
+    let base_delay_ms = 400.0;
+    let highlight_delay_ms = 300.0;
 
     loop {
+        let current_delay = if pending_highlight.is_some() {
+            Duration::from_millis((highlight_delay_ms / replay_speed) as u64)
+        } else {
+            Duration::from_millis((base_delay_ms / replay_speed) as u64)
+        };
+
         tokio::select! {
-            _ = move_timer.tick() => {
+            _ = tokio::time::sleep(current_delay) => {
                 if is_paused {
                     continue;
                 }
 
-                if let Some(action) = player.next_action() {
-                    apply_numbers_match_action(&mut game_state, action);
-                    current_action += 1;
-                }
+                if pending_highlight.is_some() {
+                    if let Some(action) = player.next_action() {
+                        apply_numbers_match_action(&mut game_state, action);
+                        current_action += 1;
+                    }
+                    pending_highlight = None;
 
-                let is_finished = player.is_finished() || game_state.status() != common::games::numbers_match::GameStatus::InProgress;
-                update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
+                    let is_finished = player.is_finished() || game_state.status() != common::games::numbers_match::GameStatus::InProgress;
+                    update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished, None);
 
-                if is_finished {
+                    if is_finished {
+                        loop {
+                            match command_rx.recv().await {
+                                Some(ReplayCommand::Restart) => return true,
+                                Some(ReplayCommand::Stop) | None => return false,
+                                _ => continue,
+                            }
+                        }
+                    }
+                } else if let Some(action) = player.peek_next_action() {
+                    let highlight = extract_remove_pair_indices(action);
+                    if highlight.is_some() {
+                        pending_highlight = highlight;
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false, pending_highlight);
+                    } else {
+                        let action = player.next_action().unwrap();
+                        apply_numbers_match_action(&mut game_state, action);
+                        current_action += 1;
+
+                        let is_finished = player.is_finished() || game_state.status() != common::games::numbers_match::GameStatus::InProgress;
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished, None);
+
+                        if is_finished {
+                            loop {
+                                match command_rx.recv().await {
+                                    Some(ReplayCommand::Restart) => return true,
+                                    Some(ReplayCommand::Stop) | None => return false,
+                                    _ => continue,
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    let is_finished = true;
+                    update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished, None);
                     loop {
                         match command_rx.recv().await {
                             Some(ReplayCommand::Restart) => return true,
@@ -362,11 +406,11 @@ async fn run_numbers_match_replay(
                 match cmd {
                     ReplayCommand::Pause => {
                         is_paused = true;
-                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false, pending_highlight);
                     }
                     ReplayCommand::Resume => {
                         is_paused = false;
-                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                        update_numbers_match_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false, pending_highlight);
                     }
                     ReplayCommand::Stop => {
                         return false;
@@ -375,15 +419,27 @@ async fn run_numbers_match_replay(
                         return true;
                     }
                     ReplayCommand::SetSpeed(speed) => {
-                        let adjusted_delay = Duration::from_millis(
-                            (300.0 / speed.clamp(0.25, 4.0)) as u64
-                        );
-                        move_timer = tokio::time::interval(adjusted_delay);
+                        replay_speed = speed.clamp(0.25, 4.0);
                     }
                 }
             }
         }
     }
+}
+
+fn extract_remove_pair_indices(action: &PlayerAction) -> Option<(u32, u32)> {
+    let content = action.content.as_ref()?;
+    let inner = content.content.as_ref()?;
+
+    if let player_action_content::Content::Command(cmd) = inner
+        && let Some(in_game_command::Command::NumbersMatch(nm_cmd)) = &cmd.command
+        && let Some(nm_inner) = &nm_cmd.command
+    {
+        if let common::proto::numbers_match::numbers_match_in_game_command::Command::RemovePair(remove) = nm_inner {
+            return Some((remove.first_index, remove.second_index));
+        }
+    }
+    None
 }
 
 fn apply_numbers_match_action(
@@ -426,6 +482,7 @@ fn update_numbers_match_watching_state(
     total_actions: u64,
     replay_version: &str,
     is_finished: bool,
+    highlighted_pair: Option<(u32, u32)>,
 ) {
     let proto_state = game_state.to_proto();
     let state_update = GameStateUpdate {
@@ -439,6 +496,7 @@ fn update_numbers_match_watching_state(
         total_ticks: total_actions,
         replay_version: replay_version.to_string(),
         is_finished,
+        highlighted_pair,
     });
 }
 
@@ -566,6 +624,7 @@ fn update_watching_state(
         total_ticks,
         replay_version: replay_version.to_string(),
         is_finished,
+        highlighted_pair: None,
     });
 }
 
@@ -604,6 +663,7 @@ fn update_tictactoe_watching_state(
         total_ticks: total_actions,
         replay_version: replay_version.to_string(),
         is_finished,
+        highlighted_pair: None,
     });
 }
 

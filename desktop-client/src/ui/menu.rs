@@ -1215,6 +1215,7 @@ impl MenuApp {
         total_ticks: u64,
         replay_version: &str,
         is_finished: bool,
+        highlighted_pair: Option<(u32, u32)>,
     ) {
         if self.game_ui.is_none()
             && let Some(state) = game_state
@@ -1342,7 +1343,7 @@ impl MenuApp {
 
         if let Some(game_ui) = &mut self.game_ui {
             let dummy_sender = CommandSender::Grpc(mpsc::unbounded_channel().0);
-            game_ui.render_game(ui, ctx, "replay", game_state, &self.client_id, true, &dummy_sender, is_finished);
+            game_ui.render_game(ui, ctx, "replay", game_state, &self.client_id, true, &dummy_sender, is_finished, highlighted_pair);
         } else {
             ui.centered_and_justified(|ui| {
                 ui.label("Loading replay...");
@@ -1480,7 +1481,7 @@ impl eframe::App for MenuApp {
                         } else {
                             &self.command_sender
                         };
-                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, sender, false);
+                        game_ui.render_game(ui, ctx, &session_id, &game_state, &self.client_id, is_observer, sender, false, None);
                     }
                 }
                 AppState::GameOver { scores, winner, last_game_state, game_info, play_again_status, is_observer } => {
@@ -1532,8 +1533,8 @@ impl eframe::App for MenuApp {
                 AppState::ReplayList { replays } => {
                     self.render_replay_list(ui, ctx, &replays);
                 }
-                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks, replay_version, is_finished } => {
-                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks, &replay_version, is_finished);
+                AppState::WatchingReplay { game_state, is_paused, current_tick, total_ticks, replay_version, is_finished, highlighted_pair } => {
+                    self.render_watching_replay(ui, ctx, &game_state, is_paused, current_tick, total_ticks, &replay_version, is_finished, highlighted_pair);
                 }
             }
         });

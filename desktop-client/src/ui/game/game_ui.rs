@@ -33,11 +33,12 @@ impl GameUi {
         is_observer: bool,
         command_sender: &CommandSender,
         force_show_dead: bool,
+        highlighted_pair: Option<(u32, u32)>,
     ) {
         match self {
             GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender, force_show_dead),
             GameUi::TicTacToe(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
-            GameUi::NumbersMatch(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
+            GameUi::NumbersMatch(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender, highlighted_pair),
         }
     }
 

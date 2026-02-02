@@ -29,6 +29,7 @@ impl NumbersMatchGameUi {
         _client_id: &str,
         _is_observer: bool,
         command_sender: &CommandSender,
+        highlighted_pair: Option<(u32, u32)>,
     ) {
         let Some(state) = game_state else {
             ui.centered_and_justified(|ui| {
@@ -42,7 +43,7 @@ impl NumbersMatchGameUi {
             return;
         };
 
-        self.render_numbers_match(ui, ctx, nm_state, command_sender);
+        self.render_numbers_match(ui, ctx, nm_state, command_sender, highlighted_pair);
     }
 
     fn render_numbers_match(
@@ -51,13 +52,14 @@ impl NumbersMatchGameUi {
         ctx: &egui::Context,
         state: &NumbersMatchGameState,
         command_sender: &CommandSender,
+        highlighted_pair: Option<(u32, u32)>,
     ) {
         let game_in_progress = state.status() == GameStatus::InProgress;
 
         ui.vertical_centered(|ui| {
             self.render_status_bar(ui, state);
             ui.add_space(10.0);
-            self.render_game_field(ui, state, game_in_progress, command_sender);
+            self.render_game_field(ui, state, game_in_progress, command_sender, highlighted_pair);
             ui.add_space(10.0);
             self.render_controls(ui, state, game_in_progress, command_sender);
         });
@@ -109,6 +111,7 @@ impl NumbersMatchGameUi {
         state: &NumbersMatchGameState,
         game_in_progress: bool,
         command_sender: &CommandSender,
+        highlighted_pair: Option<(u32, u32)>,
     ) {
         let available_size = ui.available_size();
         let max_cell_size = 44.0_f32;
@@ -143,6 +146,9 @@ impl NumbersMatchGameUi {
                                 let index = row * FIELD_WIDTH + col;
                                 if index < state.cells.len() {
                                     let cell = &state.cells[index];
+                                    let is_replay_highlighted = highlighted_pair
+                                        .map(|(a, b)| index == a as usize || index == b as usize)
+                                        .unwrap_or(false);
                                     self.render_cell(
                                         ui,
                                         cell,
@@ -150,6 +156,7 @@ impl NumbersMatchGameUi {
                                         cell_size,
                                         game_in_progress,
                                         hint_indices.contains(&index),
+                                        is_replay_highlighted,
                                         command_sender,
                                     );
                                 }
@@ -180,12 +187,15 @@ impl NumbersMatchGameUi {
         cell_size: f32,
         game_in_progress: bool,
         is_hinted: bool,
+        is_replay_highlighted: bool,
         command_sender: &CommandSender,
     ) {
         let is_active = cell.value > 0 && !cell.removed;
         let is_selected = self.selected_index == Some(index);
 
-        let (bg_color, text_color) = if is_selected {
+        let (bg_color, text_color) = if is_replay_highlighted && is_active {
+            (egui::Color32::from_rgb(200, 100, 50), egui::Color32::WHITE)
+        } else if is_selected {
             (egui::Color32::from_rgb(180, 180, 50), egui::Color32::WHITE)
         } else if is_hinted && is_active {
             (egui::Color32::from_rgb(50, 150, 50), egui::Color32::WHITE)
