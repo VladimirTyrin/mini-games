@@ -106,6 +106,8 @@ impl NumbersMatchGameState {
             added_values,
         });
 
+        self.check_game_over();
+
         Ok(())
     }
 
