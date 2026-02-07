@@ -630,14 +630,12 @@ onUnmounted(() => {
                     v-model.number="p2048TargetValue"
                     class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option :value="64">64</option>
-                    <option :value="128">128</option>
-                    <option :value="256">256</option>
-                    <option :value="512">512</option>
                     <option :value="1024">1024</option>
                     <option :value="2048">2048</option>
                     <option :value="4096">4096</option>
                     <option :value="8192">8192</option>
+                    <option :value="16384">16384</option>
+                    <option :value="32768">32768</option>
                   </select>
                 </div>
               </div>
