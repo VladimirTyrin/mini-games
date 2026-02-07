@@ -116,10 +116,10 @@ impl Field {
                     false
                 };
 
-                if !has_solid_support {
-                    if let Some(b) = self.boxes.get_mut(&box_id) {
-                        b.falling = true;
-                    }
+                if !has_solid_support
+                    && let Some(b) = self.boxes.get_mut(&box_id)
+                {
+                    b.falling = true;
                 }
             }
         }

@@ -91,6 +91,9 @@ impl GameSessionManager {
             common::lobby::LobbySettings::StackAttack(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
+            common::lobby::LobbySettings::Puzzle2048(settings) => {
+                GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
+            }
         };
 
         match game_session {

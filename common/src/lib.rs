@@ -14,6 +14,9 @@ pub mod proto {
     pub mod stack_attack {
         tonic::include_proto!("stack_attack");
     }
+    pub mod puzzle2048 {
+        tonic::include_proto!("puzzle2048");
+    }
     pub mod replay {
         tonic::include_proto!("replay");
     }
@@ -41,6 +44,10 @@ pub mod proto {
     pub use stack_attack::{
         StackAttackLobbySettings, StackAttackInGameCommand, StackAttackGameState,
         StackAttackGameEndReason, StackAttackGameEndInfo,
+    };
+    pub use puzzle2048::{
+        Puzzle2048LobbySettings, Puzzle2048InGameCommand, Puzzle2048GameState,
+        Puzzle2048GameEndReason, Puzzle2048GameEndInfo,
     };
     pub use replay::{Game as ReplayGame, PlayerAction, PlayerActionContent, PlayerDisconnected, ReplayV1, ReplayV1Metadata, ReplayV1Header};
     pub use replay::player_action_content;

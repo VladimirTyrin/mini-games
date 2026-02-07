@@ -8,6 +8,7 @@ pub enum GameUi {
     Snake(super::snake::SnakeGameUi),
     TicTacToe(super::tictactoe::TicTacToeGameUi),
     NumbersMatch(super::numbers_match::NumbersMatchGameUi),
+    Puzzle2048(super::puzzle2048::Puzzle2048GameUi),
 }
 
 impl GameUi {
@@ -21,6 +22,10 @@ impl GameUi {
 
     pub fn new_numbers_match() -> Self {
         GameUi::NumbersMatch(super::numbers_match::NumbersMatchGameUi::new())
+    }
+
+    pub fn new_puzzle2048() -> Self {
+        GameUi::Puzzle2048(super::puzzle2048::Puzzle2048GameUi::new())
     }
 
     pub fn render_game(
@@ -39,6 +44,7 @@ impl GameUi {
             GameUi::Snake(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender, force_show_dead),
             GameUi::TicTacToe(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
             GameUi::NumbersMatch(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender, highlighted_pair),
+            GameUi::Puzzle2048(ui) => ui.render_game(egui_ui, ctx, session_id, game_state, client_id, is_observer, command_sender),
         }
     }
 
@@ -70,7 +76,7 @@ impl GameUi {
                 command_sender,
                 replay_path,
             ),
-            GameUi::TicTacToe(_) | GameUi::NumbersMatch(_) => false,
+            GameUi::TicTacToe(_) | GameUi::NumbersMatch(_) | GameUi::Puzzle2048(_) => false,
         }
     }
 
@@ -89,7 +95,7 @@ impl GameUi {
         replay_path: Option<&PathBuf>,
     ) -> bool {
         match self {
-            GameUi::Snake(_) | GameUi::NumbersMatch(_) => false,
+            GameUi::Snake(_) | GameUi::NumbersMatch(_) | GameUi::Puzzle2048(_) => false,
             GameUi::TicTacToe(ui) => ui.render_game_over(
                 egui_ui,
                 ctx,
@@ -121,8 +127,40 @@ impl GameUi {
         replay_path: Option<&PathBuf>,
     ) -> bool {
         match self {
-            GameUi::Snake(_) | GameUi::TicTacToe(_) => false,
+            GameUi::Snake(_) | GameUi::TicTacToe(_) | GameUi::Puzzle2048(_) => false,
             GameUi::NumbersMatch(ui) => ui.render_game_over(
+                egui_ui,
+                ctx,
+                scores,
+                winner,
+                client_id,
+                last_game_state,
+                game_info,
+                play_again_status,
+                is_observer,
+                command_sender,
+                replay_path,
+            ),
+        }
+    }
+
+    pub fn render_game_over_puzzle2048(
+        &mut self,
+        egui_ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        scores: &[ScoreEntry],
+        winner: &Option<PlayerIdentity>,
+        client_id: &str,
+        last_game_state: &Option<GameStateUpdate>,
+        game_info: &common::proto::puzzle2048::Puzzle2048GameEndInfo,
+        play_again_status: &PlayAgainStatus,
+        is_observer: bool,
+        command_sender: &CommandSender,
+        replay_path: Option<&PathBuf>,
+    ) -> bool {
+        match self {
+            GameUi::Snake(_) | GameUi::TicTacToe(_) | GameUi::NumbersMatch(_) => false,
+            GameUi::Puzzle2048(ui) => ui.render_game_over(
                 egui_ui,
                 ctx,
                 scores,

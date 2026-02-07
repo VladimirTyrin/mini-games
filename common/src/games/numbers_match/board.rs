@@ -179,16 +179,16 @@ impl Board {
             return Vec::new();
         }
 
-        let last_active_index = self
+        let last_occupied_index = self
             .cells
             .iter()
             .enumerate()
-            .filter(|(_, cell)| cell.is_active())
+            .filter(|(_, cell)| cell.value > 0)
             .map(|(i, _)| i)
             .next_back()
             .unwrap_or(0);
 
-        let mut write_index = last_active_index + 1;
+        let mut write_index = last_occupied_index + 1;
 
         for &value in &active_values {
             if write_index >= self.cells.len() {
@@ -384,6 +384,31 @@ mod tests {
         assert_eq!(board.get(Position::new(2, 3)).unwrap().value, 2);
         assert_eq!(board.get(Position::new(2, 4)).unwrap().value, 3);
         assert_eq!(board.get(Position::new(2, 5)).unwrap().value, 4);
+    }
+
+    #[test]
+    fn test_refill_writes_after_removed_cells() {
+        #[rustfmt::skip]
+        let mut board = Board::from_values(&[
+            1, 2, 3, 4, 5, 6, 7, 8, 9,
+        ]);
+        board.get_mut(Position::new(0, 1)).unwrap().removed = true;
+        board.get_mut(Position::new(0, 3)).unwrap().removed = true;
+        board.get_mut(Position::new(0, 5)).unwrap().removed = true;
+        board.get_mut(Position::new(0, 7)).unwrap().removed = true;
+
+        board.refill();
+
+        assert!(board.get(Position::new(0, 1)).unwrap().removed);
+        assert!(board.get(Position::new(0, 3)).unwrap().removed);
+        assert!(board.get(Position::new(0, 5)).unwrap().removed);
+        assert!(board.get(Position::new(0, 7)).unwrap().removed);
+
+        assert_eq!(board.get(Position::new(1, 0)).unwrap().value, 1);
+        assert_eq!(board.get(Position::new(1, 1)).unwrap().value, 3);
+        assert_eq!(board.get(Position::new(1, 2)).unwrap().value, 5);
+        assert_eq!(board.get(Position::new(1, 3)).unwrap().value, 7);
+        assert_eq!(board.get(Position::new(1, 4)).unwrap().value, 9);
     }
 
     #[test]

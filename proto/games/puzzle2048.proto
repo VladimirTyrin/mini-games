@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package puzzle2048;
+
+message Puzzle2048LobbySettings {
+    uint32 field_width = 1;
+    uint32 field_height = 2;
+    uint32 target_value = 3;
+}
+
+enum Puzzle2048Direction {
+    PUZZLE_2048_DIRECTION_UNSPECIFIED = 0;
+    PUZZLE_2048_DIRECTION_UP = 1;
+    PUZZLE_2048_DIRECTION_DOWN = 2;
+    PUZZLE_2048_DIRECTION_LEFT = 3;
+    PUZZLE_2048_DIRECTION_RIGHT = 4;
+}
+
+message MoveCommand {
+    Puzzle2048Direction direction = 1;
+}
+
+message Puzzle2048InGameCommand {
+    oneof command {
+        MoveCommand move = 1;
+    }
+}
+
+message Puzzle2048GameState {
+    repeated uint32 cells = 1;
+    uint32 field_width = 2;
+    uint32 field_height = 3;
+    uint32 score = 4;
+    uint32 target_value = 5;
+    Puzzle2048GameStatus status = 6;
+}
+
+enum Puzzle2048GameStatus {
+    PUZZLE_2048_GAME_STATUS_UNSPECIFIED = 0;
+    PUZZLE_2048_GAME_STATUS_IN_PROGRESS = 1;
+    PUZZLE_2048_GAME_STATUS_WON = 2;
+    PUZZLE_2048_GAME_STATUS_LOST = 3;
+}
+
+message Puzzle2048GameEndInfo {
+    Puzzle2048GameEndReason reason = 1;
+    uint32 final_score = 2;
+    uint32 highest_tile = 3;
+    uint32 moves_made = 4;
+}
+
+enum Puzzle2048GameEndReason {
+    PUZZLE_2048_GAME_END_REASON_UNSPECIFIED = 0;
+    PUZZLE_2048_GAME_END_REASON_WON = 1;
+    PUZZLE_2048_GAME_END_REASON_LOST = 2;
+    PUZZLE_2048_GAME_END_REASON_PLAYER_DISCONNECTED = 3;
+}

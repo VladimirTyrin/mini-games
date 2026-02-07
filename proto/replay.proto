@@ -10,6 +10,7 @@ enum Game {
     GAME_TICTACTOE = 2;
     GAME_NUMBERS_MATCH = 3;
     GAME_STACK_ATTACK = 4;
+    GAME_PUZZLE_2048 = 5;
 }
 
 message PlayerDisconnected {}

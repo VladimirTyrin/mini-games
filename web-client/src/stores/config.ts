@@ -30,7 +30,13 @@ export interface NumbersMatchDefaults {
   hintMode: HintMode;
 }
 
-export type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack";
+export interface Puzzle2048Defaults {
+  fieldWidth: number;
+  fieldHeight: number;
+  targetValue: number;
+}
+
+export type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack" | "puzzle2048";
 
 export interface StoredConfig {
   serverUrl: string;
@@ -38,6 +44,7 @@ export interface StoredConfig {
   snakeDefaults: SnakeDefaults;
   tictactoeDefaults: TicTacToeDefaults;
   numbersMatchDefaults: NumbersMatchDefaults;
+  puzzle2048Defaults: Puzzle2048Defaults;
 }
 
 function getDefaultServerUrl(): string {
@@ -82,6 +89,14 @@ function getDefaultNumbersMatchSettings(): NumbersMatchDefaults {
   };
 }
 
+function getDefaultPuzzle2048Settings(): Puzzle2048Defaults {
+  return {
+    fieldWidth: 4,
+    fieldHeight: 4,
+    targetValue: 2048,
+  };
+}
+
 function loadConfig(): StoredConfig | null {
   const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
   if (!stored) return null;
@@ -110,6 +125,9 @@ export const useConfigStore = defineStore("config", () => {
   const numbersMatchDefaults = ref<NumbersMatchDefaults>(
     storedConfig?.numbersMatchDefaults ?? getDefaultNumbersMatchSettings()
   );
+  const puzzle2048Defaults = ref<Puzzle2048Defaults>(
+    storedConfig?.puzzle2048Defaults ?? getDefaultPuzzle2048Settings()
+  );
   const lastGameType = ref<GameType>(storedConfig?.lastGameType ?? "snake");
 
   function persist(): void {
@@ -119,6 +137,7 @@ export const useConfigStore = defineStore("config", () => {
       snakeDefaults: snakeDefaults.value,
       tictactoeDefaults: tictactoeDefaults.value,
       numbersMatchDefaults: numbersMatchDefaults.value,
+      puzzle2048Defaults: puzzle2048Defaults.value,
     });
   }
 
@@ -142,6 +161,11 @@ export const useConfigStore = defineStore("config", () => {
     persist();
   }
 
+  function setPuzzle2048Defaults(defaults: Partial<Puzzle2048Defaults>): void {
+    puzzle2048Defaults.value = { ...puzzle2048Defaults.value, ...defaults };
+    persist();
+  }
+
   function setLastGameType(gameType: GameType): void {
     lastGameType.value = gameType;
     persist();
@@ -153,6 +177,7 @@ export const useConfigStore = defineStore("config", () => {
     snakeDefaults.value = getDefaultSnakeSettings();
     tictactoeDefaults.value = getDefaultTicTacToeSettings();
     numbersMatchDefaults.value = getDefaultNumbersMatchSettings();
+    puzzle2048Defaults.value = getDefaultPuzzle2048Settings();
     localStorage.removeItem(CONFIG_STORAGE_KEY);
   }
 
@@ -162,11 +187,13 @@ export const useConfigStore = defineStore("config", () => {
     snakeDefaults,
     tictactoeDefaults,
     numbersMatchDefaults,
+    puzzle2048Defaults,
     setServerUrl,
     setLastGameType,
     setSnakeDefaults,
     setTicTacToeDefaults,
     setNumbersMatchDefaults,
+    setPuzzle2048Defaults,
     reset,
   };
 });

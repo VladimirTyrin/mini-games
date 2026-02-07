@@ -22,6 +22,7 @@ import { SnakeBotType, SnakeLobbySettingsSchema } from "../proto/games/snake_pb"
 import { TicTacToeBotType, TicTacToeLobbySettingsSchema } from "../proto/games/tictactoe_pb";
 import { NumbersMatchLobbySettingsSchema } from "../proto/games/numbers_match_pb";
 import { StackAttackLobbySettingsSchema } from "../proto/games/stack_attack_pb";
+import { Puzzle2048LobbySettingsSchema } from "../proto/games/puzzle2048_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
 
@@ -62,7 +63,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     const settingsCase = currentLobby.value.settings.case;
     if (settingsCase === "tictactoe") {
       return players.length === 2;
-    } else if (settingsCase === "numbersMatch") {
+    } else if (settingsCase === "numbersMatch" || settingsCase === "puzzle2048") {
       return players.length === 1;
     } else if (settingsCase === "stackAttack") {
       return players.length >= 1 && players.length <= 4;
@@ -124,6 +125,19 @@ export const useLobbyStore = defineStore("lobby", () => {
       settings: {
         case: "numbersMatch",
         value: create(NumbersMatchLobbySettingsSchema, nmSettings),
+      },
+    });
+    gameClient.createLobby(lobbyName, 1, settings);
+  }
+
+  function createPuzzle2048Lobby(
+    lobbyName: string,
+    p2048Settings: Parameters<typeof create<typeof Puzzle2048LobbySettingsSchema>>[1]
+  ): void {
+    const settings = create(LobbySettingsSchema, {
+      settings: {
+        case: "puzzle2048",
+        value: create(Puzzle2048LobbySettingsSchema, p2048Settings),
       },
     });
     gameClient.createLobby(lobbyName, 1, settings);
@@ -313,6 +327,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     createSnakeLobby,
     createTicTacToeLobby,
     createNumbersMatchLobby,
+    createPuzzle2048Lobby,
     createStackAttackLobby,
     joinLobby,
     leaveLobby,

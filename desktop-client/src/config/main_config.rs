@@ -2,7 +2,8 @@ use common::config::{ConfigManager, FileContentConfigProvider, Validate, YamlCon
 use serde::{Deserialize, Serialize};
 
 use super::{
-    GameType, NumbersMatchLobbyConfig, ReplayConfig, ServerConfig, SnakeLobbyConfig, TicTacToeLobbyConfig,
+    GameType, NumbersMatchLobbyConfig, Puzzle2048LobbyConfig, ReplayConfig, ServerConfig,
+    SnakeLobbyConfig, TicTacToeLobbyConfig,
 };
 
 const CONFIG_FILE_NAME: &str = "mini_games_client_config.yaml";
@@ -29,6 +30,8 @@ pub struct Config {
     pub tictactoe: TicTacToeLobbyConfig,
     #[serde(default)]
     pub numbers_match: NumbersMatchLobbyConfig,
+    #[serde(default)]
+    pub puzzle2048: Puzzle2048LobbyConfig,
     pub replays: ReplayConfig,
     pub client_id: Option<String>,
     #[serde(default)]
@@ -41,6 +44,7 @@ impl Validate for Config {
         self.snake.validate()?;
         self.tictactoe.validate()?;
         self.numbers_match.validate()?;
+        self.puzzle2048.validate()?;
         self.replays.validate()?;
         Ok(())
     }
@@ -57,6 +61,7 @@ impl Default for Config {
             snake: SnakeLobbyConfig::default(),
             tictactoe: TicTacToeLobbyConfig::default(),
             numbers_match: NumbersMatchLobbyConfig::default(),
+            puzzle2048: Puzzle2048LobbyConfig::default(),
             replays: ReplayConfig {
                 save: true,
                 location: "minigamesreplays".to_string(),

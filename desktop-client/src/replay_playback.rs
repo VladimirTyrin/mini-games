@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use common::games::snake::{SnakeGameState, Direction, FieldSize, WallCollisionMode, DeadSnakeBehavior, Point, DeathReason};
 use common::games::tictactoe::{TicTacToeGameState, FirstPlayerMode, GameStatus};
 use common::games::numbers_match::{NumbersMatchGameState, HintMode, position_from_index};
+use common::games::puzzle2048::{Puzzle2048GameState, Direction as Puzzle2048Direction};
 use common::games::SessionRng;
 use common::replay::{load_replay, ReplayPlayer};
 use common::{
@@ -68,6 +69,9 @@ pub async fn run_replay_playback(
             ReplayGame::StackAttack => {
                 shared_state.set_error("Stack Attack replay not yet supported".to_string());
                 false
+            }
+            ReplayGame::Puzzle2048 => {
+                run_puzzle2048_replay(player, shared_state.clone(), &mut command_rx, replay_version.clone()).await
             }
         };
 
@@ -429,6 +433,146 @@ async fn run_numbers_match_replay(
             }
         }
     }
+}
+
+async fn run_puzzle2048_replay(
+    mut player: ReplayPlayer,
+    shared_state: SharedState,
+    command_rx: &mut mpsc::UnboundedReceiver<ReplayCommand>,
+    replay_version: String,
+) -> bool {
+    let settings = match player.lobby_settings() {
+        Some(lobby_settings::Settings::Puzzle2048(s)) => *s,
+        _ => {
+            shared_state.set_error("Invalid puzzle 2048 settings in replay".to_string());
+            return false;
+        }
+    };
+
+    let mut rng = SessionRng::new(player.seed());
+    let mut game_state = Puzzle2048GameState::new(
+        settings.field_width as usize,
+        settings.field_height as usize,
+        settings.target_value,
+        &mut rng,
+    );
+
+    let total_actions = player.total_actions() as u64;
+    let mut current_action: u64 = 0;
+    let mut is_paused = false;
+    let mut replay_speed = 1.0_f32;
+
+    update_puzzle2048_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+
+    let base_delay_ms = 400.0;
+
+    loop {
+        let current_delay = Duration::from_millis((base_delay_ms / replay_speed) as u64);
+
+        tokio::select! {
+            _ = tokio::time::sleep(current_delay) => {
+                if is_paused {
+                    continue;
+                }
+
+                if let Some(action) = player.next_action() {
+                    apply_puzzle2048_action(&mut game_state, action, &mut rng);
+                    current_action += 1;
+                }
+
+                let is_finished = player.is_finished() || game_state.status() != common::games::puzzle2048::GameStatus::InProgress;
+                update_puzzle2048_watching_state(&shared_state, &game_state, is_paused, current_action.min(total_actions), total_actions, &replay_version, is_finished);
+
+                if is_finished {
+                    loop {
+                        match command_rx.recv().await {
+                            Some(ReplayCommand::Restart) => return true,
+                            Some(ReplayCommand::Stop) | None => return false,
+                            _ => continue,
+                        }
+                    }
+                }
+            }
+            Some(cmd) = command_rx.recv() => {
+                match cmd {
+                    ReplayCommand::Pause => {
+                        is_paused = true;
+                        update_puzzle2048_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                    }
+                    ReplayCommand::Resume => {
+                        is_paused = false;
+                        update_puzzle2048_watching_state(&shared_state, &game_state, is_paused, current_action, total_actions, &replay_version, false);
+                    }
+                    ReplayCommand::Stop => {
+                        return false;
+                    }
+                    ReplayCommand::Restart => {
+                        return true;
+                    }
+                    ReplayCommand::SetSpeed(speed) => {
+                        replay_speed = speed.clamp(0.25, 4.0);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn apply_puzzle2048_action(
+    game_state: &mut Puzzle2048GameState,
+    action: &PlayerAction,
+    rng: &mut SessionRng,
+) {
+    let Some(content) = &action.content else {
+        return;
+    };
+
+    let Some(inner) = &content.content else {
+        return;
+    };
+
+    if let player_action_content::Content::Command(cmd) = inner
+        && let Some(in_game_command::Command::Puzzle2048(p_cmd)) = &cmd.command
+        && let Some(p_inner) = &p_cmd.command
+    {
+        match p_inner {
+            common::proto::puzzle2048::puzzle2048_in_game_command::Command::Move(move_cmd) => {
+                let direction = match common::proto::puzzle2048::Puzzle2048Direction::try_from(move_cmd.direction) {
+                    Ok(common::proto::puzzle2048::Puzzle2048Direction::Up) => Puzzle2048Direction::Up,
+                    Ok(common::proto::puzzle2048::Puzzle2048Direction::Down) => Puzzle2048Direction::Down,
+                    Ok(common::proto::puzzle2048::Puzzle2048Direction::Left) => Puzzle2048Direction::Left,
+                    Ok(common::proto::puzzle2048::Puzzle2048Direction::Right) => Puzzle2048Direction::Right,
+                    _ => return,
+                };
+                game_state.apply_move(direction, rng);
+            }
+        }
+    }
+}
+
+fn update_puzzle2048_watching_state(
+    shared_state: &SharedState,
+    game_state: &Puzzle2048GameState,
+    is_paused: bool,
+    current_action: u64,
+    total_actions: u64,
+    replay_version: &str,
+    is_finished: bool,
+) {
+    let proto_state = game_state.to_proto();
+    let state_update = GameStateUpdate {
+        state: Some(game_state_update::State::Puzzle2048(proto_state)),
+    };
+
+    shared_state.set_state(AppState::WatchingReplay {
+        game_state: Some(state_update),
+        is_paused,
+        current_tick: current_action,
+        total_ticks: total_actions,
+        replay_version: replay_version.to_string(),
+        is_finished,
+        highlighted_pair: None,
+    });
 }
 
 fn extract_remove_pair_indices(action: &PlayerAction) -> Option<(u32, u32)> {

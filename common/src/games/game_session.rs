@@ -3,6 +3,7 @@ use tokio::sync::Mutex;
 
 use crate::{ClientId, ReplayGame};
 use crate::games::numbers_match::NumbersMatchSessionState;
+use crate::games::puzzle2048::Puzzle2048SessionState;
 use crate::games::snake::SnakeSessionState;
 use crate::games::stack_attack::StackAttackSessionState;
 use crate::games::tictactoe::TicTacToeSessionState;
@@ -32,7 +33,8 @@ impl_session_state!(
     SnakeSessionState,
     TicTacToeSessionState,
     NumbersMatchSessionState,
-    StackAttackSessionState
+    StackAttackSessionState,
+    Puzzle2048SessionState
 );
 
 #[derive(Clone)]
@@ -41,6 +43,7 @@ pub enum GameSession {
     TicTacToe(TicTacToeSessionState),
     NumbersMatch(NumbersMatchSessionState),
     StackAttack(StackAttackSessionState),
+    Puzzle2048(Puzzle2048SessionState),
 }
 
 impl GameSession {
@@ -50,6 +53,7 @@ impl GameSession {
             GameSession::TicTacToe(s) => s,
             GameSession::NumbersMatch(s) => s,
             GameSession::StackAttack(s) => s,
+            GameSession::Puzzle2048(s) => s,
         }
     }
 
@@ -59,6 +63,7 @@ impl GameSession {
             GameSession::TicTacToe(_) => ReplayGame::Tictactoe,
             GameSession::NumbersMatch(_) => ReplayGame::NumbersMatch,
             GameSession::StackAttack(_) => ReplayGame::StackAttack,
+            GameSession::Puzzle2048(_) => ReplayGame::Puzzle2048,
         }
     }
 

@@ -2,6 +2,7 @@ use crate::{ClientId, GameOverNotification, InGameCommand, in_game_command};
 use crate::games::{
     GameBroadcaster, GameSession, GameSessionConfig, LobbySettings, ReplayMode,
     numbers_match::NumbersMatchSession,
+    puzzle2048::Puzzle2048Session,
     snake::{DeathReason, SnakeSession},
     stack_attack::StackAttackSession,
     tictactoe::TicTacToeSession,
@@ -40,6 +41,9 @@ impl GameResolver {
             GameSession::StackAttack(state) => {
                 StackAttackSession::run(config, state, broadcaster).await
             }
+            GameSession::Puzzle2048(state) => {
+                Puzzle2048Session::run(&config, &state, &broadcaster).await
+            }
         }
     }
 
@@ -61,6 +65,9 @@ impl GameResolver {
             (GameSession::StackAttack(state), Some(in_game_command::Command::StackAttack(cmd))) => {
                 StackAttackSession::handle_command(state, client_id, cmd).await;
             }
+            (GameSession::Puzzle2048(state), Some(in_game_command::Command::Puzzle2048(cmd))) => {
+                Puzzle2048Session::handle_command(state, client_id, cmd).await;
+            }
             _ => {}
         }
     }
@@ -80,6 +87,9 @@ impl GameResolver {
             }
             GameSession::StackAttack(state) => {
                 StackAttackSession::handle_player_disconnect(state).await;
+            }
+            GameSession::Puzzle2048(state) => {
+                Puzzle2048Session::handle_player_disconnect(state).await;
             }
         }
     }

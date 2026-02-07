@@ -1,5 +1,5 @@
-use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, proto::numbers_match::NumbersMatchGameEndInfo, proto::stack_attack::StackAttackGameEndInfo, PlayerIdentity, ReplayGame};
-use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig, NumbersMatchLobbyConfig};
+use common::{LobbyInfo, LobbyDetails, GameStateUpdate, ScoreEntry, proto::snake::{Direction, SnakeGameEndInfo, SnakeBotType}, proto::tictactoe::{TicTacToeGameEndInfo, TicTacToeBotType}, proto::numbers_match::NumbersMatchGameEndInfo, proto::stack_attack::StackAttackGameEndInfo, proto::puzzle2048::{Puzzle2048GameEndInfo, Puzzle2048Direction}, PlayerIdentity, ReplayGame};
+use crate::config::{SnakeLobbyConfig, TicTacToeLobbyConfig, NumbersMatchLobbyConfig, Puzzle2048LobbyConfig};
 use crate::constants::CHAT_BUFFER_SIZE;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
@@ -22,6 +22,7 @@ pub enum LobbyConfig {
     Snake(SnakeLobbyConfig),
     TicTacToe(TicTacToeLobbyConfig),
     NumbersMatch(NumbersMatchLobbyConfig),
+    Puzzle2048(Puzzle2048LobbyConfig),
 }
 
 #[derive(Debug, Clone)]
@@ -61,10 +62,16 @@ pub enum NumbersMatchGameCommand {
 }
 
 #[derive(Debug, Clone)]
+pub enum Puzzle2048GameCommand {
+    Move { direction: Puzzle2048Direction },
+}
+
+#[derive(Debug, Clone)]
 pub enum GameCommand {
     Snake(SnakeGameCommand),
     TicTacToe(TicTacToeGameCommand),
     NumbersMatch(NumbersMatchGameCommand),
+    Puzzle2048(Puzzle2048GameCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +87,7 @@ pub enum GameEndInfo {
     NumbersMatch(NumbersMatchGameEndInfo),
     #[allow(dead_code)]
     StackAttack(StackAttackGameEndInfo),
+    Puzzle2048(Puzzle2048GameEndInfo),
 }
 
 #[derive(Debug, Clone)]

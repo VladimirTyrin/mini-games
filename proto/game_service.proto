@@ -6,6 +6,7 @@ import "games/snake.proto";
 import "games/tictactoe.proto";
 import "games/numbers_match.proto";
 import "games/stack_attack.proto";
+import "games/puzzle2048.proto";
 
 service GameService {
     rpc GameStream(stream ClientMessage) returns (stream ServerMessage);
@@ -110,6 +111,7 @@ message LobbySettings {
         tictactoe.TicTacToeLobbySettings tictactoe = 2;
         numbers_match.NumbersMatchLobbySettings numbers_match = 3;
         stack_attack.StackAttackLobbySettings stack_attack = 4;
+        puzzle2048.Puzzle2048LobbySettings puzzle2048 = 5;
     }
 }
 
@@ -194,6 +196,7 @@ message InGameCommand {
         tictactoe.TicTacToeInGameCommand tictactoe = 2;
         numbers_match.NumbersMatchInGameCommand numbers_match = 3;
         stack_attack.StackAttackInGameCommand stack_attack = 4;
+        puzzle2048.Puzzle2048InGameCommand puzzle2048 = 5;
     }
 }
 
@@ -203,6 +206,7 @@ message GameStateUpdate {
         tictactoe.TicTacToeGameState tictactoe = 2;
         numbers_match.NumbersMatchGameState numbers_match = 3;
         stack_attack.StackAttackGameState stack_attack = 4;
+        puzzle2048.Puzzle2048GameState puzzle2048 = 5;
     }
 }
 
@@ -223,6 +227,7 @@ message LobbyDetails {
         tictactoe.TicTacToeLobbySettings tictactoe = 11;
         numbers_match.NumbersMatchLobbySettings numbers_match = 12;
         stack_attack.StackAttackLobbySettings stack_attack = 13;
+        puzzle2048.Puzzle2048LobbySettings puzzle2048 = 14;
     }
 }
 
@@ -268,6 +273,7 @@ message GameOverNotification {
         tictactoe.TicTacToeGameEndInfo tictactoe_info = 11;
         numbers_match.NumbersMatchGameEndInfo numbers_match_info = 12;
         stack_attack.StackAttackGameEndInfo stack_attack_info = 13;
+        puzzle2048.Puzzle2048GameEndInfo puzzle2048_info = 14;
     }
 }
 

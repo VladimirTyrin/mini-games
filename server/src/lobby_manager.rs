@@ -371,6 +371,11 @@ impl LobbyManager {
                     return Err(format!("Stack Attack allows at most {} players, but {} are in the lobby", MAX_PLAYERS, total_players));
                 }
             }
+            LobbySettings::Puzzle2048(_) => {
+                if total_players != 1 {
+                    return Err(format!("Puzzle 2048 requires exactly 1 player, but {} are in the lobby", total_players));
+                }
+            }
         }
 
         lobby.start_game();

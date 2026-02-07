@@ -94,6 +94,7 @@ pub struct MenuApp {
     selected_ttt_bot_type: common::TicTacToeBotType,
     win_count_input: String,
     selected_hint_mode: common::proto::numbers_match::HintMode,
+    target_value_input: String,
     disconnect_timeout: std::time::Duration,
     disconnecting: Option<std::time::Instant>,
     game_ui: Option<GameUi>,
@@ -138,6 +139,7 @@ impl MenuApp {
             selected_ttt_bot_type: common::TicTacToeBotType::TictactoeBotTypeMinimax,
             win_count_input: config.tictactoe.win_count.to_string(),
             selected_hint_mode: config.numbers_match.hint_mode,
+            target_value_input: config.puzzle2048.target_value.to_string(),
             disconnecting: None,
             disconnect_timeout,
             game_ui: None,
@@ -156,6 +158,7 @@ impl MenuApp {
             GameType::Snake => true,
             GameType::TicTacToe => true,
             GameType::NumbersMatch => false,
+            GameType::Puzzle2048 => false,
         }
     }
 
@@ -419,6 +422,9 @@ impl MenuApp {
                                 Some(common::lobby_settings::Settings::StackAttack(_)) => {
                                     ("📦", "Cooperative puzzle".to_string())
                                 }
+                                Some(common::lobby_settings::Settings::Puzzle2048(s)) => {
+                                    ("🧩", format!("{}x{}, target {}", s.field_width, s.field_height, s.target_value))
+                                }
                                 None => ("❓", "Unknown".to_string()),
                             };
 
@@ -499,6 +505,13 @@ impl MenuApp {
                     if ui.radio_value(&mut self.selected_game_type, GameType::NumbersMatch, "Numbers Match").clicked() {
                         self.max_players_input = "1".to_string();
                     }
+                    if ui.radio_value(&mut self.selected_game_type, GameType::Puzzle2048, "2048").clicked() {
+                        let config = self.config_manager.get_config().unwrap();
+                        self.max_players_input = "1".to_string();
+                        self.field_width_input = config.puzzle2048.field_width.to_string();
+                        self.field_height_input = config.puzzle2048.field_height.to_string();
+                        self.target_value_input = config.puzzle2048.target_value.to_string();
+                    }
                 });
 
                 ui.separator();
@@ -506,7 +519,10 @@ impl MenuApp {
                 ui.label("Lobby Name:");
                 ui.text_edit_singleline(&mut self.lobby_name_input);
 
-                if self.selected_game_type != GameType::NumbersMatch {
+                let is_single_player_puzzle = self.selected_game_type == GameType::NumbersMatch
+                    || self.selected_game_type == GameType::Puzzle2048;
+
+                if !is_single_player_puzzle {
                     ui.label("Max Players:");
                     let max_players_enabled = self.selected_game_type == GameType::Snake;
                     ui.add_enabled(max_players_enabled, egui::TextEdit::singleline(&mut self.max_players_input));
@@ -555,6 +571,14 @@ impl MenuApp {
                             ui.radio_value(&mut self.selected_hint_mode, common::proto::numbers_match::HintMode::Unlimited, "Unlimited");
                             ui.radio_value(&mut self.selected_hint_mode, common::proto::numbers_match::HintMode::Disabled, "Disabled");
                         });
+                    }
+                    GameType::Puzzle2048 => {
+                        ui.label("Field Width:");
+                        ui.text_edit_singleline(&mut self.field_width_input);
+                        ui.label("Field Height:");
+                        ui.text_edit_singleline(&mut self.field_height_input);
+                        ui.label("Target Value:");
+                        ui.text_edit_singleline(&mut self.target_value_input);
                     }
                 }
 
@@ -653,6 +677,30 @@ impl MenuApp {
                     self.config_manager.set_config(&config).ok();
 
                     LobbyConfig::NumbersMatch(nm_config)
+                }
+                GameType::Puzzle2048 => {
+                    let Some(field_width) = parse_u32_input(&self.field_width_input, "Field width", &self.shared_state) else {
+                        return;
+                    };
+                    let Some(field_height) = parse_u32_input(&self.field_height_input, "Field height", &self.shared_state) else {
+                        return;
+                    };
+                    let Some(target_value) = parse_u32_input(&self.target_value_input, "Target value", &self.shared_state) else {
+                        return;
+                    };
+
+                    let p_config = crate::config::Puzzle2048LobbyConfig {
+                        field_width,
+                        field_height,
+                        target_value,
+                    };
+
+                    let mut config = self.config_manager.get_config().unwrap();
+                    config.puzzle2048 = p_config;
+                    config.last_game = Some(GameType::Puzzle2048);
+                    self.config_manager.set_config(&config).ok();
+
+                    LobbyConfig::Puzzle2048(p_config)
                 }
             };
 
@@ -1099,6 +1147,7 @@ impl MenuApp {
                             ReplayGame::Tictactoe => "⭕",
                             ReplayGame::NumbersMatch => "🔢",
                             ReplayGame::StackAttack => "📦",
+                            ReplayGame::Puzzle2048 => "🧩",
                             ReplayGame::Unspecified => "❓",
                         };
 
@@ -1107,6 +1156,7 @@ impl MenuApp {
                             ReplayGame::Tictactoe => "TicTacToe",
                             ReplayGame::NumbersMatch => "Numbers Match",
                             ReplayGame::StackAttack => "Stack Attack",
+                            ReplayGame::Puzzle2048 => "2048",
                             ReplayGame::Unspecified => "Unknown",
                         };
 
@@ -1237,6 +1287,9 @@ impl MenuApp {
                 }
                 Some(common::game_state_update::State::StackAttack(_)) => {
                     // Stack Attack replay not yet implemented
+                }
+                Some(common::game_state_update::State::Puzzle2048(_)) => {
+                    self.game_ui = Some(GameUi::new_puzzle2048());
                 }
                 None => {}
             }
@@ -1482,6 +1535,9 @@ impl eframe::App for MenuApp {
                                 Some(common::game_state_update::State::StackAttack(_)) => {
                                     // Stack Attack desktop client not yet implemented
                                 }
+                                Some(common::game_state_update::State::Puzzle2048(_)) => {
+                                    self.game_ui = Some(GameUi::new_puzzle2048());
+                                }
                                 None => {}
                             }
                         }
@@ -1510,6 +1566,9 @@ impl eframe::App for MenuApp {
                             crate::state::GameEndInfo::StackAttack(_) => {
                                 // Stack Attack desktop client not yet implemented
                             }
+                            crate::state::GameEndInfo::Puzzle2048(_) => {
+                                self.game_ui = Some(GameUi::new_puzzle2048());
+                            }
                         }
                     }
                     let replay_path = self.shared_state.get_last_replay_path();
@@ -1531,8 +1590,10 @@ impl eframe::App for MenuApp {
                                 game_ui.render_game_over_numbers_match(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &nm_info, &play_again_status, is_observer, sender, replay_path.as_ref())
                             }
                             crate::state::GameEndInfo::StackAttack(_) => {
-                                // Stack Attack desktop client not yet implemented
                                 false
+                            }
+                            crate::state::GameEndInfo::Puzzle2048(p_info) => {
+                                game_ui.render_game_over_puzzle2048(ui, ctx, &scores, &winner, &self.client_id, &last_game_state, &p_info, &play_again_status, is_observer, sender, replay_path.as_ref())
                             }
                         };
                     }

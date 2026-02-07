@@ -117,6 +117,7 @@ pub fn generate_replay_filename(game: ReplayGame, version: &str) -> String {
         ReplayGame::Tictactoe => "TICTACTOE",
         ReplayGame::NumbersMatch => "NUMBERSMATCH",
         ReplayGame::StackAttack => "STACKATTACK",
+        ReplayGame::Puzzle2048 => "PUZZLE2048",
         ReplayGame::Unspecified => "UNKNOWN",
     };
 

@@ -20,6 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "../proto/games/tictactoe.proto",
                 "../proto/games/numbers_match.proto",
                 "../proto/games/stack_attack.proto",
+                "../proto/games/puzzle2048.proto",
             ],
             &["../proto"],
         )?;

@@ -8,6 +8,7 @@ import SnakeGame from "../components/games/SnakeGame.vue";
 import TicTacToeGame from "../components/games/TicTacToeGame.vue";
 import NumbersMatchGame from "../components/games/NumbersMatchGame.vue";
 import StackAttackGame from "../components/games/StackAttackGame.vue";
+import Puzzle2048Game from "../components/games/Puzzle2048Game.vue";
 import GameOver from "../components/games/GameOver.vue";
 
 const router = useRouter();
@@ -31,6 +32,8 @@ const gameTitle = computed(() => {
       return "Numbers Match";
     case "stackAttack":
       return "Stack Attack";
+    case "puzzle2048":
+      return "2048";
     default:
       return "Game";
   }
@@ -133,6 +136,10 @@ onUnmounted(() => {
 
         <div v-else-if="gameType === 'stackAttack'">
           <StackAttackGame />
+        </div>
+
+        <div v-else-if="gameType === 'puzzle2048'">
+          <Puzzle2048Game />
         </div>
 
         <div

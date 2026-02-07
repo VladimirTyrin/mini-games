@@ -5,4 +5,5 @@ pub enum GameType {
     Snake,
     TicTacToe,
     NumbersMatch,
+    Puzzle2048,
 }

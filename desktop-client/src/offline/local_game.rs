@@ -10,6 +10,7 @@ use crate::constants::CHAT_BUFFER_SIZE;
 use ringbuffer::AllocRingBuffer;
 
 use super::numbers_match_runner::run_numbers_match_game;
+use super::puzzle2048_runner::run_puzzle2048_game;
 use super::snake_runner::run_snake_game;
 use super::tictactoe_runner::run_tictactoe_game;
 
@@ -136,6 +137,14 @@ fn create_lobby(
             };
             (LobbySettings::NumbersMatch(nm_settings), 1, LobbyConfig::NumbersMatch(cfg))
         }
+        crate::state::LobbyConfig::Puzzle2048(cfg) => {
+            let p_settings = common::Puzzle2048LobbySettings {
+                field_width: cfg.field_width,
+                field_height: cfg.field_height,
+                target_value: cfg.target_value,
+            };
+            (LobbySettings::Puzzle2048(p_settings), 1, LobbyConfig::Puzzle2048(cfg))
+        }
     };
 
     let creator_client_id = common::identifiers::ClientId::new(player_id.to_string());
@@ -193,6 +202,9 @@ async fn run_game(
         }
         LobbyConfig::NumbersMatch(ref cfg) => {
             run_numbers_match_game(shared_state, command_rx, player_id, &lobby, cfg, &replay_config).await;
+        }
+        LobbyConfig::Puzzle2048(ref cfg) => {
+            run_puzzle2048_game(shared_state, command_rx, player_id, &lobby, cfg, &replay_config).await;
         }
     }
 }

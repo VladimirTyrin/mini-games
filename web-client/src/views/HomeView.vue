@@ -53,6 +53,10 @@ const connectionState = computed(() => connectionStore.state);
 const connectionError = computed(() => connectionStore.error);
 const lobbies = computed(() => lobbyStore.lobbies);
 
+const p2048FieldWidth = ref(configStore.puzzle2048Defaults.fieldWidth);
+const p2048FieldHeight = ref(configStore.puzzle2048Defaults.fieldHeight);
+const p2048TargetValue = ref(configStore.puzzle2048Defaults.targetValue);
+
 function getGameTypeLabel(lobby: (typeof lobbies.value)[0]): string {
   const settings = lobby.settings?.settings;
   if (!settings) return "Unknown";
@@ -60,6 +64,7 @@ function getGameTypeLabel(lobby: (typeof lobbies.value)[0]): string {
   if (settings.case === "tictactoe") return "TicTacToe";
   if (settings.case === "numbersMatch") return "Numbers Match";
   if (settings.case === "stackAttack") return "Stack Attack";
+  if (settings.case === "puzzle2048") return "2048";
   return "Unknown";
 }
 
@@ -70,6 +75,7 @@ function getGameTypeIcon(lobby: (typeof lobbies.value)[0]): string {
   if (settings.case === "tictactoe") return "X";
   if (settings.case === "numbersMatch") return "N";
   if (settings.case === "stackAttack") return "A";
+  if (settings.case === "puzzle2048") return "P";
   return "?";
 }
 
@@ -116,6 +122,10 @@ function openCreateDialog() {
 
   nmHintMode.value = configStore.numbersMatchDefaults.hintMode;
 
+  p2048FieldWidth.value = configStore.puzzle2048Defaults.fieldWidth;
+  p2048FieldHeight.value = configStore.puzzle2048Defaults.fieldHeight;
+  p2048TargetValue.value = configStore.puzzle2048Defaults.targetValue;
+
   showCreateDialog.value = true;
 }
 
@@ -148,6 +158,12 @@ function handleCreateLobby() {
   } else if (newLobbyGameType.value === "numbersMatch") {
     lobbyStore.createNumbersMatchLobby(newLobbyName.value.trim(), {
       hintMode: nmHintMode.value,
+    });
+  } else if (newLobbyGameType.value === "puzzle2048") {
+    lobbyStore.createPuzzle2048Lobby(newLobbyName.value.trim(), {
+      fieldWidth: p2048FieldWidth.value,
+      fieldHeight: p2048FieldHeight.value,
+      targetValue: p2048TargetValue.value,
     });
   } else if (newLobbyGameType.value === "stackAttack") {
     lobbyStore.createStackAttackLobby(newLobbyName.value.trim());
@@ -275,6 +291,7 @@ onUnmounted(() => {
                   'bg-blue-600': getGameTypeIcon(lobby) === 'X',
                   'bg-purple-600': getGameTypeIcon(lobby) === 'N',
                   'bg-orange-600': getGameTypeIcon(lobby) === 'A',
+                  'bg-amber-600': getGameTypeIcon(lobby) === 'P',
                   'bg-slate-600': getGameTypeIcon(lobby) === '?',
                 }"
               >
@@ -370,6 +387,17 @@ onUnmounted(() => {
                 ]"
               >
                 Numbers
+              </button>
+              <button
+                @click="newLobbyGameType = 'puzzle2048'"
+                :class="[
+                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
+                  newLobbyGameType === 'puzzle2048'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
+                ]"
+              >
+                2048
               </button>
               <button
                 @click="newLobbyGameType = 'stackAttack'"
@@ -592,6 +620,66 @@ onUnmounted(() => {
 
               <p class="text-slate-400 text-sm mt-4">
                 Single-player puzzle game. Match pairs of equal numbers or numbers that sum to 10.
+              </p>
+            </div>
+          </template>
+
+          <template v-if="newLobbyGameType === 'puzzle2048'">
+            <div class="border-t border-slate-700 pt-4">
+              <h3 class="text-lg font-medium mb-3">2048 Settings</h3>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="p2048Width" class="block text-sm font-medium text-slate-300 mb-2">
+                    Field Width
+                  </label>
+                  <input
+                    id="p2048Width"
+                    v-model.number="p2048FieldWidth"
+                    type="number"
+                    min="2"
+                    max="10"
+                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label for="p2048Height" class="block text-sm font-medium text-slate-300 mb-2">
+                    Field Height
+                  </label>
+                  <input
+                    id="p2048Height"
+                    v-model.number="p2048FieldHeight"
+                    type="number"
+                    min="2"
+                    max="10"
+                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div class="col-span-2">
+                  <label for="p2048Target" class="block text-sm font-medium text-slate-300 mb-2">
+                    Target Value
+                  </label>
+                  <select
+                    id="p2048Target"
+                    v-model.number="p2048TargetValue"
+                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option :value="64">64</option>
+                    <option :value="128">128</option>
+                    <option :value="256">256</option>
+                    <option :value="512">512</option>
+                    <option :value="1024">1024</option>
+                    <option :value="2048">2048</option>
+                    <option :value="4096">4096</option>
+                    <option :value="8192">8192</option>
+                  </select>
+                </div>
+              </div>
+
+              <p class="text-slate-400 text-sm mt-4">
+                Single-player puzzle game. Slide tiles to merge matching numbers and reach the target value.
               </p>
             </div>
           </template>

@@ -8,6 +8,7 @@ mod session_config;
 mod session_rng;
 
 pub mod numbers_match;
+pub mod puzzle2048;
 pub mod snake;
 pub mod stack_attack;
 pub mod tictactoe;

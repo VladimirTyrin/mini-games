@@ -166,6 +166,15 @@ pub async fn grpc_client_task(
                                             })),
                                         }))
                                     }
+                                    crate::state::LobbyConfig::Puzzle2048(p_config) => {
+                                        (1, Some(common::LobbySettings {
+                                            settings: Some(common::lobby_settings::Settings::Puzzle2048(common::proto::puzzle2048::Puzzle2048LobbySettings {
+                                                field_width: p_config.field_width,
+                                                field_height: p_config.field_height,
+                                                target_value: p_config.target_value,
+                                            })),
+                                        }))
+                                    }
                                 };
 
                                 Some(client_message::Message::CreateLobby(CreateLobbyRequest {
@@ -306,6 +315,24 @@ pub async fn grpc_client_task(
                                                 common::NumbersMatchInGameCommand {
                                                     command: Some(common::proto::numbers_match::numbers_match_in_game_command::Command::RequestHint(
                                                         common::proto::numbers_match::RequestHintCommand {}
+                                                    ))
+                                                }
+                                            ))
+                                        }))
+                                    }
+                                }
+                            }
+                            GameCommand::Puzzle2048(p_cmd) => {
+                                use crate::state::Puzzle2048GameCommand;
+                                match p_cmd {
+                                    Puzzle2048GameCommand::Move { direction } => {
+                                        Some(client_message::Message::InGame(InGameCommand {
+                                            command: Some(in_game_command::Command::Puzzle2048(
+                                                common::Puzzle2048InGameCommand {
+                                                    command: Some(common::proto::puzzle2048::puzzle2048_in_game_command::Command::Move(
+                                                        common::proto::puzzle2048::MoveCommand {
+                                                            direction: direction as i32,
+                                                        }
                                                     ))
                                                 }
                                             ))
@@ -472,6 +499,9 @@ pub async fn grpc_client_task(
                                         }
                                         Some(common::game_over_notification::GameInfo::NumbersMatchInfo(info)) => {
                                             crate::state::GameEndInfo::NumbersMatch(*info)
+                                        }
+                                        Some(common::game_over_notification::GameInfo::Puzzle2048Info(info)) => {
+                                            crate::state::GameEndInfo::Puzzle2048(*info)
                                         }
                                         _ => crate::state::GameEndInfo::Snake(common::proto::snake::SnakeGameEndInfo {
                                             reason: common::proto::snake::SnakeGameEndReason::Unspecified as i32,
