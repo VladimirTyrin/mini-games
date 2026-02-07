@@ -53,6 +53,14 @@ const connectionState = computed(() => connectionStore.state);
 const connectionError = computed(() => connectionStore.error);
 const lobbies = computed(() => lobbyStore.lobbies);
 
+const gameTypes: { id: GameType; icon: string; label: string; activeClass: string }[] = [
+  { id: "snake", icon: "\u{1F40D}", label: "Snake", activeClass: "bg-green-600 text-white" },
+  { id: "tictactoe", icon: "\u{2716}", label: "TicTacToe", activeClass: "bg-blue-600 text-white" },
+  { id: "numbersMatch", icon: "\u{1F522}", label: "Numbers", activeClass: "bg-purple-600 text-white" },
+  { id: "puzzle2048", icon: "\u{1F3B2}", label: "2048", activeClass: "bg-amber-600 text-white" },
+  { id: "stackAttack", icon: "\u{1F4E6}", label: "Stack", activeClass: "bg-orange-600 text-white" },
+];
+
 const p2048FieldWidth = ref(configStore.puzzle2048Defaults.fieldWidth);
 const p2048FieldHeight = ref(configStore.puzzle2048Defaults.fieldHeight);
 const p2048TargetValue = ref(configStore.puzzle2048Defaults.targetValue);
@@ -354,61 +362,20 @@ onUnmounted(() => {
 
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Game Type</label>
-            <div class="flex gap-3">
+            <div class="grid grid-cols-5 gap-2">
               <button
-                @click="newLobbyGameType = 'snake'"
+                v-for="gt in gameTypes"
+                :key="gt.id"
+                @click="newLobbyGameType = gt.id"
+                class="flex flex-col items-center gap-1 py-2 px-1 rounded transition-colors"
                 :class="[
-                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
-                  newLobbyGameType === 'snake'
-                    ? 'bg-green-600 text-white'
+                  newLobbyGameType === gt.id
+                    ? gt.activeClass + ' ring-2 ring-white/30'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
                 ]"
               >
-                Snake
-              </button>
-              <button
-                @click="newLobbyGameType = 'tictactoe'"
-                :class="[
-                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
-                  newLobbyGameType === 'tictactoe'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
-                ]"
-              >
-                TicTacToe
-              </button>
-              <button
-                @click="newLobbyGameType = 'numbersMatch'"
-                :class="[
-                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
-                  newLobbyGameType === 'numbersMatch'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
-                ]"
-              >
-                Numbers
-              </button>
-              <button
-                @click="newLobbyGameType = 'puzzle2048'"
-                :class="[
-                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
-                  newLobbyGameType === 'puzzle2048'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
-                ]"
-              >
-                2048
-              </button>
-              <button
-                @click="newLobbyGameType = 'stackAttack'"
-                :class="[
-                  'flex-1 py-2 px-4 rounded font-medium transition-colors',
-                  newLobbyGameType === 'stackAttack'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
-                ]"
-              >
-                Stack Attack! (incomplete)
+                <span class="text-xl leading-none">{{ gt.icon }}</span>
+                <span class="text-xs font-medium truncate w-full text-center">{{ gt.label }}</span>
               </button>
             </div>
           </div>
@@ -618,9 +585,6 @@ onUnmounted(() => {
                 </select>
               </div>
 
-              <p class="text-slate-400 text-sm mt-4">
-                Single-player puzzle game. Match pairs of equal numbers or numbers that sum to 10.
-              </p>
             </div>
           </template>
 
@@ -678,21 +642,12 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <p class="text-slate-400 text-sm mt-4">
-                Single-player puzzle game. Slide tiles to merge matching numbers and reach the target value.
-              </p>
             </div>
           </template>
 
           <template v-if="newLobbyGameType === 'stackAttack'">
             <div class="border-t border-slate-700 pt-4">
               <h3 class="text-lg font-medium mb-3">Stack Attack</h3>
-
-              <p class="text-slate-400 text-sm">
-                Cooperative multiplayer game. Workers push boxes dropped by cranes.
-                Clear horizontal lines of boxes to score points. Game over when a box
-                falls on a worker or boxes reach the ceiling.
-              </p>
             </div>
           </template>
         </div>
@@ -712,6 +667,14 @@ onUnmounted(() => {
             Create
           </button>
         </div>
+
+        <p class="text-slate-500 text-xs mt-4">
+          <template v-if="newLobbyGameType === 'snake'">Multiplayer snake game. Eat food to grow, avoid walls and other snakes.</template>
+          <template v-else-if="newLobbyGameType === 'tictactoe'">Two-player strategy game. Get your marks in a row to win.</template>
+          <template v-else-if="newLobbyGameType === 'numbersMatch'">Single-player puzzle. Match pairs of equal numbers or numbers that sum to 10.</template>
+          <template v-else-if="newLobbyGameType === 'puzzle2048'">Single-player puzzle. Slide tiles to merge matching numbers and reach the target value.</template>
+          <template v-else-if="newLobbyGameType === 'stackAttack'">Cooperative multiplayer. Push boxes, clear lines. Incomplete!</template>
+        </p>
       </div>
     </div>
   </div>

@@ -357,7 +357,6 @@ onUnmounted(() => {
 
           <!-- Player Controls -->
           <div v-if="!isObserver || isHost" class="bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-semibold mb-4">Controls</h2>
             <div class="flex gap-4">
               <button
                 v-if="!isObserver"
