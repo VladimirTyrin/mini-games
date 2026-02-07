@@ -25,13 +25,16 @@ const winningLine = computed((): WinningLine | null => {
 });
 
 const BASE_CELL_SIZE = 48;
-const MIN_CELL_SIZE = 16;
+const MIN_CELL_SIZE = 12;
 const MAX_CELL_SIZE = 64;
-const GAP_SIZE = 4;
+const DESKTOP_GAP_SIZE = 4;
+const MOBILE_GAP_SIZE = 2;
 
 const isMobileLayout = computed(() => {
   return containerSize.value.width < 1024;
 });
+
+const gapSize = computed(() => isMobileLayout.value ? MOBILE_GAP_SIZE : DESKTOP_GAP_SIZE);
 
 const cellSize = computed(() => {
   if (!state.value || containerSize.value.width === 0) return BASE_CELL_SIZE;
@@ -39,15 +42,21 @@ const cellSize = computed(() => {
   const padding = isMobileLayout.value ? 0 : 48;
   const sidebarWidth = isMobileLayout.value ? 0 : 288;
   const availableWidth = containerSize.value.width - sidebarWidth - padding;
-  const availableHeight = containerSize.value.height - (isMobileLayout.value ? 200 : 100);
 
-  const totalGapsX = (state.value.fieldWidth - 1) * GAP_SIZE;
-  const totalGapsY = (state.value.fieldHeight - 1) * GAP_SIZE;
+  const gap = gapSize.value;
+  const totalGapsX = (state.value.fieldWidth - 1) * gap;
 
   const cellByWidth = Math.floor((availableWidth - totalGapsX) / state.value.fieldWidth);
-  const cellByHeight = Math.floor((availableHeight - totalGapsY) / state.value.fieldHeight);
 
-  const size = Math.min(cellByWidth, cellByHeight);
+  let size;
+  if (isMobileLayout.value) {
+    size = cellByWidth;
+  } else {
+    const availableHeight = containerSize.value.height - 100;
+    const totalGapsY = (state.value.fieldHeight - 1) * gap;
+    const cellByHeight = Math.floor((availableHeight - totalGapsY) / state.value.fieldHeight);
+    size = Math.min(cellByWidth, cellByHeight);
+  }
   return Math.max(MIN_CELL_SIZE, Math.min(MAX_CELL_SIZE, size));
 });
 
@@ -71,21 +80,21 @@ const winningLineCoords = computed((): LineCoords | null => {
   const line = winningLine.value;
   const size = cellSize.value;
   return {
-    x1: line.startX * (size + GAP_SIZE) + size / 2,
-    y1: line.startY * (size + GAP_SIZE) + size / 2,
-    x2: line.endX * (size + GAP_SIZE) + size / 2,
-    y2: line.endY * (size + GAP_SIZE) + size / 2,
+    x1: line.startX * (size + gapSize.value) + size / 2,
+    y1: line.startY * (size + gapSize.value) + size / 2,
+    x2: line.endX * (size + gapSize.value) + size / 2,
+    y2: line.endY * (size + gapSize.value) + size / 2,
   };
 });
 
 const gridWidth = computed(() => {
   if (!state.value) return 0;
-  return state.value.fieldWidth * cellSize.value + (state.value.fieldWidth - 1) * GAP_SIZE;
+  return state.value.fieldWidth * cellSize.value + (state.value.fieldWidth - 1) * gapSize.value;
 });
 
 const gridHeight = computed(() => {
   if (!state.value) return 0;
-  return state.value.fieldHeight * cellSize.value + (state.value.fieldHeight - 1) * GAP_SIZE;
+  return state.value.fieldHeight * cellSize.value + (state.value.fieldHeight - 1) * gapSize.value;
 });
 
 const isMyTurn = computed(() => {
@@ -173,7 +182,7 @@ function getCellClasses(x: number, y: number): Record<string, boolean> {
   return {
     "cursor-pointer hover:bg-gray-600": canClick,
     "cursor-not-allowed": !canClick,
-    "bg-indigo-800": isLastMove(x, y),
+    "bg-indigo-600": isLastMove(x, y),
   };
 }
 
@@ -215,7 +224,7 @@ onUnmounted(() => {
             class="grid"
             :style="{
               gridTemplateColumns: `repeat(${state.fieldWidth}, ${cellSize}px)`,
-              gap: `${GAP_SIZE}px`,
+              gap: `${gapSize}px`,
             }"
           >
             <button

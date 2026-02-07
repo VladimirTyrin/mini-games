@@ -355,6 +355,56 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Player Controls -->
+          <div v-if="!isObserver || isHost" class="bg-gray-800 rounded-lg p-4">
+            <h2 class="text-xl font-semibold mb-4">Controls</h2>
+            <div class="flex gap-4">
+              <button
+                v-if="!isObserver"
+                :class="[
+                  'px-6 py-3 rounded-lg font-medium transition-colors',
+                  isReady
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-green-600 hover:bg-green-700',
+                ]"
+                @click="toggleReady"
+              >
+                {{ isReady ? "Not Ready" : "Ready" }}<template v-if="!deviceStore.isTouchDevice"> (R)</template>
+              </button>
+
+              <button
+                v-if="isHost"
+                :disabled="!canStart"
+                :class="[
+                  'px-6 py-3 rounded-lg font-medium transition-colors',
+                  canStart
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-gray-600 cursor-not-allowed',
+                ]"
+                @click="startGame"
+              >
+                Start Game<template v-if="!deviceStore.isTouchDevice"> (S)</template>
+              </button>
+            </div>
+            <p v-if="isHost && !canStart" class="text-gray-400 mt-2 text-sm">
+              <template v-if="!lobby.players.every(p => p.ready)">
+                All players must be ready.
+              </template>
+              <template v-else-if="gameType === 'tictactoe' && lobby.players.length !== 2">
+                TicTacToe requires exactly 2 players.
+              </template>
+              <template v-else-if="gameType === 'numbersMatch' && lobby.players.length !== 1">
+                Numbers Match is a single-player game.
+              </template>
+              <template v-else-if="gameType === 'stackAttack' && lobby.players.length > 4">
+                Stack Attack supports 1-4 players.
+              </template>
+              <template v-else-if="lobby.players.length < 1">
+                At least 1 player required.
+              </template>
+            </p>
+          </div>
+
           <!-- Observers Section -->
           <div class="bg-gray-800 rounded-lg p-4">
             <h2 class="text-xl font-semibold mb-4">
@@ -409,56 +459,6 @@ onUnmounted(() => {
                 Lobby is full
               </span>
             </div>
-          </div>
-
-          <!-- Player Controls -->
-          <div v-if="!isObserver || isHost" class="bg-gray-800 rounded-lg p-4">
-            <h2 class="text-xl font-semibold mb-4">Controls</h2>
-            <div class="flex gap-4">
-              <button
-                v-if="!isObserver"
-                :class="[
-                  'px-6 py-3 rounded-lg font-medium transition-colors',
-                  isReady
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-green-600 hover:bg-green-700',
-                ]"
-                @click="toggleReady"
-              >
-                {{ isReady ? "Not Ready" : "Ready" }}<template v-if="!deviceStore.isTouchDevice"> (R)</template>
-              </button>
-
-              <button
-                v-if="isHost"
-                :disabled="!canStart"
-                :class="[
-                  'px-6 py-3 rounded-lg font-medium transition-colors',
-                  canStart
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-gray-600 cursor-not-allowed',
-                ]"
-                @click="startGame"
-              >
-                Start Game<template v-if="!deviceStore.isTouchDevice"> (S)</template>
-              </button>
-            </div>
-            <p v-if="isHost && !canStart" class="text-gray-400 mt-2 text-sm">
-              <template v-if="!lobby.players.every(p => p.ready)">
-                All players must be ready.
-              </template>
-              <template v-else-if="gameType === 'tictactoe' && lobby.players.length !== 2">
-                TicTacToe requires exactly 2 players.
-              </template>
-              <template v-else-if="gameType === 'numbersMatch' && lobby.players.length !== 1">
-                Numbers Match is a single-player game.
-              </template>
-              <template v-else-if="gameType === 'stackAttack' && lobby.players.length > 4">
-                Stack Attack supports 1-4 players.
-              </template>
-              <template v-else-if="lobby.players.length < 1">
-                At least 1 player required.
-              </template>
-            </p>
           </div>
         </div>
 

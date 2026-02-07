@@ -92,7 +92,7 @@ onUnmounted(() => {
             v-else-if="isInGame"
             class="px-2 py-1 bg-green-600 text-white text-xs font-semibold rounded"
           >
-            IN PROGRESS
+            IN GAME
           </span>
         </div>
 
@@ -113,7 +113,7 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <main class="container mx-auto px-4 py-6 relative">
+    <main class="container mx-auto px-1 py-1 sm:px-4 sm:py-6 relative">
       <div v-if="!gameType" class="text-center py-12">
         <p class="text-gray-400 text-lg">No active game. Redirecting...</p>
       </div>

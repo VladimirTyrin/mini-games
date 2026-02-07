@@ -75,7 +75,7 @@ function handleLeave(): void {
 
 <template>
   <div class="flex flex-col items-center">
-    <div class="bg-gray-900/30 rounded-lg p-2 sm:p-8 max-w-md w-full">
+    <div class="bg-gray-900/30 rounded-lg px-1 py-2 sm:p-8 max-w-md w-full">
       <h2
         class="text-xl sm:text-4xl font-bold text-center mb-4 sm:mb-6 opacity-80"
         :class="resultClass"
