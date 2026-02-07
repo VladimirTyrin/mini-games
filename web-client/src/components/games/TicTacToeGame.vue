@@ -173,7 +173,7 @@ function getCellClasses(x: number, y: number): Record<string, boolean> {
   return {
     "cursor-pointer hover:bg-gray-600": canClick,
     "cursor-not-allowed": !canClick,
-    "bg-gray-600": isLastMove(x, y),
+    "bg-indigo-800": isLastMove(x, y),
   };
 }
 

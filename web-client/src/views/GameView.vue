@@ -137,7 +137,7 @@ onUnmounted(() => {
 
         <div
           v-if="isGameOver"
-          class="absolute inset-0 flex items-center justify-center bg-black/60"
+          class="absolute inset-0 flex items-center justify-center"
         >
           <GameOver />
         </div>

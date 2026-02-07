@@ -30,8 +30,11 @@ export interface NumbersMatchDefaults {
   hintMode: HintMode;
 }
 
+export type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack";
+
 export interface StoredConfig {
   serverUrl: string;
+  lastGameType?: GameType;
   snakeDefaults: SnakeDefaults;
   tictactoeDefaults: TicTacToeDefaults;
   numbersMatchDefaults: NumbersMatchDefaults;
@@ -107,10 +110,12 @@ export const useConfigStore = defineStore("config", () => {
   const numbersMatchDefaults = ref<NumbersMatchDefaults>(
     storedConfig?.numbersMatchDefaults ?? getDefaultNumbersMatchSettings()
   );
+  const lastGameType = ref<GameType>(storedConfig?.lastGameType ?? "snake");
 
   function persist(): void {
     saveConfig({
       serverUrl: serverUrl.value,
+      lastGameType: lastGameType.value,
       snakeDefaults: snakeDefaults.value,
       tictactoeDefaults: tictactoeDefaults.value,
       numbersMatchDefaults: numbersMatchDefaults.value,
@@ -137,8 +142,14 @@ export const useConfigStore = defineStore("config", () => {
     persist();
   }
 
+  function setLastGameType(gameType: GameType): void {
+    lastGameType.value = gameType;
+    persist();
+  }
+
   function reset(): void {
     serverUrl.value = getDefaultServerUrl();
+    lastGameType.value = "snake";
     snakeDefaults.value = getDefaultSnakeSettings();
     tictactoeDefaults.value = getDefaultTicTacToeSettings();
     numbersMatchDefaults.value = getDefaultNumbersMatchSettings();
@@ -147,10 +158,12 @@ export const useConfigStore = defineStore("config", () => {
 
   return {
     serverUrl,
+    lastGameType,
     snakeDefaults,
     tictactoeDefaults,
     numbersMatchDefaults,
     setServerUrl,
+    setLastGameType,
     setSnakeDefaults,
     setTicTacToeDefaults,
     setNumbersMatchDefaults,

@@ -75,25 +75,25 @@ function handleLeave(): void {
 
 <template>
   <div class="flex flex-col items-center">
-    <div class="bg-gray-800 rounded-lg p-8 max-w-md w-full">
+    <div class="bg-gray-900/30 rounded-lg p-2 sm:p-8 max-w-md w-full">
       <h2
-        class="text-4xl font-bold text-center mb-6"
+        class="text-xl sm:text-4xl font-bold text-center mb-4 sm:mb-6 opacity-80"
         :class="resultClass"
       >
         {{ resultMessage }}
       </h2>
 
-      <div v-if="sortedScores.length > 0" class="mb-6">
-        <h3 class="text-lg font-semibold mb-3 text-gray-200">Final Scores</h3>
+      <div v-if="sortedScores.length > 0" class="mb-4 sm:mb-6">
+        <h3 class="text-sm sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-200/80">Final Scores</h3>
 
         <div class="space-y-2">
           <div
             v-for="(entry, index) in sortedScores"
             :key="entry.identity?.playerId"
-            class="flex items-center justify-between p-3 rounded-lg"
+            class="flex items-center justify-between p-2 sm:p-3 rounded-lg"
             :class="{
-              'bg-yellow-900/30': index === 0 && !isDraw,
-              'bg-gray-700': index !== 0 || isDraw,
+              'bg-yellow-900/20': index === 0 && !isDraw,
+              'bg-gray-700/30': index !== 0 || isDraw,
               'ring-2 ring-green-500': entry.identity?.playerId === connectionStore.clientId,
             }"
           >
@@ -123,7 +123,7 @@ function handleLeave(): void {
                 {{ index + 1 }}th
               </span>
 
-              <span class="font-medium text-gray-200">
+              <span class="font-medium text-gray-200/80">
                 {{ formatPlayerName(entry.identity?.playerId ?? "Unknown", entry.identity?.isBot ?? false) }}
                 <span
                   v-if="entry.identity?.playerId === connectionStore.clientId"
@@ -134,15 +134,15 @@ function handleLeave(): void {
               </span>
             </div>
 
-            <span class="font-bold text-xl text-gray-200">
+            <span class="font-bold text-xl text-gray-200/80">
               {{ entry.score }}
             </span>
           </div>
         </div>
       </div>
 
-      <div v-if="playAgainStatus && canPlayAgain" class="mb-6">
-        <h3 class="text-lg font-semibold mb-3 text-gray-200">Play Again?</h3>
+      <div v-if="playAgainStatus && canPlayAgain" class="mb-4 sm:mb-6">
+        <h3 class="text-sm sm:text-lg font-semibold mb-2 sm:mb-3 text-gray-200/80">Play Again?</h3>
 
         <div class="space-y-2 text-sm">
           <div
@@ -177,10 +177,10 @@ function handleLeave(): void {
         </div>
       </div>
 
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-2 sm:gap-3">
         <button
           v-if="canPlayAgain && !hasVotedPlayAgain"
-          class="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+          class="w-full px-3 py-2 sm:px-4 sm:py-3 bg-green-600/60 hover:bg-green-700/60 text-white/90 font-semibold rounded-lg transition-colors"
           @click="handlePlayAgain"
         >
           Play Again<template v-if="!deviceStore.isTouchDevice"> (Enter)</template>
@@ -188,7 +188,7 @@ function handleLeave(): void {
 
         <button
           v-if="canPlayAgain && hasVotedPlayAgain"
-          class="w-full px-4 py-3 bg-gray-600 text-gray-300 font-semibold rounded-lg cursor-not-allowed"
+          class="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-600/40 text-gray-300/80 font-semibold rounded-lg cursor-not-allowed"
           disabled
         >
           Waiting for others...
@@ -202,7 +202,7 @@ function handleLeave(): void {
         </div>
 
         <button
-          class="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
+          class="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-700/40 hover:bg-gray-600/40 text-white/90 font-semibold rounded-lg transition-colors"
           @click="handleLeave"
         >
           Leave Game<template v-if="!deviceStore.isTouchDevice"> (Escape)</template>

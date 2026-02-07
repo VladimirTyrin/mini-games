@@ -12,7 +12,7 @@ import {
 import { FirstPlayerMode } from "../proto/games/tictactoe_pb";
 import { HintMode } from "../proto/games/numbers_match_pb";
 
-type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack";
+import type { GameType } from "../stores/config";
 
 const router = useRouter();
 const connectionStore = useConnectionStore();
@@ -98,7 +98,7 @@ function handleJoinAsObserver(lobbyId: string) {
 
 function openCreateDialog() {
   newLobbyName.value = connectionStore.clientId ?? "";
-  newLobbyGameType.value = "snake";
+  newLobbyGameType.value = configStore.lastGameType;
   newLobbyMaxPlayers.value = 4;
 
   snakeFieldWidth.value = configStore.snakeDefaults.fieldWidth;
@@ -125,6 +125,8 @@ function closeCreateDialog() {
 
 function handleCreateLobby() {
   if (!newLobbyName.value.trim()) return;
+
+  configStore.setLastGameType(newLobbyGameType.value);
 
   if (newLobbyGameType.value === "snake") {
     lobbyStore.createSnakeLobby(newLobbyName.value.trim(), newLobbyMaxPlayers.value, {
@@ -378,7 +380,7 @@ onUnmounted(() => {
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600',
                 ]"
               >
-                Stack
+                Stack Attack! (incomplete)
               </button>
             </div>
           </div>
