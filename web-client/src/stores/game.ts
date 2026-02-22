@@ -34,6 +34,7 @@ import {
 } from "../proto/games/puzzle2048_pb";
 import { gameClient } from "../api/client";
 import { useConnectionStore } from "./connection";
+import { useReplayStore } from "./replay";
 
 export type GameType = "snake" | "tictactoe" | "numbersMatch" | "stackAttack" | "puzzle2048" | null;
 
@@ -275,6 +276,8 @@ export const useGameStore = defineStore("game", () => {
     puzzle2048State.value = null;
     gameOver.value = null;
     playAgainStatus.value = null;
+    const replayStore = useReplayStore();
+    replayStore.clear();
   }
 
   return {

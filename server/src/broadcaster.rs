@@ -2,8 +2,8 @@ use tokio::sync::{mpsc, Mutex};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::Status;
-use common::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification, log};
-use common::games::GameBroadcaster;
+use crate::{ClientId, LobbyDetails, ServerMessage, server_message, GameStateUpdate, GameOverNotification, log};
+use crate::games::GameBroadcaster;
 
 pub type ClientSender = mpsc::Sender<Result<ServerMessage, Status>>;
 

@@ -14,7 +14,7 @@ const version = __APP_VERSION__;
     <footer class="flex-shrink-0 bg-gray-800 border-t border-gray-700 py-3 px-4 text-center text-sm text-gray-400">
       <span class="text-gray-500">v{{ version }}</span>
       <span class="mx-2">|</span>
-      Source code and desktop client with richer capabilities (offline play, saving replays) available at
+      Source code available at
       <a
         href="https://github.com/VladimirTyrin/mini-games"
         target="_blank"

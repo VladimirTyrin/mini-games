@@ -4,23 +4,50 @@ import { useRouter } from "vue-router";
 import { useGameStore } from "../stores/game";
 import { useConnectionStore } from "../stores/connection";
 import { useLobbyStore } from "../stores/lobby";
+import { useChatStore } from "../stores/chat";
 import SnakeGame from "../components/games/SnakeGame.vue";
 import TicTacToeGame from "../components/games/TicTacToeGame.vue";
 import NumbersMatchGame from "../components/games/NumbersMatchGame.vue";
 import StackAttackGame from "../components/games/StackAttackGame.vue";
 import Puzzle2048Game from "../components/games/Puzzle2048Game.vue";
 import GameOver from "../components/games/GameOver.vue";
+import ReplayControls from "../components/games/ReplayControls.vue";
+import InGameChat from "../components/games/InGameChat.vue";
+import { useReplayStore } from "../stores/replay";
 
 const router = useRouter();
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
 const lobbyStore = useLobbyStore();
+const chatStore = useChatStore();
+const replayStore = useReplayStore();
 
 const gameType = computed(() => gameStore.gameType);
 const isGameOver = computed(() => gameStore.isGameOver);
 const isInGame = computed(() => gameStore.isInGame);
 const canPlayAgain = computed(() => gameStore.canPlayAgain);
 const hasVotedPlayAgain = computed(() => gameStore.hasVotedPlayAgain);
+const isInReplay = computed(() => replayStore.isInReplay);
+const humanCountInLobby = computed(() => {
+  const lobby = lobbyStore.currentLobby;
+  if (!lobby) return 0;
+  const players = lobby.players.filter((p) => p.identity && !p.identity.isBot).length;
+  const observers = lobby.observers.filter((o) => !o.isBot).length;
+  return players + observers;
+});
+const canStartWatchReplay = computed(() => {
+  if (!replayStore.replayData) return false;
+  if (humanCountInLobby.value >= 2) return lobbyStore.isHost;
+  return true;
+});
+
+const showChat = computed(() => {
+  const lobby = lobbyStore.currentLobby;
+  if (!lobby) return false;
+  const humanCount = lobby.players.filter(p => p.identity && !p.identity.isBot).length
+    + lobby.observers.filter(o => !o.isBot).length;
+  return humanCount >= 2;
+});
 
 const gameTitle = computed(() => {
   switch (gameType.value) {
@@ -42,18 +69,42 @@ const gameTitle = computed(() => {
 function handleLeaveGame(): void {
   gameStore.leaveGame();
   lobbyStore.leaveLobby();
+  chatStore.clearInLobbyMessages();
   router.push("/");
 }
 
 function handleKeyDown(event: KeyboardEvent): void {
-  if (isGameOver.value) {
-    if (event.key === "Enter" && canPlayAgain.value && !hasVotedPlayAgain.value) {
+  const target = event.target as HTMLElement | null;
+  const isInputFocused =
+    target !== null &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable);
+  if (isInputFocused) return;
+
+  if (isGameOver.value && !isInReplay.value) {
+    if (event.code === "Enter" && canPlayAgain.value && !hasVotedPlayAgain.value) {
       event.preventDefault();
       gameStore.playAgain();
-    } else if (event.key === "Escape") {
+    } else if (event.code === "Escape") {
       event.preventDefault();
       handleLeaveGame();
+    } else if (event.code === "KeyW" && replayStore.replayData && canStartWatchReplay.value) {
+      event.preventDefault();
+      if (humanCountInLobby.value >= 2) {
+        replayStore.watchReplayTogether(replayStore.replayData.content, false);
+      } else {
+        lobbyStore.leaveLobby();
+        replayStore.createReplayLobby(replayStore.replayData.content, false);
+      }
+    } else if (event.code === "KeyS" && replayStore.replayData) {
+      event.preventDefault();
+      replayStore.saveReplay();
     }
+  }
+  if (isInReplay.value && event.code === "Escape") {
+    event.preventDefault();
+    handleLeaveGame();
   }
 }
 
@@ -86,7 +137,13 @@ onUnmounted(() => {
         <div class="flex items-center gap-4">
           <h1 class="text-xl font-bold text-gray-200">{{ gameTitle }}</h1>
           <span
-            v-if="isGameOver"
+            v-if="isInReplay"
+            class="px-2 py-1 bg-indigo-600 text-white text-xs font-semibold rounded"
+          >
+            REPLAY
+          </span>
+          <span
+            v-else-if="isGameOver"
             class="px-2 py-1 bg-red-600 text-white text-xs font-semibold rounded"
           >
             GAME OVER
@@ -122,6 +179,8 @@ onUnmounted(() => {
       </div>
 
       <div v-else class="relative">
+        <InGameChat v-if="showChat" />
+
         <div v-if="gameType === 'snake'">
           <SnakeGame />
         </div>
@@ -143,12 +202,14 @@ onUnmounted(() => {
         </div>
 
         <div
-          v-if="isGameOver"
+          v-if="isGameOver && !isInReplay"
           class="absolute inset-0 flex items-center justify-center"
         >
           <GameOver />
         </div>
       </div>
+
+      <ReplayControls v-if="isInReplay" />
     </main>
   </div>
 </template>

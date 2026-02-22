@@ -8,10 +8,13 @@ import {
   ClientMessageSchema,
   ConnectRequestSchema,
   CreateLobbyRequestSchema,
+  CreateReplayLobbyRequestSchema,
   DisconnectRequestSchema,
   ErrorCode,
   type InGameCommand,
   InGameCommandSchema,
+  type InReplayCommand,
+  InReplayCommandSchema,
   InLobbyChatMessageSchema,
   JoinLobbyRequestSchema,
   KickFromLobbyRequestSchema,
@@ -25,6 +28,7 @@ import {
   PlayAgainRequestSchema,
   type ServerMessage,
   StartGameRequestSchema,
+  WatchReplayTogetherRequestSchema,
 } from "../proto/game_service_pb";
 import { type ConnectionState, WebSocketClient } from "./websocket";
 
@@ -175,6 +179,27 @@ export class GameClient {
     this.sendMessage({
       case: "inGame",
       value: create(InGameCommandSchema, { command }),
+    });
+  }
+
+  sendReplayCommand(command: InReplayCommand["command"]): void {
+    this.sendMessage({
+      case: "inReplay",
+      value: create(InReplayCommandSchema, { command }),
+    });
+  }
+
+  createReplayLobby(replayContent: Uint8Array, hostOnlyControl: boolean): void {
+    this.sendMessage({
+      case: "createReplayLobby",
+      value: create(CreateReplayLobbyRequestSchema, { replayContent, hostOnlyControl }),
+    });
+  }
+
+  watchReplayTogether(replayContent: Uint8Array, hostOnlyControl: boolean): void {
+    this.sendMessage({
+      case: "watchReplayTogether",
+      value: create(WatchReplayTogetherRequestSchema, { replayContent, hostOnlyControl }),
     });
   }
 

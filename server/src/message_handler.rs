@@ -1,7 +1,7 @@
 use tokio::sync::mpsc;
 use tonic::Status;
 
-use common::{
+use crate::{
     client_message, log, server_message, ClientId, ClientMessage, ErrorCode, ErrorResponse,
     ServerMessage,
 };
@@ -42,7 +42,7 @@ impl MessageHandler {
         tx: &ClientSender,
         client_id_opt: &mut Option<ClientId>,
     ) -> HandleResult {
-        let server_version = common::version::get_version();
+        let server_version = crate::version::get_version();
         if client_message.version != server_version {
             let error_text = format!(
                 "Version mismatch: client version '{}', server version '{}'",
@@ -77,7 +77,7 @@ impl MessageHandler {
                     let error_text = "Client ID already connected. Only one connection per client ID is allowed.";
                     log!("[connect:{}] Error: {}", client_id, error_text);
                     let response = ServerMessage {
-                        message: Some(server_message::Message::Connect(common::ConnectResponse {
+                        message: Some(server_message::Message::Connect(crate::ConnectResponse {
                             success: false,
                             error_message: error_text.to_string(),
                         })),
@@ -91,7 +91,7 @@ impl MessageHandler {
                 log!("Client connected: {}", client_id);
 
                 let response = ServerMessage {
-                    message: Some(server_message::Message::Connect(common::ConnectResponse {
+                    message: Some(server_message::Message::Connect(crate::ConnectResponse {
                         success: true,
                         error_message: String::new(),
                     })),
@@ -178,7 +178,7 @@ impl MessageHandler {
             client_message::Message::Ping(req) => {
                 if let Some(client_id) = client_id_opt {
                     let pong = ServerMessage {
-                        message: Some(server_message::Message::Pong(common::PongResponse {
+                        message: Some(server_message::Message::Pong(crate::PongResponse {
                             ping_id: req.ping_id,
                             client_timestamp_ms: req.client_timestamp_ms,
                         })),
@@ -195,8 +195,8 @@ impl MessageHandler {
                             &clients,
                             ServerMessage {
                                 message: Some(server_message::Message::LobbyListChat(
-                                    common::LobbyListChatNotification {
-                                        sender: Some(common::PlayerIdentity {
+                                    crate::LobbyListChatNotification {
+                                        sender: Some(crate::PlayerIdentity {
                                             player_id: client_id.to_string(),
                                             is_bot: false,
                                         }),
@@ -218,8 +218,8 @@ impl MessageHandler {
                                 &lobby_details,
                                 ServerMessage {
                                     message: Some(server_message::Message::InLobbyChat(
-                                        common::InLobbyChatNotification {
-                                            sender: Some(common::PlayerIdentity {
+                                        crate::InLobbyChatNotification {
+                                            sender: Some(crate::PlayerIdentity {
                                                 player_id: client_id.to_string(),
                                                 is_bot: false,
                                             }),
@@ -257,13 +257,34 @@ impl MessageHandler {
                     send_not_connected_error(tx, "make player observer").await;
                 }
             }
+            client_message::Message::InReplay(cmd) => {
+                if let Some(client_id) = client_id_opt {
+                    self.session_manager.handle_replay_command(client_id, cmd).await;
+                } else {
+                    send_not_connected_error(tx, "send replay command").await;
+                }
+            }
+            client_message::Message::CreateReplayLobby(req) => {
+                if let Some(client_id) = client_id_opt {
+                    self.handle_create_replay_lobby(client_id, req).await;
+                } else {
+                    send_not_connected_error(tx, "create replay lobby").await;
+                }
+            }
+            client_message::Message::WatchReplayTogether(req) => {
+                if let Some(client_id) = client_id_opt {
+                    self.handle_watch_replay_together(client_id, req).await;
+                } else {
+                    send_not_connected_error(tx, "watch replay together").await;
+                }
+            }
         }
 
         if let Some(client_id) = client_id_opt {
             self.lobby_manager.update_client_activity(client_id).await;
 
             if let Some(lobby_details) = self.lobby_manager.get_client_lobby(client_id).await {
-                let lobby_id = common::LobbyId::new(lobby_details.lobby_id);
+                let lobby_id = crate::LobbyId::new(lobby_details.lobby_id);
                 self.lobby_manager.update_lobby_activity(&lobby_id).await;
             }
         }
@@ -296,7 +317,7 @@ impl MessageHandler {
                 &clients_not_in_lobbies,
                 ServerMessage {
                     message: Some(server_message::Message::LobbyListUpdate(
-                        common::LobbyListUpdateNotification {},
+                        crate::LobbyListUpdateNotification {},
                     )),
                 },
             )
@@ -306,14 +327,14 @@ impl MessageHandler {
     async fn handle_list_lobbies(&self, client_id: &ClientId) {
         let lobbies = self.lobby_manager.list_lobbies().await;
         let response = ServerMessage {
-            message: Some(server_message::Message::LobbyList(common::LobbyListResponse {
+            message: Some(server_message::Message::LobbyList(crate::LobbyListResponse {
                 lobbies,
             })),
         };
         self.broadcaster.send_to_client(client_id, response).await;
     }
 
-    async fn handle_create_lobby(&self, client_id: &ClientId, request: common::CreateLobbyRequest) {
+    async fn handle_create_lobby(&self, client_id: &ClientId, request: crate::CreateLobbyRequest) {
         let settings = match crate::lobby_manager::LobbySettings::from_proto(
             request.settings.and_then(|s| s.settings),
         ) {
@@ -337,7 +358,7 @@ impl MessageHandler {
             Ok(lobby_details) => {
                 let response = ServerMessage {
                     message: Some(server_message::Message::LobbyUpdate(
-                        common::LobbyUpdateNotification {
+                        crate::LobbyUpdateNotification {
                             details: Some(lobby_details.clone()),
                         },
                     )),
@@ -351,8 +372,8 @@ impl MessageHandler {
         }
     }
 
-    async fn handle_join_lobby(&self, client_id: &ClientId, request: common::JoinLobbyRequest) {
-        let lobby_id = common::LobbyId::new(request.lobby_id);
+    async fn handle_join_lobby(&self, client_id: &ClientId, request: crate::JoinLobbyRequest) {
+        let lobby_id = crate::LobbyId::new(request.lobby_id);
 
         match self
             .lobby_manager
@@ -362,7 +383,7 @@ impl MessageHandler {
             Ok(lobby_details) => {
                 let response = ServerMessage {
                     message: Some(server_message::Message::LobbyUpdate(
-                        common::LobbyUpdateNotification {
+                        crate::LobbyUpdateNotification {
                             details: Some(lobby_details.clone()),
                         },
                     )),
@@ -376,8 +397,8 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerJoined(
-                                common::PlayerJoinedNotification {
-                                    player: Some(common::PlayerIdentity {
+                                crate::PlayerJoinedNotification {
+                                    player: Some(crate::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
                                     }),
@@ -393,7 +414,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -411,7 +432,7 @@ impl MessageHandler {
         match self.lobby_manager.leave_lobby(client_id).await {
             Ok(leave_state) => {
                 let response = ServerMessage {
-                    message: Some(server_message::Message::LobbyList(common::LobbyListResponse {
+                    message: Some(server_message::Message::LobbyList(crate::LobbyListResponse {
                         lobbies: self.lobby_manager.list_lobbies().await,
                     })),
                 };
@@ -438,7 +459,7 @@ impl MessageHandler {
                         &kicked_players,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyClosed(
-                                common::LobbyClosedNotification {
+                                crate::LobbyClosedNotification {
                                     message: "Lobby closed".to_string(),
                                 },
                             )),
@@ -453,8 +474,8 @@ impl MessageHandler {
                         &updated_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerLeft(
-                                common::PlayerLeftNotification {
-                                    player: Some(common::PlayerIdentity {
+                                crate::PlayerLeftNotification {
+                                    player: Some(crate::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
                                     }),
@@ -469,7 +490,7 @@ impl MessageHandler {
                         &updated_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(updated_details.clone()),
                                 },
                             )),
@@ -482,7 +503,7 @@ impl MessageHandler {
                         &updated_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayAgainStatus(
-                                common::PlayAgainStatusNotification {
+                                crate::PlayAgainStatusNotification {
                                     ready_players: vec![],
                                     pending_players: vec![],
                                     available: false,
@@ -497,7 +518,7 @@ impl MessageHandler {
         }
     }
 
-    async fn handle_mark_ready(&self, client_id: &ClientId, request: common::MarkReadyRequest) {
+    async fn handle_mark_ready(&self, client_id: &ClientId, request: crate::MarkReadyRequest) {
         match self.lobby_manager.mark_ready(client_id, request.ready).await {
             Ok(lobby_details) => {
                 self.broadcaster
@@ -505,8 +526,8 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerReady(
-                                common::PlayerReadyNotification {
-                                    player: Some(common::PlayerIdentity {
+                                crate::PlayerReadyNotification {
+                                    player: Some(crate::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
                                     }),
@@ -522,7 +543,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -536,7 +557,7 @@ impl MessageHandler {
         }
     }
 
-    async fn handle_add_bot(&self, client_id: &ClientId, request: common::AddBotRequest) {
+    async fn handle_add_bot(&self, client_id: &ClientId, request: crate::AddBotRequest) {
         let bot_type = match BotType::from_proto(request.bot_type) {
             Ok(bt) => bt,
             Err(e) => {
@@ -552,7 +573,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerJoined(
-                                common::PlayerJoinedNotification {
+                                crate::PlayerJoinedNotification {
                                     player: Some(bot_identity.to_proto()),
                                 },
                             )),
@@ -565,7 +586,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -581,7 +602,7 @@ impl MessageHandler {
         }
     }
 
-    async fn handle_kick_from_lobby(&self, client_id: &ClientId, request: common::KickFromLobbyRequest) {
+    async fn handle_kick_from_lobby(&self, client_id: &ClientId, request: crate::KickFromLobbyRequest) {
         match self
             .lobby_manager
             .kick_from_lobby(client_id, request.player_id)
@@ -593,7 +614,7 @@ impl MessageHandler {
 
                     let kick_msg = ServerMessage {
                         message: Some(server_message::Message::LobbyClosed(
-                            common::LobbyClosedNotification {
+                            crate::LobbyClosedNotification {
                                 message: "You were kicked from the lobby".to_string(),
                             },
                         )),
@@ -610,7 +631,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerLeft(
-                                common::PlayerLeftNotification {
+                                crate::PlayerLeftNotification {
                                     player: Some(kicked_identity.to_proto()),
                                 },
                             )),
@@ -623,7 +644,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -647,8 +668,8 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerBecameObserver(
-                                common::PlayerBecameObserverNotification {
-                                    player: Some(common::PlayerIdentity {
+                                crate::PlayerBecameObserverNotification {
+                                    player: Some(crate::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
                                     }),
@@ -663,7 +684,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -685,8 +706,8 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::ObserverBecamePlayer(
-                                common::ObserverBecamePlayerNotification {
-                                    observer: Some(common::PlayerIdentity {
+                                crate::ObserverBecamePlayerNotification {
+                                    observer: Some(crate::PlayerIdentity {
                                         player_id: client_id.to_string(),
                                         is_bot: false,
                                     }),
@@ -701,7 +722,7 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
@@ -718,7 +739,7 @@ impl MessageHandler {
     async fn handle_make_player_observer(
         &self,
         client_id: &ClientId,
-        request: common::MakePlayerObserverRequest,
+        request: crate::MakePlayerObserverRequest,
     ) {
         match self
             .lobby_manager
@@ -731,8 +752,8 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::PlayerBecameObserver(
-                                common::PlayerBecameObserverNotification {
-                                    player: Some(common::PlayerIdentity {
+                                crate::PlayerBecameObserverNotification {
+                                    player: Some(crate::PlayerIdentity {
                                         player_id: request.player_id,
                                         is_bot: false,
                                     }),
@@ -747,13 +768,136 @@ impl MessageHandler {
                         &lobby_details,
                         ServerMessage {
                             message: Some(server_message::Message::LobbyUpdate(
-                                common::LobbyUpdateNotification {
+                                crate::LobbyUpdateNotification {
                                     details: Some(lobby_details.clone()),
                                 },
                             )),
                         },
                     )
                     .await;
+            }
+            Err(e) => {
+                self.send_error(client_id, e).await;
+            }
+        }
+    }
+
+    async fn handle_create_replay_lobby(
+        &self,
+        client_id: &ClientId,
+        req: crate::CreateReplayLobbyRequest,
+    ) {
+        let replay_bytes = req.replay_content;
+        let host_only_control = req.host_only_control;
+
+        if let Err(e) = self.lobby_manager.leave_lobby(client_id).await {
+            log!("[client:{}] Note: leave before replay lobby: {}", client_id, e);
+        }
+
+        match self
+            .session_manager
+            .create_replay_session(
+                &self.lobby_manager,
+                &self.broadcaster,
+                replay_bytes,
+                client_id.clone(),
+                host_only_control,
+            )
+            .await
+        {
+            Ok(()) => {
+                self.notify_lobby_list_update().await;
+            }
+            Err(e) => {
+                self.send_error(client_id, e).await;
+            }
+        }
+    }
+
+    async fn handle_watch_replay_together(
+        &self,
+        client_id: &ClientId,
+        req: crate::WatchReplayTogetherRequest,
+    ) {
+        let replay_bytes = req.replay_content;
+        let host_only_control = req.host_only_control;
+
+        let lobby_details = match self.lobby_manager.get_client_lobby(client_id).await {
+            Some(details) => details,
+            None => {
+                self.send_error(client_id, "Not in a lobby".to_string()).await;
+                return;
+            }
+        };
+
+        let host_id_str = lobby_details
+            .creator
+            .as_ref()
+            .map(|c| c.player_id.clone())
+            .unwrap_or_default();
+
+        if client_id.to_string() != host_id_str {
+            self.send_error(client_id, "Only the host can start watch together".to_string())
+                .await;
+            return;
+        }
+
+        let human_count = lobby_details
+            .players
+            .iter()
+            .filter(|p| p.identity.as_ref().is_some_and(|i| !i.is_bot))
+            .count()
+            + lobby_details
+                .observers
+                .iter()
+                .filter(|o| !o.is_bot)
+                .count();
+
+        if human_count < 2 {
+            self.send_error(
+                client_id,
+                "Need at least 2 human players to watch together".to_string(),
+            )
+            .await;
+            return;
+        }
+
+        let viewer_ids: Vec<ClientId> = lobby_details
+            .players
+            .iter()
+            .filter_map(|p| p.identity.as_ref())
+            .filter(|i| !i.is_bot)
+            .map(|i| ClientId::new(i.player_id.clone()))
+            .chain(
+                lobby_details
+                    .observers
+                    .iter()
+                    .filter(|o| !o.is_bot)
+                    .map(|o| ClientId::new(o.player_id.clone())),
+            )
+            .collect();
+
+        let old_lobby_id = crate::LobbyId::new(lobby_details.lobby_id.clone());
+        self.lobby_manager.delete_lobby(&old_lobby_id).await;
+
+        for viewer_id in &viewer_ids {
+            self.lobby_manager.remove_from_current_lobby(viewer_id).await;
+        }
+
+        match self
+            .session_manager
+            .create_replay_session_for_group(
+                &self.lobby_manager,
+                &self.broadcaster,
+                replay_bytes,
+                client_id.clone(),
+                viewer_ids,
+                host_only_control,
+            )
+            .await
+        {
+            Ok(()) => {
+                self.notify_lobby_list_update().await;
             }
             Err(e) => {
                 self.send_error(client_id, e).await;
@@ -772,7 +916,7 @@ impl MessageHandler {
                             &lobby_details,
                             ServerMessage {
                                 message: Some(server_message::Message::GameStarting(
-                                    common::GameStartingNotification {
+                                    crate::GameStartingNotification {
                                         session_id: session_id.clone(),
                                     },
                                 )),
@@ -809,14 +953,14 @@ impl MessageHandler {
                     } => {
                         let ready = ready_player_ids
                             .iter()
-                            .map(|id| common::PlayerIdentity {
+                            .map(|id| crate::PlayerIdentity {
                                 player_id: id.clone(),
                                 is_bot: false,
                             })
                             .collect();
                         let pending = pending_player_ids
                             .iter()
-                            .map(|id| common::PlayerIdentity {
+                            .map(|id| crate::PlayerIdentity {
                                 player_id: id.clone(),
                                 is_bot: false,
                             })
@@ -827,7 +971,7 @@ impl MessageHandler {
 
                 let status_msg = ServerMessage {
                     message: Some(server_message::Message::PlayAgainStatus(
-                        common::PlayAgainStatusNotification {
+                        crate::PlayAgainStatusNotification {
                             ready_players,
                             pending_players,
                             available,
@@ -858,7 +1002,7 @@ impl MessageHandler {
                                     &updated_lobby_details,
                                     ServerMessage {
                                         message: Some(server_message::Message::GameStarting(
-                                            common::GameStartingNotification {
+                                            crate::GameStartingNotification {
                                                 session_id: session_id.clone(),
                                             },
                                         )),

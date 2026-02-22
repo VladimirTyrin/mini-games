@@ -11,9 +11,9 @@ name = "mini_games_server"
 path = "src/main.rs"
 
 [dependencies]
-common = { path = "../common" }
 clap.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 rand.workspace = true
@@ -21,4 +21,17 @@ axum.workspace = true
 tower-http.workspace = true
 futures-util.workspace = true
 prost.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_yaml_ng.workspace = true
 
+[build-dependencies]
+tonic-prost-build.workspace = true
+protoc-bin-vendored.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "minimax_bench"
+harness = false

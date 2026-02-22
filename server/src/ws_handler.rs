@@ -4,7 +4,7 @@ use prost::Message as ProstMessage;
 use tokio::sync::mpsc;
 use tonic::Status;
 
-use common::{log, ClientId, ClientMessage, ServerMessage};
+use crate::{log, ClientId, ClientMessage, ServerMessage};
 
 use crate::message_handler::{HandleResult, MessageHandler};
 use crate::web_server::WebServerState;

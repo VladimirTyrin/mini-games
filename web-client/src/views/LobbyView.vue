@@ -36,6 +36,7 @@ const gameTypeBadge = computed(() => {
   if (gameType.value === "tictactoe") return { text: "TicTacToe", class: "bg-blue-600" };
   if (gameType.value === "numbersMatch") return { text: "Numbers Match", class: "bg-purple-600" };
   if (gameType.value === "stackAttack") return { text: "Stack Attack", class: "bg-orange-600" };
+  if (gameType.value === "puzzle2048") return { text: "2048", class: "bg-amber-600" };
   return { text: "Unknown", class: "bg-gray-600" };
 });
 
@@ -206,7 +207,7 @@ watch(() => gameStore.isInGame, (inGame) => {
   if (inGame) {
     router.push("/game");
   }
-});
+}, { immediate: true });
 
 watch(() => lobbyStore.kickReason, (reason) => {
   if (reason) {
@@ -258,6 +259,12 @@ onUnmounted(() => {
             :class="[gameTypeBadge.class, 'px-3 py-1 rounded-full text-sm font-medium']"
           >
             {{ gameTypeBadge.text }}
+          </span>
+          <span
+            v-if="lobby.isReplayLobby"
+            class="px-3 py-1 rounded-full text-sm font-medium bg-indigo-600"
+          >
+            Replay
           </span>
         </div>
         <button
@@ -529,6 +536,21 @@ onUnmounted(() => {
               </div>
               <div class="text-gray-500 text-xs mt-2">
                 1-4 players
+              </div>
+            </div>
+
+            <!-- Puzzle2048 Settings -->
+            <div v-else-if="lobby.settings.case === 'puzzle2048'" class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-400">Field Size:</span>
+                <span>{{ lobby.settings.value.fieldWidth }} x {{ lobby.settings.value.fieldHeight }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-400">Target Value:</span>
+                <span>{{ lobby.settings.value.targetValue }}</span>
+              </div>
+              <div class="text-gray-500 text-xs mt-2">
+                Single-player puzzle game
               </div>
             </div>
           </div>

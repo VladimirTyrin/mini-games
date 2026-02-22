@@ -5,6 +5,7 @@ import { useConfigStore } from "./config";
 import { useLobbyStore } from "./lobby";
 import { useGameStore } from "./game";
 import { useChatStore } from "./chat";
+import { useReplayStore } from "./replay";
 import { useToastStore } from "./toast";
 import router from "../router";
 
@@ -61,6 +62,7 @@ export const useConnectionStore = defineStore("connection", () => {
     const lobbyStore = useLobbyStore();
     const gameStore = useGameStore();
     const chatStore = useChatStore();
+    const replayStore = useReplayStore();
 
     console.log("[WS] Received message:", msg.message.case);
 
@@ -148,6 +150,14 @@ export const useConnectionStore = defineStore("connection", () => {
 
       case "inLobbyChat":
         chatStore.handleInLobbyChat(msg.message.value);
+        break;
+
+      case "replayFile":
+        replayStore.handleReplayFile(msg.message.value);
+        break;
+
+      case "replayState":
+        replayStore.handleReplayState(msg.message.value);
         break;
 
       case "shutdown":

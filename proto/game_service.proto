@@ -36,6 +36,10 @@ message ClientMessage {
         MakePlayerObserverRequest make_observer = 32;
 
         InGameCommand in_game = 100;
+
+        InReplayCommand in_replay = 200;
+        CreateReplayLobbyRequest create_replay_lobby = 201;
+        WatchReplayTogetherRequest watch_replay_together = 202;
     }
 }
 
@@ -65,6 +69,8 @@ message ServerMessage {
         GameStateUpdate game_state = 101;
         GameOverNotification game_over = 102;
         ReplayFileReadyNotification replay_file = 103;
+
+        ReplayStateNotification replay_state = 150;
 
         ErrorResponse error = 200;
     }
@@ -122,6 +128,7 @@ message LobbyInfo {
     uint32 max_players = 4;
     uint32 observer_count = 5;
     LobbySettings settings = 6;
+    bool is_replay_lobby = 10;
 }
 
 message CreateLobbyRequest {
@@ -229,6 +236,7 @@ message LobbyDetails {
         stack_attack.StackAttackLobbySettings stack_attack = 13;
         puzzle2048.Puzzle2048LobbySettings puzzle2048 = 14;
     }
+    bool is_replay_lobby = 20;
 }
 
 message PlayerInfo {
@@ -317,4 +325,39 @@ message ReplayFileReadyNotification {
     int32 version = 1;
     string suggested_file_name = 2;
     bytes content = 3;
+}
+
+message InReplayCommand {
+    oneof command {
+        ReplayPauseCommand pause = 1;
+        ReplayResumeCommand resume = 2;
+        ReplaySetSpeedCommand set_speed = 3;
+        ReplayStepForwardCommand step_forward = 4;
+        ReplayRestartCommand restart = 5;
+    }
+}
+
+message ReplayPauseCommand {}
+message ReplayResumeCommand {}
+message ReplaySetSpeedCommand { float speed = 1; }
+message ReplayStepForwardCommand {}
+message ReplayRestartCommand {}
+
+message ReplayStateNotification {
+    bool is_paused = 1;
+    uint64 current_tick = 2;
+    uint64 total_ticks = 3;
+    float speed = 4;
+    bool is_finished = 5;
+    bool host_only_control = 6;
+}
+
+message CreateReplayLobbyRequest {
+    bytes replay_content = 1;
+    bool host_only_control = 2;
+}
+
+message WatchReplayTogetherRequest {
+    bytes replay_content = 1;
+    bool host_only_control = 2;
 }

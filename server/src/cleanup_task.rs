@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use common::{log, server_message, ClientId, KickReason, KickedFromLobbyNotification, ServerMessage};
+use crate::{log, server_message, ClientId, KickReason, KickedFromLobbyNotification, ServerMessage};
 
 use crate::broadcaster::Broadcaster;
 use crate::lobby_manager::LobbyManager;

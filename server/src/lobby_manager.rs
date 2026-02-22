@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use common::{LobbyInfo, LobbyDetails, ClientId, LobbyId, PlayerId, BotId};
-use common::id_generator::generate_client_id;
+use crate::{LobbyInfo, LobbyDetails, ClientId, LobbyId, PlayerId, BotId};
+use crate::id_generator::generate_client_id;
 
-pub use common::lobby::{
+pub use crate::lobby::{
     Lobby, LobbySettings, BotType, PlayerIdentity,
     LobbyStateAfterLeave, PlayAgainStatus,
 };
@@ -363,7 +363,7 @@ impl LobbyManager {
                 }
             }
             LobbySettings::StackAttack(_) => {
-                use common::games::stack_attack::settings::{MIN_PLAYERS, MAX_PLAYERS};
+                use crate::games::stack_attack::settings::{MIN_PLAYERS, MAX_PLAYERS};
                 if total_players < MIN_PLAYERS {
                     return Err(format!("Stack Attack requires at least {} player(s)", MIN_PLAYERS));
                 }
@@ -490,12 +490,54 @@ impl LobbyManager {
         let state = self.state.lock().await;
         state.lobbies.get(lobby_id).cloned()
     }
+
+    pub async fn delete_lobby(&self, lobby_id: &LobbyId) {
+        let mut state = self.state.lock().await;
+        state.lobbies.remove(lobby_id);
+        state.last_lobby_activity.remove(lobby_id);
+    }
+
+    pub async fn remove_from_current_lobby(&self, client_id: &ClientId) {
+        let mut state = self.state.lock().await;
+        state.client_to_lobby.remove(client_id);
+        state.clients_not_in_lobby.insert(client_id.clone());
+    }
+
+    pub async fn create_replay_lobby(
+        &self,
+        name: String,
+        settings: LobbySettings,
+        host_id: ClientId,
+        viewer_ids: &[ClientId],
+    ) -> Result<(LobbyId, LobbyDetails), String> {
+        let mut state = self.state.lock().await;
+
+        let lobby_id = LobbyId::new(format!("lobby_{}", state.next_lobby_id));
+        state.next_lobby_id += 1;
+
+        let mut lobby = Lobby::new(lobby_id.clone(), name, host_id.clone(), 100, settings);
+        lobby.is_replay_lobby = true;
+        lobby.in_game = true;
+
+        for viewer_id in viewer_ids {
+            let player_id = PlayerId::new(viewer_id.to_string());
+            lobby.add_observer(player_id);
+            state.client_to_lobby.insert(viewer_id.clone(), lobby_id.clone());
+            state.clients_not_in_lobby.remove(viewer_id);
+        }
+
+        let details = lobby.to_details();
+        state.lobbies.insert(lobby_id.clone(), lobby);
+        state.last_lobby_activity.insert(lobby_id.clone(), Instant::now());
+
+        Ok((lobby_id, details))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::{WallCollisionMode, DeadSnakeBehavior, SnakeLobbySettings};
+    use crate::{WallCollisionMode, DeadSnakeBehavior, SnakeLobbySettings};
 
     fn default_test_settings() -> LobbySettings {
         LobbySettings::Snake(SnakeLobbySettings {

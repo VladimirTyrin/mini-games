@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useGameStore } from "../../stores/game";
 import { useConnectionStore } from "../../stores/connection";
 import { useLobbyStore } from "../../stores/lobby";
 import { useDeviceStore } from "../../stores/device";
+import { useReplayStore } from "../../stores/replay";
 
 const router = useRouter();
 const gameStore = useGameStore();
 const connectionStore = useConnectionStore();
 const lobbyStore = useLobbyStore();
 const deviceStore = useDeviceStore();
+const replayStore = useReplayStore();
 
 const gameOver = computed(() => gameStore.gameOver);
 const playAgainStatus = computed(() => gameStore.playAgainStatus);
@@ -62,8 +64,50 @@ function formatPlayerName(playerId: string, isBot: boolean): string {
   return playerId;
 }
 
+const hasReplayData = computed(() => replayStore.replayData !== null);
+const isHost = computed(() => lobbyStore.isHost);
+
+const humanCountInLobby = computed(() => {
+  const lobby = lobbyStore.currentLobby;
+  if (!lobby) return 0;
+  const playerCount = lobby.players.filter(p => p.identity && !p.identity.isBot).length;
+  const observerCount = lobby.observers.filter(o => !o.isBot).length;
+  return playerCount + observerCount;
+});
+
+const hasMultipleHumans = computed(() => humanCountInLobby.value >= 2);
+const canStartReplay = computed(() => {
+  if (!hasReplayData.value) return false;
+  if (hasMultipleHumans.value) return isHost.value;
+  return true;
+});
+
+const watchTogetherHostOnly = ref(false);
+
 function handlePlayAgain(): void {
   gameStore.playAgain();
+}
+
+function handleWatchReplay(): void {
+  if (!replayStore.replayData) return;
+  if (hasMultipleHumans.value) {
+    if (!isHost.value) return;
+    replayStore.watchReplayTogether(
+      replayStore.replayData.content,
+      watchTogetherHostOnly.value
+    );
+    return;
+  }
+
+  lobbyStore.leaveLobby();
+  replayStore.createReplayLobby(
+    replayStore.replayData.content,
+    watchTogetherHostOnly.value
+  );
+}
+
+function handleSaveReplay(): void {
+  replayStore.saveReplay();
 }
 
 function handleLeave(): void {
@@ -163,7 +207,7 @@ function handleLeave(): void {
           <div
             v-for="player in playAgainStatus.pendingPlayers"
             :key="player.playerId"
-            class="flex items-center gap-2 text-gray-400"
+            class="flex items-center gap-2 text-gray-200"
           >
             <svg class="w-4 h-4 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
               <path
@@ -199,6 +243,41 @@ function handleLeave(): void {
           class="text-center text-gray-400 text-sm py-2"
         >
           Play again is not available (some players have left)
+        </div>
+
+        <div v-if="hasReplayData" class="flex flex-col gap-2 border-t border-gray-700/50 pt-2">
+          <button
+            :disabled="!canStartReplay"
+            class="w-full px-3 py-2 sm:px-4 sm:py-3 bg-indigo-600/60 hover:bg-indigo-700/60 text-white/90 font-semibold rounded-lg transition-colors"
+            :class="{
+              'opacity-50 cursor-not-allowed hover:bg-indigo-600/60': !canStartReplay,
+            }"
+            @click="handleWatchReplay"
+          >
+            Watch Replay<template v-if="!deviceStore.isTouchDevice"> (W)</template>
+          </button>
+
+          <div v-if="hasMultipleHumans && !isHost" class="text-gray-200 text-sm font-medium">
+            Only host can start replay for everyone.
+          </div>
+
+          <div v-if="hasMultipleHumans && isHost">
+            <label class="flex items-center gap-2 mt-1 text-sm text-gray-400 cursor-pointer">
+              <input
+                v-model="watchTogetherHostOnly"
+                type="checkbox"
+                class="rounded bg-gray-700 border-gray-600"
+              />
+              Only host controls
+            </label>
+          </div>
+
+          <button
+            class="w-full px-3 py-2 sm:px-4 sm:py-3 bg-gray-600/40 hover:bg-gray-500/40 text-white/90 font-semibold rounded-lg transition-colors"
+            @click="handleSaveReplay"
+          >
+            Save Replay<template v-if="!deviceStore.isTouchDevice"> (S)</template>
+          </button>
         </div>
 
         <button

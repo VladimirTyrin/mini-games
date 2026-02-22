@@ -2,17 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use common::{ClientId, LobbyId, PlayerId, log, ServerMessage, server_message, InGameCommand, ReplayFileReadyNotification};
-use common::games::{GameResolver, GameSession, GameSessionConfig, ReplayMode};
-use common::replay::{generate_replay_filename, save_replay_to_bytes, REPLAY_VERSION};
+use crate::{ClientId, LobbyId, PlayerId, log, ServerMessage, server_message, InGameCommand, InReplayCommand, ReplayFileReadyNotification};
+use crate::games::{GameResolver, GameSession, GameSessionConfig, ReplayMode};
+use crate::replay::{generate_replay_filename, save_replay_to_bytes, REPLAY_VERSION};
 use crate::broadcaster::Broadcaster;
-use crate::lobby_manager::LobbyManager;
+use crate::lobby_manager::{LobbyManager, LobbySettings};
+use crate::replay_session::{self, ReplaySessionHandle, ReplaySessionCommand};
 
 pub type SessionId = String;
 
 pub struct GameSessionManager {
     sessions: Arc<Mutex<HashMap<SessionId, GameSession>>>,
     client_to_session: Arc<Mutex<HashMap<ClientId, SessionId>>>,
+    replay_sessions: Arc<Mutex<HashMap<SessionId, ReplaySessionHandle>>>,
     broadcaster: Broadcaster,
     lobby_manager: LobbyManager,
 }
@@ -28,6 +30,7 @@ impl GameSessionManager {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             client_to_session: Arc::new(Mutex::new(HashMap::new())),
+            replay_sessions: Arc::new(Mutex::new(HashMap::new())),
             broadcaster,
             lobby_manager,
         }
@@ -47,7 +50,7 @@ impl GameSessionManager {
     pub async fn create_session(
         &self,
         session_id: SessionId,
-        _lobby_details: common::LobbyDetails,
+        _lobby_details: crate::LobbyDetails,
     ) {
         let lobby_id = LobbyId::new(session_id.clone());
         let lobby = match self.lobby_manager.get_lobby(&lobby_id).await {
@@ -79,19 +82,19 @@ impl GameSessionManager {
         let seed: u64 = rand::random();
 
         let game_session = match &lobby.settings {
-            common::lobby::LobbySettings::Snake(settings) => {
+            crate::lobby::LobbySettings::Snake(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
-            common::lobby::LobbySettings::TicTacToe(settings) => {
+            crate::lobby::LobbySettings::TicTacToe(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
-            common::lobby::LobbySettings::NumbersMatch(settings) => {
+            crate::lobby::LobbySettings::NumbersMatch(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
-            common::lobby::LobbySettings::StackAttack(settings) => {
+            crate::lobby::LobbySettings::StackAttack(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
-            common::lobby::LobbySettings::Puzzle2048(settings) => {
+            crate::lobby::LobbySettings::Puzzle2048(settings) => {
                 GameResolver::create_session(&config, settings, seed, ReplayMode::Save)
             }
         };
@@ -143,7 +146,7 @@ impl GameSessionManager {
     async fn handle_game_over(
         &self,
         config: &GameSessionConfig,
-        notification: common::GameOverNotification,
+        notification: crate::GameOverNotification,
     ) {
         let winner_str = notification
             .winner
@@ -235,14 +238,14 @@ impl GameSessionManager {
                                 } => {
                                     let ready = ready_player_ids
                                         .iter()
-                                        .map(|id| common::PlayerIdentity {
+                                        .map(|id| crate::PlayerIdentity {
                                             player_id: id.clone(),
                                             is_bot: false,
                                         })
                                         .collect();
                                     let pending = pending_player_ids
                                         .iter()
-                                        .map(|id| common::PlayerIdentity {
+                                        .map(|id| crate::PlayerIdentity {
                                             player_id: id.clone(),
                                             is_bot: false,
                                         })
@@ -253,7 +256,7 @@ impl GameSessionManager {
 
                             let play_again_msg = ServerMessage {
                                 message: Some(server_message::Message::PlayAgainStatus(
-                                    common::PlayAgainStatusNotification {
+                                    crate::PlayAgainStatusNotification {
                                         ready_players,
                                         pending_players,
                                         available,
@@ -292,7 +295,7 @@ impl GameSessionManager {
             recorder.finalize()
         };
 
-        let suggested_file_name = generate_replay_filename(game_type, common::version::VERSION);
+        let suggested_file_name = generate_replay_filename(game_type, crate::version::VERSION);
         let content = save_replay_to_bytes(&replay);
 
         log!(
@@ -307,6 +310,149 @@ impl GameSessionManager {
             suggested_file_name,
             content,
         })
+    }
+
+    pub async fn create_replay_session(
+        &self,
+        lobby_manager: &LobbyManager,
+        broadcaster: &Broadcaster,
+        replay_bytes: Vec<u8>,
+        host_id: ClientId,
+        host_only_control: bool,
+    ) -> Result<(), String> {
+        self.create_replay_session_for_group(
+            lobby_manager,
+            broadcaster,
+            replay_bytes,
+            host_id.clone(),
+            vec![host_id],
+            host_only_control,
+        )
+        .await
+    }
+
+    pub async fn create_replay_session_for_group(
+        &self,
+        lobby_manager: &LobbyManager,
+        broadcaster: &Broadcaster,
+        replay_bytes: Vec<u8>,
+        host_id: ClientId,
+        viewer_ids: Vec<ClientId>,
+        host_only_control: bool,
+    ) -> Result<(), String> {
+        let replay = replay_session::parse_replay(replay_bytes)?;
+        let game_type = replay_session::replay_game_type(&replay)?;
+        let game_name = replay_session::replay_game_type_name(game_type);
+
+        let player = crate::replay::ReplayPlayer::new(replay.clone());
+        let lobby_settings = player
+            .lobby_settings()
+            .map(|s| LobbySettings::from_proto(Some(*s)))
+            .transpose()?
+            .unwrap_or(LobbySettings::Snake(crate::SnakeLobbySettings {
+                field_width: 15,
+                field_height: 15,
+                wall_collision_mode: 0,
+                tick_interval_ms: 200,
+                max_food_count: 5,
+                food_spawn_probability: 0.5,
+                dead_snake_behavior: 0,
+            }));
+
+        let lobby_name = format!("Replay: {}", game_name);
+
+        let (lobby_id, lobby_details) = lobby_manager
+            .create_replay_lobby(lobby_name, lobby_settings, host_id.clone(), &viewer_ids)
+            .await?;
+
+        let session_id = lobby_id.to_string();
+
+        let game_starting_msg = ServerMessage {
+            message: Some(server_message::Message::GameStarting(
+                crate::GameStartingNotification {
+                    session_id: session_id.clone(),
+                },
+            )),
+        };
+        broadcaster
+            .broadcast_to_clients(&viewer_ids, game_starting_msg)
+            .await;
+
+        let lobby_update_msg = ServerMessage {
+            message: Some(server_message::Message::LobbyUpdate(
+                crate::LobbyUpdateNotification {
+                    details: Some(lobby_details),
+                },
+            )),
+        };
+        broadcaster
+            .broadcast_to_clients(&viewer_ids, lobby_update_msg)
+            .await;
+
+        let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let handle = ReplaySessionHandle {
+            command_tx,
+            host_id: host_id.clone(),
+            host_only_control,
+        };
+
+        {
+            let mut replay_sessions = self.replay_sessions.lock().await;
+            replay_sessions.insert(session_id.clone(), handle);
+        }
+
+        {
+            let mut mapping = self.client_to_session.lock().await;
+            for viewer_id in &viewer_ids {
+                mapping.insert(viewer_id.clone(), session_id.clone());
+            }
+        }
+
+        let broadcaster_clone = broadcaster.clone();
+        let manager_clone = self.clone();
+        let viewer_ids_clone = viewer_ids.clone();
+
+        tokio::spawn(async move {
+            replay_session::run_replay_session(
+                replay,
+                command_rx,
+                viewer_ids_clone,
+                host_only_control,
+                broadcaster_clone,
+            )
+            .await;
+
+            log!("Replay session {} ended", session_id);
+
+            let mut replay_sessions = manager_clone.replay_sessions.lock().await;
+            replay_sessions.remove(&session_id);
+            drop(replay_sessions);
+
+            let mut mapping = manager_clone.client_to_session.lock().await;
+            mapping.retain(|_, sid| *sid != session_id);
+        });
+
+        Ok(())
+    }
+
+    pub async fn handle_replay_command(&self, client_id: &ClientId, command: InReplayCommand) {
+        let mapping = self.client_to_session.lock().await;
+        let session_id = match mapping.get(client_id) {
+            Some(id) => id.clone(),
+            None => return,
+        };
+        drop(mapping);
+
+        let replay_sessions = self.replay_sessions.lock().await;
+        if let Some(handle) = replay_sessions.get(&session_id) {
+            if handle.host_only_control && *client_id != handle.host_id {
+                return;
+            }
+            let _ = handle
+                .command_tx
+                .send(ReplaySessionCommand::ReplayCommand(command));
+        }
     }
 
     pub async fn handle_command(&self, client_id: &ClientId, command: InGameCommand) {
@@ -349,6 +495,7 @@ impl Clone for GameSessionManager {
         Self {
             sessions: self.sessions.clone(),
             client_to_session: self.client_to_session.clone(),
+            replay_sessions: self.replay_sessions.clone(),
             broadcaster: self.broadcaster.clone(),
             lobby_manager: self.lobby_manager.clone(),
         }

@@ -3,7 +3,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status};
 
-use common::{log, proto::game_service::game_service_server::GameService, ClientId, ClientMessage, ServerMessage};
+use crate::{log, proto::game_service::game_service_server::GameService, ClientId, ClientMessage, ServerMessage};
 
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;

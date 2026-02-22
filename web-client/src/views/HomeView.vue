@@ -2,9 +2,11 @@
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useConnectionStore } from "../stores/connection";
+import { useGameStore } from "../stores/game";
 import { useLobbyStore } from "../stores/lobby";
 import { useConfigStore } from "../stores/config";
 import { useDeviceStore } from "../stores/device";
+import { useReplayStore } from "../stores/replay";
 import {
   WallCollisionMode,
   DeadSnakeBehavior,
@@ -16,9 +18,12 @@ import type { GameType } from "../stores/config";
 
 const router = useRouter();
 const connectionStore = useConnectionStore();
+const gameStore = useGameStore();
 const lobbyStore = useLobbyStore();
 const configStore = useConfigStore();
 const deviceStore = useDeviceStore();
+const replayStore = useReplayStore();
+const replayFileInput = ref<HTMLInputElement | null>(null);
 
 const username = ref("");
 const isConnecting = ref(false);
@@ -100,6 +105,24 @@ async function handleConnect() {
 
 function handleRefresh() {
   lobbyStore.refreshLobbies();
+}
+
+function handleLoadReplay(): void {
+  replayFileInput.value?.click();
+}
+
+function handleReplayFileSelected(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const bytes = new Uint8Array(reader.result as ArrayBuffer);
+    replayStore.createReplayLobby(bytes, false, file.name);
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = "";
 }
 
 function handleJoinLobby(lobbyId: string) {
@@ -189,6 +212,12 @@ watch(
   }
 );
 
+watch(() => gameStore.isInGame, (inGame) => {
+  if (inGame) {
+    router.push("/game");
+  }
+});
+
 function handleKeyDown(event: KeyboardEvent): void {
   if (showCreateDialog.value) {
     if (event.key === "Enter") {
@@ -273,6 +302,19 @@ onUnmounted(() => {
               Refresh
             </button>
             <button
+              @click="handleLoadReplay"
+              class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded transition-colors"
+            >
+              Load Replay
+            </button>
+            <input
+              ref="replayFileInput"
+              type="file"
+              accept=".minigamesreplay"
+              class="hidden"
+              @change="handleReplayFileSelected"
+            />
+            <button
               @click="openCreateDialog"
               class="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded transition-colors"
             >
@@ -308,6 +350,7 @@ onUnmounted(() => {
               <div>
                 <h3 class="font-semibold text-lg">{{ lobby.lobbyName }}</h3>
                 <p class="text-sm text-slate-400">
+                  <span v-if="lobby.isReplayLobby" class="text-indigo-400 font-medium">Replay: </span>
                   {{ getGameTypeLabel(lobby) }} - {{ lobby.currentPlayers }}/{{ lobby.maxPlayers }} players
                   <span v-if="lobby.observerCount > 0" class="ml-2">
                     ({{ lobby.observerCount }} observers)

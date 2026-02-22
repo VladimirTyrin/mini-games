@@ -1,14 +1,10 @@
-#!/bin/bash
-set -e
-
-WEB_ONLY=false
-if [[ "$1" == "--web" ]]; then
-    WEB_ONLY=true
-fi
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB_CLIENT_DIR="${SCRIPT_DIR}/web-client"
 WEB_CLIENT_DIST="${WEB_CLIENT_DIR}/dist"
+WEB_URL="http://localhost:5000/ui/"
 
 echo "Building web client..."
 cd "${WEB_CLIENT_DIR}"
@@ -19,41 +15,42 @@ fi
 npm run build
 cd "${SCRIPT_DIR}"
 
-echo "Building Rust projects..."
-cargo build --release
+echo "Building server..."
+cargo build --release -p mini_games_server
+
+SERVER_BIN="${SCRIPT_DIR}/target/release/mini_games_server"
+if [[ -f "${SERVER_BIN}.exe" ]]; then
+    SERVER_BIN="${SERVER_BIN}.exe"
+fi
 
 echo "Starting server..."
-./target/release/mini_games_server.exe --use-log-prefix --static-files-path "${WEB_CLIENT_DIST}" &
+"${SERVER_BIN}" --use-log-prefix --static-files-path "${WEB_CLIENT_DIST}" &
 SERVER_PID=$!
 sleep 2
 
-PIDS_TO_KILL="$SERVER_PID"
+open_browser() {
+    if command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "${WEB_URL}" >/dev/null 2>&1 || true
+    elif command -v open >/dev/null 2>&1; then
+        open "${WEB_URL}" >/dev/null 2>&1 || true
+    elif command -v cmd.exe >/dev/null 2>&1; then
+        cmd.exe /c start "" "${WEB_URL}" >/dev/null 2>&1 || true
+    else
+        echo "Could not auto-open browser. Open ${WEB_URL} manually."
+    fi
+}
 
-if [[ "$WEB_ONLY" == false ]]; then
-    echo "Starting client 1..."
-    ./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 --random-client-id &
-    CLIENT1_PID=$!
-    PIDS_TO_KILL="$PIDS_TO_KILL $CLIENT1_PID"
-
-    echo "Starting client 2..."
-    ./target/release/mini_games_client.exe --use-log-prefix --server-address http://localhost:5001 --random-client-id &
-    CLIENT2_PID=$!
-    PIDS_TO_KILL="$PIDS_TO_KILL $CLIENT2_PID"
-fi
+open_browser
 
 echo ""
 echo "Test setup running:"
 echo "  Server PID: $SERVER_PID"
-if [[ "$WEB_ONLY" == false ]]; then
-    echo "  Client 1 PID: $CLIENT1_PID"
-    echo "  Client 2 PID: $CLIENT2_PID"
-fi
 echo ""
 echo "Endpoints:"
 echo "  gRPC server:  http://localhost:5001"
-echo "  Web client:   http://localhost:5000/ui/"
+echo "  Web client:   ${WEB_URL}"
 echo ""
-echo "Press Ctrl+C to stop all processes"
+echo "Press Ctrl+C to stop server"
 
-trap "kill $PIDS_TO_KILL 2>/dev/null; exit" INT
+trap "kill $SERVER_PID 2>/dev/null; exit" INT EXIT
 wait

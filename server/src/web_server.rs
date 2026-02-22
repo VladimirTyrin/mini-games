@@ -9,7 +9,7 @@ use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
 };
-use common::log;
+use crate::log;
 
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
