@@ -7,7 +7,7 @@ use crate::{log, proto::game_service::game_service_server::GameService, ClientId
 
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
-use crate::lobby_manager::LobbyManager;
+use crate::lobby::LobbyManager;
 use crate::message_handler::{HandleResult, MessageHandler};
 
 #[derive(Debug)]

@@ -107,7 +107,7 @@ impl StackAttackSession {
     ) {
         let player_id = PlayerId::new(client_id.to_string());
         let replay_command = InGameCommand {
-            command: Some(in_game_command::Command::StackAttack(command.clone())),
+            command: Some(in_game_command::Command::StackAttack(command)),
         };
 
         let command_applied = match command.command {

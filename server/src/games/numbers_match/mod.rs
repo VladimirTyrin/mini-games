@@ -1,5 +1,6 @@
 mod board;
 mod game_state;
+pub(crate) mod replay;
 mod session;
 mod settings;
 mod types;

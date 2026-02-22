@@ -13,7 +13,7 @@ use crate::log;
 
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
-use crate::lobby_manager::LobbyManager;
+use crate::lobby::LobbyManager;
 use crate::ws_handler::handle_websocket;
 
 #[derive(Clone)]

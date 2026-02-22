@@ -68,3 +68,4 @@ pub mod validate_lobby_settings;
 pub mod lobby;
 pub mod replay;
 pub mod games;
+pub(crate) mod broadcaster;

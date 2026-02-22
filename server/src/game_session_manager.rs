@@ -6,8 +6,8 @@ use crate::{ClientId, LobbyId, PlayerId, log, ServerMessage, server_message, InG
 use crate::games::{GameResolver, GameSession, GameSessionConfig, ReplayMode};
 use crate::replay::{generate_replay_filename, save_replay_to_bytes, REPLAY_VERSION};
 use crate::broadcaster::Broadcaster;
-use crate::lobby_manager::{LobbyManager, LobbySettings};
-use crate::replay_session::{self, ReplaySessionHandle, ReplaySessionCommand};
+use crate::lobby::{LobbyManager, LobbySettings, PlayAgainStatus};
+use crate::replay::session::{self as replay_session, ReplaySessionHandle, ReplaySessionCommand};
 
 pub type SessionId = String;
 
@@ -229,10 +229,10 @@ impl GameSessionManager {
                     match self.lobby_manager.get_play_again_status(&lobby_id).await {
                         Ok(status) => {
                             let (ready_players, pending_players, available) = match status {
-                                crate::lobby_manager::PlayAgainStatus::NotAvailable => {
+                                PlayAgainStatus::NotAvailable => {
                                     (vec![], vec![], false)
                                 }
-                                crate::lobby_manager::PlayAgainStatus::Available {
+                                PlayAgainStatus::Available {
                                     ready_player_ids,
                                     pending_player_ids,
                                 } => {

@@ -8,7 +8,7 @@ use crate::{
 
 use crate::broadcaster::Broadcaster;
 use crate::game_session_manager::GameSessionManager;
-use crate::lobby_manager::{BotType, LobbyManager, LobbyStateAfterLeave, PlayAgainStatus};
+use crate::lobby::{BotType, LobbyManager, LobbyStateAfterLeave, PlayAgainStatus, LobbySettings};
 
 pub type ClientSender = mpsc::Sender<Result<ServerMessage, Status>>;
 
@@ -335,7 +335,7 @@ impl MessageHandler {
     }
 
     async fn handle_create_lobby(&self, client_id: &ClientId, request: crate::CreateLobbyRequest) {
-        let settings = match crate::lobby_manager::LobbySettings::from_proto(
+        let settings = match LobbySettings::from_proto(
             request.settings.and_then(|s| s.settings),
         ) {
             Ok(s) => s,
@@ -878,11 +878,6 @@ impl MessageHandler {
             .collect();
 
         let old_lobby_id = crate::LobbyId::new(lobby_details.lobby_id.clone());
-        self.lobby_manager.delete_lobby(&old_lobby_id).await;
-
-        for viewer_id in &viewer_ids {
-            self.lobby_manager.remove_from_current_lobby(viewer_id).await;
-        }
 
         match self
             .session_manager
@@ -897,6 +892,8 @@ impl MessageHandler {
             .await
         {
             Ok(()) => {
+                // Switch to replay lobby only after replay session was created successfully.
+                self.lobby_manager.delete_lobby(&old_lobby_id).await;
                 self.notify_lobby_list_update().await;
             }
             Err(e) => {

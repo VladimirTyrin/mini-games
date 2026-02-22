@@ -74,9 +74,7 @@ mod cleanup_task;
 mod server_config;
 mod game_session_manager;
 mod grpc_service;
-mod lobby_manager;
 mod message_handler;
-mod replay_session;
 mod web_server;
 mod ws_handler;
 
@@ -86,7 +84,7 @@ use broadcaster::Broadcaster;
 use clap::Parser;
 use game_session_manager::GameSessionManager;
 use grpc_service::GrpcService;
-use lobby_manager::LobbyManager;
+use lobby::LobbyManager;
 use tonic::transport::Server;
 
 #[derive(Parser)]

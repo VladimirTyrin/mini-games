@@ -2,6 +2,7 @@ mod box_entity;
 mod crane;
 mod field;
 mod game_state;
+pub(crate) mod replay;
 mod session;
 pub mod settings;
 mod types;

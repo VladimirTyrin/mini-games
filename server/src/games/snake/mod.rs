@@ -1,6 +1,7 @@
 mod bot_controller;
 mod entity;
 mod game_state;
+pub(crate) mod replay;
 mod session;
 mod settings;
 mod types;

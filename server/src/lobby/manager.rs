@@ -4,10 +4,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use crate::{LobbyInfo, LobbyDetails, ClientId, LobbyId, PlayerId, BotId};
 use crate::id_generator::generate_client_id;
-
-pub use crate::lobby::{
-    Lobby, LobbySettings, BotType, PlayerIdentity,
-    LobbyStateAfterLeave, PlayAgainStatus,
+use super::{
+    BotType, Lobby, LobbySettings, LobbyStateAfterLeave, PlayAgainStatus, PlayerIdentity,
 };
 
 #[derive(Debug)]

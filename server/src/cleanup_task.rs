@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::{log, server_message, ClientId, KickReason, KickedFromLobbyNotification, ServerMessage};
 
 use crate::broadcaster::Broadcaster;
-use crate::lobby_manager::LobbyManager;
+use crate::lobby::LobbyManager;
 
 pub struct CleanupTask {
     lobby_manager: LobbyManager,

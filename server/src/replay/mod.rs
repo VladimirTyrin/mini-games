@@ -1,6 +1,7 @@
 pub mod recorder;
 pub mod file_io;
 pub mod player;
+pub mod session;
 
 pub use recorder::ReplayRecorder;
 pub use file_io::{save_replay, load_replay, load_replay_metadata, save_replay_to_bytes, generate_replay_filename};
