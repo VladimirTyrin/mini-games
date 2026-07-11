@@ -38,7 +38,7 @@ if [[ "${SHOW_REMOTE_COMMANDS}" == "true" ]]; then
     echo "Nginx logs:   ssh ${REMOTE_USER}@${REMOTE_HOST} 'tail -f /var/log/nginx/error.log'"
     echo "Stop service: ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl stop ${SERVICE_NAME}'"
     echo "Restart:      ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl restart ${SERVICE_NAME}'"
-    echo "Renew SSL:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'certbot renew'"
+    echo "Renew SSL:    ./renew_cert.sh"
     exit 0
 fi
 
@@ -186,4 +186,4 @@ echo "  View logs:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'journalctl -u ${SERVICE
 echo "  Nginx logs:   ssh ${REMOTE_USER}@${REMOTE_HOST} 'tail -f /var/log/nginx/error.log'"
 echo "  Stop service: ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl stop ${SERVICE_NAME}'"
 echo "  Restart:      ssh ${REMOTE_USER}@${REMOTE_HOST} 'systemctl restart ${SERVICE_NAME}'"
-echo "  Renew SSL:    ssh ${REMOTE_USER}@${REMOTE_HOST} 'certbot renew'"
+echo "  Renew SSL:    ./renew_cert.sh"
