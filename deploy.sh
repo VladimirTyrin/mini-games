@@ -9,6 +9,7 @@
 #   --mode M        http | tls (default tls)
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
+#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
 set -euo pipefail
@@ -27,6 +28,7 @@ DOMAIN="braintvsminigames.xyz"
 EMAIL=""
 SKIP_BUILD=false
 DRY_RUN=false
+APK=""
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -36,9 +38,10 @@ while [[ $# -gt 0 ]]; do
         --mode) MODE="$2"; shift 2 ;;
         --domain) DOMAIN="$2"; shift 2 ;;
         --email) EMAIL="$2"; shift 2 ;;
+        --apk) APK="$2"; shift 2 ;;
         --skip-build) SKIP_BUILD=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
-        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -47,6 +50,7 @@ SSH_OPTS=(-o IdentitiesOnly=yes -i "$SSH_KEY")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 scp() { command scp "${SSH_OPTS[@]}" "$@"; }
 [[ "$MODE" == "http" || "$MODE" == "tls" ]] || die "--mode must be http or tls"
+[[ -z "$APK" || -f "$APK" ]] || die "APK not found: $APK"
 if [[ "$MODE" == "tls" ]]; then
     [[ -n "$DOMAIN" ]] || die "--domain is required for --mode tls"
     EMAIL="${EMAIL:-admin@${DOMAIN}}"
@@ -89,11 +93,15 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 
 echo "==> Uploading to ${HOST}"
-ssh "$HOST" "mkdir -p ${REMOTE_DIR}/web.new /var/www/certbot && rm -rf ${REMOTE_DIR}/web.new/*"
+ssh "$HOST" "mkdir -p ${REMOTE_DIR}/web.new ${REMOTE_DIR}/downloads /var/www/certbot && rm -rf ${REMOTE_DIR}/web.new/*"
 tar -C "$WEB_DIST" -czf - . | ssh "$HOST" "tar -xzf - -C ${REMOTE_DIR}/web.new"
 scp -q "$BUILD_BINARY" "${HOST}:${REMOTE_DIR}/${BINARY_NAME}.new"
+if [[ -n "$APK" ]]; then
+    scp -q "$APK" "${HOST}:${REMOTE_DIR}/downloads/mini-games.apk.new"
+    ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/mini-games.apk.new && mv ${REMOTE_DIR}/downloads/mini-games.apk.new ${REMOTE_DIR}/downloads/mini-games.apk"
+fi
 scp -q "${SCRIPT_DIR}/deploy/${SERVICE_NAME}.service" "${HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
-scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${STAGE}"/site-*.conf "${HOST}:/tmp/"
+scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${SCRIPT_DIR}/deploy/nginx-ws.conf" "${STAGE}"/site-*.conf "${HOST}:/tmp/"
 
 echo "==> Configuring host (${MODE})"
 ssh "$HOST" MODE="$MODE" DOMAIN="$DOMAIN" EMAIL="$EMAIL" REMOTE_DIR="$REMOTE_DIR" \
@@ -118,6 +126,7 @@ mv "${REMOTE_DIR}/web.new" "${REMOTE_DIR}/web"
 chmod -R a+rX "${REMOTE_DIR}"
 
 install -m 644 /tmp/nginx-locations.conf /etc/nginx/snippets/mini-games-locations.conf
+install -m 644 /tmp/nginx-ws.conf /etc/nginx/snippets/mini-games-ws.conf
 rm -f /etc/nginx/sites-enabled/default
 
 apply_site() {
@@ -141,7 +150,7 @@ if [[ "$MODE" == "tls" ]]; then
     chmod 755 /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
     apply_site site-tls.conf
 fi
-rm -f /tmp/nginx-locations.conf /tmp/site-*.conf
+rm -f /tmp/nginx-locations.conf /tmp/nginx-ws.conf /tmp/site-*.conf
 
 systemctl daemon-reload
 systemctl enable -q "${SERVICE_NAME}"

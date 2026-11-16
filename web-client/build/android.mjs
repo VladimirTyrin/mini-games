@@ -27,7 +27,7 @@ function node(script, args, options) {
 const env = {
   ...process.env,
   VITE_PLATFORM: "android",
-  VITE_SERVER_URL: process.env.MG_ANDROID_SERVER_URL ?? "ws://146.103.106.44/ws",
+  VITE_SERVER_URL: process.env.MG_ANDROID_SERVER_URL ?? "wss://braintvsminigames.xyz/ws",
 };
 node("build/generate-proto.mjs", [], { cwd: root });
 node("build/build-wasm.mjs", [], { cwd: root });

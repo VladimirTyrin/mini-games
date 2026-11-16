@@ -18,8 +18,9 @@ npm run android:sync         # web bundle + cap sync only (then open android/ in
 
 The APK lands in `android/app/build/outputs/apk/<variant>/`. `build/android.mjs` builds the web
 bundle with `VITE_PLATFORM=android`: only that flavour contains the Capacitor plugins, the web
-build drops them at build time. The default server is `ws://146.103.106.44/ws`; override it with
-`MG_ANDROID_SERVER_URL`. Users can change it in Settings (plain `ws://` to an IP is allowed).
+build drops them at build time. The default server is `wss://braintvsminigames.xyz/ws`; override it with
+`MG_ANDROID_SERVER_URL`. Users can change it in Settings (plain `ws://` to an IP is allowed;
+nginx serves `/ws` on port 80 too).
 
 ## Signing
 

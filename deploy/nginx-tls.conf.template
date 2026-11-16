@@ -8,6 +8,9 @@ server {
         root /var/www/certbot;
     }
 
+    # The Android app may be pointed at a bare IP over plain ws:// (its Settings allow it).
+    include /etc/nginx/snippets/mini-games-ws.conf;
+
     location / {
         return 301 https://__DOMAIN__$request_uri;
     }
