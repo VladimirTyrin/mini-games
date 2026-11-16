@@ -1,14 +1,13 @@
-//! Driver tests on a toy game ("race to 10").
+//! Driver tests on a toy game: two seats alternately add 1..=3, first to reach the target wins.
 
+use crate::conformance::{self, Conformance, Setup};
 use crate::*;
 
-/// Two seats alternately add 1..=3; first to reach the target wins. Who starts is random.
 #[derive(Clone, Debug)]
 struct Race {
     target: u32,
     totals: Vec<u32>,
     turn: Option<Slot>,
-    dropped: Vec<bool>,
     winner: Option<Slot>,
 }
 
@@ -22,6 +21,10 @@ struct Add(u32);
 
 #[derive(Clone, Debug, PartialEq)]
 struct FirstPlayer(Slot);
+
+fn opponent(slot: Slot) -> Slot {
+    Slot::new(1 - slot.get())
+}
 
 impl Game for Race {
     type Settings = RaceSettings;
@@ -39,18 +42,11 @@ impl Game for Race {
 
     fn new(settings: &RaceSettings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
         SetupError::check_range("target", settings.target, 1, 1000)?;
-        if players.len() != 2 {
-            return Err(SetupError::PlayerCount {
-                got: players.len(),
-                min: 2,
-                max: 2,
-            });
-        }
+        SetupError::check_player_count(players.len(), 2, 2)?;
         Ok(Self {
             target: settings.target,
             totals: vec![0; 2],
             turn: None,
-            dropped: vec![false; 2],
             winner: None,
         })
     }
@@ -59,37 +55,37 @@ impl Game for Race {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, cmd: &Add) -> Result<(), CommandError> {
+    fn apply_command(&mut self, slot: Slot, command: &Add) -> Result<(), CommandError> {
         if self.winner.is_some() {
             return Err(CommandError::GameOver);
         }
         if self.turn != Some(slot) {
             return Err(CommandError::NotYourTurn);
         }
-        if !(1..=3).contains(&cmd.0) {
+        if !(1..=3).contains(&command.0) {
             return Err(CommandError::Illegal("add 1..=3"));
         }
-        let i = usize::from(slot);
-        self.totals[i] += cmd.0;
-        if self.totals[i] >= self.target {
+        let total = &mut self.totals[slot.index()];
+        *total += command.0;
+        if *total >= self.target {
             self.winner = Some(slot);
             self.turn = None;
         } else {
-            self.turn = Some(1 - slot);
+            self.turn = Some(opponent(slot));
         }
         Ok(())
     }
 
     fn roll_world(&self, rng: &mut CoreRng) -> Vec<FirstPlayer> {
         if self.turn.is_none() && self.winner.is_none() {
-            vec![FirstPlayer(rng.below(2) as Slot)]
+            vec![FirstPlayer(Slot::new(rng.below(2) as u8))]
         } else {
             Vec::new()
         }
     }
 
     fn apply_world(&mut self, event: &FirstPlayer) -> Result<(), CommandError> {
-        if self.turn.is_some() || event.0 > 1 {
+        if self.turn.is_some() || event.0.get() > 1 {
             return Err(CommandError::Illegal("first player already chosen"));
         }
         self.turn = Some(event.0);
@@ -98,15 +94,14 @@ impl Game for Race {
 
     fn drop_player(&mut self, slot: Slot) {
         if self.winner.is_none() {
-            self.dropped[usize::from(slot)] = true;
-            self.winner = Some(1 - slot);
+            self.winner = Some(opponent(slot));
             self.turn = None;
         }
     }
 
     fn awaiting(&self) -> Awaiting {
         match (self.winner, self.turn) {
-            (None, Some(s)) => Awaiting::Turn(s),
+            (None, Some(slot)) => Awaiting::Turn(slot),
             _ => Awaiting::Nobody,
         }
     }
@@ -114,10 +109,10 @@ impl Game for Race {
     fn status(&self) -> Status {
         match self.winner {
             None => Status::InProgress,
-            Some(w) => Status::Finished(Outcome {
+            Some(winner) => Status::Finished(Outcome {
                 kind: OutcomeKind::Winner,
-                winners: vec![w],
-                scores: self.totals.iter().map(|&t| i64::from(t)).collect(),
+                winners: vec![winner],
+                scores: self.totals.iter().map(|&total| i64::from(total)).collect(),
             }),
         }
     }
@@ -126,23 +121,23 @@ impl Game for Race {
         self.totals.clone()
     }
 
-    fn hash_state(&self, h: &mut StateHasher) {
-        h.u32(self.target);
-        for &t in &self.totals {
-            h.u32(t);
+    fn hash_state(&self, hasher: &mut StateHasher) {
+        hasher.u32(self.target);
+        for &total in &self.totals {
+            hasher.u32(total);
         }
-        h.u8(self.turn.unwrap_or(255));
-        h.u8(self.winner.unwrap_or(255));
+        hasher.u8(self.turn.map_or(u8::MAX, Slot::get));
+        hasher.u8(self.winner.map_or(u8::MAX, Slot::get));
     }
 }
 
 #[derive(Debug)]
-struct GreedyBot;
+struct RandomAdder;
 
-impl Bot<Race> for GreedyBot {
+impl Bot<Race> for RandomAdder {
     fn decide(
         &mut self,
-        _g: &Race,
+        _game: &Race,
         _me: Slot,
         rng: &mut CoreRng,
         budget: &mut Budget,
@@ -152,51 +147,49 @@ impl Bot<Race> for GreedyBot {
     }
 }
 
-impl conformance::Conformance for Race {
-    fn sample_setups() -> Vec<(RaceSettings, Vec<PlayerSpec>)> {
+impl Conformance for Race {
+    fn sample_setups() -> Vec<Setup<Race>> {
         vec![
-            (
+            Setup::new(
                 RaceSettings { target: 10 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
-            (
+            Setup::new(
                 RaceSettings { target: 50 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::BOT],
             ),
-            (
+            Setup::new(
                 RaceSettings { target: 1000 },
                 vec![PlayerSpec::BOT, PlayerSpec::BOT],
             ),
         ]
     }
 
-    fn invalid_setups() -> Vec<(RaceSettings, Vec<PlayerSpec>)> {
+    fn invalid_setups() -> Vec<Setup<Race>> {
         vec![
-            (
+            Setup::new(
                 RaceSettings { target: 0 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
-            (
+            Setup::new(
                 RaceSettings { target: u32::MAX },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
-            (RaceSettings { target: 10 }, vec![PlayerSpec::HUMAN]),
+            Setup::new(RaceSettings { target: 10 }, vec![PlayerSpec::HUMAN]),
         ]
     }
 
-    fn arbitrary_command(_g: &Race, _slot: Slot, rng: &mut CoreRng) -> Add {
+    fn arbitrary_command(_game: &Race, _slot: Slot, rng: &mut CoreRng) -> Add {
         Add(rng.below(5))
     }
 
     fn bots_for(players: &[PlayerSpec]) -> Vec<BotSeat<Race>> {
-        players
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.kind == PlayerKind::Bot)
-            .map(|(i, _)| BotSeat {
-                slot: i as Slot,
-                bot: Box::new(GreedyBot),
-                budget: 10,
+        Slot::all(players.len())
+            .filter(|slot| !players[slot.index()].is_human())
+            .map(|slot| BotSeat {
+                slot,
+                bot: Box::new(RandomAdder),
+                budget_nodes: 10,
             })
             .collect()
     }
@@ -209,6 +202,13 @@ impl conformance::Conformance for Race {
     }
 }
 
+fn two_humans() -> (RaceSettings, [PlayerSpec; 2]) {
+    (
+        RaceSettings { target: 10 },
+        [PlayerSpec::HUMAN, PlayerSpec::HUMAN],
+    )
+}
+
 #[test]
 fn race_passes_conformance() {
     conformance::run_all::<Race>(25);
@@ -216,12 +216,11 @@ fn race_passes_conformance() {
 
 #[test]
 fn hash_mismatch_is_detected() {
-    let settings = RaceSettings { target: 10 };
-    let players = [PlayerSpec::HUMAN, PlayerSpec::HUMAN];
-    let mut auth = Authority::<Race>::new(&settings, &players, 1, vec![]).unwrap();
+    let (settings, players) = two_humans();
+    let mut authority = Authority::<Race>::new(&settings, &players, 1, vec![]).unwrap();
     let mut mirror = Match::<Race>::new(&settings, &players).unwrap();
-    let mut frame = auth.seal();
-    frame.hash = Some(frame.hash.unwrap() ^ 1);
+    let mut frame = authority.seal_frame();
+    frame.hash = frame.hash.map(|hash| hash ^ 1);
     assert!(matches!(
         mirror.apply_frame(&frame),
         Err(FrameError::HashMismatch { .. })
@@ -230,17 +229,16 @@ fn hash_mismatch_is_detected() {
 
 #[test]
 fn frames_must_be_sequential() {
-    let settings = RaceSettings { target: 10 };
-    let players = [PlayerSpec::HUMAN, PlayerSpec::HUMAN];
-    let mut auth = Authority::<Race>::new(&settings, &players, 1, vec![]).unwrap();
+    let (settings, players) = two_humans();
+    let mut authority = Authority::<Race>::new(&settings, &players, 1, vec![]).unwrap();
     let mut mirror = Match::<Race>::new(&settings, &players).unwrap();
-    let _skipped = auth.seal();
-    let second = auth.seal();
+    authority.seal_frame();
+    let second = authority.seal_frame();
     assert_eq!(
         mirror.apply_frame(&second),
         Err(FrameError::UnexpectedTick {
-            expected: 0,
-            got: 1
+            expected: Tick::ZERO,
+            got: Tick::new(1)
         })
     );
 }
@@ -248,43 +246,52 @@ fn frames_must_be_sequential() {
 #[test]
 fn bot_seat_without_bot_is_rejected() {
     let settings = RaceSettings { target: 10 };
-    let err = Authority::<Race>::new(&settings, &[PlayerSpec::HUMAN, PlayerSpec::BOT], 1, vec![])
+    let error = Authority::<Race>::new(&settings, &[PlayerSpec::HUMAN, PlayerSpec::BOT], 1, vec![])
         .unwrap_err();
-    assert!(matches!(err, SetupError::InvalidPlayers(_)));
+    assert!(matches!(error, SetupError::InvalidPlayers(_)));
 }
 
 #[test]
 fn humans_cannot_command_bot_seats_or_after_drop() {
     let settings = RaceSettings { target: 10 };
     let players = [PlayerSpec::HUMAN, PlayerSpec::BOT];
-    let mut auth =
+    let mut authority =
         Authority::<Race>::new(&settings, &players, 3, Race::bots_for(&players)).unwrap();
-    auth.seal();
-    assert_eq!(auth.submit(1, Add(1)), Err(CommandError::NotPlaying));
-    auth.drop_player(0);
-    assert_eq!(auth.submit(0, Add(1)), Err(CommandError::NotPlaying));
-    assert!(auth.game().status().is_finished());
+    authority.seal_frame();
+    assert_eq!(
+        authority.submit(Slot::new(1), Add(1)),
+        Err(CommandError::NotPlaying)
+    );
+    authority.drop_player(Slot::new(0));
+    assert_eq!(
+        authority.submit(Slot::new(0), Add(1)),
+        Err(CommandError::NotPlaying)
+    );
+    assert!(authority.game().status().is_finished());
 }
 
 #[test]
-fn expand_log_fills_gaps() {
+fn expand_compact_log_fills_gaps() {
     let compact = vec![
         Frame::<u8, u8> {
-            tick: 2,
+            tick: Tick::new(2),
             inputs: vec![Input::World(1)],
             hash: None,
         },
         Frame::<u8, u8> {
-            tick: 5,
+            tick: Tick::new(5),
             inputs: vec![],
             hash: Some(7),
         },
     ];
-    let full = expand_log(&compact, 7);
-    assert_eq!(full.len(), 7);
-    assert!(full.iter().enumerate().all(|(i, f)| f.tick == i as u64));
-    assert_eq!(full[2].inputs.len(), 1);
-    assert_eq!(full[5].hash, Some(7));
+    let frames = expand_compact_log(&compact, Tick::new(7));
+    assert_eq!(frames.len(), 7);
+    assert!(
+        frames
+            .iter()
+            .enumerate()
+            .all(|(i, frame)| frame.tick == Tick::new(i as u64))
+    );
+    assert_eq!(frames[2].inputs.len(), 1);
+    assert_eq!(frames[5].hash, Some(7));
 }
-
-use conformance::Conformance as _;

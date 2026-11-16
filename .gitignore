@@ -15,11 +15,9 @@ Cargo.lock
 Thumbs.dib
 
 .claude
-CLAUDE.md
 mini_games_client_config.yaml
 flamegraph.svg
 minigamesreplays/
-AGENTS.md
 
 # Signing keys and secrets (local only, back them up!)
 /.keys/

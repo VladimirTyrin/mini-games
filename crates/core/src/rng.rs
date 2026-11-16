@@ -1,10 +1,6 @@
-//! Deterministic, dependency-free PRNG.
-//!
-//! The algorithm is pinned (xoshiro256** seeded through splitmix64) so the same seed yields the
-//! same stream on every platform and every release. Only the match authority owns a [`CoreRng`];
-//! game state never sees one outside [`crate::Game::roll_world`] and bots.
+//! The algorithm is pinned (xoshiro256** seeded through splitmix64) so a seed yields the same
+//! stream on every platform and release; `rand::StdRng` gives no such guarantee.
 
-/// xoshiro256** generator with unbiased bounded sampling.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoreRng {
     s: [u64; 4],
@@ -19,7 +15,6 @@ fn splitmix64(state: &mut u64) -> u64 {
 }
 
 impl CoreRng {
-    /// Creates a generator from a 64-bit seed.
     pub fn new(seed: u64) -> Self {
         let mut sm = seed;
         let s = [
@@ -31,13 +26,12 @@ impl CoreRng {
         Self { s }
     }
 
-    /// Derives an independent stream (e.g. one per bot) from this generator's seed material.
+    /// Independent stream per purpose (world, each bot) from one match seed.
     pub fn derive(seed: u64, stream: u64) -> Self {
         let mut sm = seed ^ stream.wrapping_mul(0xD1B5_4A32_D192_ED03);
         Self::new(splitmix64(&mut sm))
     }
 
-    /// Next raw 64-bit value.
     pub fn next_u64(&mut self) -> u64 {
         let result = self.s[1].wrapping_mul(5).rotate_left(7).wrapping_mul(9);
         let t = self.s[1] << 17;
@@ -50,12 +44,11 @@ impl CoreRng {
         result
     }
 
-    /// Next raw 32-bit value (upper bits of [`Self::next_u64`]).
     pub fn next_u32(&mut self) -> u32 {
         (self.next_u64() >> 32) as u32
     }
 
-    /// Uniform value in `0..bound` (Lemire's nearly-divisionless method). Returns 0 for `bound == 0`.
+    /// Unbiased (Lemire's nearly-divisionless method). Returns 0 for `bound == 0`.
     pub fn below(&mut self, bound: u32) -> u32 {
         if bound == 0 {
             return 0;
@@ -72,7 +65,7 @@ impl CoreRng {
         (m >> 32) as u32
     }
 
-    /// Uniform value in `lo..=hi`. Returns `lo` if `hi < lo`.
+    /// Returns `lo` if `hi <= lo`.
     pub fn range_inclusive(&mut self, lo: u32, hi: u32) -> u32 {
         if hi <= lo {
             return lo;
@@ -83,7 +76,6 @@ impl CoreRng {
         }
     }
 
-    /// Uniform index into a slice of length `len`; `None` when empty.
     pub fn index(&mut self, len: usize) -> Option<usize> {
         if len == 0 {
             return None;
@@ -92,12 +84,11 @@ impl CoreRng {
         Some(self.below(bound) as usize)
     }
 
-    /// Picks a uniformly random element.
     pub fn pick<'a, T>(&mut self, items: &'a [T]) -> Option<&'a T> {
         self.index(items.len()).and_then(|i| items.get(i))
     }
 
-    /// `true` with probability `numerator / denominator` (exact, integer-only).
+    /// Exact integer probability `numerator / denominator`.
     pub fn chance(&mut self, numerator: u32, denominator: u32) -> bool {
         if denominator == 0 || numerator == 0 {
             return false;
@@ -124,7 +115,7 @@ mod tests {
 
     #[test]
     fn stream_is_pinned() {
-        // Golden values: changing them breaks determinism guarantees for everyone.
+        // Changing this value breaks every pinned game hash.
         let mut rng = CoreRng::new(42);
         let got: Vec<u64> = (0..4).map(|_| rng.next_u64()).collect();
         let mut again = CoreRng::new(42);
