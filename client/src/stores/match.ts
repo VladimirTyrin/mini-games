@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { defineStore } from "pinia";
-import { shallowRef, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 
 import type { BotKind, GameSettings } from "@/proto/minigames/v2/game_pb";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
@@ -33,6 +33,16 @@ export const useMatchStore = defineStore("match", () => {
   const toasts = useToastStore();
   const controller = shallowRef<MatchController | null>(null);
   const replay = shallowRef<ReplayMatchSource | null>(null);
+
+  /** A match is being played that this build can follow. */
+  const isPlaying = computed(() => controller.value !== null && !controller.value.incompatible.value);
+  /**
+   * Reloading for a new version now would lose something: a match being played, or the lobby
+   * (settings draft, typed chat). A match this build cannot follow is better updated at once.
+   */
+  const holdsUpdates = computed(() =>
+    controller.value ? !controller.value.incompatible.value : lobby.current !== null,
+  );
 
   function run(source: MatchSource): MatchController {
     close();
@@ -151,5 +161,15 @@ export const useMatchStore = defineStore("match", () => {
     { immediate: true },
   );
 
-  return { controller, replay, startLocal, startOnline, startReplay, close, saveReplay };
+  return {
+    controller,
+    replay,
+    isPlaying,
+    holdsUpdates,
+    startLocal,
+    startOnline,
+    startReplay,
+    close,
+    saveReplay,
+  };
 });

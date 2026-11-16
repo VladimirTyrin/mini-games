@@ -7,7 +7,10 @@ import { FakeSocket } from "@/net/testing/fake-socket";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
 
+import { LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
+
 import { useConnectionStore } from "./connection";
+import { useLobbyStore } from "./lobby";
 import { useMatchStore } from "./match";
 
 const me = { kind: IdentityKind.GUEST, id: "u_me", displayName: "Sam" };
@@ -52,12 +55,16 @@ vi.mock("@/match/replay-match-source", () => ({
     leave(): void {}
   },
 }));
-vi.mock("@/match/match-controller", () => ({
-  MatchController: class {
-    constructor(readonly source: unknown) {}
-    dispose(): void {}
-  },
-}));
+vi.mock("@/match/match-controller", async () => {
+  const { shallowRef } = await import("vue");
+  return {
+    MatchController: class {
+      readonly incompatible = shallowRef(false);
+      constructor(readonly source: unknown) {}
+      dispose(): void {}
+    },
+  };
+});
 vi.mock("@/games", () => ({ pluginBySettings: () => undefined }));
 
 describe("match store", () => {
@@ -114,5 +121,24 @@ describe("match store", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("holds a new version back in an online lobby, not only in a match", () => {
+    const match = useMatchStore();
+    expect(match.holdsUpdates).toBe(false);
+
+    useLobbyStore().current = create(LobbyStateSchema, { lobbyId: "lobby" });
+
+    expect(match.holdsUpdates).toBe(true);
+  });
+
+  it("lets a new version in when the match on screen cannot be followed by this build", async () => {
+    await inOnlineMatch();
+    const match = useMatchStore();
+    expect(match.holdsUpdates).toBe(true);
+
+    if (match.controller) match.controller.incompatible.value = true;
+
+    expect(match.holdsUpdates).toBe(false);
   });
 });

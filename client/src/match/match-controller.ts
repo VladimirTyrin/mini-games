@@ -9,6 +9,9 @@ import { PlaybackClock } from "./playback-clock";
 import { resultRevealAt } from "./result-reveal";
 import { type SeatPause, seatPauses } from "./seat-pause";
 
+/** Desyncs in a row, with no hash-checked frame in between, after which resyncing is given up. */
+const MAX_RESYNCS = 3;
+
 export interface ViewSnapshot {
   view: GameView;
   /** `performance.now()` when showing this view starts; renderers interpolate from it. */
@@ -30,6 +33,11 @@ export class MatchController {
   readonly resultRevealAt: ShallowRef<number | null> = shallowRef(null);
   /** Ended by the authority without a result (server error); there is no replay. */
   readonly aborted = shallowRef(false);
+  /**
+   * The authority's history does not replay with this build's rules: the server was updated
+   * under a running tab, or the replay comes from another version. Resyncing cannot help.
+   */
+  readonly incompatible = shallowRef(false);
   /** The game's own tick; 0 for turn-based games. */
   readonly gameTickMs: number;
   /** Replays may play faster or slower than the game; 1 everywhere else. */
@@ -38,6 +46,7 @@ export class MatchController {
   private mirror: Mirror;
   private clock: PlaybackClock;
   private resyncing = false;
+  private resyncsSinceVerifiedFrame = 0;
   private readonly unsubscribe: (() => void)[] = [];
 
   constructor(readonly source: MatchSource) {
@@ -94,18 +103,25 @@ export class MatchController {
   }
 
   private onFrame(frame: TickFrame): void {
-    if (this.resyncing) return;
+    if (this.resyncing || this.incompatible.value) return;
     const expected = BigInt(this.mirror.nextTick);
     if (frame.tick < expected) return;
     try {
       if (frame.tick > expected) throw new Error(`missed frames ${expected}..${frame.tick}`);
       this.mirror.applyFrame(frame);
     } catch (error) {
+      this.resyncsSinceVerifiedFrame += 1;
+      if (this.resyncsSinceVerifiedFrame > MAX_RESYNCS) {
+        console.error("desyncs keep coming back; giving up", error);
+        this.incompatible.value = true;
+        return;
+      }
       console.warn("desync, requesting catch-up", error);
       this.resyncing = true;
       this.source.requestCatchUp();
       return;
     }
+    if (frame.stateHash !== undefined) this.resyncsSinceVerifiedFrame = 0;
     this.publish(this.clock.showAt(Number(frame.tick), performance.now()));
     if (this.mirror.isFinished && !this.ended.value) {
       this.result.value = this.mirror.result();
@@ -117,12 +133,16 @@ export class MatchController {
     const header = catchUp.header ?? this.source.header;
     this.mirror.free();
     this.mirror = Mirror.forHeader(header);
+    this.resyncing = false;
     try {
       this.mirror.applyCatchUp(catchUp);
     } catch (error) {
+      // The authority's own history: if it does not replay here, nothing will.
       console.error("catch-up does not replay", error);
+      this.incompatible.value = true;
+      return;
     }
-    this.resyncing = false;
+    this.incompatible.value = false;
     const now = performance.now();
     const pauses = catchUp.pauses.length > 0 ? catchUp.pauses : catchUp.pause ? [catchUp.pause] : [];
     this.pauses.value = seatPauses(pauses, now);

@@ -9,14 +9,14 @@ export const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 /**
  * Web build only. iOS resumes a home-screen app from memory without navigating, and the browser
  * only re-checks the service worker on a navigation, so the app checks on every return to it and
- * every half hour. A new version is applied (the page reloads) right away, or as soon as the
- * player leaves the match on screen: never mid-match.
+ * every half hour. A new version is applied (the page reloads) right away, or as soon as
+ * `holdsUpdates` lets go: never mid-match or in an online lobby.
  */
-export function startWebUpdates(register: RegisterServiceWorker, inMatch: () => boolean): void {
+export function startWebUpdates(register: RegisterServiceWorker, holdsUpdates: () => boolean): void {
   let updateWaiting = false;
 
   function applyWhenIdle(): void {
-    if (updateWaiting && !inMatch()) void applyUpdate(true);
+    if (updateWaiting && !holdsUpdates()) void applyUpdate(true);
   }
 
   const applyUpdate = register({
@@ -37,5 +37,5 @@ export function startWebUpdates(register: RegisterServiceWorker, inMatch: () => 
     },
   });
 
-  watch(inMatch, applyWhenIdle);
+  watch(holdsUpdates, applyWhenIdle);
 }

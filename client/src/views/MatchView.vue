@@ -11,12 +11,14 @@ import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { LocalMatchSource } from "@/local/local-match-source";
 import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
+import { useAppUpdateStore } from "@/stores/app-update";
 import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 
 const router = useRouter();
 const match = useMatchStore();
 const lobby = useLobbyStore();
+const appUpdate = useAppUpdateStore();
 
 const controller = computed(() => match.controller);
 const plugin = computed(() => pluginBySettings(controller.value?.source.header.settings?.game.case));
@@ -29,6 +31,29 @@ const endReason = computed(() => {
 onMounted(() => {
   if (!controller.value) void router.replace("/");
 });
+
+const incompatibleMessage = computed(() =>
+  match.replay
+    ? "This replay was recorded with another version of the game and cannot be shown."
+    : "The game was updated on the server. Update the app to go on playing.",
+);
+
+// A replay this build cannot follow would play on behind the message.
+watch(
+  () => controller.value?.incompatible.value === true,
+  (incompatible) => {
+    if (incompatible) match.replay?.pause();
+  },
+);
+
+/** The web build reloads into the new version; the app fetches and switches to its bundle. */
+async function update(): Promise<void> {
+  if (__NATIVE_APP__) {
+    const report = await appUpdate.check();
+    if (report.kind === "web-bundle-ready") return;
+  }
+  window.location.reload();
+}
 
 /** Set when this screen ends the match itself and navigates on its own. */
 let isLeavingOnPurpose = false;
@@ -128,6 +153,29 @@ function again(): void {
   <main v-if="controller && plugin" class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3">
     <div class="relative flex min-h-0 flex-1 flex-col">
       <component :is="plugin.Board" :key="boardKey" :controller="controller" class="min-h-0 flex-1" />
+      <div
+        v-if="controller.incompatible.value"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-950/90 p-4 text-center"
+      >
+        <p class="max-w-xs text-sm text-gray-200">{{ incompatibleMessage }}</p>
+        <div class="flex flex-wrap justify-center gap-2">
+          <button
+            v-if="!match.replay"
+            type="button"
+            class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-emerald-500"
+            @click="update"
+          >
+            Update
+          </button>
+          <button
+            type="button"
+            class="rounded-lg border border-white/15 px-4 py-2 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
+            @click="leave"
+          >
+            Leave
+          </button>
+        </div>
+      </div>
       <MatchOverlay
         :controller="controller"
         :end-reason="endReason"

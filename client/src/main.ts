@@ -22,7 +22,7 @@ async function boot(): Promise<void> {
       import("./stores/match"),
     ]);
     const match = useMatchStore(pinia);
-    startWebUpdates(registerSW, () => match.controller !== null);
+    startWebUpdates(registerSW, () => match.holdsUpdates);
   }
 }
 
