@@ -5,7 +5,7 @@ Rust core runs the rules everywhere: on the server, in the browser (WASM), in th
 (same WASM in a WebView), in network bots and in the local arena.
 
 Design and status: `docs/refactoring-plan.md`. Architecture: `docs/architecture.md`.
-Adding a game: `docs/adding-a-game.md`.
+Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.md`.
 
 ## Layout
 

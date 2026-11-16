@@ -15,13 +15,12 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  WASM_BINDGEN_VERSION: 0.2.130
 
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -46,21 +45,8 @@ jobs:
       run:
         working-directory: web-client
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: wasm-bindgen@${{ env.WASM_BINDGEN_VERSION }}
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq binaryen
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web-client/package-lock.json
-      - run: npm ci
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
       - run: npm run generate
       - run: npm run lint
       - run: npm run typecheck
@@ -68,7 +54,7 @@ jobs:
       - run: npm run build
         env:
           VITE_SERVER_URL: wss://braintvsminigames.xyz/ws
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         with:
           path: web-client/dist
@@ -85,4 +71,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

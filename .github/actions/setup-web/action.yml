@@ -1,0 +1,23 @@
+name: Set up the web toolchain
+description: Rust with the WASM target, wasm-bindgen, binaryen and Node with npm dependencies installed.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+    - uses: Swatinem/rust-cache@v2
+    - uses: taiki-e/install-action@v2
+      with:
+        # Must equal the wasm-bindgen version pinned in crates/wasm/Cargo.toml.
+        tool: wasm-bindgen@0.2.130
+    - shell: bash
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq binaryen
+    - uses: actions/setup-node@v7
+      with:
+        node-version: lts/*
+        cache: npm
+        cache-dependency-path: web-client/package-lock.json
+    - shell: bash
+      working-directory: web-client
+      run: npm ci

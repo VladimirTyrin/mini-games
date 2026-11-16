@@ -72,4 +72,5 @@ Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session 
 - `games/<id>/` — one plugin per game: settings form + board. Rules and limits come from the
   core; plugins only render and turn input into commands.
 
-The Android app is the same web build inside Capacitor.
+The Android app is the same web build inside Capacitor (built with `VITE_PLATFORM=android`, which
+adds the native back button and Google sign-in); see `docs/android.md`.
