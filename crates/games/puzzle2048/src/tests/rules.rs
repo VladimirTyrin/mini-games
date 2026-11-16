@@ -257,6 +257,34 @@ fn full_board_without_merges_accepts_no_move() {
 }
 
 #[test]
+fn view_lists_only_the_directions_that_change_the_board() {
+    #[rustfmt::skip]
+    let mut game = board(2, 2, &[
+        2, 0,
+        0, 0,
+    ]);
+    assert_eq!(
+        view(&game).movable_directions,
+        [Direction::Down, Direction::Right]
+    );
+    try_move(&mut game, Direction::Down).unwrap();
+    assert!(
+        view(&game).movable_directions.is_empty(),
+        "no move is accepted while the spawn is due"
+    );
+}
+
+#[test]
+fn view_lists_no_direction_on_a_stuck_board() {
+    #[rustfmt::skip]
+    let game = board(2, 2, &[
+        2, 4,
+        4, 2,
+    ]);
+    assert!(view(&game).movable_directions.is_empty());
+}
+
+#[test]
 fn can_move_predicts_acceptance() {
     let mut rng = CoreRng::new(21);
     let mut game = started(&settings(3, 3, 64), &mut rng);

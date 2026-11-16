@@ -6,6 +6,7 @@ use crate::end_reason::EndReason;
 use crate::game_event::GameEvent;
 use crate::level::Level;
 use crate::score::Score;
+use crate::tick_count::TickCount;
 use crate::worker_view::WorkerView;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,8 +24,8 @@ pub struct View {
     pub lines_cleared: u32,
     pub boxes_pushed: u32,
     pub level: Level,
-    /// Survival time in ticks (A10); multiply by `tick_ms` for wall time.
-    pub ticks_survived: u64,
+    /// Survival time (A10); multiply by `tick_ms` for wall time.
+    pub ticks_survived: TickCount,
     pub events: Vec<GameEvent>,
     pub end_reason: Option<EndReason>,
 }

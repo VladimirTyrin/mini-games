@@ -116,6 +116,7 @@ message SnakeSeatView {
 message SnakeGameEnd {
   // Reason of the death that ended the match.
   SnakeDeathReason reason = 1;
-  // Sole survivor of a multi-seat match; unset for a draw and for solo matches.
-  optional uint32 winner_slot = 2;
+  // Seats alive when a multi-seat match ended: the sole survivor, or every bot that outlived the
+  // last human. Empty for a draw and for solo matches.
+  repeated uint32 winner_slots = 2;
 }

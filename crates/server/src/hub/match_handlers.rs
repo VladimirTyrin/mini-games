@@ -1,10 +1,9 @@
 use std::collections::BTreeSet;
 
-use mg_core::{Clock, PlayerSpec};
+use mg_core::Clock;
 use mg_protocol::proto;
 use mg_protocol::proto::server_message::Message;
-use mg_registry::{SeatSpec, create_authority, create_mirror};
-use prost::Message as _;
+use mg_registry::{SeatSpec, create_authority, load_replay_file};
 use tokio::sync::mpsc;
 
 use super::hub::Hub;
@@ -258,8 +257,13 @@ impl Hub {
                 "replay is too large",
             );
         }
-        if let Err(error) = validate_replay(&share.replay_file) {
-            return self.reject(session, request_id, ErrorCode::InvalidReplay, &error);
+        if let Err(error) = load_replay_file(&share.replay_file) {
+            return self.reject(
+                session,
+                request_id,
+                ErrorCode::InvalidReplay,
+                &error.to_string(),
+            );
         }
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
@@ -331,23 +335,4 @@ impl Hub {
             self.broadcast_lobby_list();
         }
     }
-}
-
-fn validate_replay(bytes: &[u8]) -> Result<(), String> {
-    let replay = proto::ReplayFile::decode(bytes).map_err(|e| format!("not a replay file: {e}"))?;
-    let header = replay.header.ok_or("replay has no header")?;
-    let settings = header.settings.ok_or("replay has no settings")?;
-    let players: Vec<PlayerSpec> = header
-        .seats
-        .iter()
-        .map(|seat| {
-            if seat.bot_kind.is_some() {
-                PlayerSpec::BOT
-            } else {
-                PlayerSpec::HUMAN
-            }
-        })
-        .collect();
-    create_mirror(&settings, &players).map_err(|e| format!("replay settings are invalid: {e}"))?;
-    Ok(())
 }

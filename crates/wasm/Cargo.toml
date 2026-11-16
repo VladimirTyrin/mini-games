@@ -1,0 +1,24 @@
+[package]
+name = "mg-wasm"
+description = "WebAssembly bindings for the browser and the Android WebView: local authority and lockstep mirror"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mg-core.workspace = true
+mg-protocol.workspace = true
+mg-registry.workspace = true
+prost.workspace = true
+# Must match the installed wasm-bindgen-cli exactly.
+wasm-bindgen = "=0.2.130"
+
+[dev-dependencies]
+mg-tictactoe.workspace = true

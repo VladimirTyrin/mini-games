@@ -3,7 +3,7 @@ use mg_core::{CoreRng, PlayerSpec, Slot};
 
 use crate::rules::{MULTI_LINE_BONUS, POINTS_PER_LINE};
 use crate::{
-    Command, CraneState, Direction, MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_QUEUED_COMMANDS,
+    Column, Command, CraneState, Direction, MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_QUEUED_COMMANDS,
     MIN_FIELD_HEIGHT, MIN_FIELD_WIDTH, Settings, StackAttack,
 };
 
@@ -61,20 +61,20 @@ impl Conformance for StackAttack {
         let Some(worker) = game.workers.get(slot.index()) else {
             return random;
         };
-        let threatened = |x: i32| {
+        let threatened = |column: Column| {
             game.field
                 .boxes()
                 .iter()
-                .any(|b| b.falling && b.cell.x == x && b.cell.y > worker.feet.y)
+                .any(|b| b.falling && b.cell.column() == column && b.cell.y > worker.feet.y)
                 || game
                     .cranes
                     .iter()
-                    .any(|c| c.state == CraneState::Moving && c.target_x == x)
+                    .any(|c| c.state == CraneState::Moving && c.target_x == column)
         };
-        if !threatened(worker.feet.x) || rng.chance(1, 4) {
+        if !threatened(worker.feet.column()) || rng.chance(1, 4) {
             return random;
         }
-        if threatened(worker.feet.x - 1) {
+        if threatened(Column::new(worker.feet.x - 1)) {
             Command::Move(Direction::Right)
         } else {
             Command::Move(Direction::Left)
@@ -111,7 +111,11 @@ impl Conformance for StackAttack {
             ));
         }
         let width = self.field.width();
-        if let Some(crane) = self.cranes.iter().find(|c| !(-1..=width).contains(&c.x)) {
+        if let Some(crane) = self
+            .cranes
+            .iter()
+            .find(|c| !(-1..=width).contains(&c.x.get()))
+        {
             return Err(format!("crane outside its track: {crane:?}"));
         }
         if self.end_reason.is_none() && !self.any_worker_alive() {

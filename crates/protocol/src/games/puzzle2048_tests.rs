@@ -178,11 +178,17 @@ fn malformed_world_events_are_rejected() {
         (spawn_event(None, two), WireError::Missing("cell")),
         (
             spawn_event(wire_cell(256, 0), two),
-            WireError::OutOfRange("cell.row"),
+            WireError::IntegerOutOfRange {
+                field: "cell.row",
+                source: u8::try_from(256_u32).unwrap_err(),
+            },
         ),
         (
             spawn_event(wire_cell(0, u32::MAX), two),
-            WireError::OutOfRange("cell.col"),
+            WireError::IntegerOutOfRange {
+                field: "cell.col",
+                source: u8::try_from(u32::MAX).unwrap_err(),
+            },
         ),
         (spawn_event(wire_cell(0, 0), 0), WireError::Missing("value")),
         (
@@ -224,6 +230,15 @@ fn legal_direction(game: &Puzzle2048, rng: &mut CoreRng) -> Option<Direction> {
     rng.pick(&legal).copied()
 }
 
+fn wire_direction(direction: Direction) -> proto::Puzzle2048Direction {
+    match direction {
+        Direction::Up => proto::Puzzle2048Direction::Up,
+        Direction::Down => proto::Puzzle2048Direction::Down,
+        Direction::Left => proto::Puzzle2048Direction::Left,
+        Direction::Right => proto::Puzzle2048Direction::Right,
+    }
+}
+
 fn wire_view(game: &Puzzle2048) -> proto::Puzzle2048View {
     match Puzzle2048::view_to_wire(&game.view(Viewer::Spectator)).game {
         Some(proto::game_view::Game::Puzzle2048(view)) => view,
@@ -252,15 +267,14 @@ fn view_carries_tiles_and_animation_origins() {
         assert_eq!(wire.tiles.len(), domain.tiles.len());
         assert_eq!(u64::from(wire.score), domain.score.get());
         assert_eq!(wire.moves, domain.moves);
-        assert_eq!(
-            wire.last_move(),
-            match direction {
-                Direction::Up => proto::Puzzle2048Direction::Up,
-                Direction::Down => proto::Puzzle2048Direction::Down,
-                Direction::Left => proto::Puzzle2048Direction::Left,
-                Direction::Right => proto::Puzzle2048Direction::Right,
-            }
-        );
+        assert_eq!(wire.last_move(), wire_direction(direction));
+        let movable: Vec<i32> = domain
+            .movable_directions
+            .iter()
+            .map(|&direction| wire_direction(direction).into())
+            .collect();
+        assert!(!movable.is_empty());
+        assert_eq!(wire.movable_directions, movable);
         assert_eq!(wire.phase(), proto::Puzzle2048Phase::Playing);
         for (wire_tile, tile) in wire.tiles.iter().zip(&domain.tiles) {
             assert_eq!(wire_tile.id, tile.id.get());

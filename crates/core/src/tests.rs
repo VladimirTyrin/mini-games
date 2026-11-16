@@ -270,28 +270,147 @@ fn humans_cannot_command_bot_seats_or_after_drop() {
     assert!(authority.game().status().is_finished());
 }
 
+/// Two humans add 1 in turn, with `idle_frames` empty frames sealed between moves.
+fn finished_race_with_idle_frames(policy: HashPolicy, idle_frames: usize) -> Authority<Race> {
+    let (settings, players) = two_humans();
+    let mut authority = Authority::<Race>::new(&settings, &players, 9, vec![]).unwrap();
+    authority.set_hash_policy(policy);
+    authority.seal_frame();
+    while let Awaiting::Turn(slot) = authority.game().awaiting() {
+        for _ in 0..idle_frames {
+            authority.seal_frame();
+        }
+        authority.submit(slot, Add(1)).unwrap();
+        authority.seal_frame();
+    }
+    authority
+}
+
+fn log_of(authority: &Authority<Race>) -> CompactLog<GameFrame<Race>> {
+    CompactLog::new(
+        authority.compact_log().to_vec(),
+        authority.next_tick(),
+        authority.hash_policy(),
+    )
+    .unwrap()
+}
+
+fn frame_at(tick: u64) -> Frame<u8, u8> {
+    Frame {
+        tick: Tick::new(tick),
+        inputs: vec![Input::World(1)],
+        hash: None,
+    }
+}
+
 #[test]
-fn expand_compact_log_fills_gaps() {
-    let compact = vec![
-        Frame::<u8, u8> {
-            tick: Tick::new(2),
-            inputs: vec![Input::World(1)],
-            hash: None,
-        },
-        Frame::<u8, u8> {
-            tick: Tick::new(5),
-            inputs: vec![],
-            hash: Some(7),
-        },
-    ];
-    let frames = expand_compact_log(&compact, Tick::new(7));
-    assert_eq!(frames.len(), 7);
-    assert!(
-        frames
-            .iter()
-            .enumerate()
-            .all(|(i, frame)| frame.tick == Tick::new(i as u64))
+fn compact_log_with_gaps_replays_to_the_authority_state() {
+    let authority = finished_race_with_idle_frames(HashPolicy::every(4), 2);
+    let log = log_of(&authority);
+    assert!(log.frames().len() < usize::try_from(log.end().get()).unwrap());
+    let (settings, players) = two_humans();
+    let mut mirror = Match::<Race>::new(&settings, &players).unwrap();
+    mirror.apply_compact_log(&log, log.end()).unwrap();
+    assert_eq!(mirror.next_tick(), authority.next_tick());
+    assert_eq!(mirror.game().state_hash(), authority.game().state_hash());
+    assert!(mirror.game().status().is_finished());
+}
+
+#[test]
+fn compact_log_can_be_applied_tick_by_tick() {
+    let authority = finished_race_with_idle_frames(HashPolicy::every(3), 1);
+    let log = log_of(&authority);
+    let (settings, players) = two_humans();
+    let mut mirror = Match::<Race>::new(&settings, &players).unwrap();
+    for stop in 1..=log.end().get() {
+        mirror.apply_compact_log(&log, Tick::new(stop)).unwrap();
+        assert_eq!(mirror.next_tick(), Tick::new(stop));
+    }
+    assert_eq!(mirror.game().state_hash(), authority.game().state_hash());
+}
+
+#[test]
+fn compact_log_entries_fill_gaps_without_frames() {
+    let log = CompactLog::new(
+        vec![frame_at(2), frame_at(5)],
+        Tick::new(7),
+        HashPolicy::every(3),
+    )
+    .unwrap();
+    let logged: Vec<bool> = log
+        .entries_from(Tick::new(1))
+        .map(|entry| matches!(entry, CompactLogEntry::Logged(_)))
+        .collect();
+    assert_eq!(logged, [false, true, false, false, true, false]);
+}
+
+#[test]
+fn compact_log_with_a_huge_end_is_rejected_before_expansion() {
+    let huge = Tick::new(1_000_000_000_000);
+    assert!(matches!(
+        CompactLog::new(vec![frame_at(3)], huge, HashPolicy::every(10)),
+        Err(CompactLogError::GapTooLong { .. })
+    ));
+    assert!(matches!(
+        CompactLog::<Frame<u8, u8>>::new(Vec::new(), huge, HashPolicy::every(10)),
+        Err(CompactLogError::GapTooLong { .. })
+    ));
+    assert!(matches!(
+        CompactLog::new(
+            vec![frame_at(u64::MAX - 1)],
+            Tick::new(u64::MAX),
+            HashPolicy::every(10)
+        ),
+        Err(CompactLogError::GapTooLong { .. })
+    ));
+}
+
+#[test]
+fn compact_log_tail_is_bounded_by_the_hash_policy() {
+    let policy = HashPolicy::every(10);
+    assert!(CompactLog::new(vec![frame_at(9)], Tick::new(19), policy).is_ok());
+    assert!(CompactLog::new(vec![frame_at(9)], Tick::new(20), policy).is_err());
+    assert!(CompactLog::<Frame<u8, u8>>::new(Vec::new(), Tick::new(9), policy).is_ok());
+    assert!(CompactLog::<Frame<u8, u8>>::new(Vec::new(), Tick::new(10), policy).is_err());
+}
+
+#[test]
+fn compact_log_ticks_must_increase_and_stay_before_the_end() {
+    let policy = HashPolicy::every(10);
+    assert_eq!(
+        CompactLog::new(vec![frame_at(3), frame_at(3)], Tick::new(5), policy).unwrap_err(),
+        CompactLogError::TicksNotIncreasing {
+            previous: Tick::new(3),
+            next: Tick::new(3)
+        }
     );
-    assert_eq!(frames[2].inputs.len(), 1);
-    assert_eq!(frames[5].hash, Some(7));
+    assert!(matches!(
+        CompactLog::new(vec![frame_at(4), frame_at(2)], Tick::new(5), policy),
+        Err(CompactLogError::TicksNotIncreasing { .. })
+    ));
+    assert_eq!(
+        CompactLog::new(vec![frame_at(5)], Tick::new(5), policy).unwrap_err(),
+        CompactLogError::FrameAtOrAfterEnd {
+            tick: Tick::new(5),
+            end: Tick::new(5)
+        }
+    );
+}
+
+#[test]
+fn omitted_frame_after_the_end_is_rejected() {
+    let authority = finished_race_with_idle_frames(HashPolicy::every(1), 0);
+    let end = authority.next_tick();
+    let padded = CompactLog::new(
+        authority.compact_log().to_vec(),
+        Tick::new(end.get() + 2),
+        HashPolicy::every(10),
+    )
+    .unwrap();
+    let (settings, players) = two_humans();
+    let mut mirror = Match::<Race>::new(&settings, &players).unwrap();
+    assert_eq!(
+        mirror.apply_compact_log(&padded, padded.end()),
+        Err(FrameError::MissingFrameAfterFinish { tick: end })
+    );
 }

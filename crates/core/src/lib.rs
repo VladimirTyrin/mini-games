@@ -2,6 +2,18 @@
 //! the arena. Lockstep model: an [`Authority`] seals [`Frame`]s, receivers replay them on a
 //! [`Match`]. See `docs/architecture.md` and `docs/adding-a-game.md`.
 
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::unreachable,
+        clippy::todo
+    )
+)]
+
 mod authority;
 mod awaiting;
 mod bot;
@@ -10,6 +22,9 @@ mod budget;
 mod clock;
 mod command_error;
 mod compact_log;
+mod compact_log_entries;
+mod compact_log_entry;
+mod compact_log_error;
 mod frame;
 mod frame_error;
 mod game;
@@ -17,12 +32,18 @@ mod game_info;
 mod has_bots;
 mod hash;
 mod hash_policy;
+mod input;
+mod logged_frame;
 mod matcher;
 mod outcome;
-mod player;
+mod outcome_kind;
+mod player_kind;
+mod player_spec;
 mod rng;
+mod seated_bot;
 mod setup_error;
 mod slot;
+mod status;
 mod tick;
 mod viewer;
 
@@ -36,20 +57,28 @@ pub use bot_seat::BotSeat;
 pub use budget::Budget;
 pub use clock::Clock;
 pub use command_error::CommandError;
-pub use compact_log::expand_compact_log;
-pub use frame::{Frame, GameFrame, GameInput, Input};
+pub use compact_log::CompactLog;
+pub use compact_log_entries::CompactLogEntries;
+pub use compact_log_entry::CompactLogEntry;
+pub use compact_log_error::CompactLogError;
+pub use frame::{Frame, GameFrame};
 pub use frame_error::FrameError;
 pub use game::Game;
 pub use game_info::GameInfo;
 pub use has_bots::HasBots;
 pub use hash::StateHasher;
 pub use hash_policy::HashPolicy;
+pub use input::{GameInput, Input};
+pub use logged_frame::LoggedFrame;
 pub use matcher::Match;
-pub use outcome::{Outcome, OutcomeKind, Status};
-pub use player::{PlayerKind, PlayerSpec};
+pub use outcome::Outcome;
+pub use outcome_kind::OutcomeKind;
+pub use player_kind::PlayerKind;
+pub use player_spec::PlayerSpec;
 pub use rng::CoreRng;
 pub use setup_error::SetupError;
 pub use slot::Slot;
+pub use status::Status;
 pub use tick::Tick;
 pub use viewer::Viewer;
 

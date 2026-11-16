@@ -119,6 +119,11 @@ impl WireGame for Puzzle2048 {
                 highest_tile: view.highest_tile.map_or(0, |tile| tile.get()),
                 last_move: last_move.into(),
                 phase: phase.into(),
+                movable_directions: view
+                    .movable_directions
+                    .iter()
+                    .map(|&direction| direction_to_wire(direction).into())
+                    .collect(),
             })),
         }
     }
@@ -157,8 +162,14 @@ fn spawn_value_from_wire(raw: i32) -> Result<SpawnValue, WireError> {
 /// game rule (`apply_world` rejects it).
 fn cell_from_wire(cell: Option<&proto::Puzzle2048Cell>) -> Result<Cell, WireError> {
     let cell = cell.ok_or(WireError::Missing("cell"))?;
-    let row = u8::try_from(cell.row).map_err(|_| WireError::OutOfRange("cell.row"))?;
-    let col = u8::try_from(cell.col).map_err(|_| WireError::OutOfRange("cell.col"))?;
+    let row = u8::try_from(cell.row).map_err(|source| WireError::IntegerOutOfRange {
+        field: "cell.row",
+        source,
+    })?;
+    let col = u8::try_from(cell.col).map_err(|source| WireError::IntegerOutOfRange {
+        field: "cell.col",
+        source,
+    })?;
     Ok(Cell::new(row, col))
 }
 

@@ -22,7 +22,7 @@ impl Snake {
         if !self.is_running() {
             return;
         }
-        self.steps += 1;
+        self.steps = self.steps.next();
         for seat in self.seats.iter_mut().filter(|seat| seat.is_alive()) {
             seat.consume_queued_turn();
         }

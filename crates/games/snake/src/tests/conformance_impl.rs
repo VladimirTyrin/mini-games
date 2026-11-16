@@ -239,4 +239,4 @@ fn golden_scripted_hash() {
     assert_eq!(conformance::scripted_hash(&setup, 2024), GOLDEN_HASH);
 }
 
-const GOLDEN_HASH: u64 = 0x77EF_EC80_FC65_821C;
+const GOLDEN_HASH: u64 = 0xA9C8_E5DA_80F7_804E;

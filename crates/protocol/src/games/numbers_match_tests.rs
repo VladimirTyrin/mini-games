@@ -269,12 +269,23 @@ fn malformed_commands_are_rejected() {
 
 #[test]
 fn malformed_deals_are_rejected() {
-    for bad_digit in [0, 10, 256 + 5, u32::MAX] {
+    for bad_digit in [0, 10] {
         let mut values = vec![1; 42];
         values[17] = bad_digit;
         assert_eq!(
             NumbersMatch::world_event_from_wire(&wire_deal(values)),
             Err(WireError::OutOfRange("values"))
+        );
+    }
+    for too_wide in [256 + 5, u32::MAX] {
+        let mut values = vec![1; 42];
+        values[17] = too_wide;
+        assert_eq!(
+            NumbersMatch::world_event_from_wire(&wire_deal(values)),
+            Err(WireError::IntegerOutOfRange {
+                field: "values",
+                source: u8::try_from(too_wide).unwrap_err(),
+            })
         );
     }
     let no_event = proto::GameWorldEvent {

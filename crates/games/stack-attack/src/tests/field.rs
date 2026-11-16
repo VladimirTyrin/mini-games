@@ -1,6 +1,6 @@
 use super::support::pattern;
 use crate::field::Field;
-use crate::{BoxId, CargoBox, Cell};
+use crate::{BoxId, CargoBox, Cell, Row};
 
 fn cargo(id: BoxId, x: i32, y: i32) -> CargoBox {
     CargoBox {
@@ -44,7 +44,7 @@ fn line_clear_makes_boxes_above_a_hole_fall() {
     let top = ids.next().unwrap();
     assert!(field.try_add(cargo(top, 2, 2)));
 
-    assert_eq!(field.clear_full_rows(), vec![1]);
+    assert_eq!(field.clear_full_rows(), vec![Row::new(1)]);
     let shifted = field.boxes().iter().find(|b| b.id == top).copied().unwrap();
     assert_eq!(shifted.cell, Cell::new(2, 1));
     assert!(shifted.falling);

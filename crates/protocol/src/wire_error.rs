@@ -8,6 +8,11 @@ pub enum WireError {
     WrongGame,
     #[error("field `{0}` is out of range")]
     OutOfRange(&'static str),
+    #[error("field `{field}` is out of range")]
+    IntegerOutOfRange {
+        field: &'static str,
+        source: std::num::TryFromIntError,
+    },
     #[error("unknown enum value in `{0}`")]
     UnknownEnumValue(&'static str),
 }

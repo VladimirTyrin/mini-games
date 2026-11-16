@@ -1,6 +1,6 @@
 use mg_core::{
-    Authority, BotSeat, CommandError, CoreRng, Game, GameFrame, HasBots, Match, PlayerSpec, Slot,
-    Viewer,
+    Authority, BotSeat, CommandError, CoreRng, Game, GameFrame, HasBots, Match, OutcomeKind,
+    PlayerSpec, Slot, Status, Viewer,
 };
 use mg_snake::{
     BotKind, Command, DeadSnakeBehavior, Direction, Point, Settings, Snake, WallCollisionMode,
@@ -9,7 +9,7 @@ use mg_snake::{
 use prost::Message;
 
 use crate::proto;
-use crate::{WireBots, WireError, WireGame, frame_from_wire, frame_to_wire};
+use crate::{WireBots, WireError, WireGame, frame_from_wire, frame_to_wire, slot_to_wire};
 
 fn snake_settings_wire(settings: proto::SnakeSettings) -> proto::GameSettings {
     proto::GameSettings {
@@ -125,11 +125,31 @@ fn view_carries_seats_food_and_end() {
         i32::from(proto::SnakeDeathReason::PlayerDisconnected)
     );
     let end = view.end.expect("match ended");
-    assert_eq!(end.winner_slot, Some(0));
+    assert_eq!(end.winner_slots, [0]);
     assert_eq!(
         end.reason,
         i32::from(proto::SnakeDeathReason::PlayerDisconnected)
     );
+}
+
+#[test]
+fn view_end_lists_every_surviving_bot_as_a_winner() {
+    let players = [PlayerSpec::HUMAN, PlayerSpec::BOT, PlayerSpec::BOT];
+    let mut game = Snake::new(&Settings::default(), &players).unwrap();
+    game.drop_player(Slot::new(0));
+    let Status::Finished(outcome) = game.status() else {
+        panic!("the match must end once no human is left");
+    };
+    assert_eq!(outcome.kind, OutcomeKind::Winner);
+    let Some(proto::game_view::Game::Snake(view)) =
+        Snake::view_to_wire(&game.view(Viewer::Player(Slot::new(0)))).game
+    else {
+        panic!("not a snake view");
+    };
+    let end = view.end.expect("match ended");
+    assert_eq!(end.winner_slots, [1, 2]);
+    let outcome_winners: Vec<u32> = outcome.winners.iter().copied().map(slot_to_wire).collect();
+    assert_eq!(end.winner_slots, outcome_winners);
 }
 
 #[test]
@@ -214,7 +234,10 @@ fn malformed_commands_and_events_are_rejected() {
     };
     assert_eq!(
         Snake::world_event_from_wire(&spawn_food_wire(Some(too_far))),
-        Err(WireError::OutOfRange("y"))
+        Err(WireError::IntegerOutOfRange {
+            field: "y",
+            source: u16::try_from(u32::MAX).unwrap_err(),
+        })
     );
     let empty_event = proto::GameWorldEvent {
         game: Some(proto::game_world_event::Game::Snake(

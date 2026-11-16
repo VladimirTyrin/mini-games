@@ -1,24 +1,18 @@
 use crate::awaiting::Awaiting;
-use crate::bot::Bot;
 use crate::bot_seat::BotSeat;
 use crate::budget::Budget;
 use crate::command_error::CommandError;
-use crate::frame::{Frame, GameFrame, GameInput, Input};
+use crate::frame::{Frame, GameFrame};
 use crate::game::Game;
 use crate::hash_policy::HashPolicy;
-use crate::player::{PlayerKind, PlayerSpec};
+use crate::input::{GameInput, Input};
+use crate::player_kind::PlayerKind;
+use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
+use crate::seated_bot::SeatedBot;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
 use crate::tick::Tick;
-
-#[derive(Debug)]
-struct SeatedBot<G: Game> {
-    slot: Slot,
-    bot: Box<dyn Bot<G>>,
-    rng: CoreRng,
-    budget_nodes: u64,
-}
 
 /// Single source of truth for a match (the server, or the local host in the browser): validates
 /// commands, runs bots, resolves randomness and seals frames. Every sealed frame must replay to
@@ -33,8 +27,8 @@ pub struct Authority<G: Game> {
     pending_inputs: Vec<GameInput<G>>,
     next_tick: Tick,
     hash_policy: HashPolicy,
-    /// Empty frames are omitted; see [`crate::expand_compact_log`].
-    compact_log: Vec<GameFrame<G>>,
+    /// See [`crate::CompactLog`]. `None` once the host keeps its own log.
+    compact_log: Option<Vec<GameFrame<G>>>,
     rejected_bot_commands: u64,
 }
 
@@ -77,13 +71,25 @@ impl<G: Game> Authority<G> {
             pending_inputs: Vec::new(),
             next_tick: Tick::ZERO,
             hash_policy,
-            compact_log: Vec::new(),
+            compact_log: Some(Vec::new()),
             rejected_bot_commands: 0,
         })
     }
 
+    /// Must not hash less often than [`HashPolicy::for_clock`]: receivers bound the omitted
+    /// runs of a compact log by it.
     pub fn set_hash_policy(&mut self, policy: HashPolicy) {
         self.hash_policy = policy;
+    }
+
+    pub fn hash_policy(&self) -> HashPolicy {
+        self.hash_policy
+    }
+
+    /// For hosts that keep their own log (the registry keeps wire frames): sealing then stops
+    /// cloning frames into [`Self::compact_log`], which stays empty.
+    pub fn discard_compact_log(&mut self) {
+        self.compact_log = None;
     }
 
     pub fn game(&self) -> &G {
@@ -98,8 +104,9 @@ impl<G: Game> Authority<G> {
         self.next_tick
     }
 
+    /// Frames `0..next_tick` without the empty ones; see [`crate::CompactLog`].
     pub fn compact_log(&self) -> &[GameFrame<G>] {
-        &self.compact_log
+        self.compact_log.as_deref().unwrap_or_default()
     }
 
     /// Bots should only produce legal commands; the conformance suite requires this to stay 0.
@@ -230,8 +237,12 @@ impl<G: Game> Authority<G> {
             .is_multiple_of(self.hash_policy.every_frames());
         let hash = (finished || hash_due).then(|| self.game.state_hash());
         let frame = Frame { tick, inputs, hash };
-        if !frame.inputs.is_empty() || frame.hash.is_some() {
-            self.compact_log.push(frame.clone());
+        // The domain log serves native replays and the conformance suite; the clone is the
+        // price of returning an owned frame. Hosts with their own log discard this one.
+        if frame.belongs_in_compact_log()
+            && let Some(log) = &mut self.compact_log
+        {
+            log.push(frame.clone());
         }
         frame
     }

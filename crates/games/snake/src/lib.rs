@@ -33,6 +33,7 @@ mod settings;
 mod snake;
 mod snake_view;
 mod start_positions;
+mod step_count;
 mod view;
 mod wall_collision_mode;
 mod world_event;
@@ -52,6 +53,7 @@ pub use settings::{
 pub use snake::Snake;
 pub use snake_view::SnakeView;
 pub use start_positions::START_LENGTH;
+pub use step_count::StepCount;
 pub use view::View;
 pub use wall_collision_mode::WallCollisionMode;
 pub use world_event::WorldEvent;

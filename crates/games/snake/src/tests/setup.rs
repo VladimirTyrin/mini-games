@@ -96,5 +96,5 @@ fn fresh_game_is_realtime_and_waits_for_everyone() {
     let view = game.view(Viewer::Player(mg_core::Slot::new(1)));
     assert_eq!(view.you, Some(mg_core::Slot::new(1)));
     assert!(view.food.is_empty());
-    assert_eq!(view.tick, 0);
+    assert_eq!(view.steps, crate::StepCount::ZERO);
 }

@@ -64,7 +64,10 @@ fn input_from_wire<G: WireGame>(
 pub fn slot_from_wire(slot: u32) -> Result<Slot, WireError> {
     u8::try_from(slot)
         .map(Slot::new)
-        .map_err(|_| WireError::OutOfRange("slot"))
+        .map_err(|source| WireError::IntegerOutOfRange {
+            field: "slot",
+            source,
+        })
 }
 
 pub fn slot_to_wire(slot: Slot) -> u32 {

@@ -2,6 +2,7 @@ use crate::rules::{
     CRANE_SPAWN_INTERVAL_STEP, INITIAL_CRANE_SPAWN_INTERVAL_TICKS, INITIAL_MAX_CRANES,
     LEVELS_PER_EXTRA_CRANE, MAX_CRANES_CAP, MIN_CRANE_SPAWN_INTERVAL_TICKS, TICKS_PER_LEVEL,
 };
+use crate::tick_count::TickCount;
 
 /// Difficulty, starting at 1 and growing with survival time.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -12,8 +13,8 @@ impl Level {
         self.0
     }
 
-    pub(crate) fn after_ticks(ticks: u64) -> Self {
-        let raised = u32::try_from(ticks / TICKS_PER_LEVEL).unwrap_or(u32::MAX);
+    pub(crate) fn after_ticks(ticks: TickCount) -> Self {
+        let raised = u32::try_from(ticks.get() / TICKS_PER_LEVEL).unwrap_or(u32::MAX);
         Self(raised.saturating_add(1))
     }
 

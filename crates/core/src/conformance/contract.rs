@@ -1,7 +1,7 @@
 use super::setup::Setup;
 use crate::bot_seat::BotSeat;
 use crate::game::Game;
-use crate::player::PlayerSpec;
+use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
 use crate::slot::Slot;
 

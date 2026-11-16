@@ -25,6 +25,10 @@ pub enum FrameError {
         tick: Tick,
         slot: Slot,
     },
+    /// A compact log omits a frame after the game ended.
+    MissingFrameAfterFinish {
+        tick: Tick,
+    },
 }
 
 impl fmt::Display for FrameError {
@@ -51,6 +55,9 @@ impl fmt::Display for FrameError {
                 )
             }
             Self::UnknownSlot { tick, slot } => write!(f, "frame {tick}: unknown seat {slot}"),
+            Self::MissingFrameAfterFinish { tick } => {
+                write!(f, "frame {tick} is missing after the game ended")
+            }
         }
     }
 }

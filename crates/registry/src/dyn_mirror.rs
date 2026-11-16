@@ -1,63 +1,38 @@
-use mg_core::{Clock, Match, PlayerSpec, Status, Tick, Viewer};
-use mg_protocol::{WireGame, frame_from_wire, proto};
+use mg_core::{Clock, CompactLog, CompactLogError, HashPolicy, Status, Tick, Viewer};
+use mg_protocol::proto;
 
+use crate::apply_error::ApplyError;
 use crate::game_kind::GameKind;
-use crate::registry_error::{ApplyError, CreateError};
 
-/// [`Match`] with the game type erased; the receiving side of lockstep.
+/// [`mg_core::Match`] with the game type erased; the receiving side of lockstep.
 pub trait DynMirror: Send + std::fmt::Debug {
     fn kind(&self) -> GameKind;
     fn clock(&self) -> Clock;
     fn apply_frame(&mut self, frame: &proto::TickFrame) -> Result<(), ApplyError>;
+    /// Applies ticks `next_tick..stop` (capped at the log end), filling omitted frames without
+    /// allocating them; a replay steps through one log with a growing `stop`.
+    fn apply_compact_log(
+        &mut self,
+        log: &CompactLog<proto::TickFrame>,
+        stop: Tick,
+    ) -> Result<(), ApplyError>;
     fn view(&self, viewer: Viewer) -> proto::GameView;
     fn status(&self) -> Status;
     fn next_tick(&self) -> Tick;
     fn state_hash(&self) -> u64;
-}
 
-#[derive(Debug)]
-struct MirrorAdapter<G: WireGame> {
-    kind: GameKind,
-    game_match: Match<G>,
-}
-
-impl<G: WireGame> DynMirror for MirrorAdapter<G> {
-    fn kind(&self) -> GameKind {
-        self.kind
+    /// Validates an untrusted log (catch-up, replay file) of this game; see [`CompactLog`].
+    fn compact_log(
+        &self,
+        frames: Vec<proto::TickFrame>,
+        end: Tick,
+    ) -> Result<CompactLog<proto::TickFrame>, CompactLogError> {
+        CompactLog::new(frames, end, HashPolicy::for_clock(self.clock()))
     }
 
-    fn clock(&self) -> Clock {
-        self.game_match.game().clock()
+    /// Validates the whole log before applying any of it.
+    fn catch_up(&mut self, frames: Vec<proto::TickFrame>, end: Tick) -> Result<(), ApplyError> {
+        let log = self.compact_log(frames, end)?;
+        self.apply_compact_log(&log, end)
     }
-
-    fn apply_frame(&mut self, frame: &proto::TickFrame) -> Result<(), ApplyError> {
-        let frame = frame_from_wire::<G>(frame)?;
-        Ok(self.game_match.apply_frame(&frame)?)
-    }
-
-    fn view(&self, viewer: Viewer) -> proto::GameView {
-        G::view_to_wire(&self.game_match.game().view(viewer))
-    }
-
-    fn status(&self) -> Status {
-        self.game_match.game().status()
-    }
-
-    fn next_tick(&self) -> Tick {
-        self.game_match.next_tick()
-    }
-
-    fn state_hash(&self) -> u64 {
-        self.game_match.game().state_hash()
-    }
-}
-
-pub(crate) fn mirror<G: WireGame>(
-    kind: GameKind,
-    settings: &proto::GameSettings,
-    players: &[PlayerSpec],
-) -> Result<Box<dyn DynMirror>, CreateError> {
-    let settings = G::settings_from_wire(settings)?;
-    let game_match = Match::<G>::new(&settings, players)?;
-    Ok(Box::new(MirrorAdapter { kind, game_match }))
 }

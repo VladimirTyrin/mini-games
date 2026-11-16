@@ -58,7 +58,7 @@ fn solo_game_ends_with_defeat_when_the_snake_dies() {
         game.end,
         Some(GameEnd {
             reason: DeathReason::WallCollision,
-            winner: None,
+            winners: vec![],
         })
     );
     assert_eq!(game.awaiting(), Awaiting::Nobody);
@@ -89,16 +89,49 @@ fn simultaneous_last_deaths_are_a_draw() {
 }
 
 #[test]
-fn game_ends_when_no_human_is_left() {
-    let mut with_two_bots = game(&[HUMAN, BOT, BOT]);
-    doom_seat_zero(&mut with_two_bots);
-    with_two_bots.step();
-    assert_eq!(outcome(&with_two_bots).kind, OutcomeKind::Draw);
+fn surviving_bots_win_once_the_last_human_dies() {
+    let mut game = game(&[HUMAN, BOT, BOT]);
+    doom_seat_zero(&mut game);
+    game.step();
+    assert_eq!(
+        outcome(&game),
+        Outcome {
+            kind: OutcomeKind::Winner,
+            winners: vec![Slot::new(1), Slot::new(2)],
+            scores: vec![0, 0, 0],
+        }
+    );
+    assert_eq!(
+        game.end,
+        Some(GameEnd {
+            reason: DeathReason::WallCollision,
+            winners: vec![Slot::new(1), Slot::new(2)],
+        })
+    );
+}
 
-    let mut with_one_bot = game(&[HUMAN, BOT]);
-    doom_seat_zero(&mut with_one_bot);
-    with_one_bot.step();
-    assert_eq!(outcome(&with_one_bot).winners, [Slot::new(1)]);
+#[test]
+fn a_sole_surviving_bot_wins_once_the_last_human_dies() {
+    let mut game = game(&[HUMAN, BOT]);
+    doom_seat_zero(&mut game);
+    game.step();
+    assert_eq!(outcome(&game).kind, OutcomeKind::Winner);
+    assert_eq!(outcome(&game).winners, [Slot::new(1)]);
+}
+
+#[test]
+fn humans_and_bots_dying_together_is_a_draw() {
+    let mut game = game(&[HUMAN, BOT]);
+    arrange(
+        &mut game,
+        &[
+            (line(point(4, 5), Left, 3), Right),
+            (line(point(6, 5), Right, 3), Left),
+        ],
+    );
+    game.step();
+    assert_eq!(outcome(&game).kind, OutcomeKind::Draw);
+    assert!(outcome(&game).winners.is_empty());
 }
 
 #[test]
@@ -118,7 +151,7 @@ fn dropping_a_player_kills_its_snake() {
         game.end,
         Some(GameEnd {
             reason: DeathReason::PlayerDisconnected,
-            winner: Some(Slot::new(0)),
+            winners: vec![Slot::new(0)],
         })
     );
     let before = game.state_hash();

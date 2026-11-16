@@ -4,8 +4,8 @@ use mg_core::{CommandError, Game, PlayerSpec, SetupError, Status};
 
 use super::support::*;
 use crate::{
-    Cell, Command, CraneState, Direction, EndReason, GameEvent, MAX_QUEUED_COMMANDS, Settings,
-    StackAttack, WorkerStatus,
+    Cell, Column, Command, CraneState, Direction, EndReason, GameEvent, MAX_QUEUED_COMMANDS, Row,
+    Settings, StackAttack, TickCount, WorkerStatus,
 };
 
 const RIGHT: Command = Command::Move(Direction::Right);
@@ -85,7 +85,10 @@ fn a2_two_cranes_never_drop_into_the_same_cell() {
     assert_eq!(cranes[0].id, first);
     assert_eq!(cranes[0].state, CraneState::Dropping);
     assert_eq!(cranes[1].id, second);
-    assert_eq!((cranes[1].x, cranes[1].state), (3, CraneState::Moving));
+    assert_eq!(
+        (cranes[1].x, cranes[1].state),
+        (Column::new(3), CraneState::Moving)
+    );
     assert_eq!(view(&game).boxes.len(), 1);
 
     steps(&mut game, 1);
@@ -147,7 +150,7 @@ fn a7_reported_points_equal_the_score_increase() {
         .sum();
     assert_eq!(reported, 250);
     assert!(view.events.contains(&GameEvent::LinesCleared {
-        rows: vec![0, 1],
+        rows: vec![Row::new(0), Row::new(1)],
         points: 250,
     }));
 }
@@ -158,7 +161,7 @@ fn a10_survival_time_is_counted_in_ticks() {
     steps(&mut game, 7);
     game.drop_player(slot(0));
     let view = view(&game);
-    assert_eq!(view.ticks_survived, 7);
+    assert_eq!(view.ticks_survived, TickCount::new(7));
     assert_eq!(view.tick_ms, 200);
     assert_eq!(view.end_reason, Some(EndReason::AllWorkersLeft));
 }

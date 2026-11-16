@@ -5,11 +5,11 @@ use crate::clock::Clock;
 use crate::command_error::CommandError;
 use crate::game_info::GameInfo;
 use crate::hash::StateHasher;
-use crate::outcome::Status;
-use crate::player::PlayerSpec;
+use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
+use crate::status::Status;
 use crate::viewer::Viewer;
 
 /// Rules of one game.

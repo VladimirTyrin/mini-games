@@ -4,12 +4,12 @@ use crate::dead_snake_behavior::DeadSnakeBehavior;
 use crate::game_end::GameEnd;
 use crate::point::Point;
 use crate::snake_view::SnakeView;
+use crate::step_count::StepCount;
 use crate::wall_collision_mode::WallCollisionMode;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct View {
-    /// Steps played so far.
-    pub tick: u64,
+    pub steps: StepCount,
     pub field_width: u16,
     pub field_height: u16,
     pub tick_interval_ms: u32,

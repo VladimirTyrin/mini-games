@@ -4,7 +4,7 @@ use std::time::Duration;
 use axum::extract::ws::Utf8Bytes;
 use mg_core::{Clock, OutcomeKind, Slot, Status};
 use mg_protocol::proto::server_message::Message;
-use mg_protocol::{proto, slot_from_wire};
+use mg_protocol::{REPLAY_FORMAT_VERSION, proto, slot_from_wire};
 use mg_registry::{DynAuthority, SubmitError};
 use prost::Message as _;
 use tokio::sync::{Semaphore, mpsc};
@@ -19,8 +19,6 @@ use crate::hub::{HubCommand, HubHandle};
 use crate::ids::{LobbyId, MatchId, SessionId};
 use crate::limits::Limits;
 use crate::outbound::Outbound;
-
-const REPLAY_FORMAT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RunState {
@@ -431,10 +429,9 @@ impl MatchActor {
 
     fn catch_up(&self) -> proto::MatchCatchUp {
         let now = std::time::Instant::now();
-        let (frames, next_tick) = self
-            .authority
-            .as_ref()
-            .map_or((Vec::new(), 0), |a| (a.compact_log(), a.next_tick().get()));
+        let (frames, next_tick) = self.authority.as_ref().map_or((Vec::new(), 0), |a| {
+            (a.compact_log().to_vec(), a.next_tick().get())
+        });
         proto::MatchCatchUp {
             header: Some(self.header.clone()),
             frames,
@@ -468,7 +465,7 @@ impl MatchActor {
         let replay = proto::ReplayFile {
             format_version: REPLAY_FORMAT_VERSION,
             header: Some(self.header.clone()),
-            frames: authority.compact_log(),
+            frames: authority.compact_log().to_vec(),
             end_tick: final_tick,
             result: Some(result.clone()),
         };

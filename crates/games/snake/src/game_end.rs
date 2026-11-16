@@ -2,10 +2,11 @@ use mg_core::Slot;
 
 use crate::death_reason::DeathReason;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameEnd {
     /// Reason of the death that ended the match; simultaneous deaths report the lowest seat's.
     pub reason: DeathReason,
-    /// The sole survivor of a multi-seat match; `None` for a draw and for solo matches.
-    pub winner: Option<Slot>,
+    /// Seats alive when a multi-seat match ended: the sole survivor, or every bot that outlived
+    /// the last human. Empty for a draw and for solo matches.
+    pub winners: Vec<Slot>,
 }

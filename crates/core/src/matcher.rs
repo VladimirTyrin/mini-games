@@ -1,7 +1,13 @@
-use crate::frame::{GameFrame, Input};
+use std::borrow::Cow;
+
+use crate::compact_log::CompactLog;
+use crate::compact_log_entry::CompactLogEntry;
+use crate::frame::{Frame, GameFrame};
 use crate::frame_error::FrameError;
 use crate::game::Game;
-use crate::player::PlayerSpec;
+use crate::input::Input;
+use crate::logged_frame::LoggedFrame;
+use crate::player_spec::PlayerSpec;
 use crate::setup_error::SetupError;
 use crate::tick::Tick;
 
@@ -91,6 +97,44 @@ impl<G: Game> Match<G> {
     ) -> Result<(), FrameError> {
         for frame in frames {
             self.apply_frame(frame)?;
+        }
+        Ok(())
+    }
+
+    /// Applies the log's ticks from [`Self::next_tick`] up to `stop` (exclusive, capped at the
+    /// log end), so a replay can step through one log in several calls.
+    pub fn apply_compact_log(
+        &mut self,
+        log: &CompactLog<GameFrame<G>>,
+        stop: Tick,
+    ) -> Result<(), FrameError> {
+        self.apply_compact_log_with(log, stop, |frame| Ok::<_, FrameError>(Cow::Borrowed(frame)))
+    }
+
+    /// [`Self::apply_compact_log`] for logs of another frame type: `decode` turns each logged
+    /// frame into a domain frame.
+    pub fn apply_compact_log_with<'a, F, E>(
+        &mut self,
+        log: &'a CompactLog<F>,
+        stop: Tick,
+        mut decode: impl FnMut(&'a F) -> Result<Cow<'a, GameFrame<G>>, E>,
+    ) -> Result<(), E>
+    where
+        F: LoggedFrame,
+        E: From<FrameError>,
+    {
+        let entries = log
+            .entries_from(self.next_tick)
+            .take_while(|entry| entry.tick() < stop);
+        for entry in entries {
+            match entry {
+                CompactLogEntry::Logged(frame) => self.apply_frame(decode(frame)?.as_ref())?,
+                // Once finished, the authority hashes, and therefore logs, every frame.
+                CompactLogEntry::Empty(tick) if self.game.status().is_finished() => {
+                    return Err(FrameError::MissingFrameAfterFinish { tick }.into());
+                }
+                CompactLogEntry::Empty(tick) => self.apply_frame(&Frame::empty(tick))?,
+            }
         }
         Ok(())
     }

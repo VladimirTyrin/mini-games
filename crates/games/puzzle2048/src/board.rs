@@ -33,7 +33,7 @@ impl Board {
 
     fn checked_size(field: &'static str, value: u32) -> Result<u8, SetupError> {
         SetupError::check_range(field, value, Settings::MIN_SIZE, Settings::MAX_SIZE)?;
-        u8::try_from(value).map_err(|_| SetupError::setting(field, "too large"))
+        u8::try_from(value).map_err(|error| SetupError::setting(field, error.to_string()))
     }
 
     pub(crate) fn width(&self) -> u8 {

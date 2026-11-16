@@ -57,7 +57,6 @@ impl Puzzle2048 {
         self.board.tile(cell)
     }
 
-    /// Lets UIs ignore no-op swipes without a round trip.
     pub fn can_move(&self, direction: Direction) -> bool {
         self.phase == Phase::Playing
             && self.pending_spawns == 0
@@ -260,6 +259,10 @@ impl Game for Puzzle2048 {
             highest_tile: self.board.highest_tile(),
             last_move: self.last_move,
             phase: self.phase,
+            movable_directions: Direction::ALL
+                .into_iter()
+                .filter(|&direction| self.can_move(direction))
+                .collect(),
         }
     }
 

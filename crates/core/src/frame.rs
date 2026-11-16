@@ -1,14 +1,6 @@
 use crate::game::Game;
-use crate::slot::Slot;
+use crate::input::Input;
 use crate::tick::Tick;
-
-/// One input inside a frame. Inputs are applied in list order.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Input<C, W> {
-    Command { slot: Slot, command: C },
-    World(W),
-    Dropped { slot: Slot },
-}
 
 /// Everything that happened during one tick; the only payload exchanged during a match.
 #[derive(Clone, Debug, PartialEq)]
@@ -20,7 +12,6 @@ pub struct Frame<C, W> {
 }
 
 pub type GameFrame<G> = Frame<<G as Game>::Command, <G as Game>::WorldEvent>;
-pub type GameInput<G> = Input<<G as Game>::Command, <G as Game>::WorldEvent>;
 
 impl<C, W> Frame<C, W> {
     pub fn empty(tick: Tick) -> Self {
@@ -29,5 +20,10 @@ impl<C, W> Frame<C, W> {
             inputs: Vec::new(),
             hash: None,
         }
+    }
+
+    /// Compact logs omit frames without inputs and without a hash; receivers recreate them.
+    pub fn belongs_in_compact_log(&self) -> bool {
+        !self.inputs.is_empty() || self.hash.is_some()
     }
 }

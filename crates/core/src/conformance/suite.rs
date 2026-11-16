@@ -1,10 +1,13 @@
+// A test harness: panicking with a descriptive message is how it fails a game's test.
+#![allow(clippy::panic)]
+
 use super::contract::Conformance;
 use super::setup::Setup;
 use crate::authority::Authority;
 use crate::awaiting::Awaiting;
-use crate::compact_log::expand_compact_log;
+use crate::compact_log::CompactLog;
 use crate::matcher::Match;
-use crate::player::PlayerSpec;
+use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
 use crate::slot::Slot;
 
@@ -56,7 +59,9 @@ pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, Stri
         Match::<G>::new(&setup.settings, players).map_err(|e| format!("mirror: {e}"))?;
     let mut fuzz = CoreRng::derive(seed, 0xF022);
     let humans: Vec<Slot> = Slot::all(players.len())
-        .filter(|s| players[s.index()].is_human())
+        .zip(players)
+        .filter(|(_, player)| player.is_human())
+        .map(|(slot, _)| slot)
         .collect();
     let realtime = authority.game().clock().is_realtime();
 
@@ -126,9 +131,14 @@ pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, Stri
 
     let mut replay =
         Match::<G>::new(&setup.settings, players).map_err(|e| format!("replay: {e}"))?;
-    let frames = expand_compact_log(authority.compact_log(), authority.next_tick());
+    let log = CompactLog::new(
+        authority.compact_log().to_vec(),
+        authority.next_tick(),
+        authority.hash_policy(),
+    )
+    .map_err(|e| format!("compact log: {e}"))?;
     replay
-        .apply_frames(&frames)
+        .apply_compact_log(&log, log.end())
         .map_err(|e| format!("replay: {e}"))?;
     let final_hash = authority.game().state_hash();
     if replay.game().state_hash() != final_hash {

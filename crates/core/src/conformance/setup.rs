@@ -1,5 +1,5 @@
 use crate::game::Game;
-use crate::player::PlayerSpec;
+use crate::player_spec::PlayerSpec;
 
 pub struct Setup<G: Game> {
     pub settings: G::Settings,

@@ -1,6 +1,6 @@
 mod support;
 
-use mg_core::{PlayerSpec, Viewer};
+use mg_core::Viewer;
 use mg_protocol::proto;
 use mg_protocol::proto::client_message::Message as Request;
 use mg_protocol::proto::server_message::Message as Reply;
@@ -128,26 +128,9 @@ async fn two_players_play_tictactoe_to_the_end_and_download_a_valid_replay() {
     else {
         panic!("expected replay data");
     };
-    let file = proto::ReplayFile::decode(replay.replay_file.as_slice()).unwrap();
-    let header = file.header.unwrap();
-    let players = vec![PlayerSpec::HUMAN; header.seats.len()];
-    let mut mirror =
-        mg_registry::create_mirror(header.settings.as_ref().unwrap(), &players).unwrap();
-    let frames = mg_core::expand_compact_log(
-        &file
-            .frames
-            .iter()
-            .map(|f| mg_protocol::frame_from_wire::<mg_tictactoe::TicTacToe>(f).unwrap())
-            .collect::<Vec<_>>(),
-        mg_core::Tick::new(file.end_tick),
-    );
-    for frame in &frames {
-        mirror
-            .apply_frame(&mg_protocol::frame_to_wire::<mg_tictactoe::TicTacToe>(
-                frame,
-            ))
-            .unwrap();
-    }
+    let mg_registry::LoadedReplay { mut mirror, log } =
+        mg_registry::load_replay_file(&replay.replay_file).unwrap();
+    mirror.apply_compact_log(&log, log.end()).unwrap();
     assert!(mirror.status().is_finished());
     assert!(mirror.view(Viewer::Spectator).game.is_some());
 }
@@ -377,7 +360,7 @@ async fn shared_replay_is_validated() {
     });
     expect_error(host.request(garbage).await, proto::ErrorCode::InvalidReplay);
     let huge_board = proto::ReplayFile {
-        format_version: 2,
+        format_version: mg_protocol::REPLAY_FORMAT_VERSION,
         header: Some(proto::MatchHeader {
             settings: Some(tictactoe_settings(u32::MAX, 5)),
             ..Default::default()

@@ -1,12 +1,12 @@
-use mg_core::Slot;
 use mg_stack_attack::{
-    CargoBox, Cell, Command, Crane, CraneState, Direction, EndReason, GameEvent, PatternId,
+    CargoBox, Cell, Column, Command, Crane, CraneState, Direction, EndReason, GameEvent, PatternId,
     Settings, Side, StackAttack, View, WorkerState, WorkerStatus, WorkerView, WorldEvent,
 };
 
 use crate::proto;
 use crate::proto::{game_command, game_settings, game_view, game_world_event};
 use crate::proto::{stack_attack_command, stack_attack_event, stack_attack_world_event};
+use crate::slot_to_wire;
 use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
 
@@ -74,7 +74,7 @@ impl WireGame for StackAttack {
         };
         match event.event.as_ref().ok_or(WireError::Missing("event"))? {
             stack_attack_world_event::Event::CraneSpawn(spawn) => Ok(WorldEvent::CraneSpawned {
-                target_x: spawn.target_x,
+                target_x: Column::new(spawn.target_x),
                 from: side_from_wire(spawn.from_side)?,
                 pattern: pattern_from_wire(spawn.pattern_id)?,
             }),
@@ -88,7 +88,7 @@ impl WireGame for StackAttack {
             pattern,
         } = *event;
         let spawn = proto::StackAttackCraneSpawn {
-            target_x,
+            target_x: target_x.get(),
             from_side: side_to_wire(from) as i32,
             pattern_id: u32::from(pattern.get()),
         };
@@ -114,7 +114,7 @@ impl WireGame for StackAttack {
             lines_cleared: view.lines_cleared,
             boxes_pushed: view.boxes_pushed,
             level: view.level.get(),
-            ticks_survived: view.ticks_survived,
+            ticks_survived: view.ticks_survived.get(),
             events: view.events.iter().map(event_to_wire).collect(),
             end_reason: view
                 .end_reason
@@ -159,14 +159,11 @@ fn side_to_wire(side: Side) -> proto::StackAttackSide {
 }
 
 fn pattern_from_wire(value: u32) -> Result<PatternId, WireError> {
-    u8::try_from(value)
-        .ok()
-        .and_then(PatternId::new)
-        .ok_or(WireError::OutOfRange("pattern_id"))
-}
-
-fn slot_to_wire(slot: Slot) -> u32 {
-    u32::from(slot.get())
+    let value = u8::try_from(value).map_err(|source| WireError::IntegerOutOfRange {
+        field: "pattern_id",
+        source,
+    })?;
+    PatternId::new(value).ok_or(WireError::OutOfRange("pattern_id"))
 }
 
 fn cell_to_wire(cell: Cell) -> proto::StackAttackCell {
@@ -213,8 +210,8 @@ fn crane_to_wire(crane: &Crane) -> proto::StackAttackCrane {
     };
     proto::StackAttackCrane {
         id: crane.id.get(),
-        x: crane.x,
-        target_x: crane.target_x,
+        x: crane.x.get(),
+        target_x: crane.target_x.get(),
         state: state as i32,
         pattern_id: u32::from(crane.pattern.get()),
     }
@@ -237,8 +234,8 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
             target_x,
         } => Event::CraneSpawned(proto::StackAttackCraneSpawnedEvent {
             crane_id: crane_id.get(),
-            start_x: *start_x,
-            target_x: *target_x,
+            start_x: start_x.get(),
+            target_x: target_x.get(),
         }),
         GameEvent::BoxDropped {
             crane_id,
@@ -247,7 +244,7 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
         } => Event::BoxDropped(proto::StackAttackBoxDroppedEvent {
             crane_id: crane_id.get(),
             box_id: box_id.get(),
-            x: *x,
+            x: x.get(),
         }),
         GameEvent::BoxLanded { box_id, cell } => {
             Event::BoxLanded(proto::StackAttackBoxLandedEvent {
@@ -262,8 +259,8 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
             by,
         } => Event::BoxPushed(proto::StackAttackBoxPushedEvent {
             box_id: box_id.get(),
-            from_x: *from_x,
-            to_x: *to_x,
+            from_x: from_x.get(),
+            to_x: to_x.get(),
             by_slot: slot_to_wire(*by),
         }),
         GameEvent::WorkerJumped { slot } => {
@@ -288,7 +285,7 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
         }),
         GameEvent::LinesCleared { rows, points } => {
             Event::LinesCleared(proto::StackAttackLinesClearedEvent {
-                rows: rows.clone(),
+                rows: rows.iter().map(|row| row.get()).collect(),
                 points: *points,
             })
         }

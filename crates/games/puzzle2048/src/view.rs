@@ -28,6 +28,9 @@ pub struct View {
     pub highest_tile: Option<TileValue>,
     pub last_move: Option<Direction>,
     pub phase: Phase,
+    /// Moves the game accepts right now, in [`Direction::ALL`] order: lets UIs ignore no-op
+    /// swipes without a round trip. Empty while a spawn is due and once the game is over.
+    pub movable_directions: Vec<Direction>,
 }
 
 impl View {

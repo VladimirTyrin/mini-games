@@ -110,4 +110,7 @@ message Puzzle2048View {
   // UNSPECIFIED before the first move.
   Puzzle2048Direction last_move = 8;
   Puzzle2048Phase phase = 9;
+  // Moves the game accepts right now, so UIs can ignore no-op swipes without a round trip.
+  // Empty while a spawn is due and once the game is over.
+  repeated Puzzle2048Direction movable_directions = 10;
 }

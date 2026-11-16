@@ -24,7 +24,10 @@ fn snakes_move_one_cell_per_tick() {
     let after = snake(&game, 0).body;
     assert_eq!(after[0], point(before[0].x, before[0].y - 1));
     assert_eq!(after[1..], before[..2]);
-    assert_eq!(game.view(mg_core::Viewer::Spectator).tick, 1);
+    assert_eq!(
+        game.view(mg_core::Viewer::Spectator).steps,
+        crate::StepCount::new(1)
+    );
 }
 
 #[test]

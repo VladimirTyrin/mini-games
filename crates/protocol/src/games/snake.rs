@@ -5,6 +5,7 @@ use mg_snake::{
 };
 
 use crate::proto;
+use crate::slot_to_wire;
 use crate::wire_error::WireError;
 use crate::wire_game::{WireBots, WireGame};
 
@@ -101,7 +102,7 @@ impl WireGame for Snake {
     fn view_to_wire(view: &View) -> proto::GameView {
         proto::GameView {
             game: Some(proto::game_view::Game::Snake(proto::SnakeView {
-                tick: view.tick,
+                tick: view.steps.get(),
                 field_width: u32::from(view.field_width),
                 field_height: u32::from(view.field_height),
                 tick_interval_ms: view.tick_interval_ms,
@@ -110,8 +111,8 @@ impl WireGame for Snake {
                 max_food_count: u32::from(view.max_food_count),
                 snakes: view.snakes.iter().map(seat_view_to_wire).collect(),
                 food: view.food.iter().copied().map(point_to_wire).collect(),
-                you: view.you.map(|slot| u32::from(slot.get())),
-                end: view.end.map(game_end_to_wire),
+                you: view.you.map(slot_to_wire),
+                end: view.end.as_ref().map(game_end_to_wire),
             })),
         }
     }
@@ -143,8 +144,10 @@ impl WireBots for Snake {
 }
 
 fn point_from_wire(point: &proto::SnakePoint) -> Result<Point, WireError> {
-    let x = u16::try_from(point.x).map_err(|_| WireError::OutOfRange("x"))?;
-    let y = u16::try_from(point.y).map_err(|_| WireError::OutOfRange("y"))?;
+    let x = u16::try_from(point.x)
+        .map_err(|source| WireError::IntegerOutOfRange { field: "x", source })?;
+    let y = u16::try_from(point.y)
+        .map_err(|source| WireError::IntegerOutOfRange { field: "y", source })?;
     Ok(Point::new(x, y))
 }
 
@@ -222,7 +225,7 @@ fn death_reason_to_wire(reason: DeathReason) -> proto::SnakeDeathReason {
 
 fn seat_view_to_wire(snake: &SnakeView) -> proto::SnakeSeatView {
     proto::SnakeSeatView {
-        slot: u32::from(snake.slot.get()),
+        slot: slot_to_wire(snake.slot),
         is_bot: snake.player == PlayerKind::Bot,
         body: snake.body.iter().copied().map(point_to_wire).collect(),
         direction: direction_to_wire(snake.direction).into(),
@@ -240,10 +243,10 @@ fn seat_view_to_wire(snake: &SnakeView) -> proto::SnakeSeatView {
     }
 }
 
-fn game_end_to_wire(end: GameEnd) -> proto::SnakeGameEnd {
+fn game_end_to_wire(end: &GameEnd) -> proto::SnakeGameEnd {
     proto::SnakeGameEnd {
         reason: death_reason_to_wire(end.reason).into(),
-        winner_slot: end.winner.map(|slot| u32::from(slot.get())),
+        winner_slots: end.winners.iter().copied().map(slot_to_wire).collect(),
     }
 }
 

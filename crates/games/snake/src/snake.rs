@@ -16,6 +16,7 @@ use crate::seat_state::SeatState;
 use crate::settings::{MAX_FOOD_PERMILLE, MAX_SEATS, MIN_SEATS, Settings};
 use crate::snake_view::SnakeView;
 use crate::start_positions::start_body;
+use crate::step_count::StepCount;
 use crate::view::View;
 use crate::world_event::WorldEvent;
 
@@ -31,7 +32,7 @@ pub struct Snake {
     /// In spawn order; mirrored as `CellContent::Food` in `grid`.
     pub(crate) food: Vec<Point>,
     pub(crate) grid: Grid,
-    pub(crate) steps: u64,
+    pub(crate) steps: StepCount,
     pub(crate) end: Option<GameEnd>,
 }
 
@@ -59,7 +60,8 @@ impl Snake {
     }
 
     /// Single seat: over when it dies. Several seats: over when at most one snake is alive, or
-    /// when the table had humans and none of them is alive (bots alone would play forever).
+    /// when the table had humans and none of them is alive (bots alone would play forever); the
+    /// survivors win, so a human who dies before several bots sees a defeat, not a draw.
     pub(crate) fn check_end(&mut self, reason: DeathReason) {
         let alive: Vec<Slot> = Slot::all(self.seats.len())
             .zip(&self.seats)
@@ -80,11 +82,12 @@ impl Snake {
             alive.len() <= 1 || (had_humans && !humans_alive)
         };
         if over {
-            let winner = match alive.as_slice() {
-                [sole] if self.seats.len() > 1 => Some(*sole),
-                _ => None,
+            let winners = if self.seats.len() > 1 {
+                alive
+            } else {
+                Vec::new()
             };
-            self.end = Some(GameEnd { reason, winner });
+            self.end = Some(GameEnd { reason, winners });
         }
     }
 }
@@ -108,11 +111,11 @@ impl Game for Snake {
         settings.validate()?;
         SetupError::check_player_count(players.len(), MIN_SEATS, MAX_SEATS)?;
         let width = u16::try_from(settings.field_width)
-            .map_err(|_| SetupError::setting("field_width", "out of range"))?;
+            .map_err(|error| SetupError::setting("field_width", error.to_string()))?;
         let height = u16::try_from(settings.field_height)
-            .map_err(|_| SetupError::setting("field_height", "out of range"))?;
+            .map_err(|error| SetupError::setting("field_height", error.to_string()))?;
         let max_food_count = u8::try_from(settings.max_food_count)
-            .map_err(|_| SetupError::setting("max_food_count", "out of range"))?;
+            .map_err(|error| SetupError::setting("max_food_count", error.to_string()))?;
         let field = Field::new(width, height, settings.wall_collision_mode);
 
         let mut grid = Grid::new(field);
@@ -141,7 +144,7 @@ impl Game for Snake {
             seats,
             food: Vec::with_capacity(usize::from(max_food_count)),
             grid,
-            steps: 0,
+            steps: StepCount::ZERO,
             end: None,
         })
     }
@@ -222,17 +225,19 @@ impl Game for Snake {
     }
 
     fn status(&self) -> Status {
-        let Some(end) = self.end else {
+        let Some(end) = &self.end else {
             return Status::InProgress;
         };
-        let kind = match end.winner {
-            _ if self.seats.len() == 1 => OutcomeKind::Defeat,
-            Some(_) => OutcomeKind::Winner,
-            None => OutcomeKind::Draw,
+        let kind = if self.seats.len() == 1 {
+            OutcomeKind::Defeat
+        } else if end.winners.is_empty() {
+            OutcomeKind::Draw
+        } else {
+            OutcomeKind::Winner
         };
         Status::Finished(Outcome {
             kind,
-            winners: end.winner.into_iter().collect(),
+            winners: end.winners.clone(),
             scores: self
                 .seats
                 .iter()
@@ -243,7 +248,7 @@ impl Game for Snake {
 
     fn view(&self, viewer: Viewer) -> View {
         View {
-            tick: self.steps,
+            steps: self.steps,
             field_width: self.field.width(),
             field_height: self.field.height(),
             tick_interval_ms: self.tick_interval_ms,
@@ -267,7 +272,7 @@ impl Game for Snake {
                 Viewer::Player(slot) => self.seat(slot).map(|_| slot),
                 Viewer::Spectator => None,
             },
-            end: self.end,
+            end: self.end.clone(),
         }
     }
 
@@ -279,7 +284,7 @@ impl Game for Snake {
         hasher.u8(self.max_food_count);
         hasher.u32(self.food_spawn_permille);
         hasher.u32(self.tick_interval_ms);
-        hasher.u64(self.steps);
+        hasher.u64(self.steps.get());
         hasher.length(self.seats.len());
         for seat in &self.seats {
             hasher.bool(seat.player == PlayerKind::Bot);
@@ -299,11 +304,14 @@ impl Game for Snake {
         for &food in &self.food {
             hash_point(hasher, food);
         }
-        match self.end {
+        match &self.end {
             None => hasher.u8(0),
             Some(end) => {
                 hasher.u8(end.reason.hash_code());
-                hasher.u8(end.winner.map_or(u8::MAX, Slot::get));
+                hasher.length(end.winners.len());
+                for winner in &end.winners {
+                    hasher.u8(winner.get());
+                }
             }
         }
     }

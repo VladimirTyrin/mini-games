@@ -1,12 +1,13 @@
-use mg_core::{Authority, CoreRng, Game, Match, PlayerSpec, Slot, Viewer};
-use mg_stack_attack::{Command, Direction, PatternId, Settings, Side, StackAttack, WorldEvent};
+use mg_core::{Game, PlayerSpec, Slot, Viewer};
+use mg_stack_attack::{
+    Column, Command, Direction, PatternId, Settings, Side, StackAttack, WorldEvent,
+};
 
 use crate::proto;
 use crate::proto::{game_command, game_settings, game_world_event};
 use crate::proto::{stack_attack_command, stack_attack_world_event};
 use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
-use crate::{frame_from_wire, frame_to_wire};
 
 fn crane_spawn(target_x: i32, from_side: i32, pattern_id: u32) -> proto::GameWorldEvent {
     proto::GameWorldEvent {
@@ -61,7 +62,7 @@ fn world_events_round_trip() {
     for (target_x, from) in [(0, Side::Left), (14, Side::Right)] {
         for pattern in 0..PatternId::COUNT {
             let event = WorldEvent::CraneSpawned {
-                target_x,
+                target_x: Column::new(target_x),
                 from,
                 pattern: PatternId::new(pattern).unwrap(),
             };
@@ -134,11 +135,18 @@ fn malformed_messages_are_rejected() {
         StackAttack::world_event_from_wire(&crane_spawn(3, 9, 1)),
         Err(WireError::UnknownEnumValue("from_side"))
     );
-    for pattern_id in [u32::from(PatternId::COUNT), 256, u32::MAX] {
-        assert_eq!(
+    assert_eq!(
+        StackAttack::world_event_from_wire(&crane_spawn(3, left, u32::from(PatternId::COUNT))),
+        Err(WireError::OutOfRange("pattern_id"))
+    );
+    for pattern_id in [256, u32::MAX] {
+        assert!(matches!(
             StackAttack::world_event_from_wire(&crane_spawn(3, left, pattern_id)),
-            Err(WireError::OutOfRange("pattern_id"))
-        );
+            Err(WireError::IntegerOutOfRange {
+                field: "pattern_id",
+                ..
+            })
+        ));
     }
 }
 
@@ -184,49 +192,64 @@ fn view_carries_the_render_model() {
 }
 
 #[cfg(feature = "json")]
-#[test]
-fn frames_survive_json_and_replay_to_the_same_state() {
-    let settings = Settings::default();
-    let players = [PlayerSpec::HUMAN; 3];
-    let mut authority = Authority::<StackAttack>::new(&settings, &players, 11, vec![]).unwrap();
-    let mut mirror = Match::<StackAttack>::new(&settings, &players).unwrap();
-    let mut fuzz = CoreRng::new(5);
-    let commands = [
-        Command::Move(Direction::Left),
-        Command::Move(Direction::Right),
-        Command::Jump,
-    ];
-    let mut world_events = 0;
-    for tick in 0..400 {
-        for slot in Slot::all(players.len()) {
-            if fuzz.chance(1, 2) {
-                // Busy / NotPlaying rejections are expected and never reach a frame.
-                authority.submit(slot, *fuzz.pick(&commands).unwrap()).ok();
+mod json {
+    use mg_core::{Authority, CommandError, CoreRng, Game, Match, PlayerSpec, Slot};
+    use mg_stack_attack::{Command, Direction, Settings, StackAttack};
+
+    use crate::proto;
+    use crate::{frame_from_wire, frame_to_wire};
+
+    #[test]
+    fn frames_survive_json_and_replay_to_the_same_state() {
+        let settings = Settings::default();
+        let players = [PlayerSpec::HUMAN; 3];
+        let mut authority = Authority::<StackAttack>::new(&settings, &players, 11, vec![]).unwrap();
+        let mut mirror = Match::<StackAttack>::new(&settings, &players).unwrap();
+        let mut fuzz = CoreRng::new(5);
+        let commands = [
+            Command::Move(Direction::Left),
+            Command::Move(Direction::Right),
+            Command::Jump,
+        ];
+        let mut world_events = 0;
+        for tick in 0..400 {
+            for slot in Slot::all(players.len()) {
+                if fuzz.chance(1, 2) {
+                    // Busy / NotPlaying rejections are expected and never reach a frame.
+                    let result = authority.submit(slot, *fuzz.pick(&commands).unwrap());
+                    assert!(
+                        matches!(
+                            result,
+                            Ok(()) | Err(CommandError::Busy | CommandError::NotPlaying)
+                        ),
+                        "unexpected submit result {result:?}"
+                    );
+                }
+            }
+            if tick == 250 {
+                authority.drop_player(Slot::new(2));
+            }
+            let frame = authority.seal_frame();
+            world_events += frame
+                .inputs
+                .iter()
+                .filter(|input| matches!(input, mg_core::Input::World(_)))
+                .count();
+            let json = serde_json::to_string(&frame_to_wire::<StackAttack>(&frame)).unwrap();
+            let wire: proto::TickFrame = serde_json::from_str(&json).unwrap();
+            let decoded = frame_from_wire::<StackAttack>(&wire).unwrap();
+            assert_eq!(decoded, frame);
+            mirror.apply_frame(&decoded).unwrap();
+            if authority.game().status().is_finished() {
+                break;
             }
         }
-        if tick == 250 {
-            authority.drop_player(Slot::new(2));
-        }
-        let frame = authority.seal_frame();
-        world_events += frame
-            .inputs
-            .iter()
-            .filter(|input| matches!(input, mg_core::Input::World(_)))
-            .count();
-        let json = serde_json::to_string(&frame_to_wire::<StackAttack>(&frame)).unwrap();
-        let wire: proto::TickFrame = serde_json::from_str(&json).unwrap();
-        let decoded = frame_from_wire::<StackAttack>(&wire).unwrap();
-        assert_eq!(decoded, frame);
-        mirror.apply_frame(&decoded).unwrap();
-        if authority.game().status().is_finished() {
-            break;
-        }
+        let frames = mirror.next_tick().get();
+        assert!(frames >= 200, "match ended after {frames} frames");
+        assert!(
+            world_events > 0,
+            "no crane spawned, the test exercised nothing"
+        );
+        assert_eq!(mirror.game().state_hash(), authority.game().state_hash());
     }
-    let frames = mirror.next_tick().get();
-    assert!(frames >= 200, "match ended after {frames} frames");
-    assert!(
-        world_events > 0,
-        "no crane spawned, the test exercised nothing"
-    );
-    assert_eq!(mirror.game().state_hash(), authority.game().state_hash());
 }

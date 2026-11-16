@@ -32,7 +32,7 @@ impl StackAttack {
         } else if !self.any_worker_alive() {
             self.end_reason = Some(EndReason::WorkersCrushed);
         }
-        self.ticks_survived = self.ticks_survived.saturating_add(1);
+        self.ticks_survived = self.ticks_survived.next();
         self.ticks_since_last_crane = self.ticks_since_last_crane.saturating_add(1);
         self.last_frame_events = events;
     }
@@ -81,8 +81,8 @@ impl StackAttack {
             self.boxes_pushed = self.boxes_pushed.saturating_add(1);
             events.push(GameEvent::BoxPushed {
                 box_id,
-                from_x: target.x,
-                to_x: push_to.x,
+                from_x: target.column(),
+                to_x: push_to.column(),
                 by: slot,
             });
         }
@@ -115,14 +115,14 @@ impl StackAttack {
         for crane in &mut self.cranes {
             match crane.state {
                 CraneState::Moving => {
-                    crane.x += (crane.target_x - crane.x).signum();
+                    crane.x = crane.x.step_towards(crane.target_x);
                     if crane.x != crane.target_x {
                         continue;
                     }
                     let box_id = self.next_box_id;
                     let cargo = CargoBox {
                         id: box_id,
-                        cell: Cell::new(crane.x, top),
+                        cell: Cell::new(crane.x.get(), top),
                         pattern: crane.pattern,
                         falling: true,
                     };
@@ -141,7 +141,7 @@ impl StackAttack {
                 CraneState::Dropping => crane.state = CraneState::Leaving,
                 CraneState::Leaving => {
                     let exit_x = crane.exit_side(width).outside_column(width);
-                    crane.x += (exit_x - crane.x).signum();
+                    crane.x = crane.x.step_towards(exit_x);
                 }
             }
         }

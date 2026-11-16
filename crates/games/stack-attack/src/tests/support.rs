@@ -1,8 +1,8 @@
 use mg_core::{Game, PlayerSpec, Slot, Viewer};
 
 use crate::{
-    BoxId, CargoBox, Cell, Command, Crane, CraneId, CraneState, PatternId, Settings, StackAttack,
-    View, WorkerView,
+    BoxId, CargoBox, Cell, Column, Command, Crane, CraneId, CraneState, PatternId, Settings,
+    StackAttack, View, WorkerView,
 };
 
 pub(super) fn new_game(field_width: u32, field_height: u32, seats: usize) -> StackAttack {
@@ -58,8 +58,8 @@ pub(super) fn add_crane(game: &mut StackAttack, x: i32, target_x: i32) -> CraneI
     let id = game.next_crane_id;
     game.cranes.push(Crane {
         id,
-        x,
-        target_x,
+        x: Column::new(x),
+        target_x: Column::new(target_x),
         state: CraneState::Moving,
         pattern: pattern(),
     });

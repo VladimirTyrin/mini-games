@@ -155,10 +155,11 @@ fn hint_mode_to_wire(mode: HintMode) -> WireHintMode {
 }
 
 fn cell_value_from_wire(value: u32) -> Result<CellValue, WireError> {
-    u8::try_from(value)
-        .ok()
-        .and_then(CellValue::new)
-        .ok_or(WireError::OutOfRange("values"))
+    let value = u8::try_from(value).map_err(|source| WireError::IntegerOutOfRange {
+        field: "values",
+        source,
+    })?;
+    CellValue::new(value).ok_or(WireError::OutOfRange("values"))
 }
 
 fn values_to_wire(values: &[CellValue]) -> Vec<u32> {

@@ -5,6 +5,7 @@ use mg_core::{
 
 use crate::box_id::BoxId;
 use crate::cell::Cell;
+use crate::column::Column;
 use crate::command::{Command, MAX_QUEUED_COMMANDS};
 use crate::crane::Crane;
 use crate::crane_id::CraneId;
@@ -19,6 +20,7 @@ use crate::rules::TICK_MS;
 use crate::score::Score;
 use crate::settings::{MAX_SEATS, MIN_SEATS, Settings};
 use crate::side::Side;
+use crate::tick_count::TickCount;
 use crate::view::View;
 use crate::worker::Worker;
 use crate::worker_state::WorkerState;
@@ -43,7 +45,7 @@ pub struct StackAttack {
     /// (each clear of `n` rows scores `150 n - 50`).
     pub(crate) clearing_ticks: u32,
     pub(crate) boxes_pushed: u32,
-    pub(crate) ticks_survived: u64,
+    pub(crate) ticks_survived: TickCount,
     pub(crate) ticks_since_last_crane: u32,
     pub(crate) next_box_id: BoxId,
     pub(crate) next_crane_id: CraneId,
@@ -101,9 +103,9 @@ impl Game for StackAttack {
             ));
         }
         let width = i32::try_from(settings.field_width)
-            .map_err(|_| SetupError::setting("field_width", "out of range"))?;
+            .map_err(|error| SetupError::setting("field_width", error.to_string()))?;
         let height = i32::try_from(settings.field_height)
-            .map_err(|_| SetupError::setting("field_height", "out of range"))?;
+            .map_err(|error| SetupError::setting("field_height", error.to_string()))?;
         let workers = (0..players.len())
             .map(|seat| Worker::new(Cell::new(spawn_column(seat, players.len(), width), 0)))
             .collect();
@@ -115,7 +117,7 @@ impl Game for StackAttack {
             lines_cleared: 0,
             clearing_ticks: 0,
             boxes_pushed: 0,
-            ticks_survived: 0,
+            ticks_survived: TickCount::ZERO,
             ticks_since_last_crane: 0,
             next_box_id: BoxId::FIRST,
             next_crane_id: CraneId::FIRST,
@@ -150,7 +152,7 @@ impl Game for StackAttack {
             return Vec::new();
         }
         let width = u32::try_from(self.field.width()).unwrap_or(1);
-        let target_x = i32::try_from(rng.below(width)).unwrap_or(0);
+        let target_x = Column::new(i32::try_from(rng.below(width)).unwrap_or(0));
         let from = if rng.below(2) == 0 {
             Side::Left
         } else {
@@ -319,8 +321,8 @@ impl Game for StackAttack {
         hasher.length(self.cranes.len());
         for crane in &self.cranes {
             hasher.u32(crane.id.get());
-            hasher.i32(crane.x);
-            hasher.i32(crane.target_x);
+            hasher.i32(crane.x.get());
+            hasher.i32(crane.target_x.get());
             hasher.u8(match crane.state {
                 CraneState::Moving => 0,
                 CraneState::Dropping => 1,
@@ -332,7 +334,7 @@ impl Game for StackAttack {
         hasher.u32(self.lines_cleared);
         hasher.u32(self.clearing_ticks);
         hasher.u32(self.boxes_pushed);
-        hasher.u64(self.ticks_survived);
+        hasher.u64(self.ticks_survived.get());
         hasher.u32(self.ticks_since_last_crane);
         hasher.u32(self.next_box_id.get());
         hasher.u32(self.next_crane_id.get());

@@ -1,6 +1,8 @@
 use crate::box_id::BoxId;
 use crate::cargo_box::CargoBox;
 use crate::cell::Cell;
+use crate::column::Column;
+use crate::row::Row;
 
 /// Occupancy grid plus the box list. Both are only changed together here, and no method ever
 /// puts a box on an occupied cell (legacy overwrote cells and left "ghost" boxes, A2).
@@ -38,12 +40,12 @@ impl Field {
         self.height - 1
     }
 
-    pub(crate) fn contains_column(&self, x: i32) -> bool {
-        (0..self.width).contains(&x)
+    pub(crate) fn contains_column(&self, column: Column) -> bool {
+        (0..self.width).contains(&column.get())
     }
 
     pub(crate) fn contains(&self, cell: Cell) -> bool {
-        self.contains_column(cell.x) && (0..self.height).contains(&cell.y)
+        self.contains_column(cell.column()) && (0..self.height).contains(&cell.y)
     }
 
     fn grid_index(&self, cell: Cell) -> Option<usize> {
@@ -158,7 +160,7 @@ impl Field {
 
     /// Removes full rows (falling boxes count, as in legacy) and shifts everything above each
     /// cleared row down by one. Returns the cleared rows, bottom first.
-    pub(crate) fn clear_full_rows(&mut self) -> Vec<i32> {
+    pub(crate) fn clear_full_rows(&mut self) -> Vec<Row> {
         let full: Vec<i32> = (0..self.height)
             .filter(|&y| (0..self.width).all(|x| self.is_occupied(Cell::new(x, y))))
             .collect();
@@ -184,7 +186,7 @@ impl Field {
         if !full.is_empty() {
             self.refresh_support();
         }
-        full
+        full.into_iter().map(Row::new).collect()
     }
 
     /// A9: after a clear the shifted boxes may rest on nothing; mark them falling right away so

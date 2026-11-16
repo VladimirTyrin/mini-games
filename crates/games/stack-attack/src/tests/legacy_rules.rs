@@ -4,8 +4,8 @@ use mg_core::{CommandError, CoreRng, Game, OutcomeKind, Status};
 
 use super::support::*;
 use crate::{
-    Cell, Command, CraneState, Direction, EndReason, GameEvent, Level, Side, WorkerState,
-    WorkerStatus, WorldEvent,
+    Cell, Column, Command, CraneState, Direction, EndReason, GameEvent, Level, Side, TickCount,
+    WorkerState, WorkerStatus, WorldEvent,
 };
 
 const LEFT: Command = Command::Move(Direction::Left);
@@ -65,8 +65,8 @@ fn walking_into_a_box_pushes_it() {
     assert_eq!(view.boxes_pushed, 1);
     assert!(view.events.contains(&GameEvent::BoxPushed {
         box_id: pushed,
-        from_x: 2,
-        to_x: 3,
+        from_x: Column::new(2),
+        to_x: Column::new(3),
         by: slot(0),
     }));
 }
@@ -210,7 +210,7 @@ fn crane_enters_drops_its_box_and_leaves() {
     let mut game = new_game(8, 8, 1);
     steps(&mut game, 15);
     let spawn = WorldEvent::CraneSpawned {
-        target_x: 1,
+        target_x: Column::new(1),
         from: Side::Left,
         pattern: pattern(),
     };
@@ -218,24 +218,24 @@ fn crane_enters_drops_its_box_and_leaves() {
     let crane = |game: &crate::StackAttack| view(game).cranes.first().copied();
     assert_eq!(
         crane(&game).map(|c| (c.x, c.state)),
-        Some((-1, CraneState::Moving))
+        Some((Column::new(-1), CraneState::Moving))
     );
 
     steps(&mut game, 1);
-    assert_eq!(crane(&game).map(|c| c.x), Some(0));
+    assert_eq!(crane(&game).map(|c| c.x), Some(Column::new(0)));
     steps(&mut game, 1);
     assert_eq!(
         crane(&game).map(|c| (c.x, c.state)),
-        Some((1, CraneState::Dropping))
+        Some((Column::new(1), CraneState::Dropping))
     );
     assert_eq!(box_cells(&game), vec![Cell::new(1, 6)]);
     steps(&mut game, 1);
     assert_eq!(
         crane(&game).map(|c| (c.x, c.state)),
-        Some((1, CraneState::Leaving))
+        Some((Column::new(1), CraneState::Leaving))
     );
     steps(&mut game, 1);
-    assert_eq!(crane(&game).map(|c| c.x), Some(0));
+    assert_eq!(crane(&game).map(|c| c.x), Some(Column::new(0)));
     steps(&mut game, 1);
     assert_eq!(crane(&game), None, "crane left through the left edge");
 }
@@ -249,7 +249,7 @@ fn cranes_spawn_after_the_interval_and_up_to_the_cap() {
     steps(&mut game, 1);
     assert_eq!(game.roll_world(&mut rng).len(), 1);
     let far_target = WorldEvent::CraneSpawned {
-        target_x: 31,
+        target_x: Column::new(31),
         from: Side::Left,
         pattern: pattern(),
     };
@@ -264,7 +264,7 @@ fn cranes_spawn_after_the_interval_and_up_to_the_cap() {
 
 #[test]
 fn difficulty_grows_every_150_ticks() {
-    let at = Level::after_ticks;
+    let at = |ticks: u64| Level::after_ticks(TickCount::new(ticks));
     assert_eq!(at(0).get(), 1);
     assert_eq!(at(149).get(), 1);
     assert_eq!(at(150).get(), 2);
@@ -302,7 +302,7 @@ fn resting_box_in_the_top_row_ends_the_game() {
 fn invalid_crane_spawns_are_rejected_without_changes() {
     let mut game = new_game(8, 8, 1);
     let spawn = |target_x| WorldEvent::CraneSpawned {
-        target_x,
+        target_x: Column::new(target_x),
         from: Side::Right,
         pattern: pattern(),
     };
@@ -314,7 +314,7 @@ fn invalid_crane_spawns_are_rejected_without_changes() {
     assert!(game.apply_world(&spawn(8)).is_err());
     assert!(game.apply_world(&spawn(-1)).is_err());
     assert_eq!(game.state_hash(), before_due);
-    assert!(game.apply_world(&spawn(7)).is_ok());
+    assert_eq!(game.apply_world(&spawn(7)), Ok(()));
 }
 
 #[test]

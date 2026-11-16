@@ -2,7 +2,9 @@ use mg_core::Slot;
 
 use crate::box_id::BoxId;
 use crate::cell::Cell;
+use crate::column::Column;
 use crate::crane_id::CraneId;
+use crate::row::Row;
 
 /// What happened during the latest frame, for animations and sounds. Derived from the state
 /// transitions, so it is not part of the state hash.
@@ -10,13 +12,13 @@ use crate::crane_id::CraneId;
 pub enum GameEvent {
     CraneSpawned {
         crane_id: CraneId,
-        start_x: i32,
-        target_x: i32,
+        start_x: Column,
+        target_x: Column,
     },
     BoxDropped {
         crane_id: CraneId,
         box_id: BoxId,
-        x: i32,
+        x: Column,
     },
     BoxLanded {
         box_id: BoxId,
@@ -24,8 +26,8 @@ pub enum GameEvent {
     },
     BoxPushed {
         box_id: BoxId,
-        from_x: i32,
-        to_x: i32,
+        from_x: Column,
+        to_x: Column,
         by: Slot,
     },
     WorkerJumped {
@@ -45,7 +47,7 @@ pub enum GameEvent {
     /// One event per tick however many rows were cleared; `points` is exactly what was added to
     /// the score (A7).
     LinesCleared {
-        rows: Vec<i32>,
+        rows: Vec<Row>,
         points: u32,
     },
 }
