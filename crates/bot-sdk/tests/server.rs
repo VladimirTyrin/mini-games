@@ -103,6 +103,25 @@ impl ViewStrategy for FirstFreeCell {
     }
 }
 
+/// Tries a cell off the board first, then plays like `FirstFreeCell`.
+#[derive(Debug, Default)]
+struct OffTheBoardFirst {
+    tried: bool,
+}
+
+impl ViewStrategy for OffTheBoardFirst {
+    fn decide(&mut self, view: &proto::GameView, me: Slot) -> Option<proto::GameCommand> {
+        let command = FirstFreeCell.decide(view, me)?;
+        if std::mem::replace(&mut self.tried, true) {
+            return Some(command);
+        }
+        Some(TicTacToe::command_to_wire(&Command::Place(Point {
+            x: 99,
+            y: 99,
+        })))
+    }
+}
+
 fn assert_finished(summary: &MatchSummary) -> &proto::MatchResult {
     assert_eq!(summary.rejected_commands, 0, "{summary:?}");
     summary.result.as_ref().expect("the match has a result")
@@ -247,4 +266,32 @@ async fn relay(client: TcpStream, server: TcpStream, cut_at_first_move: bool) {
         _upstream_done = upstream => {}
         _downstream_done = downstream => {}
     }
+}
+
+#[tokio::test]
+async fn a_refused_move_is_decided_again_instead_of_stalling_the_match() {
+    within(async {
+        let server = TestServer::start().await;
+        let mut session = BotSession::connect(BotConfig::new(url(server.address), "secret"))
+            .await
+            .unwrap();
+        let header = session
+            .host_match(&LobbySetup {
+                name: "retry".into(),
+                settings: small_tictactoe(),
+                max_seats: 2,
+                built_in_bots: vec![random_bot()],
+            })
+            .await
+            .unwrap();
+
+        let summary = session
+            .play_match(header, &mut ViewBot(OffTheBoardFirst::default()))
+            .await
+            .unwrap();
+
+        assert_eq!(summary.rejected_commands, 1);
+        assert!(summary.result.is_some(), "{summary:?}");
+    })
+    .await;
 }

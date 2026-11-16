@@ -14,6 +14,10 @@ use crate::submission::Submission;
 
 /// The server refuses catch-ups more often than this per session.
 const CATCH_UP_COOLDOWN: Duration = Duration::from_secs(1);
+/// A refused command is decided again (a random strategy may pick another move, a rate limit
+/// passes) this many times per state; then the bot waits for the next frame.
+const RETRIES_PER_STATE: u8 = 3;
+const RATE_LIMIT_PAUSE: Duration = Duration::from_millis(250);
 
 /// Lockstep state of the match being played.
 struct MatchPlay<M> {
@@ -31,6 +35,9 @@ struct MatchPlay<M> {
     submission: Submission,
     reconnects_at_start: u32,
     rejected_commands: u32,
+    /// The state the last refused command was decided for, and how often it was retried.
+    retried_at: Option<Tick>,
+    retries: u8,
 }
 
 enum Progress {
@@ -58,6 +65,8 @@ impl BotSession {
             submission: Submission::Settled,
             reconnects_at_start: self.reconnects,
             rejected_commands: 0,
+            retried_at: None,
+            retries: 0,
         };
         let mut started = true;
         loop {
@@ -123,6 +132,20 @@ impl BotSession {
                     })
                 {
                     play.submission = Submission::Settled;
+                    // Without this the state counts as decided, and in a turn-based match
+                    // nothing new arrives: the bot would never move again.
+                    let tick = play.mirror.next_tick();
+                    if play.retried_at != Some(tick) {
+                        play.retried_at = Some(tick);
+                        play.retries = 0;
+                    }
+                    if play.retries < RETRIES_PER_STATE {
+                        play.retries += 1;
+                        play.decided_at = None;
+                        if error.code == proto::ErrorCode::RateLimited as i32 {
+                            tokio::time::sleep(RATE_LIMIT_PAUSE).await;
+                        }
+                    }
                     self.act(play, strategy).await?;
                 }
             }
