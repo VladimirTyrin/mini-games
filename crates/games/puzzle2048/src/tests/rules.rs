@@ -31,12 +31,29 @@ fn default_settings_match_the_web_defaults() {
 #[test]
 fn board_size_limits() {
     for size in [BoardSize::MIN, BoardSize::MAX] {
-        assert!(create(&settings(size, size, 2048)).is_ok());
+        assert!(create(&settings(size, size, 8)).is_ok());
     }
     for size in [0, 1, 11, u32::MAX] {
         assert_eq!(rejected_field(raw_settings(size, 4, 2048)), "width");
         assert_eq!(rejected_field(raw_settings(4, size, 2048)), "height");
     }
+}
+
+#[test]
+fn the_target_must_fit_the_board() {
+    // 2×2 holds at most 32 (2, 4, 8 and 16, then a 4 spawns and everything merges), 3×3 1024.
+    assert!(create(&settings(2, 2, 32)).is_ok());
+    assert_eq!(rejected_field(raw_settings(2, 2, 64)), "target");
+    assert!(create(&settings(3, 3, 1024)).is_ok());
+    assert_eq!(rejected_field(raw_settings(3, 3, 2048)), "target");
+    let ranges = Settings::ranges(&raw_settings(3, 3, 2048));
+    assert_eq!(
+        ranges
+            .iter()
+            .find(|range| range.field == "target")
+            .map(|range| range.max),
+        Some(1024)
+    );
 }
 
 #[test]

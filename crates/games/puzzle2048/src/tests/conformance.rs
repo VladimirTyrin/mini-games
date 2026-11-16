@@ -33,6 +33,9 @@ impl Conformance for Puzzle2048 {
         for target in [0, 2, 4, 6, 12, 2047, 131_072, 1 << 31, u32::MAX] {
             setups.push(human(raw_settings(4, 4, target)));
         }
+        // Targets no tile on the board can reach.
+        setups.push(human(raw_settings(2, 2, 64)));
+        setups.push(human(raw_settings(3, 3, 2048)));
         setups.push(Setup::new(RawSettings::default(), Vec::new()));
         setups.push(Setup::new(
             RawSettings::default(),

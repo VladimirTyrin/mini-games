@@ -18,9 +18,11 @@ pub(super) fn settings(width: u32, height: u32, target: u32) -> Settings {
     Settings::parse(raw_settings(width, height, target)).unwrap()
 }
 
-/// A running game with these row-major values (0 = empty), target 2048, no spawn due.
+/// A running game with these row-major values (0 = empty), no spawn due; the target is 2048, or
+/// the largest tile a smaller board can hold.
 pub(super) fn board(width: u32, height: u32, values: &[u32]) -> Puzzle2048 {
-    Puzzle2048::with_values(&settings(width, height, 2048), values)
+    let largest_tile = 1_u32 << (width * height + 1).min(31);
+    Puzzle2048::with_values(&settings(width, height, largest_tile.min(2048)), values)
 }
 
 /// A new game after the authority delivered the initial spawns.

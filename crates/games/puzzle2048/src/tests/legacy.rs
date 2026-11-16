@@ -90,9 +90,9 @@ fn won_when_target_reached() {
 fn lost_when_no_moves() {
     for value in [SpawnValue::Two, SpawnValue::Four] {
         #[rustfmt::skip]
-        let mut game = board(2, 2, &[
-            8, 16,
-            0, 32,
+        let mut game = board(3, 2, &[
+            8, 16, 8,
+            0, 32, 64,
         ]);
         try_move(&mut game, Direction::Left).unwrap();
         assert_eq!(
@@ -100,7 +100,7 @@ fn lost_when_no_moves() {
             Status::InProgress,
             "decided only after the spawn"
         );
-        spawn(&mut game, 1, 1, value).unwrap();
+        spawn(&mut game, 1, 2, value).unwrap();
         assert_eq!(game.phase(), Phase::Lost);
         let Status::Finished(outcome) = game.status() else {
             panic!("game must be over");
