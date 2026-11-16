@@ -4,6 +4,7 @@ package minigames.v2;
 
 import "minigames/v2/game.proto";
 import "minigames/v2/identity.proto";
+import "minigames/v2/match.proto";
 
 enum LobbyPhase {
   LOBBY_PHASE_UNSPECIFIED = 0;
@@ -47,6 +48,9 @@ message LobbyState {
   repeated Identity observers = 7;
   LobbyPhase phase = 8;
   repeated Identity play_again_votes = 9;
+  // Set in LOBBY_PHASE_POST_MATCH: the match that just finished (its replay can be requested).
+  string last_match_id = 10;
+  MatchResult last_result = 11;
 }
 
 message ListLobbies {}

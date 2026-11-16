@@ -1,6 +1,7 @@
 use std::fmt;
 
 use super::auth_error::AuthError;
+use crate::text;
 
 /// Name shown to other players. Validated: trimmed, 1..=MAX_CHARS characters, no control or
 /// invisible formatting characters (they allow spoofing other players' names).
@@ -16,10 +17,7 @@ impl DisplayName {
         if length == 0 || length > Self::MAX_CHARS {
             return Err(AuthError::InvalidDisplayName("must be 1 to 24 characters"));
         }
-        if trimmed
-            .chars()
-            .any(|c| c.is_control() || is_invisible_format(c))
-        {
+        if trimmed.chars().any(text::is_hidden) {
             return Err(AuthError::InvalidDisplayName(
                 "contains invisible characters",
             ));
@@ -29,16 +27,17 @@ impl DisplayName {
 
     /// For names from trusted sources (Google profile, bot config) that may exceed our limits.
     pub(crate) fn sanitize(raw: &str, fallback: &str) -> Self {
-        let cleaned: String = raw
-            .trim()
-            .chars()
-            .filter(|c| !c.is_control() && !is_invisible_format(*c))
-            .take(Self::MAX_CHARS)
-            .collect();
-        match cleaned.trim() {
-            "" => Self(fallback.to_owned()),
-            name => Self(name.to_owned()),
+        match text::clean(raw, Self::MAX_CHARS) {
+            name if name.is_empty() => Self(fallback.to_owned()),
+            name => Self(name),
         }
+    }
+
+    /// The same name made distinct with `#suffix`, shortened so the result still fits.
+    pub(crate) fn with_suffix(&self, suffix: &str) -> Self {
+        let room = Self::MAX_CHARS.saturating_sub(suffix.chars().count() + 1);
+        let base: String = self.0.chars().take(room).collect();
+        Self(format!("{}#{suffix}", base.trim_end()))
     }
 
     pub(crate) fn as_str(&self) -> &str {
@@ -49,10 +48,6 @@ impl DisplayName {
     pub(crate) fn uniqueness_key(&self) -> String {
         self.0.to_lowercase()
     }
-}
-
-fn is_invisible_format(c: char) -> bool {
-    matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{FEFF}')
 }
 
 impl fmt::Display for DisplayName {
@@ -76,6 +71,10 @@ mod tests {
         assert!(DisplayName::parse(&"x".repeat(25)).is_err());
         assert!(DisplayName::parse("ad\u{202E}min").is_err());
         assert!(DisplayName::parse("a\nb").is_err());
+        assert!(DisplayName::parse("ad\u{2067}min").is_err());
+        assert!(DisplayName::parse("\u{3164}").is_err());
+        assert!(DisplayName::parse("a\u{00AD}b").is_err());
+        assert!(DisplayName::parse("a\u{061C}b").is_err());
     }
 
     #[test]
@@ -90,6 +89,22 @@ mod tests {
         assert_eq!(
             DisplayName::sanitize("\u{200B}", "Player").as_str(),
             "Player"
+        );
+        assert_eq!(DisplayName::sanitize("A\u{2066}da", "x").as_str(), "Ada");
+    }
+
+    #[test]
+    fn suffix_keeps_the_name_within_the_limit() {
+        let long = DisplayName::parse(&"n".repeat(24)).unwrap();
+        let suffixed = long.with_suffix("1a2b");
+        assert_eq!(suffixed.as_str().chars().count(), 24);
+        assert!(suffixed.as_str().ends_with("#1a2b"));
+        assert_eq!(
+            DisplayName::parse("Ada")
+                .unwrap()
+                .with_suffix("1a2b")
+                .as_str(),
+            "Ada#1a2b"
         );
     }
 }

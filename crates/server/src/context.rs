@@ -1,7 +1,9 @@
 use mg_protocol::proto;
+use tokio::sync::{Semaphore, watch};
 
 use crate::auth::{BotKeys, GoogleVerifier, SessionTokens};
 use crate::hub::HubHandle;
+use crate::timing::Timing;
 
 pub(crate) const PROTOCOL_VERSION: u32 = 2;
 pub(crate) const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -11,9 +13,14 @@ pub(crate) const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub(crate) struct ServerContext {
     pub allow_guests: bool,
     pub google: Option<GoogleVerifier>,
+    pub google_verifications: Semaphore,
     pub session_tokens: SessionTokens,
     pub bot_keys: BotKeys,
     pub hub: HubHandle,
+    pub timing: Timing,
+    /// Turns `true` when the server stops; connections that never signed in close at once
+    /// (signed-in ones are told by the hub).
+    pub shutting_down: watch::Receiver<bool>,
 }
 
 impl ServerContext {

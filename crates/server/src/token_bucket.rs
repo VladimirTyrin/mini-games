@@ -1,4 +1,6 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use tokio::time::Instant;
 
 /// Classic token bucket; time is passed in so tests control the clock.
 #[derive(Clone, Debug)]

@@ -1,5 +1,7 @@
 //! Uses a throwaway RSA key generated for these tests only.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use jsonwebtoken::{EncodingKey, Header, encode};
@@ -39,16 +41,47 @@ const CLIENT_ID: &str = "test-client.apps.googleusercontent.com";
 
 struct StaticKeys;
 
+fn test_keys() -> FetchedKeys {
+    let keys = serde_json::from_value(json!({
+        "keys": [{ "kty": "RSA", "alg": "RS256", "use": "sig", "kid": "test-kid", "n": TEST_MODULUS, "e": "AQAB" }]
+    }))
+    .unwrap();
+    FetchedKeys {
+        keys,
+        max_age: Duration::from_secs(3600),
+    }
+}
+
 impl GoogleKeySource for StaticKeys {
-    fn fetch(&self) -> Result<FetchedKeys, String> {
-        let keys = serde_json::from_value(json!({
-            "keys": [{ "kty": "RSA", "alg": "RS256", "use": "sig", "kid": "test-kid", "n": TEST_MODULUS, "e": "AQAB" }]
-        }))
-        .map_err(|e| e.to_string())?;
-        Ok(FetchedKeys {
-            keys,
-            max_age: Duration::from_secs(3600),
-        })
+    fn fetch(&self) -> Result<FetchedKeys, KeyFetchError> {
+        Ok(test_keys())
+    }
+}
+
+/// Lets a test hold a fetch in progress: the source reports that it started and then waits.
+struct FetchGate {
+    started: mpsc::Sender<()>,
+    release: Mutex<mpsc::Receiver<()>>,
+}
+
+/// Counts fetches; fails when `failing`.
+struct CountingKeys {
+    fetches: Arc<AtomicUsize>,
+    failing: bool,
+    gate: Option<FetchGate>,
+}
+
+impl GoogleKeySource for CountingKeys {
+    fn fetch(&self) -> Result<FetchedKeys, KeyFetchError> {
+        self.fetches.fetch_add(1, Ordering::SeqCst);
+        if let Some(gate) = &self.gate {
+            gate.started.send(()).unwrap();
+            gate.release.lock().unwrap().recv().unwrap();
+        }
+        if self.failing {
+            return Err(KeyFetchError::Request(ureq::Error::HostNotFound));
+        }
+        Ok(test_keys())
     }
 }
 
@@ -110,4 +143,61 @@ fn parses_cache_control_max_age() {
         Some(Duration::from_secs(21600))
     );
     assert_eq!(parse_max_age("no-cache"), None);
+}
+
+#[test]
+fn failed_fetch_without_keys_backs_off_instead_of_refetching() {
+    let fetches = Arc::new(AtomicUsize::new(0));
+    let verifier = GoogleVerifier::new(
+        CLIENT_ID.to_owned(),
+        Box::new(CountingKeys {
+            fetches: fetches.clone(),
+            failing: true,
+            gate: None,
+        }),
+    );
+    let token = sign("test-kid", valid_claims());
+    assert!(matches!(
+        verifier.verify(&token),
+        Err(AuthError::GoogleKeysUnavailable(KeyFetchError::Request(_)))
+    ));
+    assert!(matches!(
+        verifier.verify(&token),
+        Err(AuthError::GoogleKeysRetryLater)
+    ));
+    assert_eq!(fetches.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn concurrent_verifications_share_one_fetch_done_outside_the_lock() {
+    let fetches = Arc::new(AtomicUsize::new(0));
+    let (started, fetch_started) = mpsc::channel();
+    let (release_fetch, release) = mpsc::channel();
+    let verifier = Arc::new(GoogleVerifier::new(
+        CLIENT_ID.to_owned(),
+        Box::new(CountingKeys {
+            fetches: fetches.clone(),
+            failing: false,
+            gate: Some(FetchGate {
+                started,
+                release: Mutex::new(release),
+            }),
+        }),
+    ));
+    let token = sign("test-kid", valid_claims());
+    let first = {
+        let (verifier, token) = (verifier.clone(), token.clone());
+        std::thread::spawn(move || verifier.verify(&token))
+    };
+    fetch_started.recv().unwrap();
+    // The lock is free while the first thread fetches; this one waits for that fetch.
+    let second = {
+        let (verifier, token) = (verifier.clone(), token.clone());
+        std::thread::spawn(move || verifier.verify(&token))
+    };
+    assert!(verifier.lock().fetch_in_flight);
+    release_fetch.send(()).unwrap();
+    assert_eq!(first.join().unwrap().unwrap().subject, "1234567890");
+    assert_eq!(second.join().unwrap().unwrap().subject, "1234567890");
+    assert_eq!(fetches.load(Ordering::SeqCst), 1);
 }

@@ -8,13 +8,17 @@ mod clock;
 mod codec;
 mod config;
 mod connection;
+mod connection_limiter;
 mod context;
 mod hub;
 mod ids;
 mod limits;
 mod matches;
 mod outbound;
+mod text;
+mod timing;
 mod token_bucket;
 
 pub use app::{ServeError, serve};
 pub use config::Config;
+pub use timing::Timing;

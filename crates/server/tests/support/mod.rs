@@ -7,15 +7,32 @@ use futures_util::{SinkExt, StreamExt};
 use mg_protocol::proto::client_message::Message as Request;
 use mg_protocol::proto::server_message::Message as Reply;
 use mg_protocol::{WireGame, proto};
-use mg_server::{Config, serve};
+use mg_server::{Config, Timing, serve};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 /// Upper bound for waiting on an expected server message. Only limits waiting for something that
 /// should arrive promptly; it is never used to make time pass.
 pub(crate) const RECEIVE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// `MG_BOT_KEYS` entry for bot `alpha` with key `secret`.
+pub(crate) const ALPHA_BOT_KEY: &str =
+    "alpha:2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b";
+pub(crate) const SESSION_SECRET: &str =
+    "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+
+/// Production timing with the countdown and list coalescing shortened; tests shorten further
+/// whatever wait their scenario is about, and then wait for the event, not for time.
+pub(crate) fn quick_timing() -> Timing {
+    Timing {
+        resume_countdown: Duration::from_millis(50),
+        lobby_list_coalesce: Duration::from_millis(20),
+        ..Timing::default()
+    }
+}
 
 pub(crate) struct TestServer {
     pub address: SocketAddr,
@@ -48,12 +65,27 @@ impl TestServer {
     }
 
     pub(crate) async fn client(&self) -> Client {
-        let url = format!("ws://{}/ws", self.address);
-        let (socket, _) = tokio_tungstenite::connect_async(url).await.unwrap();
-        Client {
+        self.try_client(None).await.expect("connect")
+    }
+
+    /// `real_ip` is sent as `X-Real-IP`, as the reverse proxy does.
+    pub(crate) async fn try_client(
+        &self,
+        real_ip: Option<&str>,
+    ) -> Result<Client, tokio_tungstenite::tungstenite::Error> {
+        let mut request = format!("ws://{}/ws", self.address)
+            .into_client_request()
+            .unwrap();
+        if let Some(ip) = real_ip {
+            request
+                .headers_mut()
+                .insert("x-real-ip", ip.parse().unwrap());
+        }
+        let (socket, _) = tokio_tungstenite::connect_async(request).await?;
+        Ok(Client {
             socket,
             next_request: 1,
-        }
+        })
     }
 
     pub(crate) async fn guest(&self, name: &str) -> SignedInClient {
@@ -155,12 +187,21 @@ impl Client {
         name: &str,
         resume_token: &str,
     ) -> Result<proto::Welcome, proto::ErrorResponse> {
+        let credentials = proto::hello::Credentials::Guest(proto::GuestCredentials {
+            display_name: name.into(),
+        });
+        self.hello(credentials, resume_token).await
+    }
+
+    pub(crate) async fn hello(
+        &mut self,
+        credentials: proto::hello::Credentials,
+        resume_token: &str,
+    ) -> Result<proto::Welcome, proto::ErrorResponse> {
         let hello = proto::Hello {
             protocol_version: 2,
             client_version: "test".into(),
-            credentials: Some(proto::hello::Credentials::Guest(proto::GuestCredentials {
-                display_name: name.into(),
-            })),
+            credentials: Some(credentials),
             resume_token: resume_token.into(),
         };
         match self.request(Request::Hello(hello)).await {
@@ -178,6 +219,60 @@ impl Client {
                 Err(_) => return false,
             }
         }
+    }
+}
+
+pub(crate) fn bot_credentials(key: &str) -> proto::hello::Credentials {
+    proto::hello::Credentials::BotClient(proto::BotClientCredentials { key: key.into() })
+}
+
+pub(crate) fn error_push(message: &proto::ServerMessage) -> Option<proto::ErrorResponse> {
+    match &message.message {
+        Some(Reply::Error(error)) => Some(error.clone()),
+        _ => None,
+    }
+}
+
+pub(crate) fn paused(message: &proto::ServerMessage) -> Option<proto::MatchPause> {
+    match &message.message {
+        Some(Reply::Paused(paused)) => paused.pause,
+        _ => None,
+    }
+}
+
+pub(crate) fn resumed(message: &proto::ServerMessage) -> Option<proto::MatchResumed> {
+    match &message.message {
+        Some(Reply::Resumed(resumed)) => Some(resumed.clone()),
+        _ => None,
+    }
+}
+
+pub(crate) fn catch_up(message: &proto::ServerMessage) -> Option<proto::MatchCatchUp> {
+    match &message.message {
+        Some(Reply::CatchUp(catch_up)) => Some(catch_up.clone()),
+        _ => None,
+    }
+}
+
+pub(crate) fn lobby_list(message: &proto::ServerMessage) -> Option<proto::LobbyList> {
+    match &message.message {
+        Some(Reply::LobbyList(list)) => Some(list.clone()),
+        _ => None,
+    }
+}
+
+/// Picks a frame that drops `slot`.
+pub(crate) fn drops_slot(slot: u32) -> impl FnMut(&proto::ServerMessage) -> Option<()> {
+    move |message| match &message.message {
+        Some(Reply::Frame(frame))
+            if frame
+                .inputs
+                .iter()
+                .any(|input| input.input == Some(proto::frame_input::Input::DroppedSlot(slot))) =>
+        {
+            Some(())
+        }
+        _ => None,
     }
 }
 
@@ -202,6 +297,67 @@ pub(crate) fn tictactoe_settings(size: u32, win_count: u32) -> proto::GameSettin
         win_count,
         first_player: mg_tictactoe::FirstPlayerMode::Host,
     })
+}
+
+/// Slow, wrapping snake on a large field: nobody dies during a test.
+pub(crate) fn snake_settings() -> proto::GameSettings {
+    mg_snake::Snake::settings_to_wire(&mg_snake::Settings {
+        field_width: 100,
+        field_height: 100,
+        tick_interval_ms: 5000,
+        ..mg_snake::Settings::default()
+    })
+}
+
+pub(crate) fn turn_left(match_id: &str) -> Request {
+    let command =
+        mg_snake::Snake::command_to_wire(&mg_snake::Command::Turn(mg_snake::Direction::Left));
+    Request::SubmitCommand(proto::SubmitCommand {
+        match_id: match_id.into(),
+        command: Some(command),
+    })
+}
+
+pub(crate) async fn create_lobby(
+    host: &mut Client,
+    settings: proto::GameSettings,
+    max_seats: u32,
+) -> proto::LobbyState {
+    let created = host
+        .request(Request::CreateLobby(proto::CreateLobby {
+            name: "test".into(),
+            settings: Some(settings),
+            max_seats,
+        }))
+        .await;
+    match created {
+        Reply::LobbyState(lobby) => lobby,
+        other => panic!("create failed: {other:?}"),
+    }
+}
+
+pub(crate) async fn join_ready(client: &mut Client, lobby_id: &str) {
+    expect_ok(
+        client
+            .request(Request::JoinLobby(proto::JoinLobby {
+                lobby_id: lobby_id.into(),
+                as_observer: false,
+            }))
+            .await,
+    );
+    expect_ok(
+        client
+            .request(Request::SetReady(proto::SetReady { ready: true }))
+            .await,
+    );
+}
+
+pub(crate) async fn start(host: &mut Client) -> proto::MatchHeader {
+    expect_ok(
+        host.request(Request::StartMatch(proto::StartMatch {}))
+            .await,
+    );
+    host.expect(match_started).await
 }
 
 pub(crate) fn place(match_id: &str, x: u32, y: u32) -> Request {
@@ -268,4 +424,66 @@ pub(crate) async fn start_two_player_tictactoe(host: &mut Client, guest: &mut Cl
     let header = host.expect(match_started).await;
     guest.expect(match_started).await;
     header.match_id
+}
+
+/// A server on a runtime of its own that is dropped as soon as `serve` returns, the way the
+/// binary's process exits then: whatever was not flushed by that moment is lost.
+pub(crate) struct OwnRuntimeServer {
+    pub address: SocketAddr,
+    shutdown: Option<oneshot::Sender<()>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl OwnRuntimeServer {
+    pub(crate) fn start() -> Self {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let (shutdown, stopped) = oneshot::channel::<()>();
+        let thread = std::thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+                let mut config = <Config as clap::Parser>::parse_from(["mini_games_server"]);
+                config.listen = address;
+                serve(config, listener, async move {
+                    let _closed = stopped.await;
+                })
+                .await
+                .unwrap();
+            });
+            drop(runtime);
+        });
+        Self {
+            address,
+            shutdown: Some(shutdown),
+            thread: Some(thread),
+        }
+    }
+
+    pub(crate) async fn client(&self) -> Client {
+        let (socket, _) = tokio_tungstenite::connect_async(format!("ws://{}/ws", self.address))
+            .await
+            .unwrap();
+        Client {
+            socket,
+            next_request: 1,
+        }
+    }
+
+    /// Stops the server and waits until its runtime is gone.
+    pub(crate) async fn stop(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _sent = shutdown.send(());
+        }
+        if let Some(thread) = self.thread.take() {
+            tokio::task::spawn_blocking(move || thread.join().unwrap())
+                .await
+                .unwrap();
+        }
+    }
 }

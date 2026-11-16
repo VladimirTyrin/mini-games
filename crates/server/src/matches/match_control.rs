@@ -1,15 +1,9 @@
-use mg_protocol::proto;
-
 use crate::ids::SessionId;
 use crate::outbound::Outbound;
 
+/// Lifecycle commands: never dropped, handled before any request.
 #[derive(Debug)]
-pub(crate) enum MatchCommand {
-    Submit {
-        session: SessionId,
-        request_id: u32,
-        command: proto::GameCommand,
-    },
+pub(crate) enum MatchControl {
     /// A participant's connection (re)appeared; it receives a catch-up.
     Attach {
         session: SessionId,
@@ -27,14 +21,6 @@ pub(crate) enum MatchCommand {
     AddObserver {
         session: SessionId,
         outbound: Outbound,
-    },
-    VoteDrop {
-        session: SessionId,
-        request_id: u32,
-        slot: u32,
-    },
-    CatchUp {
-        session: SessionId,
     },
     Stop,
 }

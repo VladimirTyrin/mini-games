@@ -1,17 +1,23 @@
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use serde::Deserialize;
+use tokio::time::Instant;
 
 use super::auth_error::AuthError;
 use super::display_name::DisplayName;
+use super::key_fetch_error::KeyFetchError;
 
 const GOOGLE_ISSUERS: [&str; 2] = ["accounts.google.com", "https://accounts.google.com"];
-/// Lower bound between refetches triggered by an unknown `kid`, so forged tokens cannot make us
-/// hammer Google.
+/// Lower bound between refetches triggered by an unknown `kid` or expired keys, so forged
+/// tokens cannot make us hammer Google.
 const MIN_REFETCH_INTERVAL: Duration = Duration::from_secs(60);
+/// Without any keys every sign-in needs a fetch; after a failure they fail fast for this long.
+const EMPTY_CACHE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
+/// How long a verification waits for another thread's fetch when there are no keys at all.
+const FETCH_WAIT: Duration = Duration::from_secs(15);
 
 pub(crate) struct FetchedKeys {
     pub keys: JwkSet,
@@ -19,7 +25,7 @@ pub(crate) struct FetchedKeys {
 }
 
 pub(crate) trait GoogleKeySource: Send + Sync {
-    fn fetch(&self) -> Result<FetchedKeys, String>;
+    fn fetch(&self) -> Result<FetchedKeys, KeyFetchError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,15 +44,54 @@ struct GoogleClaims {
 struct CachedKeys {
     keys: JwkSet,
     expires_at: Instant,
-    fetched_at: Instant,
+}
+
+#[derive(Default)]
+struct KeyCache {
+    keys: Option<CachedKeys>,
+    /// Last fetch attempt, successful or not: the base for every backoff.
+    last_attempt: Option<Instant>,
+    fetch_in_flight: bool,
+}
+
+enum KeyPlan {
+    UseCached,
+    Fetch,
+    WaitForFetch,
+    RetryLater,
+}
+
+impl KeyCache {
+    fn plan(&self, kid: &str, now: Instant) -> KeyPlan {
+        let attempted_within = |interval| {
+            self.last_attempt
+                .is_some_and(|at| now.duration_since(at) < interval)
+        };
+        match &self.keys {
+            None if self.fetch_in_flight => KeyPlan::WaitForFetch,
+            None if attempted_within(EMPTY_CACHE_RETRY_INTERVAL) => KeyPlan::RetryLater,
+            None => KeyPlan::Fetch,
+            // Stale keys are still better than failing every sign-in while Google is slow.
+            Some(_) if self.fetch_in_flight => KeyPlan::UseCached,
+            Some(cached) => {
+                let wants_fetch = cached.expires_at <= now || cached.keys.find(kid).is_none();
+                if wants_fetch && !attempted_within(MIN_REFETCH_INTERVAL) {
+                    KeyPlan::Fetch
+                } else {
+                    KeyPlan::UseCached
+                }
+            }
+        }
+    }
 }
 
 /// Verifies Google ID tokens. `verify` may block on HTTP when keys are stale: call it from a
-/// blocking context.
+/// blocking context. At most one thread fetches at a time, and never while holding the lock.
 pub(crate) struct GoogleVerifier {
     client_id: String,
     source: Box<dyn GoogleKeySource>,
-    cache: Mutex<Option<CachedKeys>>,
+    cache: Mutex<KeyCache>,
+    fetch_finished: Condvar,
 }
 
 impl std::fmt::Debug for GoogleVerifier {
@@ -62,7 +107,8 @@ impl GoogleVerifier {
         Self {
             client_id,
             source,
-            cache: Mutex::new(None),
+            cache: Mutex::new(KeyCache::default()),
+            fetch_finished: Condvar::new(),
         }
     }
 
@@ -87,39 +133,56 @@ impl GoogleVerifier {
         })
     }
 
+    fn lock(&self) -> MutexGuard<'_, KeyCache> {
+        self.cache.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn decoding_key(&self, kid: &str) -> Result<DecodingKey, AuthError> {
-        let mut cache = self
-            .cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let now = Instant::now();
-        let needs_fetch = match cache.as_ref() {
-            None => true,
-            Some(cached) if cached.expires_at <= now => true,
-            Some(cached) => {
-                cached.keys.find(kid).is_none()
-                    && now.duration_since(cached.fetched_at) >= MIN_REFETCH_INTERVAL
-            }
-        };
-        if needs_fetch {
-            match self.source.fetch() {
-                Ok(fetched) => {
-                    *cache = Some(CachedKeys {
-                        keys: fetched.keys,
-                        expires_at: now + fetched.max_age,
-                        fetched_at: now,
-                    });
+        let wait_until = Instant::now() + FETCH_WAIT;
+        let mut cache = self.lock();
+        loop {
+            let now = Instant::now();
+            match cache.plan(kid, now) {
+                KeyPlan::UseCached => break,
+                KeyPlan::RetryLater => return Err(AuthError::GoogleKeysRetryLater),
+                KeyPlan::WaitForFetch => {
+                    let Some(left) = wait_until.checked_duration_since(now) else {
+                        return Err(AuthError::GoogleKeysRetryLater);
+                    };
+                    cache = self
+                        .fetch_finished
+                        .wait_timeout(cache, left)
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .0;
                 }
-                // Stale keys are still better than failing every sign-in while Google is unreachable.
-                Err(error) if cache.is_none() => {
-                    return Err(AuthError::GoogleKeysUnavailable(error));
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "refreshing Google keys failed, using cached keys")
+                KeyPlan::Fetch => {
+                    cache.fetch_in_flight = true;
+                    cache.last_attempt = Some(now);
+                    drop(cache);
+                    let fetched = self.source.fetch();
+                    cache = self.lock();
+                    cache.fetch_in_flight = false;
+                    self.fetch_finished.notify_all();
+                    match fetched {
+                        Ok(fetched) => {
+                            cache.keys = Some(CachedKeys {
+                                keys: fetched.keys,
+                                expires_at: Instant::now() + fetched.max_age,
+                            });
+                        }
+                        Err(error) if cache.keys.is_none() => {
+                            return Err(AuthError::GoogleKeysUnavailable(error));
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "refreshing Google keys failed, using cached keys");
+                        }
+                    }
+                    break;
                 }
             }
         }
         let jwk = cache
+            .keys
             .as_ref()
             .and_then(|cached| cached.keys.find(kid))
             .ok_or(AuthError::UnknownGoogleKey)?;
@@ -142,19 +205,25 @@ impl HttpGoogleKeySource {
 }
 
 impl GoogleKeySource for HttpGoogleKeySource {
-    fn fetch(&self) -> Result<FetchedKeys, String> {
+    fn fetch(&self) -> Result<FetchedKeys, KeyFetchError> {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(10)))
             .build()
             .new_agent();
-        let mut response = agent.get(&self.url).call().map_err(|e| e.to_string())?;
+        let mut response = agent
+            .get(&self.url)
+            .call()
+            .map_err(KeyFetchError::Request)?;
         let max_age = response
             .headers()
             .get("cache-control")
             .and_then(|value| value.to_str().ok())
             .and_then(parse_max_age)
             .unwrap_or(Duration::from_secs(3600));
-        let keys: JwkSet = response.body_mut().read_json().map_err(|e| e.to_string())?;
+        let keys: JwkSet = response
+            .body_mut()
+            .read_json()
+            .map_err(KeyFetchError::Body)?;
         Ok(FetchedKeys { keys, max_age })
     }
 }

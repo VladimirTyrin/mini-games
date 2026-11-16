@@ -50,7 +50,12 @@ message MatchCatchUp {
   repeated TickFrame frames = 2;
   // Ticks before this value are covered (missing ticks are empty frames).
   uint64 next_tick = 3;
+  // First entry of `pauses`; kept for older clients.
   MatchPause pause = 4;
+  // Every disconnected seat the match waits for.
+  repeated MatchPause pauses = 5;
+  // Non-zero while the resume countdown runs: frames resume after this many milliseconds.
+  uint32 resume_countdown_ms = 6;
 }
 
 message SubmitCommand {
@@ -115,6 +120,8 @@ message MatchResult {
 
 message MatchEnded {
   string match_id = 1;
+  // Absent when the server aborted the match (internal error): no result, no replay; the lobby
+  // goes back to LOBBY_PHASE_OPEN.
   MatchResult result = 2;
   uint64 final_tick = 3;
 }

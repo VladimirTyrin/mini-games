@@ -50,6 +50,11 @@ impl BotKeys {
             .map(|entry| &entry.name)
             .ok_or(AuthError::UnknownBotKey)
     }
+
+    /// Session tokens outlive configuration changes; a bot whose key was removed is refused.
+    pub(crate) fn is_configured(&self, name: &DisplayName) -> bool {
+        self.entries.iter().any(|entry| &entry.name == name)
+    }
 }
 
 fn parse_sha256_hex(hex: &str) -> Option<[u8; 32]> {
@@ -78,6 +83,8 @@ mod tests {
         .unwrap();
         assert_eq!(keys.authenticate("secret").unwrap().as_str(), "alpha");
         assert!(keys.authenticate("wrong").is_err());
+        assert!(keys.is_configured(&DisplayName::parse("alpha").unwrap()));
+        assert!(!keys.is_configured(&DisplayName::parse("beta").unwrap()));
     }
 
     #[test]

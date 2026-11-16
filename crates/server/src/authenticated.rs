@@ -27,7 +27,13 @@ impl Authenticated {
         }
     }
 
-    pub(crate) fn to_identity(&self, guest_id: &str) -> proto::Identity {
+    /// `display_name` is the name shown online, which may differ from the account's own name
+    /// (see `Hub::online_name`).
+    pub(crate) fn to_identity(
+        &self,
+        guest_id: &str,
+        display_name: &DisplayName,
+    ) -> proto::Identity {
         let (kind, id) = match self {
             Self::Guest { .. } => (proto::IdentityKind::Guest, guest_id.to_owned()),
             Self::Google { subject, .. } => (proto::IdentityKind::Google, subject.clone()),
@@ -36,7 +42,7 @@ impl Authenticated {
         proto::Identity {
             kind: kind as i32,
             id,
-            display_name: self.display_name().as_str().to_owned(),
+            display_name: display_name.as_str().to_owned(),
         }
     }
 }

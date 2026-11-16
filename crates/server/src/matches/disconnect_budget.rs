@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use mg_core::Slot;
+use tokio::time::Instant;
 
 /// SC2-style disconnect handling: while any seated human is disconnected the match is frozen
 /// and each disconnected seat spends its own per-match budget.
@@ -33,9 +34,9 @@ impl DisconnectBudgets {
         }
     }
 
-    /// Forget a seat that left play (dropped).
-    pub(super) fn forget(&mut self, slot: Slot) {
-        self.disconnected_since.remove(&slot);
+    /// A seat that left play (dropped) stops being waited for; the time it was gone stays spent.
+    pub(super) fn forget(&mut self, slot: Slot, now: Instant) {
+        self.reconnect(slot, now);
     }
 
     pub(super) fn any_disconnected(&self) -> bool {
@@ -115,6 +116,20 @@ mod tests {
         assert_eq!(
             budgets.next_exhaustion(start + Duration::from_secs(100)),
             Some(start + Duration::from_secs(120))
+        );
+    }
+
+    #[test]
+    fn forgetting_a_seat_keeps_the_time_it_spent() {
+        let start = Instant::now();
+        let slot = Slot::new(0);
+        let mut budgets = DisconnectBudgets::new(Duration::from_secs(60), Duration::from_secs(20));
+        budgets.disconnect(slot, start);
+        budgets.forget(slot, start + Duration::from_secs(25));
+        assert!(!budgets.any_disconnected());
+        assert_eq!(
+            budgets.budget_left(slot, start + Duration::from_secs(90)),
+            Duration::from_secs(35)
         );
     }
 }

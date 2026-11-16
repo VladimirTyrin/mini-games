@@ -1,20 +1,15 @@
 use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Instant;
 
 use mg_protocol::proto;
 use mg_registry::GameKind;
+use tokio::time::Instant;
 
+use super::finished_match::FinishedMatch;
 use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
-use crate::ids::{LobbyId, MatchId, SessionId};
+use super::stored_replay::StoredReplay;
+use crate::ids::{LobbyId, SessionId};
 use crate::limits::Limits;
-
-#[derive(Debug)]
-pub(super) struct StoredReplay {
-    pub match_id: MatchId,
-    pub file: Arc<[u8]>,
-}
 
 #[derive(Debug)]
 pub(super) struct Lobby {
@@ -31,6 +26,7 @@ pub(super) struct Lobby {
     pub phase: LobbyPhase,
     pub last_activity: Instant,
     pub replays: VecDeque<StoredReplay>,
+    pub last_match: Option<FinishedMatch>,
     pub next_bot_number: u32,
 }
 
@@ -67,6 +63,15 @@ impl Lobby {
             let seat = self.seats.remove(index);
             self.seats.insert(0, seat);
         }
+    }
+
+    /// Every seated human voted to play again (and at least one is seated).
+    pub(super) fn everyone_voted_to_play_again(&self) -> bool {
+        let LobbyPhase::PostMatch { play_again_votes } = &self.phase else {
+            return false;
+        };
+        let mut humans = self.seated_humans().peekable();
+        humans.peek().is_some() && humans.all(|human| play_again_votes.contains(human))
     }
 
     pub(super) fn reset_ready(&mut self) {

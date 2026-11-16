@@ -9,6 +9,6 @@ pub(crate) struct MatchFinished {
     pub lobby: LobbyId,
     pub match_id: MatchId,
     pub result: proto::MatchResult,
-    /// Encoded `ReplayFile`.
-    pub replay: Arc<[u8]>,
+    /// `ReplayData` already in JSON, encoded once by the actor and spliced into every reply.
+    pub replay_data_json: Arc<str>,
 }

@@ -1,9 +1,10 @@
 use mg_protocol::proto;
 use tokio::sync::oneshot;
 
+use super::validated_replay::ValidatedReplay;
 use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, ResumeToken, SessionId};
-use crate::matches::MatchFinished;
+use crate::matches::{MatchAborted, MatchFinished};
 use crate::outbound::Outbound;
 
 #[derive(Debug)]
@@ -14,6 +15,7 @@ pub(crate) struct SignIn {
     /// Empty for guests.
     pub session_token: String,
     pub resume: Option<ResumeToken>,
+    pub server_info: proto::ServerInfo,
     pub request_id: u32,
     /// `None` when sign-in was refused (the hub already sent the error).
     pub reply: oneshot::Sender<Option<SessionId>>,
@@ -37,10 +39,13 @@ pub(crate) enum HubCommand {
         connection: ConnectionId,
     },
     MatchFinished(MatchFinished),
+    MatchAborted(MatchAborted),
+    ReplayValidated(ValidatedReplay),
     ResumeGraceExpired {
         session: SessionId,
         connection: ConnectionId,
     },
+    FlushLobbyList,
     Housekeeping,
     Shutdown,
 }

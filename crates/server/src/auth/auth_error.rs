@@ -1,3 +1,5 @@
+use super::key_fetch_error::KeyFetchError;
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum AuthError {
     #[error("invalid display name: {0}")]
@@ -11,11 +13,15 @@ pub(crate) enum AuthError {
     #[error("Google ID token signed with unknown key")]
     UnknownGoogleKey,
     #[error("cannot fetch Google signing keys: {0}")]
-    GoogleKeysUnavailable(String),
+    GoogleKeysUnavailable(#[source] KeyFetchError),
+    #[error("Google signing keys are temporarily unavailable; try again shortly")]
+    GoogleKeysRetryLater,
     #[error("invalid session token")]
     InvalidSessionToken,
     #[error("session token expired")]
     SessionExpired,
     #[error("unknown bot key")]
     UnknownBotKey,
+    #[error("this bot is no longer allowed on the server")]
+    BotRevoked,
 }

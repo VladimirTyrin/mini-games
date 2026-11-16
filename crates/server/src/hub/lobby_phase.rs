@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use mg_protocol::proto;
 
+use super::shared_replay::SharedReplay;
 use crate::ids::SessionId;
 use crate::matches::MatchHandle;
 
@@ -12,9 +13,7 @@ pub(super) enum LobbyPhase {
     PostMatch {
         play_again_votes: BTreeSet<SessionId>,
     },
-    Replay {
-        host_only_control: bool,
-    },
+    Replay(SharedReplay),
 }
 
 impl LobbyPhase {
@@ -23,7 +22,7 @@ impl LobbyPhase {
             Self::Open => proto::LobbyPhase::Open,
             Self::InMatch(_) => proto::LobbyPhase::InMatch,
             Self::PostMatch { .. } => proto::LobbyPhase::PostMatch,
-            Self::Replay { .. } => proto::LobbyPhase::Replay,
+            Self::Replay(_) => proto::LobbyPhase::Replay,
         }
     }
 

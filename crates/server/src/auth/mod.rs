@@ -2,6 +2,7 @@ mod auth_error;
 mod bot_keys;
 mod display_name;
 mod google;
+mod key_fetch_error;
 mod session_token;
 
 pub(crate) use auth_error::AuthError;

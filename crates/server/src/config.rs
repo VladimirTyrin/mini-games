@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use crate::timing::Timing;
+
 #[derive(Clone, Debug, clap::Parser)]
 #[command(name = "mini_games_server", version, about = "Mini games server")]
 pub struct Config {
@@ -33,6 +35,14 @@ pub struct Config {
     /// Tokio worker threads (default: min(cores, 2)).
     #[arg(long, env = "MG_WORKER_THREADS")]
     pub worker_threads: Option<usize>,
+
+    /// WebSocket connections per client IP. Behind a reverse proxy on the same host the IP comes
+    /// from `X-Real-IP` (trusted only when the peer is loopback).
+    #[arg(long, env = "MG_MAX_CONNECTIONS_PER_IP", default_value_t = 32)]
+    pub max_connections_per_ip: usize,
+
+    #[arg(skip)]
+    pub timing: Timing,
 }
 
 #[derive(Debug, thiserror::Error)]

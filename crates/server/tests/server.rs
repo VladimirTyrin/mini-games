@@ -227,6 +227,9 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
         })
         .await;
     assert_eq!(catch_up.header.unwrap().match_id, match_id);
+    // Built before the returning seat counts as back: it still lists that seat's pause.
+    assert_eq!(catch_up.pauses.len(), 1);
+    assert_eq!(catch_up.pause, catch_up.pauses.first().copied());
     let resumed = host
         .expect(|m| match &m.message {
             Some(Reply::Resumed(r)) => Some(r.clone()),

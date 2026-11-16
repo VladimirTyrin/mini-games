@@ -1,5 +1,7 @@
 use mg_protocol::proto;
 
+use super::request_cooldowns::RequestCooldowns;
+use crate::auth::DisplayName;
 use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, LobbyId, ResumeToken};
 use crate::outbound::Outbound;
@@ -7,6 +9,8 @@ use crate::outbound::Outbound;
 #[derive(Debug)]
 pub(super) struct Session {
     pub who: Authenticated,
+    /// The name shown online: `who`'s name, with a suffix for an account whose name was taken.
+    pub display_name: DisplayName,
     pub identity: proto::Identity,
     pub resume_token: ResumeToken,
     /// `None` while disconnected (within the resume grace period).
@@ -14,6 +18,9 @@ pub(super) struct Session {
     /// The connection whose loss started the current resume grace period.
     pub lost_connection: Option<ConnectionId>,
     pub lobby: Option<LobbyId>,
+    pub cooldowns: RequestCooldowns,
+    /// An uploaded replay is being validated; one at a time per session.
+    pub validating_replay: bool,
 }
 
 #[derive(Debug)]

@@ -1,10 +1,10 @@
-use std::collections::{BTreeSet, VecDeque};
-use std::time::Instant;
+use std::collections::VecDeque;
 
 use mg_core::PlayerSpec;
 use mg_protocol::proto;
 use mg_protocol::proto::server_message::Message;
 use mg_registry::{GameKind, create_mirror, validate_bot_kind};
+use tokio::time::Instant;
 
 use super::hub::Hub;
 use super::lobby::Lobby;
@@ -13,7 +13,8 @@ use super::lobby_seat::LobbySeat;
 use crate::codec;
 use crate::ids::{LobbyId, SessionId};
 use crate::limits::Limits;
-use crate::matches::MatchCommand;
+use crate::matches::MatchControl;
+use crate::text;
 
 use proto::ErrorCode;
 
@@ -54,16 +55,9 @@ fn validate_lobby_setup(
 }
 
 fn clean_lobby_name(raw: &str, fallback: &str) -> String {
-    let name: String = raw
-        .trim()
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(Limits::MAX_LOBBY_NAME_CHARS)
-        .collect();
-    if name.is_empty() {
-        fallback.to_owned()
-    } else {
-        name
+    match text::clean(raw, Limits::MAX_LOBBY_NAME_CHARS) {
+        name if name.is_empty() => text::clean(fallback, Limits::MAX_LOBBY_NAME_CHARS),
+        name => name,
     }
 }
 
@@ -99,16 +93,16 @@ impl Hub {
         Some(lobby_id)
     }
 
-    fn touch(&mut self, lobby_id: &LobbyId) {
+    pub(super) fn touch(&mut self, lobby_id: &LobbyId) {
         if let Some(lobby) = self.lobbies.get_mut(lobby_id) {
             lobby.last_activity = Instant::now();
         }
     }
 
-    fn after_lobby_change(&mut self, lobby_id: &LobbyId) {
+    pub(super) fn after_lobby_change(&mut self, lobby_id: &LobbyId) {
         self.touch(lobby_id);
         self.broadcast_lobby_state(lobby_id);
-        self.broadcast_lobby_list();
+        self.lobby_list_changed();
     }
 
     pub(super) fn create_lobby(
@@ -165,6 +159,7 @@ impl Hub {
             phase: LobbyPhase::Open,
             last_activity: Instant::now(),
             replays: VecDeque::new(),
+            last_match: None,
             next_bot_number: 1,
         };
         self.lobbies.insert(lobby_id.clone(), lobby);
@@ -177,7 +172,7 @@ impl Hub {
                 &codec::reply(request_id, Message::LobbyState(self.lobby_state(lobby))),
             );
         }
-        self.broadcast_lobby_list();
+        self.lobby_list_changed();
     }
 
     pub(super) fn join_lobby(
@@ -235,21 +230,27 @@ impl Hub {
                 );
             }
             lobby.observers.push(session.clone());
-            if let (Some(handle), Some(outbound)) = (lobby.phase.match_handle(), outbound) {
-                handle.send(MatchCommand::AddObserver {
-                    session: session.clone(),
-                    outbound,
-                });
-            }
         }
         if let Some(s) = self.sessions.get_mut(session) {
             s.lobby = Some(lobby_id.clone());
         }
-        if let Some(lobby) = self.lobbies.get(&lobby_id) {
-            self.send_to(
-                session,
-                &codec::reply(request_id, Message::LobbyState(self.lobby_state(lobby))),
-            );
+        let Some(lobby) = self.lobbies.get(&lobby_id) else {
+            return;
+        };
+        self.send_to(
+            session,
+            &codec::reply(request_id, Message::LobbyState(self.lobby_state(lobby))),
+        );
+        // After the reply, so the client knows the lobby before its match or replay arrives.
+        if let Some(outbound) = outbound {
+            match &lobby.phase {
+                LobbyPhase::InMatch(handle) => handle.control(MatchControl::AddObserver {
+                    session: session.clone(),
+                    outbound,
+                }),
+                LobbyPhase::Replay(shared) => Self::send_shared_replay(shared, &outbound),
+                LobbyPhase::Open | LobbyPhase::PostMatch { .. } => {}
+            }
         }
         self.after_lobby_change(&lobby_id);
     }
@@ -267,7 +268,7 @@ impl Hub {
             return;
         };
         if let Some(handle) = lobby.phase.match_handle() {
-            handle.send(MatchCommand::Leave {
+            handle.control(MatchControl::Leave {
                 session: session.clone(),
             });
         }
@@ -289,7 +290,12 @@ impl Hub {
                         lobby.move_host_seat_first();
                     }
                 }
-                self.after_lobby_change(&lobby_id);
+                // The leaver may have been the last one the others were waiting for.
+                if lobby.everyone_voted_to_play_again() {
+                    self.play_again(&lobby_id);
+                } else {
+                    self.after_lobby_change(&lobby_id);
+                }
             }
         }
         self.send_lobby_list_push(session);
@@ -300,7 +306,7 @@ impl Hub {
             return;
         };
         if let Some(handle) = lobby.phase.match_handle() {
-            handle.send(MatchCommand::Stop);
+            handle.control(MatchControl::Stop);
         }
         let closed = codec::push(Message::LobbyClosed(proto::LobbyClosed {
             reason: reason as i32,
@@ -311,7 +317,7 @@ impl Hub {
                 session.send(&closed);
             }
         }
-        self.broadcast_lobby_list();
+        self.lobby_list_changed();
     }
 
     pub(super) fn set_ready(&mut self, session: &SessionId, request_id: u32, ready: bool) {
@@ -636,7 +642,12 @@ impl Hub {
         }
         match self.spawn_match(&lobby_id) {
             Ok(()) => self.ack(session, request_id),
-            Err(error) => self.reject(session, request_id, ErrorCode::InvalidSettings, &error),
+            Err(error) => self.reject(
+                session,
+                request_id,
+                ErrorCode::InvalidSettings,
+                &error.to_string(),
+            ),
         }
     }
 
@@ -673,16 +684,37 @@ impl Hub {
             );
         }
         play_again_votes.insert(session.clone());
-        let voters: BTreeSet<SessionId> = play_again_votes.clone();
-        let all_voted = lobby.seated_humans().all(|human| voters.contains(human));
+        let all_voted = lobby.everyone_voted_to_play_again();
         self.ack(session, request_id);
         if all_voted {
-            if let Err(error) = self.spawn_match(&lobby_id) {
-                tracing::warn!(lobby = %lobby_id, %error, "play-again start failed");
-            }
+            self.play_again(&lobby_id);
         } else {
             self.after_lobby_change(&lobby_id);
         }
+    }
+
+    /// Starts the next match once every seated human voted. A failure (e.g. too few players
+    /// left) is told to every member and clears the votes.
+    fn play_again(&mut self, lobby_id: &LobbyId) {
+        let Err(error) = self.spawn_match(lobby_id) else {
+            return;
+        };
+        tracing::info!(lobby = %lobby_id, %error, "play-again start failed");
+        let Some(lobby) = self.lobbies.get_mut(lobby_id) else {
+            return;
+        };
+        if let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase {
+            play_again_votes.clear();
+        }
+        let failure = codec::encode(&codec::error(
+            0,
+            ErrorCode::InvalidSettings,
+            format!("cannot start the next match: {error}"),
+        ));
+        if let Some(lobby) = self.lobbies.get(lobby_id) {
+            self.send_to_members(lobby, &failure);
+        }
+        self.after_lobby_change(lobby_id);
     }
 
     pub(super) fn send_chat(
@@ -691,12 +723,7 @@ impl Hub {
         request_id: u32,
         chat: proto::SendChat,
     ) {
-        let text: String = chat
-            .text
-            .trim()
-            .chars()
-            .filter(|c| !c.is_control())
-            .collect();
+        let text = text::clean(&chat.text, usize::MAX);
         if text.is_empty() || text.chars().count() > Limits::MAX_CHAT_CHARS {
             return self.reject(
                 session,

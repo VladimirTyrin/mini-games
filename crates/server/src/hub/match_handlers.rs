@@ -1,40 +1,53 @@
 use std::collections::BTreeSet;
 
-use mg_core::Clock;
+use mg_core::{Clock, Tick};
 use mg_protocol::proto;
 use mg_protocol::proto::server_message::Message;
 use mg_registry::{SeatSpec, create_authority, load_replay_file};
-use tokio::sync::mpsc;
+use tokio::time::Instant;
 
+use super::finished_match::FinishedMatch;
 use super::hub::Hub;
-use super::lobby::StoredReplay;
+use super::hub_command::HubCommand;
 use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
+use super::replay_check_error::ReplayCheckError;
+use super::replay_upload::ReplayUpload;
+use super::shared_replay::SharedReplay;
+use super::spawn_error::SpawnError;
+use super::stored_replay::StoredReplay;
+use super::validated_replay::ValidatedReplay;
 use crate::codec;
 use crate::context::SERVER_VERSION;
 use crate::ids::{LobbyId, MatchId, SessionId};
 use crate::limits::Limits;
 use crate::matches::{
-    MatchActor, MatchCommand, MatchFinished, MatchHandle, MatchSetup, Participant,
+    MatchAborted, MatchActor, MatchFinished, MatchHandle, MatchRequest, MatchSetup, Participant,
 };
+use crate::outbound::Outbound;
 
 use proto::ErrorCode;
 
-/// Commands queued per match actor; a turn-based actor busy with a bot search may fall behind.
-const MATCH_QUEUE: usize = 256;
+const MIN_REPLAY_SPEED_PERCENT: u32 = 25;
+const MAX_REPLAY_SPEED_PERCENT: u32 = 400;
 
 impl Hub {
-    pub(super) fn spawn_match(&mut self, lobby_id: &LobbyId) -> Result<(), String> {
-        let Some(lobby) = self.lobbies.get(lobby_id) else {
-            return Err("lobby not found".into());
+    pub(super) fn spawn_match(&mut self, lobby_id: &LobbyId) -> Result<(), SpawnError> {
+        let Some(lobby) = self.lobbies.get_mut(lobby_id) else {
+            return Err(SpawnError::LobbyNotFound);
         };
+        // The host may have lost seat 0 mid-match (host hand-over, bots seated before them).
+        lobby.move_host_seat_first();
         let info = lobby.kind.info();
         if lobby.seats.len() < usize::from(info.min_players) {
-            return Err(format!(
-                "{} needs at least {} players",
-                info.name, info.min_players
-            ));
+            return Err(SpawnError::NotEnoughPlayers {
+                game: info.name,
+                min_players: info.min_players,
+            });
         }
+        let Some(lobby) = self.lobbies.get(lobby_id) else {
+            return Err(SpawnError::LobbyNotFound);
+        };
         let seat_specs: Vec<SeatSpec> = lobby
             .seats
             .iter()
@@ -44,7 +57,7 @@ impl Hub {
             })
             .collect();
         let authority = create_authority(&lobby.settings, &seat_specs, rand::random())
-            .map_err(|e| e.to_string())?;
+            .map_err(SpawnError::Create)?;
         let match_id = MatchId::random();
         let tick_ms = match authority.clock() {
             Clock::Realtime { tick_ms } => tick_ms,
@@ -91,30 +104,31 @@ impl Hub {
             })
             .collect();
 
-        let (sender, receiver) = mpsc::channel(MATCH_QUEUE);
-        let actor = MatchActor::new(MatchSetup {
+        let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
+        MatchActor::new(MatchSetup {
             lobby: lobby_id.clone(),
-            match_id: match_id.clone(),
+            match_id,
             header,
             authority,
             participants,
             hub: self.handle.clone(),
             bot_cpu: self.bot_cpu.clone(),
-        });
-        tokio::spawn(actor.run(receiver));
+            timing: self.timing,
+        })
+        .spawn(inbox);
         if let Some(lobby) = self.lobbies.get_mut(lobby_id) {
-            lobby.phase = LobbyPhase::InMatch(MatchHandle::new(match_id, sender));
+            lobby.phase = LobbyPhase::InMatch(handle);
             lobby.reset_ready();
         }
         self.broadcast_lobby_state(lobby_id);
-        self.broadcast_lobby_list();
+        self.lobby_list_changed();
         Ok(())
     }
 
-    fn match_of(&self, session: &SessionId, match_id: &str) -> Option<MatchHandle> {
-        let lobby_id = self.sessions.get(session)?.lobby.clone()?;
-        let handle = self.lobbies.get(&lobby_id)?.phase.match_handle()?;
-        (handle.match_id.as_str() == match_id).then(|| handle.clone())
+    fn match_of(&self, session: &SessionId, match_id: &str) -> Option<&MatchHandle> {
+        let lobby_id = self.sessions.get(session)?.lobby.as_ref()?;
+        let handle = self.lobbies.get(lobby_id)?.phase.match_handle()?;
+        (handle.match_id.as_str() == match_id).then_some(handle)
     }
 
     pub(super) fn forward_to_match(
@@ -122,16 +136,23 @@ impl Hub {
         session: &SessionId,
         request_id: u32,
         match_id: &str,
-        command: MatchCommand,
+        request: MatchRequest,
     ) {
-        match self.match_of(session, match_id) {
-            Some(handle) => handle.send(command),
-            None => self.reject(
+        let Some(handle) = self.match_of(session, match_id) else {
+            return self.reject(
                 session,
                 request_id,
                 ErrorCode::MatchNotFound,
                 "no such running match",
-            ),
+            );
+        };
+        if let Err(busy) = handle.request(request) {
+            self.reject(
+                session,
+                request_id,
+                ErrorCode::RateLimited,
+                &busy.to_string(),
+            );
         }
     }
 
@@ -149,12 +170,12 @@ impl Hub {
                 "command is required",
             );
         };
-        let command = MatchCommand::Submit {
+        let request = MatchRequest::Submit {
             session: session.clone(),
             request_id,
             command,
         };
-        self.forward_to_match(session, request_id, &submit.match_id, command);
+        self.forward_to_match(session, request_id, &submit.match_id, request);
     }
 
     pub(super) fn match_finished(&mut self, finished: MatchFinished) {
@@ -178,15 +199,47 @@ impl Hub {
             play_again_votes: BTreeSet::new(),
         };
         lobby.store_replay(StoredReplay {
-            match_id: finished.match_id,
-            file: finished.replay,
+            match_id: finished.match_id.clone(),
+            replay_data_json: finished.replay_data_json,
         });
-        lobby.last_activity = std::time::Instant::now();
+        lobby.last_match = Some(FinishedMatch {
+            match_id: finished.match_id,
+            result: finished.result,
+        });
+        lobby.last_activity = Instant::now();
         self.broadcast_lobby_state(&finished.lobby);
-        self.broadcast_lobby_list();
+        self.lobby_list_changed();
     }
 
-    pub(super) fn request_replay(&self, session: &SessionId, request_id: u32, match_id: &str) {
+    /// The actor died without a result: members get `Ended` without one and the lobby opens
+    /// again, so nobody is stuck in a match that no longer runs.
+    pub(super) fn match_aborted(&mut self, aborted: MatchAborted) {
+        let Some(lobby) = self.lobbies.get_mut(&aborted.lobby) else {
+            return;
+        };
+        if lobby
+            .phase
+            .match_handle()
+            .is_none_or(|h| h.match_id != aborted.match_id)
+        {
+            return;
+        }
+        lobby.phase = LobbyPhase::Open;
+        lobby.reset_ready();
+        lobby.last_activity = Instant::now();
+        let ended = codec::encode(&codec::push(Message::Ended(proto::MatchEnded {
+            match_id: aborted.match_id.to_string(),
+            result: None,
+            final_tick: 0,
+        })));
+        if let Some(lobby) = self.lobbies.get(&aborted.lobby) {
+            self.send_to_members(lobby, &ended);
+        }
+        self.broadcast_lobby_state(&aborted.lobby);
+        self.lobby_list_changed();
+    }
+
+    pub(super) fn request_replay(&mut self, session: &SessionId, request_id: u32, match_id: &str) {
         let replay = self
             .sessions
             .get(session)
@@ -197,8 +250,9 @@ impl Hub {
                     .replays
                     .iter()
                     .find(|r| r.match_id.as_str() == match_id)
-            });
-        let Some(replay) = replay else {
+            })
+            .map(|replay| replay.replay_data_json.clone());
+        let Some(replay_data_json) = replay else {
             return self.reject(
                 session,
                 request_id,
@@ -206,49 +260,38 @@ impl Hub {
                 "replay not available",
             );
         };
-        let message = Message::ReplayData(proto::ReplayData {
-            match_id: replay.match_id.to_string(),
-            replay_file: replay.file.to_vec(),
-            suggested_file_name: format!("match-{}.mgreplay", replay.match_id),
-        });
-        self.send_to(session, &codec::reply(request_id, message));
+        let Some(session_state) = self.sessions.get_mut(session) else {
+            return;
+        };
+        if !session_state.cooldowns.try_replay_download(Instant::now()) {
+            return self.reject(
+                session,
+                request_id,
+                ErrorCode::RateLimited,
+                "a replay was just sent; try again shortly",
+            );
+        }
+        if let Some(outbound) = session_state.outbound() {
+            outbound.send_encoded(codec::reply_with_encoded_payload(
+                request_id,
+                "replayData",
+                &replay_data_json,
+            ));
+        }
     }
 
-    /// Validates an uploaded replay just enough to know every viewer can play it; playback is
-    /// client-side, so the server never simulates untrusted replays.
+    /// Checks who may share, then validates the file on the blocking pool (one upload per
+    /// session at a time); `replay_validated` finishes the job. Playback is client-side, so the
+    /// server never simulates untrusted replays.
     pub(super) fn share_replay(
         &mut self,
         session: &SessionId,
         request_id: u32,
         share: proto::ShareReplay,
     ) {
-        let Some(lobby_id) = self.sessions.get(session).and_then(|s| s.lobby.clone()) else {
-            return self.reject(
-                session,
-                request_id,
-                ErrorCode::NotInLobby,
-                "you are not in a lobby",
-            );
-        };
-        let Some(lobby) = self.lobbies.get(&lobby_id) else {
+        let Some(lobby_id) = self.may_share_replay(session, request_id) else {
             return;
         };
-        if &lobby.host != session {
-            return self.reject(
-                session,
-                request_id,
-                ErrorCode::NotHost,
-                "only the host can share a replay",
-            );
-        }
-        if !lobby.phase.allows_setup_changes() {
-            return self.reject(
-                session,
-                request_id,
-                ErrorCode::WrongPhase,
-                "not during a match",
-            );
-        }
         if share.replay_file.len() > Limits::MAX_REPLAY_BYTES {
             return self.reject(
                 session,
@@ -257,33 +300,122 @@ impl Hub {
                 "replay is too large",
             );
         }
-        if let Err(error) = load_replay_file(&share.replay_file) {
+        let Some(session_state) = self.sessions.get_mut(session) else {
+            return;
+        };
+        if session_state.validating_replay {
             return self.reject(
                 session,
                 request_id,
-                ErrorCode::InvalidReplay,
-                &error.to_string(),
+                ErrorCode::RateLimited,
+                "the previous replay is still being checked",
             );
+        }
+        session_state.validating_replay = true;
+        let hub = self.handle.clone();
+        let session = session.clone();
+        let host_only_control = share.host_only_control;
+        tokio::spawn(async move {
+            let outcome = match tokio::task::spawn_blocking(move || validate_replay(share)).await {
+                Ok(checked) => checked.map_err(ReplayCheckError::Invalid),
+                Err(error) => {
+                    tracing::error!(%error, "replay validation task failed");
+                    Err(ReplayCheckError::TaskFailed)
+                }
+            };
+            hub.send(HubCommand::ReplayValidated(ValidatedReplay {
+                session,
+                lobby: lobby_id,
+                request_id,
+                host_only_control,
+                outcome,
+            }));
+        });
+    }
+
+    /// The sender's lobby if they host it and it is between matches; otherwise replies with
+    /// the reason.
+    fn may_share_replay(&self, session: &SessionId, request_id: u32) -> Option<LobbyId> {
+        let Some(lobby_id) = self.sessions.get(session).and_then(|s| s.lobby.clone()) else {
+            self.reject(
+                session,
+                request_id,
+                ErrorCode::NotInLobby,
+                "you are not in a lobby",
+            );
+            return None;
+        };
+        let lobby = self.lobbies.get(&lobby_id)?;
+        if &lobby.host != session {
+            self.reject(
+                session,
+                request_id,
+                ErrorCode::NotHost,
+                "only the host can share a replay",
+            );
+            return None;
+        }
+        if !lobby.phase.allows_setup_changes() {
+            self.reject(
+                session,
+                request_id,
+                ErrorCode::WrongPhase,
+                "not during a match",
+            );
+            return None;
+        }
+        Some(lobby_id)
+    }
+
+    pub(super) fn replay_validated(&mut self, validated: ValidatedReplay) {
+        let ValidatedReplay {
+            session,
+            lobby: lobby_id,
+            request_id,
+            host_only_control,
+            outcome,
+        } = validated;
+        if let Some(session_state) = self.sessions.get_mut(&session) {
+            session_state.validating_replay = false;
+        }
+        let upload = match outcome {
+            Ok(upload) => upload,
+            Err(error) => {
+                return self.reject(
+                    &session,
+                    request_id,
+                    ErrorCode::InvalidReplay,
+                    &error.to_string(),
+                );
+            }
+        };
+        // Things may have changed while the file was checked.
+        if self.may_share_replay(&session, request_id).as_ref() != Some(&lobby_id) {
+            return;
         }
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
         };
-        lobby.phase = LobbyPhase::Replay {
-            host_only_control: share.host_only_control,
-        };
-        let message = codec::push(Message::SharedReplay(proto::SharedReplay {
-            replay_file: share.replay_file,
-            host_only_control: share.host_only_control,
-        }));
-        let encoded = codec::encode(&message);
-        for member in lobby.members() {
-            if let Some(outbound) = self.sessions.get(member).and_then(|s| s.outbound()) {
-                outbound.send_encoded(encoded.clone());
-            }
+        let ReplayUpload { push, end_tick } = upload;
+        lobby.phase = LobbyPhase::Replay(SharedReplay {
+            push: push.clone(),
+            end_tick,
+            host_only_control,
+            speed: None,
+            playback: None,
+        });
+        if let Some(lobby) = self.lobbies.get(&lobby_id) {
+            self.send_to_members(lobby, &push);
         }
-        self.ack(session, request_id);
-        self.broadcast_lobby_state(&lobby_id);
-        self.broadcast_lobby_list();
+        self.ack(&session, request_id);
+        self.after_lobby_change(&lobby_id);
+    }
+
+    pub(super) fn send_shared_replay(shared: &SharedReplay, outbound: &Outbound) {
+        outbound.send_encoded(shared.push.clone());
+        for control in [shared.speed, shared.playback].into_iter().flatten() {
+            outbound.send(&codec::push(Message::ReplayControl(control)));
+        }
     }
 
     pub(super) fn replay_control(
@@ -303,7 +435,7 @@ impl Hub {
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
         };
-        let LobbyPhase::Replay { host_only_control } = lobby.phase else {
+        let LobbyPhase::Replay(shared) = &mut lobby.phase else {
             return self.reject(
                 session,
                 request_id,
@@ -311,7 +443,7 @@ impl Hub {
                 "no shared replay",
             );
         };
-        if host_only_control && &lobby.host != session {
+        if shared.host_only_control && &lobby.host != session {
             return self.reject(
                 session,
                 request_id,
@@ -319,20 +451,62 @@ impl Hub {
                 "only the host controls this replay",
             );
         }
-        let stop = control.action == proto::ReplayControlAction::Stop as i32;
-        if stop {
-            lobby.phase = LobbyPhase::Open;
+        let action = proto::ReplayControlAction::try_from(control.action)
+            .unwrap_or(proto::ReplayControlAction::Unspecified);
+        match action {
+            proto::ReplayControlAction::Unspecified => {
+                return self.reject(
+                    session,
+                    request_id,
+                    ErrorCode::InvalidRequest,
+                    "unknown replay action",
+                );
+            }
+            proto::ReplayControlAction::SetSpeed
+                if !(MIN_REPLAY_SPEED_PERCENT..=MAX_REPLAY_SPEED_PERCENT)
+                    .contains(&control.speed_percent) =>
+            {
+                return self.reject(
+                    session,
+                    request_id,
+                    ErrorCode::InvalidRequest,
+                    "speed must be 25..=400 percent",
+                );
+            }
+            proto::ReplayControlAction::Seek if Tick::new(control.tick) > shared.end_tick => {
+                return self.reject(
+                    session,
+                    request_id,
+                    ErrorCode::InvalidRequest,
+                    "seek past the end of the replay",
+                );
+            }
+            proto::ReplayControlAction::SetSpeed => shared.speed = Some(control),
+            proto::ReplayControlAction::Play
+            | proto::ReplayControlAction::Pause
+            | proto::ReplayControlAction::Seek => shared.playback = Some(control),
+            proto::ReplayControlAction::Stop => lobby.phase = LobbyPhase::Open,
         }
         let encoded = codec::encode(&codec::push(Message::ReplayControl(control)));
-        for member in lobby.members() {
-            if let Some(outbound) = self.sessions.get(member).and_then(|s| s.outbound()) {
-                outbound.send_encoded(encoded.clone());
-            }
+        if let Some(lobby) = self.lobbies.get(&lobby_id) {
+            self.send_to_members(lobby, &encoded);
         }
         self.ack(session, request_id);
-        if stop {
-            self.broadcast_lobby_state(&lobby_id);
-            self.broadcast_lobby_list();
+        if action == proto::ReplayControlAction::Stop {
+            self.after_lobby_change(&lobby_id);
+        } else {
+            self.touch(&lobby_id);
         }
     }
+}
+
+/// Runs on the blocking pool: decoding and checking a replay of up to 4 MiB, and encoding the
+/// push every member receives, is too much work for the hub task.
+fn validate_replay(share: proto::ShareReplay) -> Result<ReplayUpload, mg_registry::ReplayError> {
+    let end_tick = load_replay_file(&share.replay_file)?.log.end();
+    let push = codec::encode(&codec::push(Message::SharedReplay(proto::SharedReplay {
+        replay_file: share.replay_file,
+        host_only_control: share.host_only_control,
+    })));
+    Ok(ReplayUpload { push, end_tick })
 }

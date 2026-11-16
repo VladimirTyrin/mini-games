@@ -7,16 +7,21 @@ impl Limits {
     pub(crate) const MAX_CONNECTIONS: usize = 2_000;
     pub(crate) const MAX_LOBBIES: usize = 300;
     pub(crate) const MAX_MESSAGE_BYTES: usize = 64 * 1024;
-    /// Replays are shared inside a JSON message (base64), so the frame limit is larger.
+    /// Replays are shared inside a JSON message (base64), so the frame limit is larger. Only a
+    /// signed-in connection may send a frame above `MAX_MESSAGE_BYTES`.
     pub(crate) const MAX_REPLAY_BYTES: usize = 4 * 1024 * 1024;
     pub(crate) const MAX_REPLAY_MESSAGE_BYTES: usize = Self::MAX_REPLAY_BYTES * 4 / 3 + 4096;
     pub(crate) const MAX_CHAT_CHARS: usize = 300;
     pub(crate) const MAX_LOBBY_NAME_CHARS: usize = 48;
     pub(crate) const MAX_OBSERVERS: usize = 32;
 
-    /// Outbound queue per connection. A client that falls this far behind is disconnected
-    /// (it can resume) instead of slowing anyone else down.
+    /// Outbound queue per connection, by count and by bytes. A client that falls this far
+    /// behind is disconnected (it can resume) instead of slowing anyone else down. One message
+    /// larger than the byte cap (a replay) is accepted when the queue is empty.
     pub(crate) const OUTBOUND_QUEUE: usize = 512;
+    pub(crate) const OUTBOUND_BYTES: usize = 8 * 1024 * 1024;
+    /// A socket write that takes longer than this means the client stopped reading.
+    pub(crate) const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 
     /// General messages: burst / sustained rate.
     pub(crate) const MESSAGE_BURST: u32 = 60;
@@ -24,17 +29,24 @@ impl Limits {
     pub(crate) const CHAT_BURST: u32 = 5;
     pub(crate) const CHAT_REFILL: Duration = Duration::from_secs(1);
 
-    /// Clients ping every 15 s; silence for longer than this closes the connection.
-    pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(45);
-    /// How long a disconnected session keeps its lobby seat.
-    pub(crate) const RESUME_GRACE: Duration = Duration::from_secs(60);
-    pub(crate) const OPEN_LOBBY_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60);
-    pub(crate) const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
+    /// Per-session cooldowns for requests whose answer is expensive (a whole match log or
+    /// replay). Frames above `MAX_MESSAGE_BYTES` (shared replays) share one cooldown per
+    /// connection, checked before the frame is decoded.
+    pub(crate) const REPLAY_DOWNLOAD_COOLDOWN: Duration = Duration::from_secs(2);
+    pub(crate) const CATCH_UP_COOLDOWN: Duration = Duration::from_secs(1);
+    pub(crate) const LARGE_MESSAGE_COOLDOWN: Duration = Duration::from_secs(5);
 
-    pub(crate) const DISCONNECT_BUDGET: Duration = Duration::from_secs(60);
-    pub(crate) const DROP_VOTE_AFTER: Duration = Duration::from_secs(20);
-    pub(crate) const RESUME_COUNTDOWN: Duration = Duration::from_secs(3);
+    /// Concurrent Google ID token verifications (each may block a pool thread on a key fetch).
+    pub(crate) const GOOGLE_VERIFICATIONS: usize = 4;
+
+    /// How long shutdown waits for the hub and then for connections to flush `ShuttingDown`.
+    pub(crate) const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
     /// Finished matches whose replay can still be requested, per lobby.
     pub(crate) const REPLAYS_PER_LOBBY: usize = 3;
+
+    /// Commands that may be shed (submits, catch-up, votes) queued per match actor; a
+    /// turn-based actor busy with a bot search may fall behind. Lifecycle commands have their
+    /// own unbounded queue.
+    pub(crate) const MATCH_REQUEST_QUEUE: usize = 256;
 }
