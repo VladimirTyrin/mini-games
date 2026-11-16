@@ -65,7 +65,6 @@ impl Answers {
         self.nth(*order.get(position)?)
     }
 
-    #[cfg(test)]
     pub(crate) fn all(self) -> impl Iterator<Item = &'static str> {
         self.texts()
     }

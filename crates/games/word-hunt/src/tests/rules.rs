@@ -230,10 +230,8 @@ fn keyboard_shows_each_guessed_letters_best_mark() {
 #[test]
 fn guesses_wait_for_the_answer() {
     let mut game = WordHunt::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
-    assert_eq!(
-        guess(&mut game, "crane"),
-        Err(CommandError::Illegal("the word is not chosen yet"))
-    );
+    // Nobody's turn until the answer is chosen.
+    assert_eq!(guess(&mut game, "crane"), Err(CommandError::NotYourTurn));
     game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
         .unwrap();
     assert!(

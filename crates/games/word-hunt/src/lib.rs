@@ -13,6 +13,7 @@
     )
 )]
 
+mod bots;
 mod game;
 mod io;
 mod model;
@@ -20,10 +21,11 @@ mod rules;
 mod settings;
 mod view;
 
+pub use bots::{BOT_BUDGET, BotKind, GuessingBot};
 pub use game::WordHunt;
 pub use io::{Command, WorldEvent};
 pub use model::{LetterMark, Phase, ScoredGuess, Word, WordError};
-pub use rules::HardModeViolation;
+pub use rules::{GROUP_GUESS_CAP, HardModeViolation};
 pub use settings::{
     DAILY_WORD_LENGTH, DayNumber, Language, MaxGuesses, Puzzle, PuzzleMode, RawSettings, Settings,
     WordLength,

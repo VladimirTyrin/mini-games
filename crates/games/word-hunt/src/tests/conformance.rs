@@ -1,7 +1,12 @@
 use mg_core::conformance::{self, Conformance, Setup};
-use mg_core::{CoreRng, PlayerSpec, Slot};
+use mg_core::{BotSeat, CoreRng, HasBots, PlayerSpec, Slot};
 
-use crate::{Command, Language, MaxGuesses, PuzzleMode, RawSettings, WordHunt, WordLength};
+use crate::{
+    BotKind, Command, Language, MaxGuesses, PuzzleMode, RawSettings, WordHunt, WordLength,
+};
+
+const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
+const BOT: PlayerSpec = PlayerSpec::BOT;
 
 fn raw(language: Language, word_length: u32, mode: PuzzleMode) -> RawSettings {
     RawSettings {
@@ -42,6 +47,18 @@ impl Conformance for WordHunt {
                 max_guesses: MaxGuesses::MIN,
                 ..raw(Language::English, 5, PuzzleMode::Daily)
             }),
+            Setup::new(RawSettings::default(), vec![HUMAN, HUMAN]),
+            Setup::new(
+                raw(Language::Russian, 4, PuzzleMode::Unlimited),
+                vec![HUMAN, BOT],
+            ),
+            Setup::new(
+                RawSettings {
+                    hard_mode: true,
+                    ..raw(Language::English, 6, PuzzleMode::Unlimited)
+                },
+                vec![BOT, HUMAN, BOT, BOT],
+            ),
         ]
     }
 
@@ -66,9 +83,37 @@ impl Conformance for WordHunt {
                 ..raw(Language::English, 5, PuzzleMode::Daily)
             }),
             Setup::new(RawSettings::default(), vec![]),
-            Setup::new(RawSettings::default(), vec![PlayerSpec::HUMAN; 2]),
-            Setup::new(RawSettings::default(), vec![PlayerSpec::BOT]),
+            Setup::new(RawSettings::default(), vec![HUMAN; 5]),
+            Setup::new(
+                raw(Language::English, 5, PuzzleMode::Daily),
+                vec![HUMAN, BOT],
+            ),
+            Setup::new(RawSettings::default(), vec![BOT]),
+            Setup::new(RawSettings::default(), vec![BOT, BOT]),
         ]
+    }
+
+    /// Bot levels by seat, so every level plays.
+    fn bots_for(players: &[PlayerSpec]) -> Vec<BotSeat<Self>> {
+        const LEVELS: [BotKind; 4] = [
+            BotKind::Easy,
+            BotKind::Medium,
+            BotKind::Hard,
+            BotKind::Medium,
+        ];
+        Slot::all(players.len())
+            .zip(LEVELS)
+            .filter(|(slot, _)| {
+                players
+                    .get(slot.index())
+                    .is_some_and(|spec| !spec.is_human())
+            })
+            .map(|(slot, kind)| BotSeat {
+                slot,
+                bot: WordHunt::make_bot(kind),
+                budget_nodes: WordHunt::default_bot_budget(kind),
+            })
+            .collect()
     }
 
     /// Mostly well-formed guesses (random letters of the right length), sometimes the wrong

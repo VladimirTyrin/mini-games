@@ -1,14 +1,14 @@
 use mg_core::GameSettings;
 use mg_word_hunt::{
-    Command, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings, ScoredGuess, View,
-    WordHunt, WorldEvent,
+    BotKind, Command, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings, ScoredGuess,
+    View, WordHunt, WorldEvent,
 };
 
 use crate::proto::{
     game_command, game_settings, game_view, game_world_event, word_hunt_command,
     word_hunt_world_event,
 };
-use crate::{WireError, WireGame, proto};
+use crate::{WireBots, WireError, WireGame, proto, slot_from_wire, slot_to_wire};
 
 /// Longer than any word of any language (7 letters of at most 2 UTF-8 bytes each); a longer
 /// string is refused before the game copies it.
@@ -69,18 +69,28 @@ impl WireGame for WordHunt {
             word_hunt_world_event::Event::AnswerChosen(chosen) => {
                 Ok(WorldEvent::AnswerChosen(bounded_word(&chosen.word)?))
             }
+            word_hunt_world_event::Event::FirstPlayerChosen(chosen) => {
+                Ok(WorldEvent::FirstPlayerChosen(slot_from_wire(chosen.slot)?))
+            }
         }
     }
 
     fn world_event_to_wire(event: &WorldEvent) -> proto::GameWorldEvent {
-        let WorldEvent::AnswerChosen(word) = event;
+        let event = match event {
+            WorldEvent::AnswerChosen(word) => {
+                word_hunt_world_event::Event::AnswerChosen(proto::WordHuntAnswerChosen {
+                    word: word.clone(),
+                })
+            }
+            WorldEvent::FirstPlayerChosen(slot) => {
+                word_hunt_world_event::Event::FirstPlayerChosen(proto::WordHuntFirstPlayerChosen {
+                    slot: slot_to_wire(*slot),
+                })
+            }
+        };
         proto::GameWorldEvent {
             game: Some(game_world_event::Game::WordHunt(
-                proto::WordHuntWorldEvent {
-                    event: Some(word_hunt_world_event::Event::AnswerChosen(
-                        proto::WordHuntAnswerChosen { word: word.clone() },
-                    )),
-                },
+                proto::WordHuntWorldEvent { event: Some(event) },
             )),
         }
     }
@@ -93,6 +103,9 @@ impl WireGame for WordHunt {
                 guesses: view.guesses.iter().map(scored_guess_to_wire).collect(),
                 keyboard: view.keyboard.iter().map(key_hint_to_wire).collect(),
                 answer: view.answer.clone(),
+                turn_slot: view.turn.map(slot_to_wire),
+                winner_slot: view.winner.map(slot_to_wire),
+                guess_limit: view.guess_limit,
             })),
         }
     }
@@ -162,6 +175,7 @@ fn phase_to_wire(phase: Phase) -> proto::WordHuntPhase {
         Phase::Solved => proto::WordHuntPhase::Solved,
         Phase::Failed => proto::WordHuntPhase::Failed,
         Phase::Abandoned => proto::WordHuntPhase::Abandoned,
+        Phase::Forfeited => proto::WordHuntPhase::Forfeited,
     }
 }
 
@@ -173,6 +187,7 @@ fn scored_guess_to_wire(guess: &ScoredGuess) -> proto::WordHuntScoredGuess {
             .iter()
             .map(|mark| i32::from(mark_to_wire(*mark)))
             .collect(),
+        by_slot: slot_to_wire(guess.by),
     }
 }
 
@@ -180,6 +195,33 @@ fn key_hint_to_wire(hint: &KeyHint) -> proto::WordHuntKeyHint {
     proto::WordHuntKeyHint {
         letter: hint.letter.to_string(),
         mark: mark_to_wire(hint.mark).into(),
+    }
+}
+
+impl WireBots for WordHunt {
+    fn bot_kind_from_wire(kind: &proto::BotKind) -> Result<BotKind, WireError> {
+        let kind = match kind.game.as_ref().ok_or(WireError::Missing("game"))? {
+            proto::bot_kind::Game::WordHunt(kind) => *kind,
+            _ => return Err(WireError::WrongGame),
+        };
+        match proto::WordHuntBotKind::try_from(kind) {
+            Ok(proto::WordHuntBotKind::Easy) => Ok(BotKind::Easy),
+            Ok(proto::WordHuntBotKind::Medium) => Ok(BotKind::Medium),
+            Ok(proto::WordHuntBotKind::Hard) => Ok(BotKind::Hard),
+            Ok(proto::WordHuntBotKind::Unspecified) => Err(WireError::Missing("bot_kind")),
+            Err(_) => Err(WireError::UnknownEnumValue("bot_kind")),
+        }
+    }
+
+    fn bot_kind_to_wire(kind: BotKind) -> proto::BotKind {
+        let kind = match kind {
+            BotKind::Easy => proto::WordHuntBotKind::Easy,
+            BotKind::Medium => proto::WordHuntBotKind::Medium,
+            BotKind::Hard => proto::WordHuntBotKind::Hard,
+        };
+        proto::BotKind {
+            game: Some(proto::bot_kind::Game::WordHunt(kind.into())),
+        }
     }
 }
 

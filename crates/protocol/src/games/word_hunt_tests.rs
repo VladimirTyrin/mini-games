@@ -1,10 +1,12 @@
 use mg_core::{Game, PlayerSpec, Viewer};
-use mg_word_hunt::{Command, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent};
+use mg_word_hunt::{
+    BotKind, Command, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent,
+};
 use prost::Message;
 
 use crate::proto;
 use crate::wire_error::WireError;
-use crate::wire_game::WireGame;
+use crate::wire_game::{WireBots, WireGame};
 
 fn binary<M: Message + Default + PartialEq + std::fmt::Debug>(message: &M) -> M {
     let decoded = M::decode(message.encode_to_vec().as_slice()).unwrap();
@@ -64,9 +66,21 @@ fn commands_and_world_events_round_trip() {
     let command = Command::Guess("ёлка".into());
     let wire = binary(&WordHunt::command_to_wire(&command));
     assert_eq!(WordHunt::command_from_wire(&wire), Ok(command));
-    let event = WorldEvent::AnswerChosen("crane".into());
-    let wire = binary(&WordHunt::world_event_to_wire(&event));
-    assert_eq!(WordHunt::world_event_from_wire(&wire), Ok(event));
+    for event in [
+        WorldEvent::AnswerChosen("crane".into()),
+        WorldEvent::FirstPlayerChosen(mg_core::Slot::new(2)),
+    ] {
+        let wire = binary(&WordHunt::world_event_to_wire(&event));
+        assert_eq!(WordHunt::world_event_from_wire(&wire), Ok(event));
+    }
+}
+
+#[test]
+fn bot_kinds_round_trip() {
+    for kind in [BotKind::Easy, BotKind::Medium, BotKind::Hard] {
+        let wire = binary(&WordHunt::bot_kind_to_wire(kind));
+        assert_eq!(WordHunt::bot_kind_from_wire(&wire), Ok(kind));
+    }
 }
 
 #[test]

@@ -66,5 +66,6 @@ message BotKind {
   oneof game {
     SnakeBotKind snake = 1;
     TicTacToeBotKind tictactoe = 2;
+    WordHuntBotKind word_hunt = 3;
   }
 }

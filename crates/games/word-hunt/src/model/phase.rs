@@ -4,10 +4,12 @@ pub enum Phase {
     Choosing,
     Guessing,
     Solved,
-    /// Out of guesses.
+    /// Out of guesses: a loss alone, a draw in a group.
     Failed,
-    /// The player left before the end.
+    /// Every person left before the end.
     Abandoned,
+    /// A group game where everyone else left; the one still in play wins.
+    Forfeited,
 }
 
 impl Phase {
@@ -18,10 +20,14 @@ impl Phase {
             Phase::Solved => 2,
             Phase::Failed => 3,
             Phase::Abandoned => 4,
+            Phase::Forfeited => 5,
         }
     }
 
     pub fn is_over(self) -> bool {
-        matches!(self, Phase::Solved | Phase::Failed | Phase::Abandoned)
+        matches!(
+            self,
+            Phase::Solved | Phase::Failed | Phase::Abandoned | Phase::Forfeited
+        )
     }
 }

@@ -41,7 +41,13 @@ message WordHuntGuess {
 message WordHuntWorldEvent {
   oneof event {
     WordHuntAnswerChosen answer_chosen = 1;
+    WordHuntFirstPlayerChosen first_player_chosen = 2;
   }
+}
+
+// Group games: who guesses first.
+message WordHuntFirstPlayerChosen {
+  uint32 slot = 1;
 }
 
 message WordHuntAnswerChosen {
@@ -65,13 +71,28 @@ enum WordHuntPhase {
   WORD_HUNT_PHASE_SOLVED = 3;
   // Out of guesses.
   WORD_HUNT_PHASE_FAILED = 4;
+  // Every person left.
   WORD_HUNT_PHASE_ABANDONED = 5;
+  // A group game where everyone else left; the one still in play wins.
+  WORD_HUNT_PHASE_FORFEITED = 6;
+}
+
+enum WordHuntBotKind {
+  WORD_HUNT_BOT_KIND_UNSPECIFIED = 0;
+  // Every hint, but of the last two guesses only.
+  WORD_HUNT_BOT_KIND_EASY = 1;
+  // Green and yellow letters of every guess; grey ones are ignored.
+  WORD_HUNT_BOT_KIND_MEDIUM = 2;
+  // Every hint.
+  WORD_HUNT_BOT_KIND_HARD = 3;
 }
 
 message WordHuntScoredGuess {
   string word = 1;
   // One per letter of `word`.
   repeated WordHuntLetterMark marks = 2;
+  // Who guessed it.
+  uint32 by_slot = 3;
 }
 
 message WordHuntKeyHint {
@@ -87,4 +108,10 @@ message WordHuntView {
   repeated WordHuntKeyHint keyboard = 4;
   // Set once the game is over.
   optional string answer = 5;
+  // Whose guess is next; unset before the start and after the end.
+  optional uint32 turn_slot = 6;
+  // Group games: who found the word (or outlasted the others).
+  optional uint32 winner_slot = 7;
+  // Guesses allowed in total: the setting alone, the safety cap in a group.
+  uint32 guess_limit = 8;
 }
