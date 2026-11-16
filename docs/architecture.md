@@ -52,14 +52,16 @@ Actors, no shared locks:
 - **Connection** (one task per WebSocket): JSON decode, size and rate limits, heartbeat,
   sign-in. Outbound queue is bounded; a client that cannot keep up is disconnected (it may
   resume) instead of slowing others.
-- **Hub** (one task): sessions, names, resume tokens, lobbies (explicit phases: open →
+- **Hub** (one task): sessions, accounts (one session per account), resume tokens, lobbies (explicit phases: open →
   in match → post match / replay). Handles one command at a time.
 - **Match actor** (one task per match): owns the `DynAuthority`, ticks real-time games,
   runs bot searches on the blocking pool under a CPU semaphore, broadcasts each frame encoded
   once, handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
 
 Authentication without a database: guests (if allowed), Google ID tokens verified against
-Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session token.
+Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session token. Players
+are told apart by an opaque id (`PlayerId`; for accounts an HMAC of the account under the same
+secret), never by display name, which may repeat.
 
 ## Web client (`web-client`)
 

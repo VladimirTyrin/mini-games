@@ -26,7 +26,7 @@ export type ConnectionState =
   | "reconnecting"
   /** Server speaks another protocol: the app must be updated, retrying is pointless. */
   | "outdated"
-  /** Sign-in was refused (bad token, name taken, guests disabled). */
+  /** Sign-in was refused (bad token, guests disabled). */
   | "rejected"
   /** The same account signed in elsewhere; reconnecting would take the session back. */
   | "replaced";

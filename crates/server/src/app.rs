@@ -12,7 +12,7 @@ use tokio::sync::{Semaphore, mpsc, watch};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
-use crate::auth::{BotKeys, GoogleVerifier, HttpGoogleKeySource, SessionTokens};
+use crate::auth::{BotKeys, GoogleVerifier, HttpGoogleKeySource, PlayerIdKey, SessionTokens};
 use crate::config::{Config, ConfigError};
 use crate::connection;
 use crate::connection_limiter::{ConnectionLimiter, ConnectionRefused};
@@ -58,6 +58,8 @@ fn build_context(
         allow_guests: config.allow_guests,
         google,
         google_verifications: Semaphore::new(Limits::GOOGLE_VERIFICATIONS),
+        // Same secret: account ids stay stable exactly as long as session tokens stay valid.
+        player_ids: PlayerIdKey::new(secret.clone()),
         session_tokens: SessionTokens::new(secret, config.session_days.saturating_mul(24 * 3600)),
         bot_keys: BotKeys::parse(&config.bot_keys)?,
         hub,

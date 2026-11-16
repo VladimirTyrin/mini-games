@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import type { MatchController } from "@/match/match-controller";
 import type { SeatPause } from "@/match/seat-pause";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
+import { seatLabels } from "@/util/players";
 
 const props = defineProps<{ controller: MatchController }>();
 const emit = defineEmits<{ leave: []; replay: []; again: [] }>();
@@ -42,8 +43,8 @@ const headline = computed(() => {
   }
 });
 
-const seatName = (slot: number) =>
-  props.controller.source.header.seats[slot]?.player?.displayName ?? `Player ${slot + 1}`;
+const labels = computed(() => seatLabels(props.controller.source.header));
+const seatName = (slot: number) => labels.value[slot] ?? `Player ${slot + 1}`;
 
 async function voteDrop(slot: number): Promise<void> {
   await props.controller.source.voteDrop(slot).catch(() => undefined);
@@ -61,7 +62,10 @@ async function voteDrop(slot: number): Promise<void> {
         <p v-if="aborted" class="text-sm text-gray-300">The server stopped this match. No replay is kept.</p>
         <ul v-if="result" class="space-y-1 text-sm">
           <li v-for="(score, slot) in result.scores" :key="slot" class="flex justify-between">
-            <span>{{ seatName(slot) }}</span>
+            <span>
+              {{ seatName(slot) }}
+              <span v-if="slot === mySlot" class="text-xs text-sky-300">(you)</span>
+            </span>
             <span class="font-mono">{{ score }}</span>
           </li>
         </ul>

@@ -12,9 +12,14 @@ enum IdentityKind {
   IDENTITY_KIND_BUILT_IN_BOT = 4;
 }
 
+// A player is identified by `id`; `display_name` is only a label and several players may share
+// it. Compare players by `id`, never by name.
 message Identity {
   IdentityKind kind = 1;
-  // Stable within its kind: Google `sub`, bot key id, or a per-session id for guests.
+  // Opaque and unique among players online; the prefix tells the kind:
+  // `g_…` Google account (derived from the account, the same on every session and device),
+  // `b_…` network bot (the same for its key), `u_…` guest (one session),
+  // `bot-N` built-in bot (one lobby).
   string id = 2;
   string display_name = 3;
   // Profile picture: an https URL hosted by Google (googleusercontent.com), Google accounts

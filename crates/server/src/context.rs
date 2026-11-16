@@ -1,7 +1,7 @@
 use mg_protocol::proto;
 use tokio::sync::{Semaphore, watch};
 
-use crate::auth::{BotKeys, GoogleVerifier, SessionTokens};
+use crate::auth::{BotKeys, GoogleVerifier, PlayerIdKey, SessionTokens};
 use crate::hub::HubHandle;
 use crate::timing::Timing;
 
@@ -15,6 +15,7 @@ pub(crate) struct ServerContext {
     pub google: Option<GoogleVerifier>,
     pub google_verifications: Semaphore,
     pub session_tokens: SessionTokens,
+    pub player_ids: PlayerIdKey,
     pub bot_keys: BotKeys,
     pub hub: HubHandle,
     pub timing: Timing,

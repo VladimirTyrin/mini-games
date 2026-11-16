@@ -25,4 +25,14 @@ describe("Avatar", () => {
     expect(avatar.find("img").exists()).toBe(false);
     expect(avatar.text()).toBe("В");
   });
+
+  it("colours namesakes by player id", () => {
+    const tone = (playerId: string) =>
+      mount(Avatar, { props: { url: "", name: "Alex", playerId } })
+        .get("span")
+        .classes()
+        .join(" ");
+    expect(tone("u_a")).not.toBe(tone("u_b"));
+    expect(tone("u_a")).toBe(tone("u_a"));
+  });
 });

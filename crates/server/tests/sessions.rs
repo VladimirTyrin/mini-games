@@ -63,20 +63,6 @@ async fn bot_session_token_stops_working_once_the_key_is_removed() {
 }
 
 #[tokio::test]
-async fn a_guest_cannot_take_an_online_bot_name_but_a_bot_gets_in_past_a_guest() {
-    let server = TestServer::start_with(|config| config.bot_keys = ALPHA_BOT_KEY.into()).await;
-    let _guest = server.guest("ALPHA").await;
-    let mut bot = server.client().await;
-    let welcome = bot.hello(bot_credentials("secret"), "").await.unwrap();
-    let shown = welcome.identity.unwrap().display_name;
-    assert!(shown.starts_with("alpha#"), "{shown}");
-
-    let mut late_guest = server.client().await;
-    let error = late_guest.hello_guest(&shown, "").await.unwrap_err();
-    assert_eq!(error.code, proto::ErrorCode::NameTaken as i32);
-}
-
-#[tokio::test]
 async fn a_connection_that_never_says_hello_is_closed() {
     let server = TestServer::start_with(|config| {
         config.timing.hello_timeout = Duration::from_millis(100);

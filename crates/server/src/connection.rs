@@ -357,7 +357,7 @@ impl Connection {
                 );
                 Ok(SignedIn {
                     who: Authenticated::Google {
-                        subject: identity.subject,
+                        account: self.context.player_ids.google(&identity.subject),
                         name: identity.display_name,
                         avatar: identity.avatar,
                     },
@@ -374,7 +374,10 @@ impl Connection {
                     now,
                 );
                 Ok(SignedIn {
-                    who: Authenticated::BotClient { name },
+                    who: Authenticated::BotClient {
+                        account: self.context.player_ids.bot_client(&name),
+                        name,
+                    },
                     session_token: token,
                 })
             }
@@ -382,7 +385,7 @@ impl Connection {
                 let claims = self.context.session_tokens.verify(&session.token, now)?;
                 let who = match claims.kind {
                     SessionKind::Google => Authenticated::Google {
-                        subject: claims.subject,
+                        account: self.context.player_ids.google(&claims.subject),
                         name: claims.display_name,
                         avatar: claims.avatar,
                     },
@@ -391,6 +394,7 @@ impl Connection {
                             return Err(AuthError::BotRevoked.into());
                         }
                         Authenticated::BotClient {
+                            account: self.context.player_ids.bot_client(&claims.display_name),
                             name: claims.display_name,
                         }
                     }

@@ -55,6 +55,7 @@ if (props.back) useBackHandler(goBack);
         v-if="connection.state === 'signed-in' && connection.identity"
         :url="connection.identity.avatarUrl"
         :name="connection.identity.displayName"
+        :player-id="connection.identity.id"
       />
       <span class="truncate">{{ status.text }}</span>
     </span>

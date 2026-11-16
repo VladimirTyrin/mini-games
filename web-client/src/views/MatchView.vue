@@ -70,6 +70,7 @@ function again(): void {
     <ChatPanel
       v-if="isOnline && lobby.current"
       :messages="lobby.lobbyChat"
+      :players="lobby.members"
       @send="lobby.sendChat(ChatScope.LOBBY, $event)"
     />
   </main>

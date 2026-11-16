@@ -43,7 +43,7 @@ async fn unsupported_protocol_is_refused_and_closed() {
 }
 
 #[tokio::test]
-async fn requests_need_sign_in_and_names_are_unique() {
+async fn requests_need_sign_in() {
     let server = TestServer::start().await;
     let mut anonymous = server.client().await;
     expect_error(
@@ -52,9 +52,6 @@ async fn requests_need_sign_in_and_names_are_unique() {
             .await,
         proto::ErrorCode::NotSignedIn,
     );
-    let _alice = server.guest("Alice").await;
-    let error = anonymous.hello_guest("alice", "").await.unwrap_err();
-    assert_eq!(error.code, proto::ErrorCode::NameTaken as i32);
 }
 
 #[tokio::test]
@@ -266,7 +263,7 @@ async fn kicked_member_is_notified_and_can_keep_using_the_server() {
     );
     expect_ok(
         host.request(Request::KickMember(proto::KickMember {
-            member: guest_identity,
+            player_id: guest_identity.unwrap().id,
         }))
         .await,
     );

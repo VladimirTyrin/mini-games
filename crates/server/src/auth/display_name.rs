@@ -33,20 +33,8 @@ impl DisplayName {
         }
     }
 
-    /// The same name made distinct with `#suffix`, shortened so the result still fits.
-    pub(crate) fn with_suffix(&self, suffix: &str) -> Self {
-        let room = Self::MAX_CHARS.saturating_sub(suffix.chars().count() + 1);
-        let base: String = self.0.chars().take(room).collect();
-        Self(format!("{}#{suffix}", base.trim_end()))
-    }
-
     pub(crate) fn as_str(&self) -> &str {
         &self.0
-    }
-
-    /// Case-insensitive key used to keep online names unique.
-    pub(crate) fn uniqueness_key(&self) -> String {
-        self.0.to_lowercase()
     }
 }
 
@@ -91,20 +79,5 @@ mod tests {
             "Player"
         );
         assert_eq!(DisplayName::sanitize("A\u{2066}da", "x").as_str(), "Ada");
-    }
-
-    #[test]
-    fn suffix_keeps_the_name_within_the_limit() {
-        let long = DisplayName::parse(&"n".repeat(24)).unwrap();
-        let suffixed = long.with_suffix("1a2b");
-        assert_eq!(suffixed.as_str().chars().count(), 24);
-        assert!(suffixed.as_str().ends_with("#1a2b"));
-        assert_eq!(
-            DisplayName::parse("Ada")
-                .unwrap()
-                .with_suffix("1a2b")
-                .as_str(),
-            "Ada#1a2b"
-        );
     }
 }

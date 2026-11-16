@@ -496,18 +496,14 @@ impl Hub {
         let Some(lobby_id) = self.hosted_lobby(session, request_id) else {
             return;
         };
-        let Some(member) = kick.member else {
-            return self.reject(
-                session,
-                request_id,
-                ErrorCode::InvalidRequest,
-                "member is required",
-            );
-        };
         let target = self.lobbies.get(&lobby_id).and_then(|lobby| {
             lobby
                 .members()
-                .find(|m| self.sessions.get(*m).is_some_and(|s| s.identity == member))
+                .find(|m| {
+                    self.sessions
+                        .get(*m)
+                        .is_some_and(|s| s.identity.id == kick.player_id)
+                })
                 .cloned()
         });
         let Some(target) = target.filter(|t| t != session) else {

@@ -7,6 +7,7 @@ import type { MatchController, ViewSnapshot } from "@/match/match-controller";
 import { SnakeDirection, type SnakeView } from "@/proto/minigames/v2/snake_pb";
 import { tickProgress } from "@/render/tick-progress";
 import { useCanvas } from "@/render/use-canvas";
+import { seatLabels } from "@/util/players";
 
 import SnakeScoreboard from "./SnakeScoreboard.vue";
 import { drawSnakeScene } from "./snake-renderer";
@@ -24,9 +25,7 @@ function snakeViewOf(snapshot: ViewSnapshot | null): SnakeView | null {
 }
 
 const view = computed(() => snakeViewOf(props.controller.current.value));
-const seatNames = computed(() =>
-  props.controller.source.header.seats.map((seat) => seat.player?.displayName ?? `Player ${seat.slot + 1}`),
-);
+const seatNames = computed(() => seatLabels(props.controller.source.header));
 
 const mySeat = computed(() => {
   const slot = props.controller.mySlot;

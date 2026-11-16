@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-const props = defineProps<{ url: string; name: string }>();
+/** `playerId` picks the fallback colour, so namesakes without pictures still look different. */
+const props = defineProps<{ url: string; name: string; playerId?: string }>();
 
 const FALLBACK_TONES = ["bg-emerald-600", "bg-sky-600", "bg-violet-600", "bg-amber-600", "bg-rose-600"];
 
@@ -15,7 +16,7 @@ const showsImage = computed(() => props.url !== "" && !failed.value);
 const initial = computed(() => Array.from(props.name.trim())[0]?.toUpperCase() ?? "?");
 const tone = computed(() => {
   let sum = 0;
-  for (const character of props.name) sum += character.codePointAt(0) ?? 0;
+  for (const character of props.playerId ?? props.name) sum += character.codePointAt(0) ?? 0;
   return FALLBACK_TONES[sum % FALLBACK_TONES.length];
 });
 </script>

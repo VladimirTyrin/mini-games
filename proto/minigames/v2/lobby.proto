@@ -24,6 +24,7 @@ message LobbySummary {
   uint32 max_seats = 5;
   uint32 observers = 6;
   LobbyPhase phase = 7;
+  Identity host = 8;
 }
 
 message LobbySeat {
@@ -90,7 +91,10 @@ message RemoveSeat {
 }
 
 message KickMember {
-  Identity member = 1;
+  reserved 1;
+  reserved "member";
+  // `Identity.id` of the member to remove.
+  string player_id = 2;
 }
 
 message SwitchToObserver {}

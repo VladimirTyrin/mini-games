@@ -13,9 +13,9 @@ import { ReplayMatchSource } from "@/match/replay-match-source";
 import { downloadBytes } from "@/platform/download";
 
 import { useConnectionStore } from "./connection";
-import { sameIdentity } from "./lobby";
 import { useToastStore } from "./toasts";
 import { errorMessage } from "@/util/error-message";
+import { sameIdentity } from "@/util/players";
 
 export interface LocalSeat {
   /** `null` for the local player. */

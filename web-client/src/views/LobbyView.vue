@@ -6,12 +6,13 @@ import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import { pluginBySettings } from "@/games";
-import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
+import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
-import { sameIdentity, useLobbyStore } from "@/stores/lobby";
+import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
+import { sameIdentity } from "@/util/players";
 import { botKinds, gameCatalog } from "@/wasm/core";
 
 const router = useRouter();
@@ -36,6 +37,9 @@ const canStart = computed(
     (state.value.phase === LobbyPhase.OPEN || state.value.phase === LobbyPhase.POST_MATCH) &&
     state.value.seats.length >= (info.value?.minPlayers ?? 1),
 );
+
+const labelOf = (player: Identity) => lobby.memberLabels.get(player.id) ?? player.displayName;
+const isMe = (player: Identity | undefined) => sameIdentity(player, connection.identity);
 
 /** Nobody else is here: play locally instead (no ping, works offline). */
 const startsLocally = computed(() => humanSeats.value === 1 && (state.value?.observers.length ?? 0) === 0);
@@ -83,9 +87,15 @@ async function leave(): Promise<void> {
           :key="index"
           class="flex items-center gap-2 rounded bg-panel-raised px-3 py-2"
         >
-          <Avatar v-if="seat.occupant" :url="seat.occupant.avatarUrl" :name="seat.occupant.displayName" />
+          <Avatar
+            v-if="seat.occupant"
+            :url="seat.occupant.avatarUrl"
+            :name="seat.occupant.displayName"
+            :player-id="seat.occupant.id"
+          />
           <span class="flex-1 truncate">
-            {{ seat.occupant?.displayName }}
+            {{ seat.occupant ? labelOf(seat.occupant) : "" }}
+            <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> (you)</span>
             <span v-if="seat.botKind" class="text-xs text-gray-400"
               >({{ plugin.botLabel(seat.botKind) }})</span
             >
@@ -110,11 +120,11 @@ async function leave(): Promise<void> {
             v-else-if="
               lobby.isHost &&
               seat.occupant &&
-              !sameIdentity(seat.occupant, connection.identity) &&
+              !isMe(seat.occupant) &&
               seat.occupant.kind !== IdentityKind.BUILT_IN_BOT
             "
             class="text-xs text-gray-400 hover:text-rose-300"
-            @click="lobby.kick(seat.occupant)"
+            @click="lobby.kick(seat.occupant.id)"
           >
             kick
           </button>
@@ -133,7 +143,11 @@ async function leave(): Promise<void> {
           </button>
         </div>
         <p v-if="state.observers.length" class="pt-2 text-xs text-gray-400">
-          Watching: {{ state.observers.map((observer) => observer.displayName).join(", ") }}
+          Watching:
+          <template v-for="(observer, index) in state.observers" :key="observer.id">
+            <span>{{ index > 0 ? ", " : "" }}{{ labelOf(observer) }}</span>
+            <span v-if="isMe(observer)" class="text-sky-300"> (you)</span>
+          </template>
         </p>
       </section>
 
@@ -163,6 +177,10 @@ async function leave(): Promise<void> {
         </button>
       </section>
     </div>
-    <ChatPanel :messages="lobby.lobbyChat" @send="lobby.sendChat(ChatScope.LOBBY, $event)" />
+    <ChatPanel
+      :messages="lobby.lobbyChat"
+      :players="lobby.members"
+      @send="lobby.sendChat(ChatScope.LOBBY, $event)"
+    />
   </main>
 </template>

@@ -10,7 +10,7 @@ use mg_protocol::proto::server_message::Message as Reply;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
 use super::{Hub, HubCommand, HubHandle, SignIn};
-use crate::auth::{AvatarUrl, DisplayName};
+use crate::auth::{AvatarUrl, DisplayName, PlayerIdKey};
 use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, LobbyId, MatchId, SessionId};
 use crate::matches::MatchAborted;
@@ -78,9 +78,13 @@ async fn sign_in(hub: &HubHandle, who: Authenticated) -> (Option<TestConnection>
     (connection, outcome)
 }
 
+fn player_ids() -> PlayerIdKey {
+    PlayerIdKey::new(b"hub-test-secret".to_vec())
+}
+
 fn google(subject: &str, name: &str) -> Authenticated {
     Authenticated::Google {
-        subject: subject.into(),
+        account: player_ids().google(subject),
         name: DisplayName::parse(name).unwrap(),
         avatar: None,
     }
@@ -92,9 +96,9 @@ fn guest(name: &str) -> Authenticated {
     }
 }
 
-fn shown_name(outcome: &SignInOutcome) -> String {
+fn shown_identity(outcome: &SignInOutcome) -> proto::Identity {
     match outcome {
-        SignInOutcome::Welcome(welcome) => welcome.identity.clone().unwrap().display_name,
+        SignInOutcome::Welcome(welcome) => welcome.identity.clone().unwrap(),
         SignInOutcome::Refused(error) => panic!("refused: {error:?}"),
     }
 }
@@ -162,40 +166,40 @@ async fn create_lobby(host: &mut TestConnection) -> proto::LobbyState {
 }
 
 #[tokio::test(start_paused = true)]
-async fn accounts_with_a_taken_name_get_a_stable_suffix_and_guests_are_refused() {
+async fn everyone_keeps_their_name_and_players_are_told_apart_by_id() {
     let hub = start_hub();
     let (_ada, first) = sign_in(&hub, google("sub-1", "Ada")).await;
-    assert_eq!(shown_name(&first), "Ada");
-
-    let (second_ada, second) = sign_in(&hub, google("sub-2", "ada")).await;
-    let suffixed = shown_name(&second);
-    assert!(suffixed.starts_with("ada#"), "{suffixed}");
-
-    // Same account again later: same suffix.
-    second_ada.unwrap().sign_out();
-    let (_again, again) = sign_in(&hub, google("sub-2", "ada")).await;
-    assert_eq!(shown_name(&again), suffixed);
-
-    // A guest cannot take any name in use, suffixed or not.
-    for taken in ["ADA", suffixed.as_str()] {
-        let (refused, outcome) = sign_in(&hub, guest(taken)).await;
-        assert!(refused.is_none());
-        assert!(matches!(
-            outcome,
-            SignInOutcome::Refused(error) if error.code == proto::ErrorCode::NameTaken as i32
-        ));
-    }
-
-    // A guest's name does not keep a bot account out either.
-    let (_guest, _) = sign_in(&hub, guest("Alpha")).await;
-    let (_bot, bot) = sign_in(
+    let (other_ada, second) = sign_in(&hub, google("sub-2", "Ada")).await;
+    let (_guest_ada, third) = sign_in(&hub, guest("Ada")).await;
+    let (_bot_ada, fourth) = sign_in(
         &hub,
         Authenticated::BotClient {
-            name: DisplayName::parse("alpha").unwrap(),
+            account: player_ids().bot_client(&DisplayName::parse("Ada").unwrap()),
+            name: DisplayName::parse("Ada").unwrap(),
         },
     )
     .await;
-    assert!(shown_name(&bot).starts_with("alpha#"));
+    let identities: Vec<proto::Identity> = [&first, &second, &third, &fourth]
+        .into_iter()
+        .map(shown_identity)
+        .collect();
+    assert!(
+        identities
+            .iter()
+            .all(|identity| identity.display_name == "Ada")
+    );
+    for (index, identity) in identities.iter().enumerate() {
+        assert!(
+            identities[index + 1..]
+                .iter()
+                .all(|other| other.id != identity.id)
+        );
+    }
+
+    // Same account again later: same id.
+    other_ada.unwrap().sign_out();
+    let (_again, again) = sign_in(&hub, google("sub-2", "Ada")).await;
+    assert_eq!(shown_identity(&again).id, identities[1].id);
 }
 
 #[tokio::test(start_paused = true)]
@@ -220,7 +224,7 @@ async fn an_account_back_within_the_grace_period_shows_its_new_name_and_avatar()
 
     let picture = "https://lh3.googleusercontent.com/a/new";
     let renamed = Authenticated::Google {
-        subject: "sub-1".into(),
+        account: player_ids().google("sub-1"),
         name: DisplayName::parse("Ada L").unwrap(),
         avatar: AvatarUrl::parse(picture),
     };
@@ -243,31 +247,36 @@ async fn an_account_back_within_the_grace_period_shows_its_new_name_and_avatar()
         })
         .await;
     assert_eq!(host_seen_by_member.avatar_url, picture);
-
-    // The old name is free again.
-    let (guest_ada, _) = sign_in(&hub, guest("Ada")).await;
-    assert!(guest_ada.is_some());
+    assert_eq!(host_seen_by_member.id, identity.id);
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_sign_in_whose_connection_vanished_does_not_keep_the_name() {
+async fn a_sign_in_whose_connection_vanished_leaves_no_session_behind() {
     let hub = start_hub();
-    let (outbound, _receiver) = Outbound::channel(ConnectionId::next());
+    let (outbound, mut vanished) = Outbound::channel(ConnectionId::next());
     let (reply, response) = oneshot::channel();
     drop(response);
     hub.send(HubCommand::SignIn(SignIn {
         connection: ConnectionId::next(),
         outbound,
-        who: guest("Ghost"),
+        who: google("sub-1", "Ghost"),
         session_token: String::new(),
         resume: None,
         server_info: proto::ServerInfo::default(),
         request_id: 1,
         reply,
     }));
-    let (connection, outcome) = sign_in(&hub, guest("Ghost")).await;
+    let (connection, outcome) = sign_in(&hub, google("sub-1", "Ghost")).await;
     assert!(connection.is_some());
-    assert_eq!(shown_name(&outcome), "Ghost");
+    assert_eq!(shown_identity(&outcome).display_name, "Ghost");
+    // A leftover session would have been taken over, telling the vanished connection so.
+    while let Some(text) = vanished.try_next() {
+        let message: proto::ServerMessage = serde_json::from_str(text.as_str()).unwrap();
+        assert!(
+            !matches!(message.message, Some(Reply::Error(_))),
+            "{message:?}"
+        );
+    }
 }
 
 #[tokio::test(start_paused = true)]

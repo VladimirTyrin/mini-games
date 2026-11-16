@@ -37,9 +37,19 @@ server are pushes (lobby updates, frames, chat, some errors).
 3. Credentials: guest name, Google ID token, bot key, or a `session_token` from an earlier
    `Welcome` (Google/bot sessions; HMAC-signed, 30 days; a bot token stops working once its key
    is removed from the server).
-4. Names online are unique (case-insensitive). A guest whose name is in use gets
-   `ERROR_CODE_NAME_TAKEN`. Google and bot accounts always get in: if their name is taken they
-   are shown as `Name#1a2b`, a suffix derived from the account (the same every time).
+4. A player is identified by `Identity.id`; `display_name` is only a label (sanitized, at most 24
+   characters) and several players may share it. Everything that refers to a player carries
+   its `Identity` (seats, lobby host, lobby summaries, observers, play-again votes, chat
+   senders, match and replay headers) or its id (`KickMember.player_id`); results, pauses and
+   drop votes refer to seats by slot. Clients compare players by id, never by name, and
+   disambiguate namesakes on screen themselves. Ids are opaque, with a prefix per kind:
+   - `g_…` Google account: an HMAC of the Google subject keyed by the server's session secret,
+     so it is the same on every session and device (as long as the secret is), and the Google
+     id itself is never shown to other players;
+   - `b_…` network bot: derived the same way from its configured name;
+   - `u_…` guest: new for every session;
+   - `bot-N` built-in bot: unique within its lobby.
+
    `Identity.avatar_url` is the Google profile picture (`https://`, hosted on
    `googleusercontent.com`, at most 512 bytes; anything else is dropped). It is empty for
    guests, bots and Google accounts without an acceptable picture. Session tokens carry it, so
@@ -48,9 +58,9 @@ server are pushes (lobby updates, frames, chat, some errors).
 5. `resume_token` reclaims the same session after a dropped connection (grace period 60 s in
    lobbies; during a match the seat's pause budget applies).
 6. Signing in to an account that is already online moves the session to the new connection;
-   the old one receives `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed. If the account's
-   name or avatar changed meanwhile, the session takes the new ones (same name policy) and its
-   lobby receives an updated `LobbyState`. A client must
+   the old one receives `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed. The id stays the
+   same; if the account's name or avatar changed meanwhile, the session takes the new ones and
+   its lobby receives an updated `LobbyState`. A client must
    not reconnect automatically after it, or two devices would keep taking the session from
    each other.
 7. Ping every 15 s; the server closes connections silent for 45 s.
@@ -64,7 +74,7 @@ REPLAY (shared replay)`.
 
 - The join reply (`LobbyState`) comes before anything about a running match or replay.
 - `LobbyList` pushes to clients outside lobbies are coalesced (up to 250 ms) and sent only
-  when a summary changed (seats, observers, phase, settings, name).
+  when a summary changed (seats, observers, phase, settings, name, host).
 - `POST_MATCH` carries `last_match_id` and `last_result`. When every seated human voted (or the
   last one who had not voted leaves) the next match starts; if it cannot (e.g. too few players
   are left), members get an `ERROR_CODE_INVALID_SETTINGS` push and the votes are cleared.

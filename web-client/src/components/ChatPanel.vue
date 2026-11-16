@@ -1,13 +1,27 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 import Avatar from "@/components/Avatar.vue";
+import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import type { ChatMessage } from "@/proto/minigames/v2/lobby_pb";
+import { useConnectionStore } from "@/stores/connection";
+import { playerLabels, sameIdentity } from "@/util/players";
 
-const props = defineProps<{ messages: ChatMessage[] }>();
+/** `players`: who is shown elsewhere on screen (lobby members), so chat labels match theirs. */
+const props = defineProps<{ messages: ChatMessage[]; players?: readonly (Identity | undefined)[] }>();
 const emit = defineEmits<{ send: [text: string] }>();
 const text = ref("");
 const list = ref<HTMLElement | null>(null);
+const connection = useConnectionStore();
+
+const labels = computed(() =>
+  playerLabels([...(props.players ?? []), ...props.messages.map((message) => message.sender)]),
+);
+const isMine = (message: ChatMessage) => sameIdentity(message.sender, connection.identity);
+function senderLabel(message: ChatMessage): string {
+  const label = (message.sender && labels.value.get(message.sender.id)) ?? "";
+  return isMine(message) ? `${label} (you)` : label;
+}
 
 function send(): void {
   const trimmed = text.value.trim();
@@ -29,9 +43,16 @@ watch(
   <section class="flex min-h-0 flex-col rounded-xl bg-panel">
     <ol ref="list" class="max-h-56 min-h-24 flex-1 space-y-1 overflow-y-auto p-3 text-sm">
       <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
-        <Avatar v-if="message.sender" :url="message.sender.avatarUrl" :name="message.sender.displayName" />
+        <Avatar
+          v-if="message.sender"
+          :url="message.sender.avatarUrl"
+          :name="message.sender.displayName"
+          :player-id="message.sender.id"
+        />
         <span class="min-w-0 break-words">
-          <span class="font-semibold text-emerald-300">{{ message.sender?.displayName }}:</span>
+          <span class="font-semibold" :class="isMine(message) ? 'text-sky-300' : 'text-emerald-300'"
+            >{{ senderLabel(message) }}:</span
+          >
           {{ message.text }}
         </span>
       </li>

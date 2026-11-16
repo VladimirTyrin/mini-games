@@ -1,7 +1,6 @@
 use mg_protocol::proto;
 
 use super::request_cooldowns::RequestCooldowns;
-use crate::auth::DisplayName;
 use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, LobbyId, ResumeToken};
 use crate::outbound::Outbound;
@@ -9,8 +8,6 @@ use crate::outbound::Outbound;
 #[derive(Debug)]
 pub(super) struct Session {
     pub who: Authenticated,
-    /// The name shown online: `who`'s name, with a suffix for an account whose name was taken.
-    pub display_name: DisplayName,
     pub identity: proto::Identity,
     pub resume_token: ResumeToken,
     /// `None` while disconnected (within the resume grace period).

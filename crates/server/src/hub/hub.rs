@@ -4,7 +4,6 @@ use std::sync::Arc;
 use mg_protocol::proto;
 use mg_protocol::proto::client_message::Message as ClientPayload;
 use mg_protocol::proto::server_message::Message;
-use sha2::{Digest, Sha256};
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::Instant;
 
@@ -15,16 +14,12 @@ use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
 use super::request_cooldowns::RequestCooldowns;
 use super::session::{Session, SessionConnection};
-use crate::auth::DisplayName;
-use crate::authenticated::Authenticated;
 use crate::codec;
 use crate::ids::{ConnectionId, LobbyId, ResumeToken, SessionId};
 use crate::matches::{MatchControl, MatchRequest};
 use crate::outbound::Outbound;
+use crate::player_id::PlayerId;
 use crate::timing::Timing;
-
-/// Suffix lengths (hex characters) tried, in order, when an account's name is taken online.
-const NAME_SUFFIX_LENGTHS: [usize; 4] = [4, 6, 8, 12];
 
 /// Owns every session and lobby. Runs as one task and handles one command at a time, so lobby
 /// state needs no locks; anything slow (bots, broadcasts of frames, replay validation) runs
@@ -34,10 +29,9 @@ pub(crate) struct Hub {
     pub(super) bot_cpu: Arc<Semaphore>,
     pub(super) timing: Timing,
     pub(super) sessions: HashMap<SessionId, Session>,
-    /// Lowercased online display name → owner, so online names stay unambiguous.
-    pub(super) names: HashMap<String, SessionId>,
-    /// Google subject / bot name → session, so a second sign-in takes the session over.
-    pub(super) accounts: HashMap<String, SessionId>,
+    /// Account → session, so a second sign-in takes the session over. Display names are
+    /// labels only and may repeat; players are told apart by id.
+    pub(super) accounts: HashMap<PlayerId, SessionId>,
     pub(super) resume_tokens: HashMap<ResumeToken, SessionId>,
     /// BTreeMap keeps the lobby list order stable.
     pub(super) lobbies: BTreeMap<LobbyId, Lobby>,
@@ -54,7 +48,6 @@ impl Hub {
             bot_cpu,
             timing,
             sessions: HashMap::new(),
-            names: HashMap::new(),
             accounts: HashMap::new(),
             resume_tokens: HashMap::new(),
             lobbies: BTreeMap::new(),
@@ -114,26 +107,6 @@ impl Hub {
         }
     }
 
-    /// The name `who` gets online. Guests take their name only if nobody online uses it.
-    /// Accounts always get in: on a collision the name gets a short suffix derived from the
-    /// account, so the same account gets the same suffix every time.
-    fn online_name(&self, who: &Authenticated) -> Option<DisplayName> {
-        let name = who.display_name();
-        if !self.names.contains_key(&name.uniqueness_key()) {
-            return Some(name.clone());
-        }
-        let account = who.account_key()?;
-        let digest: String = Sha256::digest(account.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
-        NAME_SUFFIX_LENGTHS
-            .iter()
-            .filter_map(|&length| digest.get(..length))
-            .map(|suffix| name.with_suffix(suffix))
-            .find(|candidate| !self.names.contains_key(&candidate.uniqueness_key()))
-    }
-
     fn sign_in(&mut self, sign_in: SignIn) {
         let SignIn {
             connection,
@@ -156,8 +129,8 @@ impl Hub {
             .filter(|id| self.sessions.get(*id).is_some_and(|s| s.who == who))
             .cloned();
         let existing = resumable.or_else(|| {
-            who.account_key()
-                .and_then(|key| self.accounts.get(&key).cloned())
+            who.account()
+                .and_then(|key| self.accounts.get(key).cloned())
         });
 
         let created = existing.is_none();
@@ -175,34 +148,24 @@ impl Hub {
                 previous.outbound.close();
             }
             if session.who != who {
-                self.refresh_account(&id, who);
+                // An account may come back with a new profile name or picture; lobby members
+                // see them in the `LobbyState` that `rejoin_lobby` pushes below.
+                session.identity = who.to_identity(&id);
+                session.who = who;
             }
             id
         } else {
-            let Some(display_name) = self.online_name(&who) else {
-                outbound.send(&codec::error(
-                    request_id,
-                    proto::ErrorCode::NameTaken,
-                    "this name is already in use",
-                ));
-                if reply.send(None).is_err() {
-                    tracing::debug!(%connection, "connection closed during sign-in");
-                }
-                return;
-            };
             let id = SessionId::random();
-            let identity = who.to_identity(id.as_str(), &display_name);
+            let identity = who.to_identity(&id);
             let resume_token = ResumeToken::random();
-            self.names.insert(display_name.uniqueness_key(), id.clone());
-            if let Some(key) = who.account_key() {
-                self.accounts.insert(key, id.clone());
+            if let Some(account) = who.account() {
+                self.accounts.insert(account.clone(), id.clone());
             }
             self.resume_tokens.insert(resume_token.clone(), id.clone());
             self.sessions.insert(
                 id.clone(),
                 Session {
                     who,
-                    display_name,
                     identity,
                     resume_token,
                     connection: Some(connection_info),
@@ -240,32 +203,6 @@ impl Hub {
         }
         if let Some(lobby_id) = lobby {
             self.rejoin_lobby(&session_id, &lobby_id, outbound);
-        }
-    }
-
-    /// An account taking over its session may come back with a new profile name or picture;
-    /// the session adopts them under the usual name policy. Lobby members see the change in
-    /// the `LobbyState` that `rejoin_lobby` pushes right after the sign-in.
-    fn refresh_account(&mut self, id: &SessionId, who: Authenticated) {
-        let Some(old_name_key) = self
-            .sessions
-            .get(id)
-            .map(|session| session.display_name.uniqueness_key())
-        else {
-            return;
-        };
-        self.names.remove(&old_name_key);
-        let Some(display_name) = self.online_name(&who) else {
-            // Unreachable for accounts, which always get a name; keep the old one regardless.
-            self.names.insert(old_name_key, id.clone());
-            return;
-        };
-        self.names.insert(display_name.uniqueness_key(), id.clone());
-        let identity = who.to_identity(id.as_str(), &display_name);
-        if let Some(session) = self.sessions.get_mut(id) {
-            session.who = who;
-            session.display_name = display_name;
-            session.identity = identity;
         }
     }
 
@@ -331,9 +268,8 @@ impl Hub {
     pub(super) fn end_session(&mut self, session_id: &SessionId) {
         self.leave_lobby(session_id);
         if let Some(session) = self.sessions.remove(session_id) {
-            self.names.remove(&session.display_name.uniqueness_key());
-            if let Some(key) = session.who.account_key() {
-                self.accounts.remove(&key);
+            if let Some(account) = session.who.account() {
+                self.accounts.remove(account);
             }
             self.resume_tokens.remove(&session.resume_token);
         }
@@ -531,6 +467,7 @@ impl Hub {
                 max_seats: u32::from(lobby.max_seats),
                 observers: u32::try_from(lobby.observers.len()).unwrap_or(u32::MAX),
                 phase: lobby.phase.to_wire() as i32,
+                host: Some(self.identity_of(&lobby.host)),
             })
             .collect();
         proto::LobbyList { lobbies }

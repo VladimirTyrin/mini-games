@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
+import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
@@ -106,6 +107,14 @@ const phaseLabel: Record<number, string> = {
           <span class="text-2xl">{{ pluginBySettings(summary.settings?.game.case)?.icon }}</span>
           <span class="min-w-0 flex-1">
             <span class="block truncate font-semibold">{{ summary.name }}</span>
+            <span v-if="summary.host" class="flex items-center gap-1 text-xs text-gray-300">
+              <Avatar
+                :url="summary.host.avatarUrl"
+                :name="summary.host.displayName"
+                :player-id="summary.host.id"
+              />
+              <span class="truncate">{{ summary.host.displayName }}</span>
+            </span>
             <span class="block text-xs text-gray-400">
               {{ summary.seatsTaken }}/{{ summary.maxSeats }} players · {{ summary.observers }} watching ·
               {{ phaseLabel[summary.phase] }}

@@ -226,6 +226,30 @@ pub(crate) fn bot_credentials(key: &str) -> proto::hello::Credentials {
     proto::hello::Credentials::BotClient(proto::BotClientCredentials { key: key.into() })
 }
 
+/// Session credentials for a Google account, signed with `SESSION_SECRET` the way the server
+/// signs them after verifying a Google ID token (which tests cannot obtain).
+pub(crate) fn google_session(subject: &str, name: &str) -> proto::hello::Credentials {
+    use base64::Engine;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use hmac::{Hmac, KeyInit, Mac};
+
+    let secret: Vec<u8> = SESSION_SECRET
+        .as_bytes()
+        .chunks(2)
+        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+        .collect();
+    let payload = serde_json::json!({
+        "v": 2, "kind": "google", "sub": subject, "name": name, "exp": 9_999_999_999_u64,
+    });
+    let encoded = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+    let mut mac = Hmac::<sha2::Sha256>::new_from_slice(&secret).unwrap();
+    mac.update(encoded.as_bytes());
+    let signature = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    proto::hello::Credentials::Session(proto::SessionCredentials {
+        token: format!("{encoded}.{signature}"),
+    })
+}
+
 pub(crate) fn error_push(message: &proto::ServerMessage) -> Option<proto::ErrorResponse> {
     match &message.message {
         Some(Reply::Error(error)) => Some(error.clone()),

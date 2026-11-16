@@ -2,7 +2,6 @@ import { defineStore } from "pinia";
 import { computed, ref, shallowRef, watch } from "vue";
 
 import type { BotKind, GameSettings } from "@/proto/minigames/v2/game_pb";
-import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import {
   type ChatMessage,
   ChatScope,
@@ -12,15 +11,12 @@ import {
   type LobbySummary,
 } from "@/proto/minigames/v2/lobby_pb";
 import type { ServerPayload } from "@/net/session";
+import { playerLabels, sameIdentity } from "@/util/players";
 
 import { useConnectionStore } from "./connection";
 import { useToastStore } from "./toasts";
 
 const MAX_CHAT_MESSAGES = 200;
-
-export function sameIdentity(a: Identity | undefined | null, b: Identity | undefined | null): boolean {
-  return !!a && !!b && a.kind === b.kind && a.id === b.id;
-}
 
 const CLOSED_REASONS: Record<LobbyClosedReason, string> = {
   [LobbyClosedReason.UNSPECIFIED]: "The lobby was closed",
@@ -45,6 +41,12 @@ export const useLobbyStore = defineStore("lobby", () => {
       ? current.value.seats.findIndex((seat) => sameIdentity(seat.occupant, connection.identity))
       : -1,
   );
+  /** Seated players first, then observers, so seat labels do not change when someone watches. */
+  const members = computed(() => [
+    ...(current.value?.seats.map((seat) => seat.occupant) ?? []),
+    ...(current.value?.observers ?? []),
+  ]);
+  const memberLabels = computed(() => playerLabels(members.value));
 
   let detach: (() => void)[] = [];
   watch(
@@ -126,7 +128,7 @@ export const useLobbyStore = defineStore("lobby", () => {
   const setReady = (ready: boolean) => call({ case: "setReady", value: { ready } });
   const addBot = (botKind: BotKind) => call({ case: "addBot", value: { botKind } });
   const removeSeat = (seat: number) => call({ case: "removeSeat", value: { seat } });
-  const kick = (member: Identity) => call({ case: "kickMember", value: { member } });
+  const kick = (playerId: string) => call({ case: "kickMember", value: { playerId } });
   const switchToObserver = () => call({ case: "switchToObserver", value: {} });
   const switchToPlayer = () => call({ case: "switchToPlayer", value: {} });
   const start = () => call({ case: "startMatch", value: {} });
@@ -144,6 +146,8 @@ export const useLobbyStore = defineStore("lobby", () => {
     lobbyListChat,
     isHost,
     mySeatIndex,
+    members,
+    memberLabels,
     inMatch,
     refresh,
     create,
