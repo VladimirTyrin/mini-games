@@ -30,6 +30,13 @@ onMounted(() => {
   if (!controller.value) void router.replace("/");
 });
 
+/** Set when this screen ends the match itself and navigates on its own. */
+let isLeavingOnPurpose = false;
+// The match can also end under this screen: the seat was lost after a long disconnect.
+watch(controller, (current) => {
+  if (!current && !isLeavingOnPurpose) void router.replace(lobby.current ? "/lobby" : "/online");
+});
+
 // A backgrounded tab or app must not let bots play on alone.
 function onVisibility(): void {
   const source = controller.value?.source;
@@ -56,6 +63,7 @@ function requestLeave(): void {
 async function leave(): Promise<void> {
   confirmingLeave.value = false;
   const kind = controller.value?.source.kind;
+  isLeavingOnPurpose = true;
   match.close();
   if (kind === "online") await lobby.leave();
   // In the app a replay is usually opened from the saved-replays list, so leave back to it.
@@ -90,6 +98,7 @@ function again(): void {
     return;
   }
   if (current.source.kind === "online") {
+    isLeavingOnPurpose = true;
     match.close();
     void lobby.votePlayAgain().catch(() => undefined);
     void router.push("/lobby");

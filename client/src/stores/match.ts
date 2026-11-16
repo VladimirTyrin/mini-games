@@ -16,6 +16,7 @@ import { saveReplayFile } from "@/platform/saved-replays";
 import { replayFileNameForMatch } from "@/replays/replay-file-name";
 
 import { useConnectionStore } from "./connection";
+import { useLobbyStore } from "./lobby";
 import { useToastStore } from "./toasts";
 import { errorMessage } from "@/util/error-message";
 import { sameIdentity } from "@/util/players";
@@ -28,6 +29,7 @@ export interface LocalSeat {
 /** The match on screen (online, local or replay) and its controller. */
 export const useMatchStore = defineStore("match", () => {
   const connection = useConnectionStore();
+  const lobby = useLobbyStore();
   const toasts = useToastStore();
   const controller = shallowRef<MatchController | null>(null);
   const replay = shallowRef<ReplayMatchSource | null>(null);
@@ -123,19 +125,27 @@ export const useMatchStore = defineStore("match", () => {
     () => connection.session,
     (session) => {
       detach?.();
+      const source = controller.value?.source;
       if (!session) {
         detach = null;
+        if (source instanceof OnlineMatchSource) close();
         return;
       }
+      if (source instanceof OnlineMatchSource) source.rebind(session);
       const offStarted = session.events.on("matchStarted", (header) => void startOnline(header));
       // A reload or reconnect into a running match: the server sends only a catch-up.
       const offCatchUp = session.events.on("catchUp", (catchUp) => {
-        if (controller.value || !catchUp.header) return;
+        if (controller.value || !catchUp.header || lobby.isLeaving) return;
         startOnline(catchUp.header)?.applyCatchUp(catchUp);
+      });
+      // The server kept the seat no longer (away past its grace period): the match is gone.
+      const offSignedIn = session.events.on("signedIn", ({ resumed }) => {
+        if (!resumed && controller.value?.source instanceof OnlineMatchSource) close();
       });
       detach = () => {
         offStarted();
         offCatchUp();
+        offSignedIn();
       };
     },
     { immediate: true },

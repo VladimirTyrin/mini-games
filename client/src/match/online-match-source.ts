@@ -22,7 +22,7 @@ export class OnlineMatchSource implements MatchSource {
   private isLeft = false;
 
   constructor(
-    private readonly session: Session,
+    private session: Session,
     readonly header: MatchHeader,
     readonly mySlot: number | null,
   ) {}
@@ -63,6 +63,15 @@ export class OnlineMatchSource implements MatchSource {
         if (resumed) this.requestCatchUp();
       }),
     );
+  }
+
+  /** The account signed in again over a new session ("Continue here"): follow it. */
+  rebind(session: Session): void {
+    if (this.isLeft || session === this.session) return;
+    for (const unsubscribe of this.unsubscribe) unsubscribe();
+    this.unsubscribe.length = 0;
+    this.session = session;
+    this.start();
   }
 
   async submit(command: GameCommandInit): Promise<void> {

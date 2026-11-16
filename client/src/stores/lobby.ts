@@ -10,6 +10,7 @@ import {
   type LobbyState,
   type LobbySummary,
 } from "@/proto/minigames/v2/lobby_pb";
+import { RequestError } from "@/net/request-error";
 import type { ServerPayload } from "@/net/session";
 import { playerLabels, sameIdentity } from "@/util/players";
 
@@ -34,6 +35,10 @@ export const useLobbyStore = defineStore("lobby", () => {
   const current = shallowRef<LobbyState | null>(null);
   const lobbyChat = ref<ChatMessage[]>([]);
   const lobbyListChat = ref<ChatMessage[]>([]);
+  /** The lobby left last: its late updates must not bring it back. */
+  let leftLobbyId: string | null = null;
+  /** A leave sent while the connection was down; the server puts us back on resume otherwise. */
+  const isLeaving = ref(false);
 
   const isHost = computed(() => sameIdentity(current.value?.host, connection.identity));
   const mySeatIndex = computed(() =>
@@ -70,7 +75,17 @@ export const useLobbyStore = defineStore("lobby", () => {
           const target = message.scope === ChatScope.LOBBY ? lobbyChat : lobbyListChat;
           target.value = [...target.value.slice(-(MAX_CHAT_MESSAGES - 1)), message];
         }),
-        session.events.on("signedIn", () => void refresh()),
+        session.events.on("signedIn", ({ resumed }) => {
+          if (isLeaving.value) {
+            if (resumed) void sendLeave();
+            else isLeaving.value = false;
+          } else if (!resumed && current.value) {
+            current.value = null;
+            lobbyChat.value = [];
+            toasts.show("You were away too long and lost your place in the lobby");
+          }
+          void refresh();
+        }),
       );
     },
     { immediate: true },
@@ -80,6 +95,7 @@ export const useLobbyStore = defineStore("lobby", () => {
   function accept(state: LobbyState): void {
     const known = current.value;
     if (known && known.lobbyId !== state.lobbyId) return;
+    if (!known && (isLeaving.value || state.lobbyId === leftLobbyId)) return;
     if (!known && !state.seats.some((seat) => sameIdentity(seat.occupant, connection.identity))) {
       if (!state.observers.some((observer) => sameIdentity(observer, connection.identity))) return;
     }
@@ -104,25 +120,38 @@ export const useLobbyStore = defineStore("lobby", () => {
 
   async function create(name: string, settings: GameSettings, maxSeats: number): Promise<void> {
     const reply = await call({ case: "createLobby", value: { name, settings, maxSeats } });
-    if (reply.case === "lobbyState") {
-      current.value = reply.value;
-      lobbyChat.value = [];
-    }
+    if (reply.case === "lobbyState") enter(reply.value);
   }
 
   async function join(lobbyId: string, asObserver: boolean): Promise<void> {
     const reply = await call({ case: "joinLobby", value: { lobbyId, asObserver } });
-    if (reply.case === "lobbyState") {
-      current.value = reply.value;
-      lobbyChat.value = [];
-    }
+    if (reply.case === "lobbyState") enter(reply.value);
+  }
+
+  function enter(state: LobbyState): void {
+    current.value = state;
+    lobbyChat.value = [];
+    leftLobbyId = null;
+    isLeaving.value = false;
   }
 
   async function leave(): Promise<void> {
+    leftLobbyId = current.value?.lobbyId ?? leftLobbyId;
     current.value = null;
     lobbyChat.value = [];
-    await call({ case: "leaveLobby", value: {} }).catch(() => undefined);
+    isLeaving.value = true;
+    await sendLeave();
     await refresh();
+  }
+
+  /** Leaves on the server; a request the server never got is sent again after the reconnect. */
+  async function sendLeave(): Promise<void> {
+    try {
+      await connection.requireSession().request({ case: "leaveLobby", value: {} });
+      isLeaving.value = false;
+    } catch (error) {
+      if (error instanceof RequestError && error.failure === "refused") isLeaving.value = false;
+    }
   }
 
   const setReady = (ready: boolean) => call({ case: "setReady", value: { ready } });
@@ -149,6 +178,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     members,
     memberLabels,
     inMatch,
+    isLeaving,
     refresh,
     create,
     join,
