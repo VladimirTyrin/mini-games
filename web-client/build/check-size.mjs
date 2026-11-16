@@ -7,9 +7,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
-// js: 135 since the setup forms (+4 KiB) and Stack Attack's vector worker, animation and touch
-// controls (+6 KiB); everything else of the app stays well inside.
-const budgetsKiB = { js: 135, wasm: 250, css: 30 };
+// js: 145. The largest share is the protobuf runtime with the message schemas (~70 KiB); the
+// setup forms, Stack Attack's animation and the PWA registration took it past 135.
+const budgetsKiB = { js: 145, wasm: 250, css: 30 };
 const totals = { js: 0, wasm: 0, css: 0 };
 const assetName = /[\w.-]+\.(?:js|wasm|css)\b/g;
 

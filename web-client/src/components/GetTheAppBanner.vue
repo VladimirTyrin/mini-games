@@ -6,25 +6,44 @@ import { storage } from "@/platform/storage";
 const DISMISSED_KEY = "mini-games.get-the-app.dismissed";
 const APK_URL = "https://braintvsminigames.xyz/downloads/mini-games.apk";
 
-// Only Android browsers: the app is an APK, there is nothing to offer elsewhere.
-const shown = ref(
-  !__NATIVE_APP__ && /android/i.test(navigator.userAgent) && storage.get(DISMISSED_KEY) === null,
-);
+/** What the device can install: the Android app, or the site itself on an iPhone home screen. */
+type Offer = "android-app" | "ios-home-screen" | null;
+
+function offerFor(): Offer {
+  if (__NATIVE_APP__ || storage.get(DISMISSED_KEY) !== null) return null;
+  const userAgent = navigator.userAgent;
+  if (/android/i.test(userAgent)) return "android-app";
+  // iPadOS reports a Mac; touch support tells them apart.
+  const isAppleMobile =
+    /iphone|ipad|ipod/i.test(userAgent) || (/macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
+  const installed =
+    matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return isAppleMobile && !installed ? "ios-home-screen" : null;
+}
+
+const offer = ref<Offer>(offerFor());
 
 function dismiss(): void {
   storage.set(DISMISSED_KEY, "1");
-  shown.value = false;
+  offer.value = null;
 }
 </script>
 
 <template>
-  <div v-if="shown" class="flex items-center gap-3 rounded-xl bg-sky-900/50 p-3 text-sm">
-    <span class="flex-1"
-      >Smoother on your phone: get the Android app — it works offline and updates itself.</span
-    >
-    <a :href="APK_URL" class="rounded-full bg-sky-600 px-4 py-2 font-semibold whitespace-nowrap"
-      >Get the app</a
-    >
+  <div v-if="offer" class="flex items-center gap-3 rounded-xl bg-sky-900/50 p-3 text-sm">
+    <template v-if="offer === 'android-app'">
+      <span class="flex-1"
+        >Smoother on your phone: get the Android app — it works offline and updates itself.</span
+      >
+      <a :href="APK_URL" class="whitespace-nowrap rounded-full bg-sky-600 px-4 py-2 font-semibold"
+        >Get the app</a
+      >
+    </template>
+    <span v-else class="flex-1">
+      Install it like an app: tap <span class="font-semibold">Share</span> ⎙, then
+      <span class="font-semibold">Add to Home Screen</span>. It works offline too.
+    </span>
     <button class="px-1 text-lg text-gray-400" aria-label="Not now" @click="dismiss">✕</button>
   </div>
 </template>
