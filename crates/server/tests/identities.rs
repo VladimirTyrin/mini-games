@@ -117,52 +117,71 @@ async fn the_lobby_list_names_each_host_by_identity() {
 }
 
 #[tokio::test]
-async fn a_google_account_keeps_an_opaque_id_on_every_connection() {
+async fn each_device_of_a_google_account_is_its_own_player() {
+    const SUBJECT: &str = "109876543210987654321";
+    let server = TestServer::start_with(with_session_secret).await;
+    let mut phone = server.client().await;
+    let phone_identity = phone
+        .hello(google_session(SUBJECT, "Ada"), "")
+        .await
+        .unwrap()
+        .identity
+        .unwrap();
+    assert_eq!(phone_identity.kind, proto::IdentityKind::Google as i32);
+    assert!(phone_identity.id.starts_with("g_"), "{}", phone_identity.id);
+    assert!(!phone_identity.id.contains(SUBJECT));
+
+    // A second device signs in too: nobody is pushed out, and the two are told apart.
+    let mut laptop = server.client().await;
+    let laptop_identity = laptop
+        .hello(google_session(SUBJECT, "Ada"), "")
+        .await
+        .unwrap()
+        .identity
+        .unwrap();
+    assert_ne!(laptop_identity.id, phone_identity.id);
+
+    let lobby = create_lobby(&mut phone, tictactoe_settings(3, 3), 2).await;
+    join_ready(&mut laptop, &lobby.lobby_id).await;
+    let state = phone
+        .expect(|m| lobby_state(m).filter(|state| state.seats.len() == 2))
+        .await;
+    assert_eq!(
+        seated_ids(&state),
+        vec![phone_identity.id.clone(), laptop_identity.id.clone()]
+    );
+    // Still connected: the phone's requests are answered.
+    let Reply::LobbyList(_) = phone
+        .request(Request::ListLobbies(proto::ListLobbies {}))
+        .await
+    else {
+        panic!("the first device must stay signed in");
+    };
+}
+
+#[tokio::test]
+async fn a_device_resumes_its_own_session_even_after_a_profile_change() {
     const SUBJECT: &str = "109876543210987654321";
     let server = TestServer::start_with(with_session_secret).await;
     let mut first = server.client().await;
-    let first_identity = first
+    let welcome = first
         .hello(google_session(SUBJECT, "Ada"), "")
         .await
-        .unwrap()
-        .identity
         .unwrap();
-    assert_eq!(first_identity.kind, proto::IdentityKind::Google as i32);
-    assert!(first_identity.id.starts_with("g_"), "{}", first_identity.id);
-    assert!(!first_identity.id.contains(SUBJECT));
+    let first_id = welcome.identity.unwrap().id;
+    drop(first);
 
-    // Another device, with a changed profile name: same player, and it takes the session over.
-    let mut second = server.client().await;
-    let second_identity = second
-        .hello(google_session(SUBJECT, "Ada Lovelace"), "")
+    let mut again = server.client().await;
+    let resumed = again
+        .hello(
+            google_session(SUBJECT, "Ada Lovelace"),
+            &welcome.resume_token,
+        )
         .await
-        .unwrap()
-        .identity
         .unwrap();
-    assert_eq!(second_identity.id, first_identity.id);
-    assert_eq!(second_identity.display_name, "Ada Lovelace");
-    let error = first.expect(error_push).await;
-    assert_eq!(error.code, proto::ErrorCode::SignedInElsewhere as i32);
-    assert!(first.closed().await);
-
-    // After a restart with the same secret, still the same id; another account gets another.
-    let restarted = TestServer::start_with(with_session_secret).await;
-    let mut later = restarted.client().await;
-    let later_identity = later
-        .hello(google_session(SUBJECT, "Ada"), "")
-        .await
-        .unwrap()
-        .identity
-        .unwrap();
-    assert_eq!(later_identity.id, first_identity.id);
-    let mut other = restarted.client().await;
-    let other_identity = other
-        .hello(google_session("123", "Ada"), "")
-        .await
-        .unwrap()
-        .identity
-        .unwrap();
-    assert_ne!(other_identity.id, first_identity.id);
+    let identity = resumed.identity.unwrap();
+    assert_eq!(identity.id, first_id);
+    assert_eq!(identity.display_name, "Ada Lovelace");
 }
 
 #[tokio::test]

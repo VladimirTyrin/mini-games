@@ -29,8 +29,8 @@ pub(crate) struct Hub {
     pub(super) bot_cpu: Arc<Semaphore>,
     pub(super) timing: Timing,
     pub(super) sessions: HashMap<SessionId, Session>,
-    /// Account → session, so a second sign-in takes the session over. Display names are
-    /// labels only and may repeat; players are told apart by id.
+    /// Exclusive account (a bot key) → session, so a second sign-in takes the session over.
+    /// Display names are labels only and may repeat; players are told apart by id.
     pub(super) accounts: HashMap<PlayerId, SessionId>,
     pub(super) resume_tokens: HashMap<ResumeToken, SessionId>,
     /// BTreeMap keeps the lobby list order stable.
@@ -126,10 +126,14 @@ impl Hub {
         let resumable = resume
             .as_ref()
             .and_then(|token| self.resume_tokens.get(token))
-            .filter(|id| self.sessions.get(*id).is_some_and(|s| s.who == who))
+            .filter(|id| {
+                self.sessions
+                    .get(*id)
+                    .is_some_and(|s| s.who.is_same_player(&who))
+            })
             .cloned();
         let existing = resumable.or_else(|| {
-            who.account()
+            who.exclusive_account()
                 .and_then(|key| self.accounts.get(key).cloned())
         });
 
@@ -139,7 +143,8 @@ impl Hub {
                 return;
             };
             if let Some(previous) = session.connection.replace(connection_info) {
-                // Same account signed in again (another tab/device): the old connection loses.
+                // The same session from a second connection (a bot restarted, a duplicated tab
+                // with the same resume token): the old connection loses.
                 previous.outbound.send(&codec::error(
                     0,
                     proto::ErrorCode::SignedInElsewhere,
@@ -158,7 +163,7 @@ impl Hub {
             let id = SessionId::random();
             let identity = who.to_identity(&id);
             let resume_token = ResumeToken::random();
-            if let Some(account) = who.account() {
+            if let Some(account) = who.exclusive_account() {
                 self.accounts.insert(account.clone(), id.clone());
             }
             self.resume_tokens.insert(resume_token.clone(), id.clone());
@@ -268,7 +273,7 @@ impl Hub {
     pub(super) fn end_session(&mut self, session_id: &SessionId) {
         self.leave_lobby(session_id);
         if let Some(session) = self.sessions.remove(session_id) {
-            if let Some(account) = session.who.account() {
+            if let Some(account) = session.who.exclusive_account() {
                 self.accounts.remove(account);
             }
             self.resume_tokens.remove(&session.resume_token);

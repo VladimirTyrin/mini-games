@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::ids::SessionId;
 
 /// `Identity.id`: what tells players apart. Display names are only labels and may repeat.
-/// Opaque, with a prefix per kind; an account gets the same id on every session and device.
+/// Opaque, with a prefix per kind (see `docs/protocol.md`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct PlayerId(Arc<str>);
 
@@ -22,6 +22,12 @@ impl PlayerId {
             id.push_str(&format!("{byte:02x}"));
         }
         Self(id.into())
+    }
+
+    /// One device (session) of an account: the account's id with the session's, so two devices
+    /// of one account are two players that still read as the same kind.
+    pub(crate) fn device_of(account: &PlayerId, session: &SessionId) -> Self {
+        Self(format!("{account}.{session}").into())
     }
 
     pub(crate) fn as_str(&self) -> &str {

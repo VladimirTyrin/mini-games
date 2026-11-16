@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// Each device or tab is its own player; this only shows when the very same session (a
+// duplicated tab carries its resume token) was opened in another window and took it over.
 import { useConnectionStore } from "@/stores/connection";
 
 const connection = useConnectionStore();
@@ -11,9 +13,12 @@ const connection = useConnectionStore();
     style="padding-top: max(0.75rem, env(safe-area-inset-top))"
     role="status"
   >
-    <span class="text-gray-200">You're playing on another device.</span>
-    <button class="rounded-full bg-emerald-600 px-4 py-2 font-semibold" @click="connection.continueHere()">
-      Continue here
+    <span class="text-gray-200">This game is open in another window.</span>
+    <button
+      class="rounded-full bg-emerald-600 px-4 py-2 font-semibold whitespace-nowrap"
+      @click="connection.continueHere()"
+    >
+      Play here
     </button>
   </div>
 </template>

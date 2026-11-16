@@ -43,9 +43,10 @@ server are pushes (lobby updates, frames, chat, some errors).
    senders, match and replay headers) or its id (`KickMember.player_id`); results, pauses and
    drop votes refer to seats by slot. Clients compare players by id, never by name, and
    disambiguate namesakes on screen themselves. Ids are opaque, with a prefix per kind:
-   - `g_…` Google account: an HMAC of the Google subject keyed by the server's session secret,
-     so it is the same on every session and device (as long as the secret is), and the Google
-     id itself is never shown to other players;
+   - `g_….…` Google account on one device: an HMAC of the Google subject keyed by the server's
+     session secret (so the Google id itself is never shown to other players), then the session.
+     Every device or browser tab of an account is its own player with its own id: an account
+     can play from a phone and a laptop at once, even at one table;
    - `b_…` network bot: derived the same way from its configured name;
    - `u_…` guest: new for every session;
    - `bot-N` built-in bot: unique within its lobby.
@@ -57,12 +58,15 @@ server are pushes (lobby updates, frames, chat, some errors).
    client signs in with Google again.
 5. `resume_token` reclaims the same session after a dropped connection (grace period 60 s in
    lobbies; during a match the seat's pause budget applies).
-6. Signing in to an account that is already online moves the session to the new connection;
-   the old one receives `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed. The id stays the
-   same; if the account's name or avatar changed meanwhile, the session takes the new ones and
-   its lobby receives an updated `LobbyState`. A client must
-   not reconnect automatically after it, or two devices would keep taking the session from
-   each other.
+6. A session is taken over only by a sign-in that resumes it (its `resume_token`, e.g. a
+   duplicated browser tab) or, for network bots, by another sign-in with the same key (a
+   restarted bot gets its seat back). The old connection receives
+   `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed; a client must not reconnect
+   automatically after it, or the two would keep taking the session from each other. A Google
+   account signing in on another device gets a new session instead. A resumed account session
+   whose name or avatar changed meanwhile takes the new ones, and its lobby receives an updated
+   `LobbyState`. The web client keeps the resume token per tab; the Android app keeps it across
+   restarts, so a killed app gets its seat back.
 7. Ping every 15 s; the server closes connections silent for 45 s.
 8. On shutdown the server pushes `ServerShuttingDown` and closes connections.
 

@@ -12,7 +12,7 @@ use tokio::sync::{Semaphore, mpsc, oneshot};
 use super::{Hub, HubCommand, HubHandle, SignIn};
 use crate::auth::{AvatarUrl, DisplayName, PlayerIdKey};
 use crate::authenticated::Authenticated;
-use crate::ids::{ConnectionId, LobbyId, MatchId, SessionId};
+use crate::ids::{ConnectionId, LobbyId, MatchId, ResumeToken, SessionId};
 use crate::matches::MatchAborted;
 use crate::outbound::{Outbound, OutboundReceiver};
 use crate::timing::Timing;
@@ -49,6 +49,14 @@ async fn next_message(receiver: &mut OutboundReceiver) -> proto::ServerMessage {
 }
 
 async fn sign_in(hub: &HubHandle, who: Authenticated) -> (Option<TestConnection>, SignInOutcome) {
+    sign_in_resuming(hub, who, None).await
+}
+
+async fn sign_in_resuming(
+    hub: &HubHandle,
+    who: Authenticated,
+    resume: Option<ResumeToken>,
+) -> (Option<TestConnection>, SignInOutcome) {
     let id = ConnectionId::next();
     let (outbound, mut receiver) = Outbound::channel(id);
     let (reply, response) = oneshot::channel();
@@ -57,7 +65,7 @@ async fn sign_in(hub: &HubHandle, who: Authenticated) -> (Option<TestConnection>
         outbound,
         who,
         session_token: String::new(),
-        resume: None,
+        resume,
         server_info: proto::ServerInfo::default(),
         request_id: 1,
         reply,
@@ -198,17 +206,20 @@ async fn everyone_keeps_their_name_and_players_are_told_apart_by_id() {
         );
     }
 
-    // Same account again later: same id.
+    // The same account on another device (or after signing out) is another player.
     other_ada.unwrap().sign_out();
     let (_again, again) = sign_in(&hub, google("sub-2", "Ada")).await;
-    assert_eq!(shown_identity(&again).id, identities[1].id);
+    assert_ne!(shown_identity(&again).id, identities[1].id);
 }
 
 #[tokio::test(start_paused = true)]
 async fn an_account_back_within_the_grace_period_shows_its_new_name_and_avatar() {
     let hub = start_hub();
-    let (host, _) = sign_in(&hub, google("sub-1", "Ada")).await;
+    let (host, signed_in) = sign_in(&hub, google("sub-1", "Ada")).await;
     let mut host = host.unwrap();
+    let SignInOutcome::Welcome(first_welcome) = signed_in else {
+        panic!("refused: {signed_in:?}");
+    };
     let (member, _) = sign_in(&hub, guest("Member")).await;
     let mut member = member.unwrap();
     let lobby = create_lobby(&mut host).await;
@@ -230,7 +241,8 @@ async fn an_account_back_within_the_grace_period_shows_its_new_name_and_avatar()
         name: DisplayName::parse("Ada L").unwrap(),
         avatar: AvatarUrl::parse(picture),
     };
-    let (again, outcome) = sign_in(&hub, renamed).await;
+    let resume = ResumeToken::parse(&first_welcome.resume_token);
+    let (again, outcome) = sign_in_resuming(&hub, renamed, resume).await;
     assert_eq!(again.unwrap().session, host.session);
     let SignInOutcome::Welcome(welcome) = outcome else {
         panic!("refused: {outcome:?}");

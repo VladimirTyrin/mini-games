@@ -28,20 +28,35 @@ impl Authenticated {
         }
     }
 
-    /// Accounts (Google, bot keys) are unique: a second sign-in takes the session over.
-    /// Guests have no account, so two guests are never the same person.
-    pub(crate) fn account(&self) -> Option<&PlayerId> {
+    /// A bot key is one player: a second sign-in with it takes the session over (a restarted
+    /// bot process gets its seat back). A Google account plays from several devices at once,
+    /// each device its own player, so it never takes a session over; guests have no account.
+    pub(crate) fn exclusive_account(&self) -> Option<&PlayerId> {
         match self {
-            Self::Guest { .. } => None,
-            Self::Google { account, .. } | Self::BotClient { account, .. } => Some(account),
+            Self::BotClient { account, .. } => Some(account),
+            Self::Guest { .. } | Self::Google { .. } => None,
         }
     }
 
-    /// A guest is a new player in every session; an account keeps its id.
+    /// Whether a resumed session belongs to this sign-in. An account matches by account, so a
+    /// changed profile name or picture still resumes; a guest by name.
+    pub(crate) fn is_same_player(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Google { account: a, .. }, Self::Google { account: b, .. })
+            | (Self::BotClient { account: a, .. }, Self::BotClient { account: b, .. }) => a == b,
+            (Self::Guest { name: a }, Self::Guest { name: b }) => a == b,
+            _ => false,
+        }
+    }
+
+    /// A guest is a new player in every session, and so is each device of a Google account; a
+    /// bot keeps its id.
     pub(crate) fn player_id(&self, session: &SessionId) -> PlayerId {
-        self.account()
-            .cloned()
-            .unwrap_or_else(|| PlayerId::guest(session))
+        match self {
+            Self::Guest { .. } => PlayerId::guest(session),
+            Self::Google { account, .. } => PlayerId::device_of(account, session),
+            Self::BotClient { account, .. } => account.clone(),
+        }
     }
 
     pub(crate) fn to_identity(&self, session: &SessionId) -> proto::Identity {
