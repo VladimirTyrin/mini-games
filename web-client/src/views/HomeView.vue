@@ -4,6 +4,7 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
+import GetTheAppBanner from "@/components/GetTheAppBanner.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { gamePlugins } from "@/games";
 import { useMatchStore } from "@/stores/match";
@@ -33,6 +34,7 @@ const isNativeApp = __NATIVE_APP__;
   </AppHeader>
   <main class="mx-auto w-full max-w-3xl flex-1 space-y-6 p-4">
     <UpdateBanner />
+    <GetTheAppBanner />
     <section>
       <h2 class="mb-3 text-sm uppercase tracking-wide text-gray-400">Play now — works offline</h2>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
