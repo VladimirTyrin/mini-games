@@ -46,30 +46,28 @@ fn a1_pushed_box_without_support_falls() {
     assert_eq!(worker(&game, 0).feet, Cell::new(4, 1));
 }
 
+/// Only resting boxes complete a row, so a clear can no longer leave a box hanging over a hole
+/// in play; the field-level test `line_clear_makes_boxes_above_a_hole_fall` keeps that guard.
+/// Here: a crate still falling when the row below it clears is carried down and completes the
+/// next row once it rests.
 #[test]
 fn a9_boxes_shifted_by_a_line_clear_keep_falling() {
     let mut game = new_game(8, 8, 1);
     fill_row(&mut game, 0, &[2]);
     fill_row(&mut game, 1, &[2]);
-    put_falling_box(&mut game, 2, 2);
+    put_falling_box(&mut game, 2, 1);
     let upper = put_falling_box(&mut game, 2, 3);
     place_worker(&mut game, 0, 6, 2);
 
-    steps(&mut game, 1);
+    steps(&mut game, 2);
     assert_eq!(view(&game).lines_cleared, 1);
-    let shifted = view(&game)
-        .boxes
-        .into_iter()
-        .find(|b| b.id == upper)
-        .unwrap();
-    assert_eq!(shifted.cell, Cell::new(2, 1));
-    assert!(shifted.falling, "box above the gap must not hang");
+    assert_eq!(box_cell(&game, upper), Some(Cell::new(2, 0)));
 
     steps(&mut game, 1);
     assert_eq!(
         view(&game).lines_cleared,
         2,
-        "it fell into row 0 and completed it"
+        "it came to rest in row 0 and completed it"
     );
 }
 
@@ -119,7 +117,8 @@ fn a6_line_clear_happens_before_the_ceiling_check() {
         put_box(&mut game, 1, y);
     }
     put_falling_box(&mut game, 1, 5);
-    put_falling_box(&mut game, 0, 1);
+    // Lands this tick, together with the crate reaching the top row.
+    put_falling_box(&mut game, 0, 0);
     place_worker(&mut game, 0, 5, 1);
 
     steps(&mut game, 1);
@@ -133,8 +132,8 @@ fn a7_reported_points_equal_the_score_increase() {
     let mut game = new_game(8, 8, 1);
     fill_row(&mut game, 0, &[2]);
     fill_row(&mut game, 1, &[2]);
+    put_falling_box(&mut game, 2, 0);
     put_falling_box(&mut game, 2, 1);
-    put_falling_box(&mut game, 2, 2);
     place_worker(&mut game, 0, 6, 2);
 
     steps(&mut game, 1);

@@ -26,6 +26,8 @@ impl StackAttack {
             self.end_reason = Some(EndReason::CeilingReached);
         } else if !self.any_worker_alive() {
             self.end_reason = Some(EndReason::WorkersCrushed);
+        } else if self.all_living_workers_trapped() {
+            self.end_reason = Some(EndReason::WorkersTrapped);
         }
         self.ticks_survived = self.ticks_survived.next();
         self.ticks_since_last_crane = self.ticks_since_last_crane.saturating_add(1);
@@ -46,7 +48,7 @@ impl StackAttack {
         }
     }
 
-    fn living_worker_at(&self, cell: Cell) -> bool {
+    pub(super) fn living_worker_at(&self, cell: Cell) -> bool {
         self.workers
             .iter()
             .any(|w| w.is_alive() && w.occupies(cell))

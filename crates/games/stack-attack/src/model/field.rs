@@ -177,11 +177,14 @@ impl Field {
         landed
     }
 
-    /// Removes full rows (falling boxes count, as in legacy) and shifts everything above each
-    /// cleared row down by one. Returns the cleared rows, bottom first.
+    /// Removes rows full of resting boxes and shifts everything above each cleared row down by
+    /// one. Returns the cleared rows, bottom first.
+    ///
+    /// Deliberate change: legacy counted falling boxes too, so a crate dropping into the gap a
+    /// worker stands in completed the row at head height and vanished instead of crushing them.
     pub(crate) fn clear_full_rows(&mut self) -> Vec<Row> {
         let full: Vec<i32> = (0..self.height)
-            .filter(|&y| (0..self.width).all(|x| self.is_occupied(Cell::new(x, y))))
+            .filter(|&y| (0..self.width).all(|x| self.has_resting_box_at(Cell::new(x, y))))
             .collect();
         for &row in full.iter().rev() {
             self.boxes.retain(|b| b.cell.y != row);

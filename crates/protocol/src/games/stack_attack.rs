@@ -222,6 +222,7 @@ fn end_reason_to_wire(reason: EndReason) -> proto::StackAttackEndReason {
         EndReason::WorkersCrushed => proto::StackAttackEndReason::WorkersCrushed,
         EndReason::CeilingReached => proto::StackAttackEndReason::CeilingReached,
         EndReason::AllWorkersLeft => proto::StackAttackEndReason::AllWorkersLeft,
+        EndReason::WorkersTrapped => proto::StackAttackEndReason::WorkersTrapped,
     }
 }
 

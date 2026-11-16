@@ -1,6 +1,7 @@
 mod constants;
 mod end_reason;
 mod simulation;
+mod trap;
 
 pub use constants::{
     CRANE_SPAWN_INTERVAL_STEP, INITIAL_CRANE_SPAWN_INTERVAL_TICKS, INITIAL_MAX_CRANES,

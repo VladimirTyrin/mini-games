@@ -6,4 +6,6 @@ pub enum EndReason {
     CeilingReached,
     /// No worker is alive and the last one left.
     AllWorkersLeft,
+    /// Every living worker stands in a pit they can neither walk nor jump out of.
+    WorkersTrapped,
 }

@@ -112,6 +112,8 @@ enum StackAttackEndReason {
   STACK_ATTACK_END_REASON_CEILING_REACHED = 2;
   // No worker is alive and the last one left.
   STACK_ATTACK_END_REASON_ALL_WORKERS_LEFT = 3;
+  // Every living worker stands in a pit they can neither walk nor jump out of.
+  STACK_ATTACK_END_REASON_WORKERS_TRAPPED = 4;
 }
 
 // What happened during the latest frame, for animations and sounds.

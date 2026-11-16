@@ -5,6 +5,7 @@ const END_REASONS: Partial<Record<StackAttackEndReason, string>> = {
   [StackAttackEndReason.WORKERS_CRUSHED]: "Crushed by a falling crate",
   [StackAttackEndReason.CEILING_REACHED]: "The crates reached the ceiling",
   [StackAttackEndReason.ALL_WORKERS_LEFT]: "Every worker left",
+  [StackAttackEndReason.WORKERS_TRAPPED]: "Trapped in a pit with no way out",
 };
 
 export function describeStackAttackEnd(view: GameView): string | null {

@@ -324,6 +324,7 @@ impl Game for StackAttack {
             Some(EndReason::WorkersCrushed) => 1,
             Some(EndReason::CeilingReached) => 2,
             Some(EndReason::AllWorkersLeft) => 3,
+            Some(EndReason::WorkersTrapped) => 4,
         });
     }
 }

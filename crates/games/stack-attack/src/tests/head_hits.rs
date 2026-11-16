@@ -211,19 +211,25 @@ fn a_head_hit_shields_a_worker_standing_below() {
 #[test]
 fn a_broken_crate_never_completes_a_row() {
     let setup = || {
-        let mut game = new_game(8, 8, 1);
+        // The second worker stands free on top, so the pit alone does not end the game.
+        let mut game = new_game(8, 8, 2);
         for y in 0..3 {
             fill_row(&mut game, y, &[3]);
         }
         place_worker(&mut game, 0, 3, 0);
+        place_worker(&mut game, 1, 6, 3);
         put_falling_box(&mut game, 3, 3);
         game
     };
 
+    // Standing still, the crate drops through row 2 without completing it and crushes them.
     let mut standing = setup();
     steps(&mut standing, 1);
-    assert_eq!(view(&standing).lines_cleared, 1, "the crate fills row 2");
+    assert_eq!(view(&standing).lines_cleared, 0);
     assert_eq!(worker(&standing, 0).status, WorkerStatus::Alive);
+    steps(&mut standing, 1);
+    assert_eq!(view(&standing).lines_cleared, 0);
+    assert_eq!(worker(&standing, 0).status, WorkerStatus::Crushed);
 
     let mut jumping = setup();
     send(&mut jumping, 0, Command::Jump);

@@ -23,7 +23,11 @@ impl Worker {
     }
 
     pub(crate) fn head(&self) -> Cell {
-        Cell::new(self.feet.x, self.feet.y + WORKER_HEIGHT - 1)
+        Self::head_for(self.feet)
+    }
+
+    pub(crate) fn head_for(feet: Cell) -> Cell {
+        Cell::new(feet.x, feet.y + WORKER_HEIGHT - 1)
     }
 
     pub(crate) fn is_alive(&self) -> bool {
