@@ -122,7 +122,7 @@ mod tests {
         let mut budgets = DisconnectBudgets::new(Duration::from_secs(60), Duration::from_secs(20));
         budgets.disconnect(slot, start);
         budgets.forget(slot, start + Duration::from_secs(25));
-        assert!(!budgets.any_disconnected());
+        assert!(budgets.disconnected().next().is_none());
         assert_eq!(
             budgets.budget_left(slot, start + Duration::from_secs(90)),
             Duration::from_secs(35)
