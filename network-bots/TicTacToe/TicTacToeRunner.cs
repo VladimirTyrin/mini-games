@@ -76,53 +76,30 @@ public sealed class TicTacToeRunner(BotSession session, IBot bot, TicTacToeBotKi
         var play = new MatchPlay(header, MySlot);
         try
         {
-            await ActAsync(play, cancellationToken).ConfigureAwait(false);
+            var actFirst = true;
             while (true)
             {
-                ServerMessage message;
+                // A lost connection can surface on a send (a move) as well as on a receive: both
+                // resume the seat the same way instead of ending the bot.
                 try
                 {
-                    message = await session.Connection.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                    if (actFirst)
+                    {
+                        actFirst = false;
+                        await ActAsync(play, cancellationToken).ConfigureAwait(false);
+                    }
+                    var message = await session.Connection.ReceiveAsync(cancellationToken).ConfigureAwait(false);
+                    if (await HandleAsync(play, header, message, cancellationToken).ConfigureAwait(false) is { } ended)
+                        return ended;
                 }
                 catch (ConnectionLostException)
                 {
                     if (!await session.ReconnectAsync(cancellationToken).ConfigureAwait(false))
                         throw new InvalidOperationException("the server did not restore the seat after reconnecting");
-                    // The server pushes a catch-up when the seat is resumed.
+                    // The server pushes a catch-up when the seat is resumed, or the lobby state when
+                    // the match ended meanwhile.
                     play.WaitingForCatchUp = true;
-                    continue;
-                }
-
-                switch (message.MessageCase)
-                {
-                    case ServerMessage.MessageOneofCase.Frame:
-                        await OnFrameAsync(play, message.Frame, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case ServerMessage.MessageOneofCase.CatchUp when message.CatchUp.Header?.MatchId == header.MatchId:
-                        await OnCatchUpAsync(play, message.CatchUp, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case ServerMessage.MessageOneofCase.Ack when message.RequestId == play.SubmissionRequest:
-                        play.SubmissionRequest = null;
-                        play.AwaitingOwnFrame = true;
-                        break;
-                    case ServerMessage.MessageOneofCase.Error when message.RequestId == play.SubmissionRequest:
-                        Console.WriteLine($"Move refused: {message.Error.Code} {message.Error.Message}");
-                        play.SubmissionRequest = null;
-                        break;
-                    case ServerMessage.MessageOneofCase.Error when message.Error.Code == ErrorCode.SignedInElsewhere:
-                        throw new ServerErrorException(message.Error);
-                    case ServerMessage.MessageOneofCase.Paused when message.Paused.MatchId == header.MatchId:
-                        play.Paused = true;
-                        break;
-                    case ServerMessage.MessageOneofCase.Resumed when message.Resumed.MatchId == header.MatchId:
-                        await Task.Delay((int)message.Resumed.CountdownMs, cancellationToken).ConfigureAwait(false);
-                        play.Paused = false;
-                        play.DecidedAt = null;
-                        await ActAsync(play, cancellationToken).ConfigureAwait(false);
-                        break;
-                    case ServerMessage.MessageOneofCase.Ended when message.Ended.MatchId == header.MatchId:
-                        MatchEnded?.Invoke(View(play), message.Ended);
-                        return message.Ended;
+                    play.SubmissionRequest = null;
                 }
             }
         }
@@ -130,6 +107,63 @@ public sealed class TicTacToeRunner(BotSession session, IBot bot, TicTacToeBotKi
         {
             play.Mirror.Dispose();
         }
+    }
+
+    /// <summary>Applies one server message; returns the end of the match once it is over.</summary>
+    private async Task<MatchEnded?> HandleAsync(
+        MatchPlay play, MatchHeader header, ServerMessage message, CancellationToken cancellationToken)
+    {
+        switch (message.MessageCase)
+        {
+            case ServerMessage.MessageOneofCase.Frame:
+                await OnFrameAsync(play, message.Frame, cancellationToken).ConfigureAwait(false);
+                break;
+            case ServerMessage.MessageOneofCase.CatchUp when message.CatchUp.Header?.MatchId == header.MatchId:
+                await OnCatchUpAsync(play, message.CatchUp, cancellationToken).ConfigureAwait(false);
+                break;
+            case ServerMessage.MessageOneofCase.Ack when message.RequestId == play.SubmissionRequest:
+                play.SubmissionRequest = null;
+                play.AwaitingOwnFrame = true;
+                break;
+            case ServerMessage.MessageOneofCase.Error when message.RequestId == play.SubmissionRequest:
+                Console.WriteLine($"Move refused: {message.Error.Code} {message.Error.Message}");
+                play.SubmissionRequest = null;
+                break;
+            case ServerMessage.MessageOneofCase.Error when message.Error.Code == ErrorCode.SignedInElsewhere:
+                throw new ServerErrorException(message.Error);
+            case ServerMessage.MessageOneofCase.Paused when message.Paused.MatchId == header.MatchId:
+                play.Paused = true;
+                break;
+            case ServerMessage.MessageOneofCase.Resumed when message.Resumed.MatchId == header.MatchId:
+                await ResumeAfterAsync(play, message.Resumed.CountdownMs, cancellationToken).ConfigureAwait(false);
+                break;
+            case ServerMessage.MessageOneofCase.Ended when message.Ended.MatchId == header.MatchId:
+                MatchEnded?.Invoke(View(play), message.Ended);
+                return message.Ended;
+            // The match ended while the connection was down: no Ended comes, the resumed lobby
+            // reports the result instead.
+            case ServerMessage.MessageOneofCase.LobbyState
+                when play.WaitingForCatchUp && message.LobbyState.LastMatchId == header.MatchId:
+            {
+                var ended = new MatchEnded
+                {
+                    MatchId = header.MatchId,
+                    Result = message.LobbyState.LastResult,
+                    FinalTick = play.Mirror.NextTick,
+                };
+                MatchEnded?.Invoke(View(play), ended);
+                return ended;
+            }
+        }
+        return null;
+    }
+
+    private async Task ResumeAfterAsync(MatchPlay play, uint countdownMs, CancellationToken cancellationToken)
+    {
+        await Task.Delay((int)countdownMs, cancellationToken).ConfigureAwait(false);
+        play.Paused = false;
+        play.DecidedAt = null;
+        await ActAsync(play, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task OnFrameAsync(MatchPlay play, TickFrame frame, CancellationToken cancellationToken)
@@ -166,8 +200,11 @@ public sealed class TicTacToeRunner(BotSession session, IBot bot, TicTacToeBotKi
         play.SubmissionRequest = null;
         play.AwaitingOwnFrame = false;
         play.DecidedAt = null;
-        play.Paused = catchUp.Pauses.Count > 0 || catchUp.ResumeCountdownMs > 0;
-        if (!play.Paused)
+        play.Paused = catchUp.Pauses.Count > 0;
+        // A catch-up sent during the resume countdown: no Resumed follows, so wait it out here.
+        if (!play.Paused && catchUp.ResumeCountdownMs > 0)
+            await ResumeAfterAsync(play, catchUp.ResumeCountdownMs, cancellationToken).ConfigureAwait(false);
+        else if (!play.Paused)
             await ActAsync(play, cancellationToken).ConfigureAwait(false);
     }
 
