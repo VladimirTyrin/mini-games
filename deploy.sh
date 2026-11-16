@@ -21,6 +21,7 @@ REMOTE_DIR="/opt/mini-games-server"
 
 HOST="root@146.103.106.44"
 SSH_KEY="${HOME}/.ssh/id_ed25519_github"
+GOOGLE_CLIENT_ID="996811598578-2dtc8gc90413c0qbtk87fhm84arqbrd3.apps.googleusercontent.com"
 MODE="tls"
 DOMAIN="braintvsminigames.xyz"
 EMAIL=""
@@ -60,13 +61,13 @@ if [[ "$SKIP_BUILD" == false ]]; then
     (
         cd "${SCRIPT_DIR}/web-client"
         [[ -d node_modules ]] || npm ci
-        npm run generate:proto
         # No VITE_SERVER_URL: the page served by this host talks to the same host (/ws).
         npm run build
     )
     echo "==> Building server (${TARGET})"
     rustup target list --installed | grep -qx "${TARGET}" || rustup target add "${TARGET}"
-    cargo build --release --target "${TARGET}" -p mini_games_server
+    # zig provides the musl C toolchain that ring (TLS for Google key fetches) needs.
+    cargo zigbuild --release --target "${TARGET}" -p mg-server
 fi
 
 [[ -f "$BUILD_BINARY" ]] || die "binary not found: $BUILD_BINARY"
@@ -147,14 +148,14 @@ systemctl enable -q "${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 
 for _ in $(seq 1 20); do
-    if curl -fs -o /dev/null http://127.0.0.1:5000/ui/ 2>/dev/null; then break; fi
+    if curl -fs -o /dev/null http://127.0.0.1:5000/healthz 2>/dev/null; then break; fi
     sleep 0.5
 done
 if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
     journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
     exit 1
 fi
-curl -fsS -o /dev/null http://127.0.0.1/ui/ && echo "==> nginx -> server OK"
+curl -fsS -o /dev/null http://127.0.0.1/healthz && curl -fsS -o /dev/null http://127.0.0.1/ && echo "==> nginx OK"
 rm -rf "${REMOTE_DIR}/web.old"
 REMOTE
 

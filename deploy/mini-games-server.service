@@ -6,14 +6,16 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/mini-games-server
-EnvironmentFile=-/etc/mini-games-server.env
-ExecStart=/opt/mini-games-server/mini_games_server --static-files-path /opt/mini-games-server/web
+# MG_SESSION_SECRET, MG_GOOGLE_CLIENT_ID, MG_ALLOW_GUESTS, MG_BOT_KEYS (created by deploy.sh).
+EnvironmentFile=/etc/mini-games-server.env
+Environment=MG_LISTEN=127.0.0.1:5000
+ExecStart=/opt/mini-games-server/mini_games_server
 Restart=always
 RestartSec=3
 KillSignal=SIGTERM
 TimeoutStopSec=10
 
-# Hardening: the server only needs to read its own files and listen on localhost.
+# Hardening: the server only reads its own binary and listens on localhost.
 DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -25,6 +27,7 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=yes
+MemoryMax=300M
 
 [Install]
 WantedBy=multi-user.target
