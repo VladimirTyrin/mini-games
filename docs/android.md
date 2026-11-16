@@ -1,6 +1,6 @@
 # Android app
 
-The app is the web client inside Capacitor 8 (`web-client/android`). Games, bots and replays run
+The app is the web client inside Capacitor 8 (`client/android`). Games, bots and replays run
 on the same WASM core as in the browser; the app adds the system back button, native Google
 sign-in and an editable server address (Settings).
 
@@ -10,7 +10,7 @@ Needs JDK 21 and the Android SDK (platform 36, build-tools 36) with `JAVA_HOME` 
 `ANDROID_HOME` set, plus the usual web toolchain (see `AGENTS.md`).
 
 ```bash
-cd web-client
+cd client
 npm run android:apk          # signed release APK
 npm run android:apk:debug    # debug APK
 npm run android:sync         # web bundle + cap sync only (then open android/ in Android Studio)
@@ -79,7 +79,7 @@ packages in `package-lock.json`. `build/android.mjs` bakes it into the Android w
 | `web-<build>.zip` | the Android web bundle (`dist/`, `index.html` at the zip root) |
 | `web.json` | `{ build, versionName, nativeFingerprint, zip, sha256 }` |
 
-`./deploy.sh --apk web-client/android/dist/mini-games.apk` uploads all four to `/downloads/`:
+`./deploy.sh --apk client/android/dist/mini-games.apk` uploads all four to `/downloads/`:
 the APK before `android.json`, the zip before `web.json`, so a published file never names one
 that is not there yet. The server keeps the 3 newest `web-*.zip`. The APK files must be of the
 build being deployed (see [deploy.md](deploy.md)).
@@ -122,10 +122,11 @@ offered the APK instead of the bundle.
 
 ## Releases
 
-Pushing a tag `v<workspace version>` (e.g. `v2.0.0`) runs `.github/workflows/release.yml`, which
-publishes a GitHub Release with the APK (plus its `web.json` and `web-<build>.zip`), the musl
-server binary and the server-hosted web bundle.
-A manual run of the workflow builds the same files as artifacts without publishing.
+To release, bump `[workspace.package] version` in `Cargo.toml` and push to `master`.
+`.github/workflows/release.yml` finds no `v<version>` tag for it, builds the APK (with `web.json`
+and the over-the-air zip), the musl server binary and the server-hosted web bundle, and publishes
+them as the GitHub Release `v<version>`, tagging the pushed commit. Pushes that keep the version
+build nothing. A manual run of the workflow builds the same files as artifacts without publishing.
 
 Repository secrets the workflow needs:
 

@@ -17,7 +17,7 @@ runs:
       with:
         node-version: lts/*
         cache: npm
-        cache-dependency-path: web-client/package-lock.json
+        cache-dependency-path: client/package-lock.json
     - shell: bash
-      working-directory: web-client
+      working-directory: client
       run: npm ci

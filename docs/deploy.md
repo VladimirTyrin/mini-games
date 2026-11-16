@@ -23,7 +23,7 @@ Every deploy puts exactly one build on the host. The build number is the commit 
    build (rebuild the APK from this commit, or pass `--allow-version-mismatch` to publish an APK
    from another commit on purpose);
 2. builds the web client and the server with `MG_BUILD_NUMBER` (and `MG_COMMIT` for
-   `version.json`), and refuses to upload a `web-client/dist` of another build
+   `version.json`), and refuses to upload a `client/dist` of another build
    (a stale `--skip-build`);
 3. after the switch, reads `/version`, `/version.json` and, with `--apk`, the two release files
    from the public address (`https://<domain>`, or `http://<host>` in `--mode http`) and fails

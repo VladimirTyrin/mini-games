@@ -68,7 +68,7 @@ Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session 
 are told apart by an opaque id (`PlayerId`; for accounts an HMAC of the account under the same
 secret), never by display name, which may repeat.
 
-## Web client (`web-client`)
+## Web client (`client`)
 
 - `wasm/core.ts` — typed wrapper over `mg-wasm` (binary protobuf across the boundary).
 - `net/session.ts` — WebSocket session: sign-in on every (re)connect, request ids, ping,

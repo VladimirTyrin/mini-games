@@ -48,7 +48,7 @@ fn new_game(args: &[String]) -> Result<(), String> {
         names.kebab
     );
     println!(
-        "  2. cd web-client && npm run dev   # Home → {} plays locally",
+        "  2. cd client && npm run dev   # Home → {} plays locally",
         names.title
     );
     println!("  3. Replace the sample rules; follow docs/adding-a-game.md");

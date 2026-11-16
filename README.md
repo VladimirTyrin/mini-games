@@ -22,7 +22,7 @@ server (or the device, offline) seals each tick and every client replays the sam
 replays are just the frame log.
 
 - `crates/` — the core, the games, protocol, server, WASM bindings, bot arena, bot SDK and a C ABI
-- `web-client/` — Vue web client, also packaged as the Android app (Capacitor)
+- `client/` — Vue web client, also packaged as the Android app (Capacitor)
 - `network-bots/` — C# bots (rules from the core through the C ABI)
 - `proto/` — the wire protocol (protobuf)
 
@@ -34,8 +34,8 @@ More: [architecture](docs/architecture.md), [protocol](docs/protocol.md),
 
 ```bash
 cargo test --workspace                 # core, games, server
-cd web-client && npm ci && npm run dev # web client on http://localhost:5173 (local games need no server)
-cargo run -p mg-server -- --listen 127.0.0.1:5000 --static-dir web-client/dist   # online play
+cd client && npm ci && npm run dev # web client on http://localhost:5173 (local games need no server)
+cargo run -p mg-server -- --listen 127.0.0.1:5000 --static-dir client/dist   # online play
 ```
 
 Toolchain: Rust (stable), Node.js LTS, `wasm-bindgen-cli`, `binaryen` (`wasm-opt`). See

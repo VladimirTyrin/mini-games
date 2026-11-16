@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web-client
+        working-directory: client
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-web
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         with:
-          path: web-client/dist
+          path: client/dist
 
   pages:
     needs: [rust, web]

@@ -1,10 +1,14 @@
 name: Release
 
-# A `v*` tag publishes a GitHub Release with the Android APK (plus web.json and the zip of its
-# over-the-air web bundle), the server binary and the web bundle. A manual run builds the same files as workflow artifacts without publishing.
+# Bumping `[workspace.package] version` in Cargo.toml on master publishes the GitHub Release
+# `v<version>` with the Android APK (plus web.json and the zip of its over-the-air web bundle),
+# the server binary and the web bundle; the workflow creates the tag. A push whose version is
+# already tagged builds nothing, so the trigger can be broad. A manual run builds the same files
+# as workflow artifacts without publishing.
 on:
   push:
-    tags: ["v*"]
+    branches: [master]
+    paths: [Cargo.toml, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
@@ -18,23 +22,32 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.read.outputs.version }}
+      # false when this version already has its release tag.
+      build: ${{ steps.read.outputs.build }}
     steps:
       - uses: actions/checkout@v7
       - id: read
         run: |
           version=$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match the workspace version $version"
+          if [[ -z "$version" ]]; then
+            echo "::error::no [workspace.package] version in Cargo.toml"
             exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == push ]] && git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already released, nothing to build"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
   android:
     needs: version
+    if: needs.version.outputs.build == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web-client
+        working-directory: client
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,6 +89,7 @@ jobs:
 
   server:
     needs: version
+    if: needs.version.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -98,10 +112,11 @@ jobs:
 
   web:
     needs: version
+    if: needs.version.outputs.build == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: web-client
+        working-directory: client
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-web
@@ -116,7 +131,7 @@ jobs:
 
   publish:
     needs: [version, android, server, web]
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -127,6 +142,8 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v3
         with:
+          tag_name: v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: release/*
           generate_release_notes: true
           fail_on_unmatched_files: true

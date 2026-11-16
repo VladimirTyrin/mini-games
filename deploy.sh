@@ -72,7 +72,7 @@ if [[ "$MODE" == "http" ]]; then SERVER_NAME="_"; else SERVER_NAME="$DOMAIN"; fi
 BUILD="$(git -C "$SCRIPT_DIR" rev-list --count HEAD)" || die "cannot count commits for the build number"
 COMMIT="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
-WEB_DIST="${SCRIPT_DIR}/web-client/dist"
+WEB_DIST="${SCRIPT_DIR}/client/dist"
 APK_DIR="$(dirname "${APK:-.}")"
 echo "==> Build ${BUILD} (commit ${COMMIT})"
 
@@ -92,7 +92,7 @@ fi
 if [[ "$SKIP_BUILD" == false ]]; then
     echo "==> Building web client"
     (
-        cd "${SCRIPT_DIR}/web-client"
+        cd "${SCRIPT_DIR}/client"
         [[ -d node_modules ]] || npm ci
         # No VITE_SERVER_URL: the page served by this host talks to the same host (/ws).
         MG_BUILD_NUMBER="$BUILD" MG_COMMIT="$COMMIT" npm run build
@@ -107,7 +107,7 @@ fi
 [[ -f "$WEB_DIST/index.html" ]] || die "web build not found: $WEB_DIST"
 WEB_BUILD="$(json_build < "$WEB_DIST/version.json" 2>/dev/null || true)"
 [[ "$WEB_BUILD" == "$BUILD" ]] \
-    || die "web-client/dist is build ${WEB_BUILD:-?}, this commit is build ${BUILD}: deploy without --skip-build"
+    || die "client/dist is build ${WEB_BUILD:-?}, this commit is build ${BUILD}: deploy without --skip-build"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT

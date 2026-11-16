@@ -18,13 +18,13 @@ It creates a game that already works end to end (a placeholder "reach the target
 | `crates/protocol/src/games/connect_four.rs` | `WireGame` mapping |
 | `crates/registry/src/games.rs` | one line in the game list (all dispatch is generated from it) |
 | `proto/minigames/v2/game.proto` | one case in each envelope oneof |
-| `web-client/src/games/connect-four/` | plugin: settings form + board |
+| `client/src/games/connect-four/` | plugin: settings form + board |
 
 Check that it runs before changing anything:
 
 ```bash
 cargo test -p mg-connect-four
-cd web-client && npm run dev    # Home → Connect Four, plays locally with no server
+cd client && npm run dev    # Home → Connect Four, plays locally with no server
 ```
 
 ## 2. Rules (`crates/games/<game>`)
@@ -104,7 +104,7 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 ## 4. Wire (`proto` + `crates/protocol`)
 
 - Prefix every message and enum with the game name (one shared package); enum zero values are
-  `<GAME>_<ENUM>_UNSPECIFIED`. `cd web-client && npx buf lint ../proto` must pass.
+  `<GAME>_<ENUM>_UNSPECIFIED`. `cd client && npx buf lint ../proto` must pass.
 - `*_from_wire` checks the shape (right game, required fields, known enum values) and returns
   `WireError`; it never clamps or panics. Settings come out as `RawSettings`: ranges and other
   game rules are the game's (`GameSettings::parse`, called by `mg_registry::parse_settings`).
@@ -113,7 +113,7 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 - Add round-trip tests and one end-to-end test (authority → wire → JSON → wire → `Match`, equal
   hashes); the other games have examples.
 
-## 5. UI (`web-client/src/games/<game>`)
+## 5. UI (`client/src/games/<game>`)
 
 - `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controls` (a keyboard and a touch hint), and
   optionally `describeEnd` (why the match ended, shown with the result).
@@ -140,7 +140,7 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
-cd web-client && npm run lint && npm run typecheck && npx vitest run && npm run build
+cd client && npm run lint && npm run typecheck && npx vitest run && npm run build
 ```
 
 Then play it: locally against bots, online in two browser tabs, and watch the saved replay.

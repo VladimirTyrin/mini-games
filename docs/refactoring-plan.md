@@ -147,7 +147,7 @@ crates/
   server/                  mini_games_server: axum WS, идентичность, лобби, акторы матчей
 xtask/                     cargo xtask new-game | gen-proto | wasm | check
 proto/                     v2-схема (buf lint)
-web-client/                Vue-приложение; web-client/android — Capacitor-проект
+client/                Vue-приложение; client/android — Capacitor-проект
 network-bots/              C#: FFI-обёртка над ядром, WS-клиент, ML
 docs/                      architecture.md, protocol.md, adding-a-game.md, rules-changelog.md, deploy.md
 AGENTS.md, CLAUDE.md
@@ -279,7 +279,7 @@ pub trait Bot<G: Game> {
 
 ### 4.6 Android
 
-- Capacitor (актуальная 8.x). Проект лежит в `web-client/android`, веб собирается в него через `cap sync`.
+- Capacitor (актуальная 8.x). Проект лежит в `client/android`, веб собирается в него через `cap sync`.
 - Плагины: `@capacitor/app` (кнопка «назад», lifecycle → пауза локальной игры), `@capacitor/haptics`, `@capacitor/status-bar`, splash. Полноэкранный режим во время игры.
 - Экран настроек: адрес сервера (любой, включая `ws://IP`), выход из аккаунта, debug-лог сообщений. По умолчанию пока `ws://146.103.106.44/ws`. Cleartext разрешён и в release-сборке (`usesCleartextTraffic`), потому что адрес вводит пользователь. После переключения DNS дефолт меняется на `wss://braintvsminigames.xyz/ws`.
 - Google-вход нативный через Credential Manager (Capacitor-плагин, например `@capgo/capacitor-social-login`, проверить на этапе 6). Веб-кнопка Google в WebView не работает: Google блокирует OAuth во встроенных браузерах.

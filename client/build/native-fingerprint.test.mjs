@@ -15,7 +15,7 @@ function write(path, content) {
 }
 
 function lockWith(versions) {
-  const packages = { "": { name: "web-client" } };
+  const packages = { "": { name: "client" } };
   for (const [name, version] of Object.entries(versions)) packages[`node_modules/${name}`] = { version };
   return JSON.stringify({ lockfileVersion: 3, packages });
 }

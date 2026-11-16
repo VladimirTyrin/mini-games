@@ -10,7 +10,7 @@ struct Template {
 
 fn templates(names: &GameNames) -> Vec<Template> {
     let game = format!("crates/games/{}", names.kebab);
-    let web = format!("web-client/src/games/{}", names.kebab);
+    let web = format!("client/src/games/{}", names.kebab);
     let template = |path: String, body| Template { path, body };
     vec![
         template(
@@ -245,7 +245,7 @@ fn patches(root: &Path, names: &GameNames) -> Result<Vec<Patch>, String> {
         }
         Ok(c)
     })?;
-    patch("web-client/src/games/index.ts", &|c| {
+    patch("client/src/games/index.ts", &|c| {
         let c = insert_before_marker(
             &c,
             "// xtask:imports",
