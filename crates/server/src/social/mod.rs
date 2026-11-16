@@ -1,6 +1,7 @@
 mod account_id;
 mod invite;
 mod invite_lobby;
+mod notification_throttle;
 mod requester;
 #[allow(clippy::module_inception)]
 mod social;

@@ -19,7 +19,7 @@ use crate::connection_limiter::{ConnectionLimiter, ConnectionRefused};
 use crate::context::{ServerContext, server_version};
 use crate::hub::{Hub, HubCommand, HubHandle};
 use crate::limits::Limits;
-use crate::push::PushSender;
+use crate::push::{PushQueue, PushSender};
 use crate::social::{Social, SocialCommand, SocialHandle, Store, StoreError};
 
 #[derive(Debug, thiserror::Error)]
@@ -75,6 +75,7 @@ fn build_context(
             )
             .map_err(ConfigError::Push)?,
         ),
+        push_queue: PushQueue::start(),
         timing: config.timing,
         shutting_down,
     })
@@ -113,6 +114,7 @@ pub async fn serve(
         Social::new(
             store,
             context.push.clone(),
+            context.push_queue.clone(),
             hub_handle.clone(),
             social_handle.clone(),
             config.timing,

@@ -8,6 +8,7 @@ use mg_protocol::proto::server_message::Message;
 use proto::ErrorCode;
 use tokio::sync::{mpsc, oneshot};
 
+use super::notification_throttle::{NotificationKind, NotificationThrottle};
 use super::social_notifications as notifications;
 use super::store::{
     FriendLinkKind, FriendLinkRecord, FriendLinkRefusal, FriendRequestDecision,
@@ -19,7 +20,7 @@ use crate::codec;
 use crate::error_chain::error_chain;
 use crate::hub::{HubCommand, HubHandle};
 use crate::ids::{FriendLinkCode, InviteId, SessionId};
-use crate::push::{PushError, PushNotification, PushSender, PushTarget};
+use crate::push::{PushError, PushNotification, PushQueue, PushSender, PushTarget};
 use crate::timing::Timing;
 
 /// Friends, friend links, push targets and invitations. Runs as one task, like the hub, and
@@ -28,15 +29,19 @@ use crate::timing::Timing;
 pub(crate) struct Social {
     store: Arc<Store>,
     push: Arc<PushSender>,
+    push_queue: PushQueue,
     hub: HubHandle,
     handle: SocialHandle,
     timing: Timing,
+    /// Open invitations only; at most `MAX_OPEN_INVITES_PER_SESSION` per session.
     invites: HashMap<InviteId, Invite>,
     /// Where each device said it receives pushes: an answer on one device then notifies only
     /// the others.
     session_targets: HashMap<SessionId, String>,
-    /// What friends were last told, so the hub's repeated reports are not broadcast again.
+    /// What friends were last told, so the hub's repeated reports are not broadcast again. Only
+    /// accounts that are online: going offline removes the entry.
     presences: HashMap<AccountId, proto::Presence>,
+    throttle: NotificationThrottle,
 }
 
 /// A refused request, sent back as `ErrorResponse`.
@@ -70,11 +75,14 @@ impl Social {
     const MAX_OUTGOING_REQUESTS: usize = 50;
     const MAX_ACTIVE_LINKS: usize = 20;
     const MAX_OPEN_INVITES_PER_SESSION: usize = 5;
+    /// Keeps a friend list (and every presence change fanned out to it) a sensible size.
+    const MAX_FRIENDS: usize = 500;
     const LINK_LIFETIME: Duration = Duration::from_secs(7 * 24 * 3600);
 
     pub(crate) fn new(
         store: Arc<Store>,
         push: Arc<PushSender>,
+        push_queue: PushQueue,
         hub: HubHandle,
         handle: SocialHandle,
         timing: Timing,
@@ -82,12 +90,14 @@ impl Social {
         Self {
             store,
             push,
+            push_queue,
             hub,
             handle,
             timing,
             invites: HashMap::new(),
             session_targets: HashMap::new(),
             presences: HashMap::new(),
+            throttle: NotificationThrottle::default(),
         }
     }
 
@@ -110,11 +120,20 @@ impl Social {
                 }
                 SocialCommand::SignedIn(account) => {
                     let now = unix_millis();
+                    let id = account.id.clone();
                     if let Err(refusal) = self
                         .db(move |store| store.remember_account(&account, now))
                         .await
                     {
                         tracing::warn!(message = refusal.message, "account not remembered");
+                    }
+                    // A device that was away while an invitation came in still gets to answer it.
+                    for invite in self
+                        .invites
+                        .values()
+                        .filter(|invite| invite.to_account == id)
+                    {
+                        self.deliver(&id, Message::GameInvite(invite.to_wire(now)));
                     }
                 }
                 SocialCommand::Presence { account, presence } => {
@@ -122,16 +141,16 @@ impl Social {
                 }
                 SocialCommand::SessionEnded(session) => {
                     self.session_targets.remove(&session);
-                    let gone: Vec<InviteId> = self
-                        .invites
-                        .values()
-                        .filter(|invite| invite.from.session == session)
-                        .map(|invite| invite.id.clone())
-                        .collect();
-                    for id in gone {
-                        if let Some(invite) = self.invites.remove(&id) {
-                            self.close_invite(&invite, proto::InviteState::Cancelled, None);
-                        }
+                    self.close_invites_from(&session);
+                }
+                SocialCommand::LeftLobby(session) => self.close_invites_from(&session),
+                SocialCommand::SignedOut(session) => {
+                    if let Some(address) = self.session_targets.remove(&session)
+                        && let Err(refusal) = self
+                            .db(move |store| store.forget_push_target(&address))
+                            .await
+                    {
+                        tracing::warn!(message = refusal.message, "push target not forgotten");
                     }
                 }
                 SocialCommand::InviteExpired(id) => {
@@ -140,6 +159,7 @@ impl Social {
                     }
                 }
                 SocialCommand::Housekeeping => {
+                    self.throttle.forget_expired(tokio::time::Instant::now());
                     let now = unix_millis();
                     if let Err(refusal) =
                         self.db(move |store| store.delete_expired_links(now)).await
@@ -222,6 +242,40 @@ impl Social {
             account: account.clone(),
             message: codec::push(message),
         });
+    }
+
+    fn deliver_to_session(&self, session: &SessionId, message: Message) {
+        self.hub.send(HubCommand::DeliverToSession {
+            session: session.clone(),
+            message: codec::push(message),
+        });
+    }
+
+    /// Refuses when either account has `MAX_FRIENDS` already.
+    async fn has_room_for_a_friend(&self, accounts: [&AccountId; 2]) -> Result<(), Refusal> {
+        for account in accounts {
+            let owner = account.clone();
+            if self.db(move |store| store.friend_ids(&owner)).await?.len() >= Self::MAX_FRIENDS {
+                return Err(Refusal::new(ErrorCode::RateLimited, "too many friends"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Notifies unless this sender notified this account of the same thing just now.
+    fn notify_once(
+        &mut self,
+        kind: NotificationKind,
+        from: &AccountId,
+        to: &AccountId,
+        notification: PushNotification,
+    ) {
+        if self
+            .throttle
+            .allow(kind, from, to, tokio::time::Instant::now())
+        {
+            self.notify(to, notification, None);
+        }
     }
 
     async fn friend_list(&self, account: &AccountId) -> Result<proto::FriendList, Refusal> {
@@ -322,8 +376,9 @@ impl Social {
         Ok(account)
     }
 
-    async fn send_friend_request(&self, from: &Requester, player_id: &str) -> Outcome {
+    async fn send_friend_request(&mut self, from: &Requester, player_id: &str) -> Outcome {
         let to = self.other_account(from, player_id).await?;
+        self.has_room_for_a_friend([&from.account, &to]).await?;
         let sender = from.account.clone();
         let outgoing = self
             .db(move |store| store.friend_graph(&sender, 0))
@@ -341,16 +396,18 @@ impl Social {
             .db(move |store| store.send_friend_request(&sender, &recipient, now))
             .await?;
         match outcome {
-            FriendRequestOutcome::Sent => {
-                self.notify(
-                    &to,
-                    notifications::friend_request(&from.identity, now),
-                    None,
-                );
-            }
-            FriendRequestOutcome::BecameFriends => {
-                self.notify(&to, notifications::new_friend(&from.identity, now), None);
-            }
+            FriendRequestOutcome::Sent => self.notify_once(
+                NotificationKind::FriendRequest,
+                &from.account,
+                &to,
+                notifications::friend_request(&from.identity, now),
+            ),
+            FriendRequestOutcome::BecameFriends => self.notify_once(
+                NotificationKind::NewFriend,
+                &from.account,
+                &to,
+                notifications::new_friend(&from.identity, now),
+            ),
             FriendRequestOutcome::AlreadySent | FriendRequestOutcome::AlreadyFriends => {}
         }
         self.refresh_friend_lists(&[&from.account, &to]).await;
@@ -358,7 +415,7 @@ impl Social {
     }
 
     async fn answer_friend_request(
-        &self,
+        &mut self,
         from: &Requester,
         answer: proto::AnswerFriendRequest,
     ) -> Outcome {
@@ -368,6 +425,9 @@ impl Social {
             _ => return Err(Refusal::new(ErrorCode::InvalidRequest, "accept or decline")),
         };
         let asker = self.other_account(from, &answer.account_id).await?;
+        if decision == FriendRequestDecision::Accept {
+            self.has_room_for_a_friend([&from.account, &asker]).await?;
+        }
         let (recipient, sender, now) = (from.account.clone(), asker.clone(), unix_millis());
         let found = self
             .db(move |store| store.answer_friend_request(&recipient, &sender, decision, now))
@@ -379,17 +439,36 @@ impl Social {
             ));
         }
         if decision == FriendRequestDecision::Accept {
-            self.notify(&asker, notifications::new_friend(&from.identity, now), None);
+            self.notify_once(
+                NotificationKind::NewFriend,
+                &from.account,
+                &asker,
+                notifications::new_friend(&from.identity, now),
+            );
         }
         self.refresh_friend_lists(&[&from.account, &asker]).await;
         ack()
     }
 
-    async fn remove_friend(&self, from: &Requester, raw: &str) -> Outcome {
+    async fn remove_friend(&mut self, from: &Requester, raw: &str) -> Outcome {
         let other = self.other_account(from, raw).await?;
         let (mine, theirs) = (from.account.clone(), other.clone());
         self.db(move |store| store.remove_friend(&mine, &theirs))
             .await?;
+        let between: Vec<InviteId> = self
+            .invites
+            .values()
+            .filter(|invite| {
+                (invite.from.account == from.account && invite.to_account == other)
+                    || (invite.from.account == other && invite.to_account == from.account)
+            })
+            .map(|invite| invite.id.clone())
+            .collect();
+        for id in between {
+            if let Some(invite) = self.invites.remove(&id) {
+                self.close_invite(&invite, proto::InviteState::Cancelled, None);
+            }
+        }
         self.refresh_friend_lists(&[&from.account, &other]).await;
         ack()
     }
@@ -431,7 +510,7 @@ impl Social {
         ack()
     }
 
-    async fn use_friend_link(&self, from: &Requester, raw: &str) -> Outcome {
+    async fn use_friend_link(&mut self, from: &Requester, raw: &str) -> Outcome {
         let invalid = || {
             Refusal::new(
                 ErrorCode::FriendLinkInvalid,
@@ -439,17 +518,23 @@ impl Social {
             )
         };
         let code = FriendLinkCode::parse(raw).ok_or_else(invalid)?;
+        // Only this side can be checked before the link names its owner.
+        self.has_room_for_a_friend([&from.account, &from.account])
+            .await?;
         let (user, now) = (from.account.clone(), unix_millis());
         let used = self
             .db(move |store| store.use_friend_link(&code, &user, now))
             .await?;
         match used {
             Ok(link) => {
-                self.notify(
-                    &link.owner,
-                    notifications::new_friend(&from.identity, now),
-                    None,
-                );
+                if link.became_friends {
+                    self.notify_once(
+                        NotificationKind::NewFriend,
+                        &from.account,
+                        &link.owner,
+                        notifications::new_friend(&from.identity, now),
+                    );
+                }
                 self.refresh_friend_lists(&[&from.account, &link.owner])
                     .await;
                 ack()
@@ -481,15 +566,16 @@ impl Social {
                 "you can only invite friends",
             ));
         }
-        if let Some(open) = self
-            .invites
-            .values()
-            .find(|invite| invite.from.session == from.session && invite.to_account == friend)
-        {
+        if let Some(open) = self.invites.values().find(|invite| {
+            invite.from.session == from.session
+                && invite.to_account == friend
+                && invite.lobby.id == lobby.id
+        }) {
             // Asking again while the first invitation is open: tell the inviter where it stands.
-            from.outbound.send(&codec::push(Message::InviteUpdate(
-                open.update(proto::InviteState::Pending),
-            )));
+            self.deliver_to_session(
+                &from.session,
+                Message::InviteUpdate(open.update(proto::InviteState::Pending, unix_millis())),
+            );
             return ack();
         }
         let open_from_session = self
@@ -518,17 +604,17 @@ impl Social {
             expires_at_ms: now
                 .saturating_add(i64::try_from(lifetime.as_millis()).unwrap_or(i64::MAX)),
         };
-        invite
-            .from
-            .outbound
-            .send(&codec::push(Message::InviteUpdate(
-                invite.update(proto::InviteState::Pending),
-            )));
-        self.deliver(&friend, Message::GameInvite(invite.to_wire()));
-        self.notify(
+        self.deliver_to_session(
+            &invite.from.session,
+            Message::InviteUpdate(invite.update(proto::InviteState::Pending, now)),
+        );
+        self.deliver(&friend, Message::GameInvite(invite.to_wire(now)));
+        let notification = notifications::invitation(&invite, now, lifetime);
+        self.notify_once(
+            NotificationKind::Invitation,
+            &invite.from.account,
             &friend,
-            notifications::invitation(&invite, now, lifetime),
-            None,
+            notification,
         );
         let handle = self.handle.clone();
         let id = invite.id.clone();
@@ -594,10 +680,12 @@ impl Social {
         state: proto::InviteState,
         answered_by: Option<&SessionId>,
     ) {
-        invite
-            .from
-            .outbound
-            .send(&codec::push(Message::InviteUpdate(invite.update(state))));
+        // Through the hub to the session, not the connection it asked from: that one may have
+        // been replaced by a reconnect since.
+        self.deliver_to_session(
+            &invite.from.session,
+            Message::InviteUpdate(invite.update(state, unix_millis())),
+        );
         self.deliver(
             &invite.to_account,
             Message::GameInviteClosed(proto::GameInviteClosed {
@@ -615,13 +703,27 @@ impl Social {
         }
     }
 
-    /// Sends `notification` to every device of `account` except `skip` (a push address), off
-    /// this task. Devices the push service no longer knows are forgotten.
+    fn close_invites_from(&mut self, session: &SessionId) {
+        let gone: Vec<InviteId> = self
+            .invites
+            .values()
+            .filter(|invite| &invite.from.session == session)
+            .map(|invite| invite.id.clone())
+            .collect();
+        for id in gone {
+            if let Some(invite) = self.invites.remove(&id) {
+                self.close_invite(&invite, proto::InviteState::Cancelled, None);
+            }
+        }
+    }
+
+    /// Sends `notification` to every device of `account` except `skip` (a push address), on the
+    /// push queue. Devices the push service no longer knows are forgotten.
     fn notify(&self, account: &AccountId, notification: PushNotification, skip: Option<String>) {
         let store = self.store.clone();
         let push = self.push.clone();
         let account = account.clone();
-        tokio::task::spawn_blocking(move || {
+        self.push_queue.submit(move || {
             let targets = match store.push_targets(&account) {
                 Ok(targets) => targets,
                 Err(error) => {
@@ -650,22 +752,25 @@ impl Social {
     }
 
     async fn presence_changed(&mut self, account: AccountId, presence: proto::Presence) {
-        if self.presences.get(&account) == Some(&presence) {
+        if self.presences.get(&account) == Some(&presence)
+            || (presence == proto::Presence::Offline && !self.presences.contains_key(&account))
+        {
             return;
-        }
-        if presence == proto::Presence::Offline {
-            self.presences.remove(&account);
-        } else {
-            self.presences.insert(account.clone(), presence);
         }
         let owner = account.clone();
         let friends = match self.db(move |store| store.friend_ids(&owner)).await {
             Ok(friends) => friends,
             Err(refusal) => {
+                // Not remembered as told: the next report tries again.
                 tracing::warn!(message = refusal.message, "presence not shared");
                 return;
             }
         };
+        if presence == proto::Presence::Offline {
+            self.presences.remove(&account);
+        } else {
+            self.presences.insert(account.clone(), presence);
+        }
         let update = proto::FriendPresence {
             account_id: account.as_str().to_owned(),
             presence: presence as i32,

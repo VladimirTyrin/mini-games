@@ -13,10 +13,10 @@ onBeforeUnmount(() => clearInterval(ticker));
 
 /** The newest invitation that has not run out; older ones wait behind it. */
 const invite = computed(() =>
-  [...friends.incomingInvites].reverse().find((open) => Number(open.expiresAtUnixMs) > now.value),
+  [...friends.incomingInvites].reverse().find((open) => friends.deadlineOf(open.inviteId) > now.value),
 );
 const secondsLeft = computed(() =>
-  invite.value ? Math.max(0, Math.floor((Number(invite.value.expiresAtUnixMs) - now.value) / 1000)) : 0,
+  invite.value ? Math.max(0, Math.floor((friends.deadlineOf(invite.value.inviteId) - now.value) / 1000)) : 0,
 );
 const gameTitle = computed(() => (invite.value ? (pluginById(invite.value.game)?.title ?? "a game") : ""));
 </script>

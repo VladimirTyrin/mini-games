@@ -16,7 +16,7 @@ pub enum PushConfigError {
     Fcm(#[source] FcmConfigError),
     #[error(transparent)]
     Vapid(VapidKeyError),
-    #[error("MG_VAPID_SUBJECT must be an https:// or mailto: URL when MG_VAPID_PRIVATE_KEY is set")]
+    #[error("MG_VAPID_SUBJECT must be an https:// or mailto: URL")]
     VapidSubject,
 }
 
@@ -33,14 +33,19 @@ impl PushSender {
         };
         let web_push = match vapid_private_key_hex.trim() {
             "" => None,
-            key => {
-                let subject = vapid_subject.trim();
-                if !(subject.starts_with("https://") || subject.starts_with("mailto:")) {
-                    return Err(PushConfigError::VapidSubject);
+            key => match vapid_subject.trim() {
+                // A host without a site to name (plain http by IP) cannot serve Web Push anyway:
+                // browsers offer it to secure origins only.
+                "" => {
+                    tracing::warn!("MG_VAPID_SUBJECT not set: Web Push is off");
+                    None
                 }
-                let key = VapidKey::from_hex(key).map_err(PushConfigError::Vapid)?;
-                Some(WebPushSender::new(key, subject.to_owned()))
-            }
+                subject if subject.starts_with("https://") || subject.starts_with("mailto:") => {
+                    let key = VapidKey::from_hex(key).map_err(PushConfigError::Vapid)?;
+                    Some(WebPushSender::new(key, subject.to_owned()))
+                }
+                _ => return Err(PushConfigError::VapidSubject),
+            },
         };
         Ok(Self { fcm, web_push })
     }

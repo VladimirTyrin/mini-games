@@ -96,6 +96,7 @@ impl Hub {
                         .get(&session)
                         .is_some_and(|s| s.is_connection(connection))
                     {
+                        self.social.send(SocialCommand::SignedOut(session.clone()));
                         self.end_session(&session);
                     }
                 }
@@ -108,6 +109,9 @@ impl Hub {
                 } => self.resume_grace_expired(&session, connection),
                 HubCommand::DeliverToAccount { account, message } => {
                     self.deliver_to_account(&account, &message);
+                }
+                HubCommand::DeliverToSession { session, message } => {
+                    self.send_to(&session, &message);
                 }
                 HubCommand::PresenceOf { accounts, reply } => {
                     // The asker may be gone (shutting down); nothing to do then.

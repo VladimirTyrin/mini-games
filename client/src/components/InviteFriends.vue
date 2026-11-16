@@ -34,11 +34,23 @@ function invitationTo(accountId: string) {
   return latest;
 }
 
+/** Pending until its time is up, even if the news of its end never arrived. */
+function stateOf(accountId: string): InviteState | undefined {
+  const update = invitationTo(accountId);
+  if (update?.state === InviteState.PENDING && friends.deadlineOf(update.inviteId) <= now.value) {
+    return InviteState.EXPIRED;
+  }
+  return update?.state;
+}
+
 function status(accountId: string): string | null {
   const update = invitationTo(accountId);
-  switch (update?.state) {
+  switch (stateOf(accountId)) {
     case InviteState.PENDING: {
-      const seconds = Math.max(0, Math.floor((Number(update.expiresAtUnixMs) - now.value) / 1000));
+      const seconds = Math.max(
+        0,
+        Math.floor((friends.deadlineOf(update?.inviteId ?? "") - now.value) / 1000),
+      );
       return `Waiting… ${seconds} s`;
     }
     case InviteState.ACCEPTED:
@@ -53,7 +65,7 @@ function status(accountId: string): string | null {
 }
 
 function isPending(accountId: string): boolean {
-  return invitationTo(accountId)?.state === InviteState.PENDING;
+  return stateOf(accountId) === InviteState.PENDING;
 }
 
 function cancel(accountId: string): void {

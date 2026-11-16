@@ -134,7 +134,13 @@ fn a_single_use_link_befriends_only_the_first_who_opens_it() {
     let first = store.use_friend_link(&code, &bob, 1).unwrap();
     let second = store.use_friend_link(&code, &cid, 2).unwrap();
 
-    assert_eq!(first, Ok(UsedFriendLink { owner: ada.clone() }));
+    assert_eq!(
+        first,
+        Ok(UsedFriendLink {
+            owner: ada.clone(),
+            became_friends: true
+        })
+    );
     assert_eq!(second, Err(FriendLinkRefusal::Invalid));
     assert_eq!(
         names(&store.friend_graph(&ada, 2).unwrap().friends),
@@ -293,4 +299,23 @@ fn a_database_written_by_a_newer_server_is_refused() {
     let opened = Store::open(&file.0);
 
     assert!(matches!(opened, Err(StoreError::NewerThanServer { .. })));
+}
+
+#[test]
+fn a_friend_opening_a_single_use_link_again_leaves_it_for_someone_else() {
+    let store = Store::in_memory().unwrap();
+    let ada = account(&store, 'a', "Ada");
+    let bob = account(&store, 'b', "Bob");
+    let cid = account(&store, 'c', "Cid");
+    store
+        .use_friend_link(&link(&store, &ada, FriendLinkKind::SingleUse), &bob, 1)
+        .unwrap()
+        .unwrap();
+    let code = link(&store, &ada, FriendLinkKind::SingleUse);
+
+    let again = store.use_friend_link(&code, &bob, 2).unwrap();
+    let for_cid = store.use_friend_link(&code, &cid, 3).unwrap();
+
+    assert_eq!(again.map(|used| used.became_friends), Ok(false));
+    assert_eq!(for_cid.map(|used| used.became_friends), Ok(true));
 }

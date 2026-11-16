@@ -17,7 +17,21 @@ Every device of a Google account registers its address (`RegisterPushTarget`, se
 An invitation answered on one device is replaced on the friend's other devices ("you joined on
 another device"). When an invitation expires or is cancelled, no second notification goes out:
 it would land on every device that ignored the first one. Tapping the stale one says the
-invitation is closed. While the app is open, invitations show as a banner in the app instead.
+invitation is closed. While the app is open, invitations also show as a banner in the app (an
+open browser tab shows both).
+
+Nobody gets the same news from the same sender over and over:
+- one notification a day per sender for a friend request or a new friend;
+- one every 10 s per friend for invitations.
+
+Sending goes through a small queue: at most 2 sends run at once and 256 wait. Past that,
+notifications are dropped, so a slow push service cannot fill the blocking pool that the database
+and bots share.
+
+A device stops getting an account's notifications when the account signs out on it. The app asks
+for notification permission once, the first time the player adds a friend, answers a request,
+shares or opens a friend link, or invites someone. It asks from that tap, since iOS lets nothing
+else show the prompt. After that, the Friends screen offers it.
 
 On iPhone, links from other apps always open in Safari, never in the Home Screen app. That
 matters only for friend links: the Friends screen takes a pasted link, and a request sent with

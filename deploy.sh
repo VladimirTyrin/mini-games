@@ -142,22 +142,25 @@ if [[ "$MODE" == "tls" ]]; then
         "${SCRIPT_DIR}/deploy/nginx-tls.conf.template" > "${STAGE}/site-tls.conf"
 fi
 
-# The Firebase service account (push to the Android app) goes to the host when .keys has it;
-# without it the host keeps the one it has. A new key can be made in the Firebase console at any
-# time (Project settings, Service accounts).
-shopt -s nullglob
-FCM_ACCOUNTS=("${SCRIPT_DIR}"/.keys/*-firebase-adminsdk-*.json)
-shopt -u nullglob
-(( ${#FCM_ACCOUNTS[@]} <= 1 )) || die "more than one Firebase service account key in .keys: keep one"
-if (( ${#FCM_ACCOUNTS[@]} == 1 )); then
-    (umask 077; echo "MG_FCM_SERVICE_ACCOUNT=$(base64 -w0 < "${FCM_ACCOUNTS[0]}")" > "${STAGE}/push.env")
-fi
-
 if [[ "$DRY_RUN" == true ]]; then
     echo "==> Dry run: rendered configs in ${STAGE}"
     cat "${STAGE}"/site-*.conf
     trap - EXIT
     exit 0
+fi
+
+# The Firebase service account (push to the Android app) goes to the host when .keys has it;
+# without it the host keeps the one it has. A new key can be made in the Firebase console at any
+# time (Project settings, Service accounts). Written after the dry-run exit, which keeps $STAGE.
+shopt -s nullglob
+FCM_ACCOUNTS=("${SCRIPT_DIR}"/.keys/*-firebase-adminsdk-*.json)
+shopt -u nullglob
+(( ${#FCM_ACCOUNTS[@]} <= 1 )) || die "more than one Firebase service account key in .keys: keep one"
+if (( ${#FCM_ACCOUNTS[@]} == 1 )); then
+    FCM_ACCOUNT_BASE64="$(base64 < "${FCM_ACCOUNTS[0]}" | tr -d '\n')"
+    [[ -n "$FCM_ACCOUNT_BASE64" ]] || die "cannot read ${FCM_ACCOUNTS[0]}"
+    (umask 077; echo "MG_FCM_SERVICE_ACCOUNT=${FCM_ACCOUNT_BASE64}" > "${STAGE}/push.env")
+    unset FCM_ACCOUNT_BASE64
 fi
 
 echo "==> Uploading to ${HOST}"
@@ -227,6 +230,8 @@ if ! grep -q '^MG_VAPID_PRIVATE_KEY=' "$ENV_FILE"; then
     echo "MG_VAPID_PRIVATE_KEY=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')" >> "$ENV_FILE"
 fi
 sed -i '/^MG_VAPID_SUBJECT=/d' "$ENV_FILE"
+# Without a site (plain http by IP) the server leaves Web Push off: browsers offer push to
+# secure origins only.
 if [[ "$MODE" == "tls" ]]; then
     echo "MG_VAPID_SUBJECT=https://${DOMAIN}" >> "$ENV_FILE"
 fi

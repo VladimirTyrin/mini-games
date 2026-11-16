@@ -268,3 +268,114 @@ async fn friends_see_each_other_go_offline() {
     })
     .await;
 }
+
+async fn invite(inviter: &mut Client, account_id: &str) {
+    inviter
+        .send(Request::InviteFriend(proto::InviteFriend {
+            account_id: account_id.to_owned(),
+        }))
+        .await;
+    inviter
+        .expect(invite_state(proto::InviteState::Pending))
+        .await;
+}
+
+fn invite_closed(message: &proto::ServerMessage) -> Option<proto::GameInviteClosed> {
+    match &message.message {
+        Some(Reply::GameInviteClosed(closed)) => Some(closed.clone()),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn the_inviter_hears_the_answer_after_reconnecting() {
+    let server = server_with(|_| {}).await;
+    let mut ada = server.client().await;
+    let welcome = ada.hello(google_session("1", "Ada"), "").await.unwrap();
+    let (mut bob, bob_account) = device(&server, "2", "Bob").await;
+    befriend(&mut ada, &mut bob).await;
+    create_lobby(&mut ada, tictactoe_settings(3, 3), 2).await;
+    invite(&mut ada, &bob_account).await;
+    let invitation = bob.expect(game_invite).await;
+
+    drop(ada);
+    let mut ada = server.client().await;
+    ada.hello(google_session("1", "Ada"), &welcome.resume_token)
+        .await
+        .unwrap();
+    expect_ok(
+        bob.request(answer(&invitation.invite_id, proto::InviteAnswer::Decline))
+            .await,
+    );
+
+    ada.expect(invite_state(proto::InviteState::Declined)).await;
+}
+
+#[tokio::test]
+async fn leaving_the_lobby_closes_its_invitations() {
+    let server = server_with(|_| {}).await;
+    let (mut ada, _) = device(&server, "1", "Ada").await;
+    let (mut bob, bob_account) = device(&server, "2", "Bob").await;
+    befriend(&mut ada, &mut bob).await;
+    create_lobby(&mut ada, tictactoe_settings(3, 3), 2).await;
+    invite(&mut ada, &bob_account).await;
+    let first = bob.expect(game_invite).await;
+
+    expect_ok(ada.request(Request::LeaveLobby(proto::LeaveLobby {})).await);
+    let closed = bob.expect(invite_closed).await;
+    create_lobby(&mut ada, tictactoe_settings(3, 3), 2).await;
+    invite(&mut ada, &bob_account).await;
+    let second = bob.expect(game_invite).await;
+
+    assert_eq!(closed.invite_id, first.invite_id);
+    assert_eq!(closed.state, proto::InviteState::Cancelled as i32);
+    assert_ne!(second.invite_id, first.invite_id);
+    expect_error(
+        bob.request(answer(&first.invite_id, proto::InviteAnswer::Accept))
+            .await,
+        proto::ErrorCode::InviteClosed,
+    );
+}
+
+#[tokio::test]
+async fn removing_a_friend_closes_the_invitations_between_them() {
+    let server = server_with(|_| {}).await;
+    let (mut ada, ada_account) = device(&server, "1", "Ada").await;
+    let (mut bob, bob_account) = device(&server, "2", "Bob").await;
+    befriend(&mut ada, &mut bob).await;
+    create_lobby(&mut ada, tictactoe_settings(3, 3), 2).await;
+    invite(&mut ada, &bob_account).await;
+    let invitation = bob.expect(game_invite).await;
+
+    expect_ok(
+        bob.request(Request::RemoveFriend(proto::RemoveFriend {
+            account_id: ada_account,
+        }))
+        .await,
+    );
+
+    ada.expect(invite_state(proto::InviteState::Cancelled))
+        .await;
+    expect_error(
+        bob.request(answer(&invitation.invite_id, proto::InviteAnswer::Accept))
+            .await,
+        proto::ErrorCode::InviteClosed,
+    );
+}
+
+#[tokio::test]
+async fn a_device_that_signs_in_during_an_invitation_still_gets_it() {
+    let server = server_with(|_| {}).await;
+    let (mut ada, _) = device(&server, "1", "Ada").await;
+    let (mut phone, bob_account) = device(&server, "2", "Bob").await;
+    befriend(&mut ada, &mut phone).await;
+    create_lobby(&mut ada, tictactoe_settings(3, 3), 2).await;
+    invite(&mut ada, &bob_account).await;
+    let on_phone = phone.expect(game_invite).await;
+
+    let (mut tablet, _) = device(&server, "2", "Bob").await;
+
+    let on_tablet = tablet.expect(game_invite).await;
+    assert_eq!(on_tablet.invite_id, on_phone.invite_id);
+    assert!(on_tablet.expires_in_ms > 0);
+}

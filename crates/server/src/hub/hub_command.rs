@@ -53,6 +53,10 @@ pub(crate) enum HubCommand {
         account: AccountId,
         message: proto::ServerMessage,
     },
+    DeliverToSession {
+        session: SessionId,
+        message: proto::ServerMessage,
+    },
     PresenceOf {
         accounts: Vec<AccountId>,
         reply: oneshot::Sender<BTreeMap<AccountId, proto::Presence>>,

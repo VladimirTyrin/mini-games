@@ -15,7 +15,8 @@ import {
   InviteState,
   type InviteUpdate,
 } from "@/proto/minigames/v2/social_pb";
-import { canNotifyWithoutAsking, registerForPush } from "@/platform/push-notifications";
+import { canNotifyWithoutAsking, pushAvailability, registerForPush } from "@/platform/push-notifications";
+import { storage } from "@/platform/storage";
 
 import { useConnectionStore } from "./connection";
 import { useLobbyStore } from "./lobby";
@@ -25,6 +26,9 @@ import { useToastStore } from "./toasts";
 export function accountOf(playerId: string): string {
   return playerId.split(".")[0] ?? playerId;
 }
+
+/** Set once the app asked for notifications on its own: asking again after a "no" only annoys. */
+const ASKED_FOR_NOTIFICATIONS_KEY = "mini-games.notifications-asked";
 
 /** An invitation the player opened from a notification, kept until the app is signed in. */
 interface OpenedInvite {
@@ -40,8 +44,13 @@ export const useFriendsStore = defineStore("friends", () => {
   const list = shallowRef<FriendList | null>(null);
   /** Invitations to this account still open, newest last. */
   const incomingInvites = ref<GameInvite[]>([]);
-  /** What became of the invitations this device sent, by invite id. */
+  /** What became of the invitations this device sent from the current lobby, by invite id. */
   const sentInvites = ref<Map<string, InviteUpdate>>(new Map());
+  /**
+   * When each invitation runs out, on this device's clock: counted from the time left the server
+   * sent, since the device's clock may be off.
+   */
+  const deadlines = ref<Map<string, number>>(new Map());
   /** A friend link the app was opened with, used once signed in with Google. */
   const pendingLinkCode = ref<string | null>(null);
   const openedInvite = ref<OpenedInvite | null>(null);
@@ -81,6 +90,7 @@ export const useFriendsStore = defineStore("friends", () => {
           list.value = { ...list.value };
         }),
         session.events.on("gameInvite", (invite) => {
+          setDeadline(invite.inviteId, invite.expiresInMs);
           incomingInvites.value = [
             ...incomingInvites.value.filter((open) => open.inviteId !== invite.inviteId),
             invite,
@@ -88,6 +98,7 @@ export const useFriendsStore = defineStore("friends", () => {
         }),
         session.events.on("gameInviteClosed", ({ inviteId }) => forgetInvite(inviteId)),
         session.events.on("inviteUpdate", (update) => {
+          if (update.state === InviteState.PENDING) setDeadline(update.inviteId, update.expiresInMs);
           sentInvites.value = new Map(sentInvites.value).set(update.inviteId, update);
           const name = update.friend?.displayName ?? "Your friend";
           if (update.state === InviteState.DECLINED) toasts.show(`${name} declined the invitation`);
@@ -98,13 +109,41 @@ export const useFriendsStore = defineStore("friends", () => {
     },
     { immediate: true },
   );
+  // What happened to invitations into an earlier lobby says nothing about this one.
+  watch(
+    () => lobby.current?.lobbyId,
+    () => (sentInvites.value = new Map()),
+  );
+
+  function setDeadline(inviteId: string, expiresInMs: number): void {
+    deadlines.value = new Map(deadlines.value).set(inviteId, Date.now() + expiresInMs);
+  }
+
+  function deadlineOf(inviteId: string): number {
+    return deadlines.value.get(inviteId) ?? 0;
+  }
 
   async function signedIn(): Promise<void> {
     if (!hasAccount.value) return;
     await refresh();
-    void registerPush(false);
+    // Before answering an opened invitation: the server then knows this device answered it and
+    // does not notify it that "another device" did.
+    await registerPush(false);
     if (pendingLinkCode.value) await useLink(pendingLinkCode.value);
     if (openedInvite.value) await acceptOpenedInvite();
+  }
+
+  /**
+   * Asks for notifications the first time the player does something with friends: from a tap (iOS
+   * lets nothing else ask), and only once, whatever the answer.
+   */
+  function askForNotificationsOnce(): void {
+    if (!hasAccount.value || storage.get(ASKED_FOR_NOTIFICATIONS_KEY) !== null) return;
+    if (!__NATIVE_APP__ && (pushAvailability() !== "available" || Notification.permission !== "default")) {
+      return;
+    }
+    storage.set(ASKED_FOR_NOTIFICATIONS_KEY, "1");
+    void registerPush(true);
   }
 
   function forgetInvite(inviteId: string): void {
@@ -155,6 +194,7 @@ export const useFriendsStore = defineStore("friends", () => {
       pendingLinkCode.value = code;
       return;
     }
+    askForNotificationsOnce();
     pendingLinkCode.value = null;
     try {
       await connection.requireSession().request({ case: "useFriendLink", value: { code } });
@@ -164,21 +204,46 @@ export const useFriendsStore = defineStore("friends", () => {
     }
   }
 
-  const sendRequest = (playerId: string) =>
-    call({ case: "sendFriendRequest", value: { playerId } }).then(() =>
+  function sendRequest(playerId: string): Promise<void> {
+    askForNotificationsOnce();
+    return call({ case: "sendFriendRequest", value: { playerId } }).then(() =>
       toasts.show("Friend request sent", "success"),
     );
-  const answerRequest = (accountId: string, accept: boolean) =>
-    call({
+  }
+  function answerRequest(accountId: string, accept: boolean): Promise<ServerPayload> {
+    if (accept) askForNotificationsOnce();
+    return call({
       case: "answerFriendRequest",
       value: {
         accountId,
         answer: accept ? FriendRequestAnswer.ACCEPT : FriendRequestAnswer.DECLINE,
       },
     });
+  }
   const remove = (accountId: string) => call({ case: "removeFriend", value: { accountId } });
-  const invite = (accountId: string) => call({ case: "inviteFriend", value: { accountId } });
-  const cancelInvite = (inviteId: string) => call({ case: "cancelInvite", value: { inviteId } });
+  function invite(accountId: string): Promise<ServerPayload> {
+    askForNotificationsOnce();
+    return call({ case: "inviteFriend", value: { accountId } });
+  }
+
+  async function cancelInvite(inviteId: string): Promise<void> {
+    try {
+      await connection.requireSession().request({ case: "cancelInvite", value: { inviteId } });
+    } catch (error) {
+      if (!(error instanceof RequestError && error.code === ErrorCode.INVITE_CLOSED)) {
+        toasts.failure(error);
+        return;
+      }
+      // It closed already and the news did not reach this device: stop waiting for it.
+      const update = sentInvites.value.get(inviteId);
+      if (update) {
+        sentInvites.value = new Map(sentInvites.value).set(inviteId, {
+          ...update,
+          state: InviteState.EXPIRED,
+        });
+      }
+    }
+  }
 
   /** Accepts and joins the lobby; leaves the current lobby first. */
   async function accept(inviteId: string, lobbyId: string): Promise<void> {
@@ -231,6 +296,8 @@ export const useFriendsStore = defineStore("friends", () => {
     incomingRequestCount,
     refresh,
     registerPush,
+    askForNotificationsOnce,
+    deadlineOf,
     createLink,
     revokeLink,
     useLink,

@@ -125,3 +125,13 @@ async fn test_push_needs_sign_in() {
 
     expect_error(reply, proto::ErrorCode::NotSignedIn);
 }
+
+#[tokio::test]
+async fn a_web_push_key_without_a_subject_leaves_web_push_off_instead_of_failing() {
+    let server = TestServer::start_with(|config| {
+        config.vapid_private_key = VAPID_KEY.to_owned();
+    })
+    .await;
+
+    assert_eq!(server_info(&server).await.web_push_public_key, "");
+}

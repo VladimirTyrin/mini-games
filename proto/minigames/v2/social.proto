@@ -125,10 +125,13 @@ message InviteUpdate {
   Identity friend = 2;
   InviteState state = 3;
   uint64 expires_at_unix_ms = 4;
+  // Time left when this was sent: count down from it, since device clocks may be off.
+  uint32 expires_in_ms = 5;
 }
 
-// Pushed to every connected device of the invited account (the same data rides on the push
-// notification for devices that are not connected).
+// Pushed to every connected device of the invited account, again to a device that signs in
+// while it is open. Every device of the account also gets a push notification with the same data
+// (a browser tab that is open shows both).
 message GameInvite {
   string invite_id = 1;
   Identity from = 2;
@@ -137,6 +140,8 @@ message GameInvite {
   // GameKind id, e.g. "snake".
   string game = 5;
   uint64 expires_at_unix_ms = 6;
+  // Time left when this was sent: count down from it, since device clocks may be off.
+  uint32 expires_in_ms = 7;
 }
 
 // Pushed to the invited account's devices once the invitation is answered, expired or

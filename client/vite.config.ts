@@ -48,7 +48,16 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,wasm,png,svg,webmanifest}"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: "index.html",
-        navigateFallbackDenylist: [/^\/ws/, /^\/downloads\//, /^\/healthz/, /^\/version/, /^\/privacy\.html/],
+        // /f/<code> (friend links) must reach nginx, which sends it on to /?friend=<code>.
+        navigateFallbackDenylist: [
+          /^\/ws/,
+          /^\/downloads\//,
+          /^\/healthz/,
+          /^\/version/,
+          /^\/privacy\.html/,
+          /^\/f\//,
+          /^\/\.well-known\//,
+        ],
         cleanupOutdatedCaches: true,
         // Push and notification-click handlers (public/push-sw.js).
         importScripts: ["push-sw.js"],

@@ -130,7 +130,9 @@ impl FcmSender {
             })?;
         match response.status().as_u16() {
             200 => Ok(()),
-            404 => Err(PushError::TargetGone),
+            // 404 UNREGISTERED: the app is gone; 403 SENDER_ID_MISMATCH: the token belongs to
+            // another Firebase project. Neither will ever work again.
+            403 | 404 => Err(PushError::TargetGone),
             401 => {
                 self.forget_access_token();
                 Err(rejection(FCM, response))

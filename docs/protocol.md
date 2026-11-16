@@ -153,7 +153,8 @@ player id before the dot.
   (offline, online, playing), requests both ways, and the account's open links. The server also
   pushes `FriendList` whenever it changes, and `FriendPresence` when a friend's presence changes.
 - **Requests.** `SendFriendRequest { player_id }` takes a device or an account id. When the other
-  account had already asked, the two become friends at once.
+  account had already asked, the two become friends at once. An account has at most 500 friends
+  and 50 unanswered requests.
 - **Answers and removal.** `AnswerFriendRequest` accepts or declines; `RemoveFriend` ends a
   friendship or withdraws a request.
 - **Links.** `CreateFriendLink { kind }` is answered with `FriendLink`, valid for 7 days, at
@@ -167,8 +168,12 @@ player id before the dot.
   (`ERROR_CODE_NOT_FRIENDS`, `ERROR_CODE_NOT_IN_LOBBY`).
   - The inviting session gets `InviteUpdate` as the invitation moves on: pending, then
     accepted, declined, expired (after 90 s) or cancelled (`CancelInvite`).
-  - Every connected device of the friend gets `GameInvite`; the others get a push notification
-    with the same data.
+  - Every connected device of the friend gets `GameInvite`, and so does a device that signs in
+    while it is open. Every device also gets a push notification with the same data, so an open
+    browser tab shows both. `expires_in_ms` is the time left: count down from it, not from
+    `expires_at_unix_ms`, since device clocks may be off.
+  - Leaving the lobby, the lobby closing, or the two no longer being friends cancels it. Asking
+    the same friend again from the same lobby while it is open only repeats `InviteUpdate`.
   - `AnswerInvite` accepts or declines, then the client joins `lobby_id` as usual. A closed
     invitation answers `ERROR_CODE_INVITE_CLOSED`.
   - Once an invitation closes, the friend's devices get `GameInviteClosed`.

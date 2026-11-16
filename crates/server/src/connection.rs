@@ -325,16 +325,13 @@ impl Connection {
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(u64::from(delay.get()))).await;
             let notification = test_notification(unix_millis());
-            let sent =
-                tokio::task::spawn_blocking(move || context.push.send(&target, &notification))
-                    .await;
-            match sent {
-                Ok(Ok(())) => tracing::info!(%connection, "test push sent"),
-                Ok(Err(error)) => {
-                    tracing::warn!(%connection, error = %error_chain(&error), "test push failed")
+            let push = context.push.clone();
+            context.push_queue.submit(move || match push.send(&target, &notification) {
+                Ok(()) => tracing::info!(%connection, "test push sent"),
+                Err(error) => {
+                    tracing::warn!(%connection, error = %error_chain(&error), "test push failed");
                 }
-                Err(error) => tracing::warn!(%connection, %error, "test push task failed"),
-            }
+            });
         });
     }
 

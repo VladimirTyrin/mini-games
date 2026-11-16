@@ -55,6 +55,7 @@ async function turnOnNotifications(): Promise<void> {
 }
 
 async function share(kind: FriendLinkKind): Promise<void> {
+  friends.askForNotificationsOnce();
   const link = await friends.createLink(kind);
   if (!link) return;
   const url = friendLinkUrl(prefs.serverUrl, link.code);

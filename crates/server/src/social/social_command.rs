@@ -21,6 +21,10 @@ pub(crate) enum SocialCommand {
         presence: proto::Presence,
     },
     SessionEnded(SessionId),
+    /// The session left its lobby (or the lobby closed): its invitations are void.
+    LeftLobby(SessionId),
+    /// The device's owner signed out: it must not get that account's notifications any more.
+    SignedOut(SessionId),
     InviteExpired(InviteId),
     Housekeeping,
 }

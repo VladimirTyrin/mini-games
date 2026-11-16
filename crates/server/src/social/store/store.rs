@@ -464,12 +464,29 @@ impl Store {
             if &owner == user {
                 return Ok(Err(FriendLinkRefusal::OwnLink));
             }
-            if FriendLinkKind::from_column(&kind) == FriendLinkKind::SingleUse {
-                transaction.execute("DELETE FROM friend_links WHERE code = ?1", [code.as_str()])?;
+            let (low, high) = ordered(&owner, user);
+            let already_friends = transaction
+                .query_row(
+                    "SELECT 1 FROM friendships WHERE low_id = ?1 AND high_id = ?2",
+                    [low.as_str(), high.as_str()],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some();
+            // A friend opening the link again changes nothing: a single-use link stays for the
+            // friend it was meant for.
+            if !already_friends {
+                if FriendLinkKind::from_column(&kind) == FriendLinkKind::SingleUse {
+                    transaction
+                        .execute("DELETE FROM friend_links WHERE code = ?1", [code.as_str()])?;
+                }
+                befriend(&transaction, &owner, user, now_ms)?;
             }
-            befriend(&transaction, &owner, user, now_ms)?;
             transaction.commit()?;
-            Ok(Ok(UsedFriendLink { owner }))
+            Ok(Ok(UsedFriendLink {
+                owner,
+                became_friends: !already_friends,
+            }))
         })
     }
 

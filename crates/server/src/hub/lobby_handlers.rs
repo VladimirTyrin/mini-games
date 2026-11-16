@@ -265,6 +265,8 @@ impl Hub {
         if let Some(s) = self.sessions.get_mut(session) {
             s.lobby = None;
         }
+        self.social
+            .send(crate::social::SocialCommand::LeftLobby(session.clone()));
         self.announce_presence(session);
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
@@ -316,6 +318,8 @@ impl Hub {
                 session.lobby = None;
                 session.send(&closed);
             }
+            self.social
+                .send(crate::social::SocialCommand::LeftLobby(member.clone()));
             self.announce_presence(member);
         }
         self.lobby_list_changed();
