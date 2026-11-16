@@ -65,5 +65,8 @@ const replayFileTypes = isNativeApp ? undefined : ".mgreplay";
       </button>
       <input ref="fileInput" type="file" :accept="replayFileTypes" class="hidden" @change="openReplay" />
     </section>
+    <p class="text-center text-xs text-gray-500">
+      <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
+    </p>
   </main>
 </template>

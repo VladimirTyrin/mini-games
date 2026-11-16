@@ -83,5 +83,8 @@ function resetServer(): void {
     </section>
     <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
+    <p class="text-center text-xs text-gray-500">
+      <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
+    </p>
   </main>
 </template>
