@@ -79,10 +79,14 @@ REPLAY (shared replay)`.
 - The join reply (`LobbyState`) comes before anything about a running match or replay.
 - `LobbyList` pushes to clients outside lobbies are coalesced (up to 250 ms) and sent only
   when a summary changed (seats, observers, phase, settings, name, host).
-- `POST_MATCH` carries `last_match_id` and `last_result`. When every seated human voted (or the
-  last one who had not voted leaves) the next match starts; if it cannot (e.g. too few players
-  are left), members get an `ERROR_CODE_INVALID_SETTINGS` push and the votes are cleared.
-- Lobbies outside a match close after an hour without activity (`LOBBY_CLOSED_REASON_INACTIVE`).
+- `POST_MATCH` carries `last_match_id`, `last_result` and `play_again_votes`. When every seated
+  human voted the next match starts; if it cannot (e.g. too few players), members get an
+  `ERROR_CODE_INVALID_SETTINGS` push and the votes are cleared. Any change to who sits or to
+  the settings (a player leaves, steps aside to watch or joins, a bot is added, the host edits
+  the settings) clears the votes too: the next match would not be the one voted for (a Word Hunt
+  group left with one player would even be a game alone), so everyone votes again.
+- Lobbies outside a match close after an hour without activity (`LOBBY_CLOSED_REASON_INACTIVE`);
+  chat counts as activity.
 
 ## Matches
 

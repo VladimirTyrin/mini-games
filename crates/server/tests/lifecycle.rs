@@ -244,7 +244,7 @@ async fn post_match_reports_the_result_and_everyone_voting_starts_the_next_match
 }
 
 #[tokio::test]
-async fn the_last_non_voter_leaving_tries_the_next_match_and_reports_failure() {
+async fn a_player_leaving_after_a_match_asks_the_others_to_vote_again() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
@@ -254,14 +254,19 @@ async fn the_last_non_voter_leaving_tries_the_next_match_and_reports_failure() {
         host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
             .await,
     );
+    assert_eq!(host.expect(play_again_votes).await, 1);
+
     expect_ok(
         guest
             .request(Request::LeaveLobby(proto::LeaveLobby {}))
             .await,
     );
-    // TicTacToe needs two players, so the start fails and the voter is told.
-    let error = host.expect(error_push).await;
-    assert_eq!(error.code, proto::ErrorCode::InvalidSettings as i32);
+
+    // Not a silent start at a smaller table: the vote is asked again.
+    let state = host
+        .expect(|m| post_match(m).filter(|state| state.seats.len() == 1))
+        .await;
+    assert!(state.play_again_votes.is_empty());
 }
 
 /// Wall deaths on a small field: a snake match ends within a few ticks.
@@ -277,7 +282,7 @@ fn short_snake() -> proto::GameSettings {
 }
 
 #[tokio::test]
-async fn the_last_non_voter_leaving_starts_the_next_match() {
+async fn the_ones_left_can_play_again_after_voting_again() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
@@ -293,6 +298,12 @@ async fn the_last_non_voter_leaving_starts_the_next_match() {
     expect_ok(
         guest
             .request(Request::LeaveLobby(proto::LeaveLobby {}))
+            .await,
+    );
+    host.expect(|m| post_match(m).filter(|state| state.seats.len() == 1))
+        .await;
+    expect_ok(
+        host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
             .await,
     );
     let next = host.expect(match_started).await;
@@ -629,7 +640,7 @@ async fn changing_the_settings_after_a_match_asks_for_new_play_again_votes() {
 }
 
 #[tokio::test]
-async fn a_voter_stepping_aside_lets_the_others_play_again() {
+async fn a_player_stepping_aside_to_watch_asks_for_new_votes() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
@@ -648,7 +659,15 @@ async fn a_voter_stepping_aside_lets_the_others_play_again() {
             .request(Request::SwitchToObserver(proto::SwitchToObserver {}))
             .await,
     );
+    let state = host
+        .expect(|m| post_match(m).filter(|state| state.seats.len() == 1))
+        .await;
+    assert!(state.play_again_votes.is_empty());
 
+    expect_ok(
+        host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+            .await,
+    );
     let next = host.expect(match_started).await;
     assert_ne!(next.match_id, first.match_id);
     assert_eq!(next.seats.len(), 1);

@@ -273,9 +273,12 @@ impl Hub {
                 session: session.clone(),
             });
         }
+        let left_a_seat = lobby.seat_index(session).is_some();
         lobby.remove_member(session);
-        if let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase {
-            play_again_votes.remove(session);
+        // Fewer players is another match (Word Hunt alone is even another mode): the others
+        // vote again, knowing who is left, instead of their old votes starting it silently.
+        if left_a_seat {
+            lobby.forget_play_again_votes();
         }
         let next_host = lobby
             .seated_humans()
@@ -291,12 +294,7 @@ impl Hub {
                         lobby.move_host_seat_first();
                     }
                 }
-                // The leaver may have been the last one the others were waiting for.
-                if lobby.everyone_voted_to_play_again() {
-                    self.play_again(&lobby_id);
-                } else {
-                    self.after_lobby_change(&lobby_id);
-                }
+                self.after_lobby_change(&lobby_id);
             }
         }
         self.send_lobby_list_push(session);
@@ -565,17 +563,9 @@ impl Hub {
         }
         lobby.seats.remove(index);
         lobby.observers.push(session.clone());
-        if let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase {
-            play_again_votes.remove(session);
-        }
-        let all_voted = lobby.everyone_voted_to_play_again();
+        lobby.forget_play_again_votes();
         self.ack(session, request_id);
-        // The one who stepped aside may have been the last the others were waiting for.
-        if all_voted {
-            self.play_again(&lobby_id);
-        } else {
-            self.after_lobby_change(&lobby_id);
-        }
+        self.after_lobby_change(&lobby_id);
     }
 
     pub(super) fn switch_to_player(&mut self, session: &SessionId, request_id: u32) {

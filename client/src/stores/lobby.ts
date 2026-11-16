@@ -96,6 +96,12 @@ export const useLobbyStore = defineStore("lobby", () => {
     const known = current.value;
     if (known && known.lobbyId !== state.lobbyId) return;
     if (!known && (isLeaving.value || state.lobbyId === leftLobbyId)) return;
+    const hadVoted = known?.playAgainVotes.some((voter) => sameIdentity(voter, connection.identity));
+    const stillVoted = state.playAgainVotes.some((voter) => sameIdentity(voter, connection.identity));
+    // The server drops the votes when the players or the settings change after a match.
+    if (hadVoted && !stillVoted && state.phase === LobbyPhase.POST_MATCH) {
+      toasts.show("The players or settings changed: vote again to play");
+    }
     if (!known && !state.seats.some((seat) => sameIdentity(seat.occupant, connection.identity))) {
       if (!state.observers.some((observer) => sameIdentity(observer, connection.identity))) return;
     }

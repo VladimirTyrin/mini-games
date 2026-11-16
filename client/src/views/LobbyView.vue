@@ -78,6 +78,7 @@ async function saveSettings(): Promise<void> {
 }
 
 /** Nobody else is here: play locally instead (no ping, works offline). */
+const iVotedToPlayAgain = computed(() => state.value?.playAgainVotes.some((voter) => isMe(voter)) ?? false);
 const startsLocally = computed(() => humanSeats.value === 1 && (state.value?.observers.length ?? 0) === 0);
 
 async function start(): Promise<void> {
@@ -266,10 +267,13 @@ function kick(): void {
         </button>
         <button
           v-if="state.phase === LobbyPhase.POST_MATCH && mySeat"
-          class="rounded bg-emerald-700 px-4 py-2"
+          class="rounded bg-emerald-700 px-4 py-2 whitespace-nowrap disabled:opacity-60"
+          :disabled="iVotedToPlayAgain"
           @click="lobby.votePlayAgain()"
         >
-          Play again
+          {{ iVotedToPlayAgain ? "Waiting" : "Play again" }} · {{ state.playAgainVotes.length }}/{{
+            humanSeats
+          }}
         </button>
         <p v-if="canStart && startProblem" class="ml-auto text-sm text-rose-300">
           {{ startProblem.message }} — edit the settings to start

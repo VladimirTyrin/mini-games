@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FakeSocket } from "@/net/testing/fake-socket";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
+import { LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
 
 import { useConnectionStore } from "./connection";
@@ -160,5 +161,32 @@ describe("lobby store", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("tells the player when a play-again vote was dropped because the table changed", async () => {
+    const socket = await inLobby();
+    const postMatch = (votes: (typeof me)[]) =>
+      create(ServerMessageSchema, {
+        message: {
+          case: "lobbyState",
+          value: {
+            lobbyId: "lobby",
+            host: me,
+            maxSeats: 2,
+            seats: [{ occupant: me }],
+            phase: LobbyPhase.POST_MATCH,
+            playAgainVotes: votes,
+          },
+        },
+      });
+
+    socket.push(postMatch([me]));
+    socket.push(postMatch([]));
+
+    await vi.waitFor(() =>
+      expect(useToastStore().toasts.map((toast) => toast.text)).toContain(
+        "The players or settings changed: vote again to play",
+      ),
+    );
   });
 });
