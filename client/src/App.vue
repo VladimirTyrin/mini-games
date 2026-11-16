@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import SignedInElsewhere from "@/components/SignedInElsewhere.vue";
 import ToastList from "@/components/ToastList.vue";
+import { onAppResumed } from "@/platform/native-app";
 import { useAppUpdateStore } from "@/stores/app-update";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
@@ -36,6 +37,7 @@ watch(
 onMounted(() => {
   connection.resumeStoredSession();
   void appUpdate.check();
+  void onAppResumed(() => appUpdate.checkIfDue());
 });
 </script>
 

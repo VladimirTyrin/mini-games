@@ -12,6 +12,8 @@ import { nativeWebBundles } from "@/platform/web-bundle";
 import { useMatchStore } from "./match";
 import { usePrefsStore } from "./prefs";
 
+const RESUME_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+
 export type UpdateCheckReport = UpdateCheckResult | { readonly kind: "check-failed" };
 
 /**
@@ -26,6 +28,7 @@ export const useAppUpdateStore = defineStore("app-update", () => {
   /** Version name of a downloaded web bundle that is waiting for the switch. */
   const webBundleReady = shallowRef<string | null>(null);
   let running: Promise<UpdateCheckReport> | null = null;
+  let lastCheckAt = -Infinity;
 
   async function runCheck(): Promise<UpdateCheckReport> {
     const bundles = await nativeWebBundles();
@@ -50,12 +53,22 @@ export const useAppUpdateStore = defineStore("app-update", () => {
 
   function check(): Promise<UpdateCheckReport> {
     if (!__NATIVE_APP__) return Promise.resolve({ kind: "up-to-date" });
+    lastCheckAt = performance.now();
     if (!running) {
       running = runCheck().finally(() => {
         running = null;
       });
     }
     return running;
+  }
+
+  /**
+   * Android keeps an app in memory for days and resumes it without a restart, so a check only at
+   * start would miss every release meanwhile: returning to the app checks too, at most every
+   * ten minutes.
+   */
+  function checkIfDue(): void {
+    if (performance.now() - lastCheckAt >= RESUME_CHECK_INTERVAL_MS) void check();
   }
 
   async function install(): Promise<void> {
@@ -76,5 +89,5 @@ export const useAppUpdateStore = defineStore("app-update", () => {
     );
   }
 
-  return { available, webBundleReady, check, install };
+  return { available, webBundleReady, check, checkIfDue, install };
 });
