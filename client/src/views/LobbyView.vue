@@ -7,12 +7,14 @@ import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import InviteFriends from "@/components/InviteFriends.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
+import { accountOf, useFriendsStore } from "@/stores/friends";
 import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
@@ -52,6 +54,16 @@ const canStart = computed(
 
 const labelOf = (player: Identity) => lobby.memberLabels.get(player.id) ?? player.displayName;
 const isMe = (player: Identity | undefined) => sameIdentity(player, connection.identity);
+const friends = useFriendsStore();
+/** Another Google player who is neither a friend nor asked yet. */
+const canBefriend = (player: Identity | undefined) =>
+  friends.hasAccount &&
+  !!player &&
+  !isMe(player) &&
+  player.kind === IdentityKind.GOOGLE &&
+  accountOf(player.id) !== accountOf(connection.identity?.id ?? "") &&
+  !friends.friendAccounts.has(accountOf(player.id)) &&
+  !friends.requestedAccounts.has(accountOf(player.id));
 
 const canEditSettings = computed(
   () =>
@@ -212,6 +224,13 @@ function kick(): void {
             <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300"> host</span>
             <span v-if="seat.connectionLost" class="text-xs text-rose-300"> reconnecting…</span>
           </span>
+          <button
+            v-if="canBefriend(seat.occupant)"
+            class="-my-1 min-h-9 rounded px-2 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
+            @click="friends.sendRequest(seat.occupant!.id)"
+          >
+            + Friend
+          </button>
           <span
             v-if="!seat.botKind"
             class="text-xs"
@@ -260,6 +279,8 @@ function kick(): void {
           </template>
         </p>
       </section>
+
+      <InviteFriends v-if="friends.hasAccount" :members="lobby.members" />
 
       <section class="flex flex-wrap gap-2">
         <button

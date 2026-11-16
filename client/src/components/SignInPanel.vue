@@ -87,10 +87,13 @@ const isNativeApp = __NATIVE_APP__;
           v-model="name"
           maxlength="24"
           placeholder="Your name"
-          class="flex-1 rounded bg-panel-raised px-3 py-2"
+          class="min-w-0 flex-1 rounded bg-panel-raised px-3 py-2"
           autocomplete="nickname"
         />
-        <button class="rounded bg-emerald-600 px-4 py-2 font-semibold" :disabled="!name.trim() || busy">
+        <button
+          class="shrink-0 rounded bg-emerald-600 px-4 py-2 font-semibold whitespace-nowrap"
+          :disabled="!name.trim() || busy"
+        >
           Play as guest
         </button>
       </form>

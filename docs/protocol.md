@@ -140,6 +140,39 @@ connection) is answered with `Ack`. After the delay, the server sends a test not
 `ServerInfo.web_push_public_key` is the key browsers subscribe with; it is empty when Web Push
 is off. See [push-notifications.md](push-notifications.md).
 
+## Friends and invitations
+
+Only for Google accounts; anyone else gets `ERROR_CODE_ACCOUNT_REQUIRED`.
+
+A friend is an account, not a device. Its `Identity.id` is the account id: the part of a device's
+player id before the dot.
+
+- **Push address.** `RegisterPushTarget { target }`: the device sends it on every sign-in once
+  notifications are allowed. The server keeps up to 10 addresses per account.
+- **Friend list.** `ListFriends` is answered with `FriendList`: friends with their presence
+  (offline, online, playing), requests both ways, and the account's open links. The server also
+  pushes `FriendList` whenever it changes, and `FriendPresence` when a friend's presence changes.
+- **Requests.** `SendFriendRequest { player_id }` takes a device or an account id. When the other
+  account had already asked, the two become friends at once.
+- **Answers and removal.** `AnswerFriendRequest` accepts or declines; `RemoveFriend` ends a
+  friendship or withdraws a request.
+- **Links.** `CreateFriendLink { kind }` is answered with `FriendLink`, valid for 7 days, at
+  most 20 open per account:
+  - single-use: the first account to open it becomes a friend;
+  - multi-use: for group chats.
+
+  The link is `https://<site>/f/<code>`. `UseFriendLink { code }` is answered with `Ack` or
+  `ERROR_CODE_FRIEND_LINK_INVALID`. `RevokeFriendLink` withdraws a link.
+- **Invitations.** `InviteFriend { account_id }` asks a friend into the requester's lobby
+  (`ERROR_CODE_NOT_FRIENDS`, `ERROR_CODE_NOT_IN_LOBBY`).
+  - The inviting session gets `InviteUpdate` as the invitation moves on: pending, then
+    accepted, declined, expired (after 90 s) or cancelled (`CancelInvite`).
+  - Every connected device of the friend gets `GameInvite`; the others get a push notification
+    with the same data.
+  - `AnswerInvite` accepts or declines, then the client joins `lobby_id` as usual. A closed
+    invitation answers `ERROR_CODE_INVITE_CLOSED`.
+  - Once an invitation closes, the friend's devices get `GameInviteClosed`.
+
 ## Compatibility
 
 `protocol_version` changes only on incompatible changes. Adding optional fields or messages

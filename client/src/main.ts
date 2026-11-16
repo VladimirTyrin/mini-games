@@ -14,8 +14,20 @@ async function boot(): Promise<void> {
   const pinia = createPinia();
   createApp(App).use(pinia).use(router).mount("#app");
   await setUpNativeApp();
-  const { useNotificationsStore } = await import("./stores/notifications");
+  const [{ useNotificationsStore }, { useFriendsStore }, links] = await Promise.all([
+    import("./stores/notifications"),
+    import("./stores/friends"),
+    import("./platform/friend-links"),
+  ]);
   await useNotificationsStore(pinia).listen(router);
+  const friends = useFriendsStore(pinia);
+  const openFriendLink = (code: string): void => {
+    void friends.useLink(code);
+    void router.push("/friends");
+  };
+  const code = links.takeFriendCodeFromAddress();
+  if (code) openFriendLink(code);
+  await links.onFriendLinkOpened(openFriendLink);
   if (!__NATIVE_APP__) {
     // Offline support; new versions are applied outside matches (see web-updates.ts).
     const [{ registerSW }, { startWebUpdates }, { useMatchStore }] = await Promise.all([

@@ -2,6 +2,7 @@
 import { onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import GameInviteBanner from "@/components/GameInviteBanner.vue";
 import SignedInElsewhere from "@/components/SignedInElsewhere.vue";
 import ToastList from "@/components/ToastList.vue";
 import { onAppResumed } from "@/platform/native-app";
@@ -48,6 +49,7 @@ onMounted(() => {
          setup to another's (history back/forward) must build a fresh screen, not reuse it. -->
     <RouterView :key="route.path" />
     <SignedInElsewhere />
+    <GameInviteBanner />
     <ToastList />
   </div>
 </template>

@@ -63,7 +63,14 @@ Actors, no shared locks:
   runs bot searches on the blocking pool under a CPU semaphore, broadcasts each frame encoded
   once, handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
 
-Authentication without a database: guests (if allowed), Google ID tokens verified against
+- **Social actor** (one task): friends, friend links, push targets and invitations, kept in a
+  SQLite database (`MG_DATABASE`, migrated at start by `PRAGMA user_version`; a database written
+  by a newer server is refused). It asks the hub who is online and has the hub deliver to every
+  device of an account; the hub only ever sends it fire-and-forget commands, so the two cannot
+  deadlock. Push notifications go out from blocking tasks. See
+  [push-notifications.md](push-notifications.md).
+
+Authentication needs no database: guests (if allowed), Google ID tokens verified against
 Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session token. Players
 are told apart by an opaque id (`PlayerId`; for accounts an HMAC of the account under the same
 secret), never by display name, which may repeat.

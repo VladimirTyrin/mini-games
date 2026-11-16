@@ -12,11 +12,13 @@ import { controlsHintFor } from "@/games/game-plugin";
 import { initialSettings } from "@/games/initial-settings";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
+import { useFriendsStore } from "@/stores/friends";
 import { useLobbyStore } from "@/stores/lobby";
 import { usePrefsStore } from "@/stores/prefs";
 import { type SettingsProblem, defaultSettings, gameCatalog } from "@/wasm/core";
 
 const connection = useConnectionStore();
+const friends = useFriendsStore();
 const lobby = useLobbyStore();
 const prefs = usePrefsStore();
 const catalog = gameCatalog();
@@ -66,6 +68,17 @@ const phaseLabel: Record<number, string> = {
   <main class="mx-auto w-full max-w-3xl flex-1 space-y-4 p-4">
     <SignInPanel v-if="!connection.isSignedIn" />
     <template v-else>
+      <RouterLink
+        v-if="friends.hasAccount"
+        to="/friends"
+        class="flex min-h-12 items-center gap-2 rounded-xl bg-panel px-4 font-semibold"
+      >
+        Friends
+        <span v-if="friends.incomingRequestCount" class="rounded-full bg-rose-600 px-2 text-xs font-semibold">
+          {{ friends.incomingRequestCount }} new
+        </span>
+        <span class="ml-auto text-gray-400" aria-hidden="true">›</span>
+      </RouterLink>
       <div class="flex items-center justify-between">
         <h2 class="text-sm uppercase tracking-wide text-gray-400">Lobbies</h2>
         <div class="flex gap-2">

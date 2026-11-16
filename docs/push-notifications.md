@@ -1,14 +1,27 @@
 # Push notifications
 
-Groundwork for "call a friend to a game now". It covers two kinds of device:
-
+The server sends push notifications to two kinds of device:
 - the Android app, through **FCM**;
-- browsers and installed web apps, through **Web Push**. On iPhone this means iOS 16.4+ with the
+- browsers and installed web apps, through **Web Push**. On iPhone this needs iOS 16.4+ and the
   app added to the Home Screen; Safari tabs get no push.
 
-So far the only notification is the test in Settings: "Send a test notification" comes 20 s
-after the tap, which leaves time to close the app or lock the phone. Settings then shows how
-long each step took.
+Every device of a Google account registers its address (`RegisterPushTarget`, see
+[protocol.md](protocol.md), "Friends and invitations"), and a notification goes to all of them:
+
+| What | Tap opens |
+|---|---|
+| A friend invites you into a lobby (lives 90 s) | the app, which accepts and joins |
+| A friend request, a new friend | the Friends screen |
+| The test in Settings ("Send a test notification", 20 s after the tap) | Settings, with how long each step took |
+
+An invitation answered on one device is replaced on the friend's other devices ("you joined on
+another device"). When an invitation expires or is cancelled, no second notification goes out:
+it would land on every device that ignored the first one. Tapping the stale one says the
+invitation is closed. While the app is open, invitations show as a banner in the app instead.
+
+On iPhone, links from other apps always open in Safari, never in the Home Screen app. That
+matters only for friend links: the Friends screen takes a pasted link, and a request sent with
+"+ Friend" in a lobby arrives as a notification, which opens the app itself.
 
 ## Flow
 

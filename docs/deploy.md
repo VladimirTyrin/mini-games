@@ -36,6 +36,14 @@ Every deploy puts exactly one build on the host. The build number is the commit 
    from the public address (`https://<domain>`, or `http://<host>` in `--mode http`) and fails
    with a list of what differs.
 
+## Database
+
+Friends, friend links and push addresses live in SQLite at
+`/var/lib/mini-games-server/mini-games.db`. systemd keeps that directory across deploys
+(`StateDirectory`), and the server applies new migrations when it starts. A migration that fails
+keeps the service from starting, and `deploy.sh` then fails with the journal. There are no
+backups yet.
+
 ## Secrets on the host
 
 The server reads `/etc/mini-games-server.env`.

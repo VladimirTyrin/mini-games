@@ -20,6 +20,7 @@ export const router = createRouter({
       props: true,
     },
     { path: "/online", name: "online", component: () => import("./views/OnlineView.vue") },
+    { path: "/friends", name: "friends", component: () => import("./views/FriendsView.vue") },
     { path: "/lobby", name: "lobby", component: () => import("./views/LobbyView.vue") },
     { path: "/match", name: "match", component: () => import("./views/MatchView.vue") },
     { path: "/settings", name: "settings", component: () => import("./views/SettingsView.vue") },

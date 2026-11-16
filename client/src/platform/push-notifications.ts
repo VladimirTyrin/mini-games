@@ -22,6 +22,8 @@ export interface ReceivedNotification {
   tappedAt: number | null;
   /** When the app had it in hand: after the tap, it was ready to show it. */
   handledAt: number;
+  /** Everything the server sent along, as strings (`inviteId`, `lobbyId`...). */
+  data: Record<string, string>;
 }
 
 /** Both the Android channel and the server's FCM messages use this id. */
@@ -36,6 +38,15 @@ export function pushAvailability(): PushAvailability {
   if (isAppleMobile() && !isInstalledWebApp()) return "add-to-home-screen-first";
   if (!supported) return "unsupported";
   return Notification.permission === "denied" ? "blocked" : "available";
+}
+
+/** Notifications are already allowed: the device can register without a prompt. */
+export async function canNotifyWithoutAsking(): Promise<boolean> {
+  if (__NATIVE_APP__) {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    return (await PushNotifications.checkPermissions()).receive === "granted";
+  }
+  return pushAvailability() === "available" && Notification.permission === "granted";
 }
 
 /**
@@ -152,12 +163,16 @@ function parseNotification(data: Record<string, unknown>, handledAt: number): Re
   };
   const sentAt = number("sentAt");
   if (typeof data.kind !== "string" || sentAt === null) return null;
+  const strings = Object.fromEntries(
+    Object.entries(data).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
   return {
     kind: data.kind,
     sentAt,
     receivedAt: number("receivedAt"),
     tappedAt: number("tappedAt"),
     handledAt,
+    data: strings,
   };
 }
 
