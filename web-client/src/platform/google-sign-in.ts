@@ -52,6 +52,8 @@ export async function renderGoogleButton(
     size: "large",
     shape: "pill",
     text: "signin_with",
+    // Google caps the width at 400 px; filling the panel lines it up with the guest form.
+    width: Math.min(400, Math.floor(element.clientWidth)),
   });
 }
 

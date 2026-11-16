@@ -19,6 +19,8 @@ const prefs = usePrefsStore();
 const name = ref(prefs.guestName);
 const googleButton = ref<HTMLElement | null>(null);
 const googleError = ref<string | null>(null);
+/** Google draws its button once its script has loaded; until then a placeholder holds the space. */
+const googleButtonShown = ref(false);
 
 const info = computed(() => connection.serverInfo);
 const googleClientId = computed(() => info.value?.googleClientId ?? "");
@@ -34,6 +36,7 @@ async function mountGoogle(): Promise<void> {
     await renderGoogleButton(googleButton.value, googleClientId.value, (idToken) =>
       connection.signInWithGoogle(idToken),
     );
+    googleButtonShown.value = true;
   } catch (error) {
     googleError.value = errorMessage(error);
   }
@@ -76,7 +79,14 @@ watch([googleClientId, googleButton], () => void mountGoogle());
       </form>
       <div v-if="googleClientId" class="space-y-1">
         <GoogleSignInButton v-if="isNativeApp" :disabled="busy" @click="signInNatively" />
-        <div v-else ref="googleButton" />
+        <div v-else class="relative h-11">
+          <div
+            v-if="!googleButtonShown && !googleError"
+            class="absolute inset-0 animate-pulse rounded-full bg-panel-raised"
+            aria-hidden="true"
+          />
+          <div ref="googleButton" class="w-full" />
+        </div>
         <p v-if="googleError" class="text-xs text-gray-400">{{ googleError }}</p>
       </div>
     </template>
