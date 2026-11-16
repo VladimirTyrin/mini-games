@@ -42,9 +42,19 @@ fn new_game(args: &[String]) -> Result<(), String> {
     let names = GameNames::new(id, title)?;
     let root = repo_root()?;
     scaffold::create_game(&root, &names)?;
+    // The templates and patched files are not laid out the way rustfmt wants: format them, so
+    // the new game passes `cargo fmt --check` in CI from the start.
+    let formatted = std::process::Command::new("cargo")
+        .args(["fmt", "--all"])
+        .current_dir(&root)
+        .status()
+        .map_err(|error| format!("cannot run cargo fmt: {error}"))?;
+    if !formatted.success() {
+        return Err(format!("cargo fmt failed ({formatted}) on the new game"));
+    }
     println!("Created game `{}`. Next:", names.snake);
     println!(
-        "  1. cargo test -p mg-{}            # conformance passes out of the box",
+        "  1. cargo test -p mg-{}            # conformance passes; pin GOLDEN_HASH from the failing hash test",
         names.kebab
     );
     println!(

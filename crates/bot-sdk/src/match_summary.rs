@@ -19,11 +19,44 @@ pub struct MatchSummary {
 }
 
 impl MatchSummary {
+    /// Won a competitive match, or completed a solo or cooperative one.
     pub fn won(&self) -> bool {
         let (Some(slot), Some(result)) = (self.my_slot, &self.result) else {
             return false;
         };
-        result.kind == proto::OutcomeKind::Winner as i32
-            && result.winner_slots.contains(&u32::from(slot.get()))
+        match proto::OutcomeKind::try_from(result.kind) {
+            Ok(proto::OutcomeKind::Winner) => result.winner_slots.contains(&u32::from(slot.get())),
+            Ok(proto::OutcomeKind::Victory) => true,
+            _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary(kind: proto::OutcomeKind, winners: Vec<u32>) -> MatchSummary {
+        MatchSummary {
+            match_id: "m".into(),
+            my_slot: Some(Slot::new(0)),
+            result: Some(proto::MatchResult {
+                kind: kind as i32,
+                winner_slots: winners,
+                ..proto::MatchResult::default()
+            }),
+            final_tick: Tick::default(),
+            final_state_hash: 0,
+            reconnects: 0,
+            rejected_commands: 0,
+        }
+    }
+
+    #[test]
+    fn a_solo_victory_is_a_win() {
+        assert!(summary(proto::OutcomeKind::Victory, vec![]).won());
+        assert!(!summary(proto::OutcomeKind::Defeat, vec![]).won());
+        assert!(summary(proto::OutcomeKind::Winner, vec![0]).won());
+        assert!(!summary(proto::OutcomeKind::Winner, vec![1]).won());
     }
 }

@@ -95,8 +95,9 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
   bot seats), `invalid_setups` (0, max+1, `u32::MAX`, broken rules between fields, wrong seat
   counts), `arbitrary_command` biased towards legal moves, `check_invariants`. Setups hold
   `RawSettings`; the suite parses them like any boundary and checks that they round-trip.
-- Pin the golden hash: run `scripted_hash` once and `assert_eq!` the value. It must only change
-  when you change a rule on purpose.
+- Pin the golden hash: a scaffolded game starts with `GOLDEN_HASH = 0`, so
+  `scripted_hash_is_pinned` fails and prints the value to copy there. It must only change when
+  you change a rule on purpose.
 - One test per rule, testing behaviour through `Authority`/`Game`, not private helpers.
 - CI also runs the game tests on `wasm32-wasip1`, so the golden hash proves native and WASM
   agree.

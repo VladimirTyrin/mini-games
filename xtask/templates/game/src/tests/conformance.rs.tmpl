@@ -34,11 +34,13 @@ fn passes_conformance() {
     conformance::run_all::<{{Pascal}}>(20);
 }
 
-/// Pins the rules: if this value changes, a rule changed — update it deliberately.
+/// Pins the rules: if this value changes, a rule changed — update it deliberately. A new game
+/// starts unpinned, so this test fails until the value it prints is copied here.
+const GOLDEN_HASH: u64 = 0;
+
 #[test]
 fn scripted_hash_is_pinned() {
     let setup = Setup::<{{Pascal}}>::new(RawSettings::default(), vec![PlayerSpec::HUMAN; 2]);
     let hash = conformance::scripted_hash(&setup, 42);
-    assert_eq!(hash, conformance::scripted_hash(&setup, 42));
-    // xtask leaves the golden value to the author: run once, then assert_eq!(hash, 0x…).
+    assert_eq!(hash, GOLDEN_HASH, "pin GOLDEN_HASH = {hash:#018x}");
 }
