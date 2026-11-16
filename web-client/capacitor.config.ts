@@ -21,6 +21,20 @@ const config: CapacitorConfig = {
       providers: { google: true, facebook: false, apple: false, twitter: false },
       logLevel: 1,
     },
+    // Over-the-air web bundles from our own server, driven by src/platform/app-update.ts:
+    // no Capgo cloud, no update checks of its own, no statistics.
+    CapacitorUpdater: {
+      autoUpdate: false,
+      updateUrl: "",
+      channelUrl: "",
+      statsUrl: "",
+      // A new APK starts from the bundle inside it, dropping bundles downloaded for the old shell.
+      resetWhenUpdate: true,
+      // Keeps a bundle that failed to start in the list, so the same build is not tried again.
+      autoDeleteFailed: false,
+      // Time from start to notifyAppReady (after WASM load and mount) before rolling back.
+      appReadyTimeout: 20000,
+    },
   },
 };
 

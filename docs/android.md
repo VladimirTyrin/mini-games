@@ -58,16 +58,64 @@ client per key (release and debug). Print a key's SHA-1 with
 
 ## Updates
 
-`./deploy.sh --apk web-client/android/dist/mini-games.apk` publishes the APK at
-`/downloads/mini-games.apk` and its `android.json`. On start (and after the server address
-changes) the app reads `android.json` from its server and, when the build is newer, offers
-"Update available → Download" on the home and settings screens; the system browser downloads
-the APK and Android offers to install it.
+The app has two parts: the native shell (the `android/` project, the Capacitor plugins and
+their config) and the web bundle inside it (JS, CSS, WASM). Most releases change only the web
+bundle, and the app picks it up over the air (OTA) without a new APK and without asking;
+it asks the player to install an APK only when the shell itself changed. Everything stays
+offline-capable: the app always runs a complete bundle stored on the device.
+
+**Shell fingerprint.** `build/native-fingerprint.mjs` hashes everything native: the files of
+`android/` (without build outputs, `.gradle`, the copied web bundle and the files `cap sync`
+regenerates), `capacitor.config.ts` and the exact versions of the `@capacitor/*` and `@capgo/*`
+packages in `package-lock.json`. `build/android.mjs` bakes it into the Android web bundle as
+`__NATIVE_FINGERPRINT__`; the web build has `""` there.
+
+**What a release build publishes.** `npm run android:apk` writes to `android/dist/`:
+
+| File | Content |
+|---|---|
+| `mini-games.apk` | the app |
+| `android.json` | `{ build, versionName, apk }` |
+| `web-<build>.zip` | the Android web bundle (`dist/`, `index.html` at the zip root) |
+| `web.json` | `{ build, versionName, nativeFingerprint, zip, sha256 }` |
+
+`./deploy.sh --apk web-client/android/dist/mini-games.apk` uploads all four to `/downloads/`:
+the APK before `android.json`, the zip before `web.json`, so a published file never names one
+that is not there yet. The server keeps the 3 newest `web-*.zip`. The APK files must be of the
+build being deployed (see [deploy.md](deploy.md)).
+
+**The check.** On start, after the server address changes and on Settings → "Check for
+updates", the app reads `web.json` and `android.json` from its server
+(`wss://host/ws` → `https://host/downloads/…`) and compares them with the running bundle's
+`__APP_BUILD__` and `__NATIVE_FINGERPRINT__`:
+
+| Published | App does |
+|---|---|
+| `web.json` build newer, same fingerprint, served over https | downloads the zip silently (the plugin checks its SHA-256) and switches to it when the app next goes to the background (leaving or closing it) |
+| newer build with another fingerprint, or no `web.json` (older server), or a plain-http server | offers "Update available → Download" for the APK, as long as `android.json` is newer |
+| nothing newer | nothing |
+| a newer build that already failed to start on this device | nothing (it is not retried) |
+
+The OTA part uses `@capgo/capacitor-updater` in manual mode: no Capgo cloud, no update checks of
+its own, statistics off (`capacitor.config.ts`). The switch never happens during a match: while
+a match screen is open the switch is held until the player leaves it. Each start calls
+`notifyAppReady` once the app has mounted; a bundle that does not get that far within 20 s is
+rolled back to the previous one. Installing a new APK drops downloaded bundles and starts from
+the one inside the APK (`resetWhenUpdate`). Plain-http servers get no OTA bundles: the bundle is
+code, and the plugin downloads over https only.
+
+Settings shows which parts run: "Version 2.0.0 (web 512, app 498)" means web bundle 512 in the
+shell of build 498.
+
+**Forcing an APK.** Change anything native (a file under `android/`, `capacitor.config.ts`, a
+Capacitor or Capgo plugin version): the fingerprint changes, and apps with the old shell are
+offered the APK instead of the bundle.
 
 ## Releases
 
 Pushing a tag `v<workspace version>` (e.g. `v2.0.0`) runs `.github/workflows/release.yml`, which
-publishes a GitHub Release with the APK, the musl server binary and the server-hosted web bundle.
+publishes a GitHub Release with the APK (plus its `web.json` and `web-<build>.zip`), the musl
+server binary and the server-hosted web bundle.
 A manual run of the workflow builds the same files as artifacts without publishing.
 
 Repository secrets the workflow needs:

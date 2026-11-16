@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { normalizeServerUrl } from "@/platform/server-url";
+import { nativeShellBuild } from "@/platform/web-bundle";
 import { useAppUpdateStore } from "@/stores/app-update";
 import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
@@ -16,7 +17,40 @@ const connection = useConnectionStore();
 const appUpdate = useAppUpdateStore();
 const toasts = useToastStore();
 const serverInput = ref(prefs.serverUrl);
-const version = __NATIVE_APP__ ? `${__APP_VERSION__} (${__APP_BUILD__})` : __APP_VERSION__;
+// The build is 0 in a local build without MG_BUILD_NUMBER (deploy.sh and the Android build set it).
+const webVersion = __APP_BUILD__ > 0 ? `${__APP_VERSION__} (${__APP_BUILD__})` : __APP_VERSION__;
+const version = ref(__NATIVE_APP__ ? `${__APP_VERSION__} (web ${__APP_BUILD__})` : webVersion);
+const checkingForUpdates = ref(false);
+/** For the template, which cannot see the build-time constant. */
+const isNativeApp = __NATIVE_APP__;
+
+onMounted(async () => {
+  if (!__NATIVE_APP__) return;
+  // The running web bundle may be newer than the app shell when it came over the air.
+  const shellBuild = await nativeShellBuild().catch(() => null);
+  if (shellBuild !== null) version.value = `${__APP_VERSION__} (web ${__APP_BUILD__}, app ${shellBuild})`;
+});
+
+async function checkForUpdates(): Promise<void> {
+  checkingForUpdates.value = true;
+  const report = await appUpdate.check();
+  checkingForUpdates.value = false;
+  switch (report.kind) {
+    case "up-to-date":
+      toasts.show("Up to date", "success");
+      break;
+    case "web-bundle-ready":
+      toasts.show("Update downloaded — restart the app to apply", "success");
+      break;
+    case "apk-available":
+      toasts.show("A new app version is available — tap Download", "success");
+      break;
+    case "no-release-info":
+    case "check-failed":
+      toasts.error("Could not check for updates — is the server reachable?");
+      break;
+  }
+}
 
 function saveServer(): void {
   const url = normalizeServerUrl(serverInput.value);
@@ -83,6 +117,11 @@ function resetServer(): void {
     </section>
     <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
+    <p v-if="isNativeApp" class="text-center text-xs text-gray-500">
+      <button class="underline hover:text-gray-300" :disabled="checkingForUpdates" @click="checkForUpdates">
+        {{ checkingForUpdates ? "Checking for updates…" : "Check for updates" }}
+      </button>
+    </p>
     <p class="text-center text-xs text-gray-500">
       <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
     </p>

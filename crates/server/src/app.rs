@@ -16,7 +16,7 @@ use crate::auth::{BotKeys, GoogleVerifier, HttpGoogleKeySource, PlayerIdKey, Ses
 use crate::config::{Config, ConfigError};
 use crate::connection;
 use crate::connection_limiter::{ConnectionLimiter, ConnectionRefused};
-use crate::context::ServerContext;
+use crate::context::{ServerContext, server_version};
 use crate::hub::{Hub, HubCommand, HubHandle};
 use crate::limits::Limits;
 
@@ -107,6 +107,8 @@ pub async fn serve(
     let mut router = Router::new()
         .route("/ws", get(websocket))
         .route("/healthz", get(|| async { "ok" }))
+        // Lets deploy.sh check which build is running without a WebSocket.
+        .route("/version", get(|| async { server_version() }))
         .with_state(state);
     if let Some(dir) = &config.static_dir {
         let assets = Router::new()

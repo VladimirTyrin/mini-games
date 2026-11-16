@@ -9,10 +9,17 @@
 #   --mode M        http | tls (default tls)
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
-#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk (with the
-#                   android.json next to it, if any, for the app's update check)
+#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk, with what
+#                   build/android.mjs put next to it for the app's update check: android.json,
+#                   and web.json + web-<build>.zip (over-the-air web bundle; 3 newest kept)
+#   --allow-version-mismatch
+#                   publish an APK built from another commit than the one being deployed
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
+#
+# Everything deployed carries one build number, the commit count of HEAD: the server reports it
+# at /version, the web bundle in /version.json, the APK files in android.json and web.json. The
+# deploy refuses mismatched inputs up front and checks what the host serves at the end.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,8 +37,11 @@ EMAIL=""
 SKIP_BUILD=false
 DRY_RUN=false
 APK=""
+ALLOW_VERSION_MISMATCH=false
 
 die() { echo "error: $*" >&2; exit 1; }
+# The "build" number of a JSON document on stdin (android.json, web.json, version.json).
+json_build() { grep -o '"build": *[0-9]*' | head -n 1 | grep -o '[0-9]*$' || true; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -40,9 +50,10 @@ while [[ $# -gt 0 ]]; do
         --domain) DOMAIN="$2"; shift 2 ;;
         --email) EMAIL="$2"; shift 2 ;;
         --apk) APK="$2"; shift 2 ;;
+        --allow-version-mismatch) ALLOW_VERSION_MISMATCH=true; shift ;;
         --skip-build) SKIP_BUILD=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
-        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -58,8 +69,25 @@ if [[ "$MODE" == "tls" ]]; then
 fi
 if [[ "$MODE" == "http" ]]; then SERVER_NAME="_"; else SERVER_NAME="$DOMAIN"; fi
 
+BUILD="$(git -C "$SCRIPT_DIR" rev-list --count HEAD)" || die "cannot count commits for the build number"
+COMMIT="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_DIST="${SCRIPT_DIR}/web-client/dist"
+APK_DIR="$(dirname "${APK:-.}")"
+echo "==> Build ${BUILD} (commit ${COMMIT})"
+
+# android.json and web.json must come from this commit too, before anything is built or uploaded.
+if [[ -n "$APK" ]]; then
+    for info in "${APK_DIR}/android.json" "${APK_DIR}/web.json"; do
+        [[ -f "$info" ]] || continue
+        info_build="$(json_build < "$info")"
+        if [[ "$info_build" != "$BUILD" ]]; then
+            [[ "$ALLOW_VERSION_MISMATCH" == true ]] \
+                || die "$info is build ${info_build:-?}, this commit is build ${BUILD}: rebuild the APK from this commit (npm run android:apk) or pass --allow-version-mismatch"
+            echo "warning: $info is build ${info_build:-?}, deploying build ${BUILD} (--allow-version-mismatch)" >&2
+        fi
+    done
+fi
 
 if [[ "$SKIP_BUILD" == false ]]; then
     echo "==> Building web client"
@@ -67,16 +95,19 @@ if [[ "$SKIP_BUILD" == false ]]; then
         cd "${SCRIPT_DIR}/web-client"
         [[ -d node_modules ]] || npm ci
         # No VITE_SERVER_URL: the page served by this host talks to the same host (/ws).
-        npm run build
+        MG_BUILD_NUMBER="$BUILD" MG_COMMIT="$COMMIT" npm run build
     )
     echo "==> Building server (${TARGET})"
     rustup target list --installed | grep -qx "${TARGET}" || rustup target add "${TARGET}"
     # zig provides the musl C toolchain that ring (TLS for Google key fetches) needs.
-    cargo zigbuild --release --target "${TARGET}" -p mg-server
+    MG_BUILD_NUMBER="$BUILD" cargo zigbuild --release --target "${TARGET}" -p mg-server
 fi
 
 [[ -f "$BUILD_BINARY" ]] || die "binary not found: $BUILD_BINARY"
 [[ -f "$WEB_DIST/index.html" ]] || die "web build not found: $WEB_DIST"
+WEB_BUILD="$(json_build < "$WEB_DIST/version.json" 2>/dev/null || true)"
+[[ "$WEB_BUILD" == "$BUILD" ]] \
+    || die "web-client/dist is build ${WEB_BUILD:-?}, this commit is build ${BUILD}: deploy without --skip-build"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
@@ -101,10 +132,22 @@ if [[ -n "$APK" ]]; then
     scp -q "$APK" "${HOST}:${REMOTE_DIR}/downloads/mini-games.apk.new"
     ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/mini-games.apk.new && mv ${REMOTE_DIR}/downloads/mini-games.apk.new ${REMOTE_DIR}/downloads/mini-games.apk"
     # Published after the APK, so the app never offers a build that is not there yet.
-    APK_INFO="$(dirname "$APK")/android.json"
+    APK_INFO="${APK_DIR}/android.json"
     if [[ -f "$APK_INFO" ]]; then
         scp -q "$APK_INFO" "${HOST}:${REMOTE_DIR}/downloads/android.json.new"
         ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/android.json.new && mv ${REMOTE_DIR}/downloads/android.json.new ${REMOTE_DIR}/downloads/android.json"
+    fi
+    # The over-the-air web bundle: the zip first, web.json (which names it) last. Older zips stay
+    # for apps that read the previous web.json moments ago; the 3 newest are kept.
+    WEB_INFO="${APK_DIR}/web.json"
+    if [[ -f "$WEB_INFO" ]]; then
+        WEB_ZIP="$(sed -n 's/^ *"zip": *"\(web-[0-9]*\.zip\)".*/\1/p' "$WEB_INFO")"
+        [[ -n "$WEB_ZIP" && -f "${APK_DIR}/${WEB_ZIP}" ]] || die "web.json names no zip next to it: $WEB_INFO"
+        scp -q "${APK_DIR}/${WEB_ZIP}" "${HOST}:${REMOTE_DIR}/downloads/${WEB_ZIP}.new"
+        ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/${WEB_ZIP}.new && mv ${REMOTE_DIR}/downloads/${WEB_ZIP}.new ${REMOTE_DIR}/downloads/${WEB_ZIP}"
+        scp -q "$WEB_INFO" "${HOST}:${REMOTE_DIR}/downloads/web.json.new"
+        ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/web.json.new && mv ${REMOTE_DIR}/downloads/web.json.new ${REMOTE_DIR}/downloads/web.json"
+        ssh "$HOST" "cd ${REMOTE_DIR}/downloads && ls -1 web-*.zip | sort -t- -k2 -n | head -n -3 | xargs -r rm -f --"
     fi
 fi
 scp -q "${SCRIPT_DIR}/deploy/${SERVICE_NAME}.service" "${HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
@@ -191,4 +234,27 @@ curl -fsS -o /dev/null http://127.0.0.1/healthz && curl -fsS -o /dev/null http:/
 rm -rf "${REMOTE_DIR}/web.old"
 REMOTE
 
-echo "==> Deployed to ${HOST} (${MODE})"
+echo "==> Checking that ${HOST} serves build ${BUILD} everywhere"
+if [[ "$MODE" == "tls" ]]; then PUBLIC_URL="https://${DOMAIN}"; else PUBLIC_URL="http://${HOST#*@}"; fi
+MISMATCHES=()
+check_build() { # name, served build, expected build
+    if [[ "$2" == "$3" ]]; then echo "    ok  $1: build $2"; else MISMATCHES+=("$1 is build ${2:-?}, expected $3"); fi
+}
+SERVED_SERVER="$(curl -fsS "${PUBLIC_URL}/version" || true)"
+check_build "server ${PUBLIC_URL}/version (${SERVED_SERVER:-unreachable})" "${SERVED_SERVER##*+}" "$BUILD"
+check_build "web ${PUBLIC_URL}/version.json" "$(curl -fsS "${PUBLIC_URL}/version.json" | json_build)" "$BUILD"
+if [[ -n "$APK" ]]; then
+    # With --allow-version-mismatch the APK files are expected to carry their own build.
+    for info in android.json web.json; do
+        [[ -f "${APK_DIR}/${info}" ]] || continue
+        expected="$BUILD"
+        [[ "$ALLOW_VERSION_MISMATCH" == true ]] && expected="$(json_build < "${APK_DIR}/${info}")"
+        check_build "${PUBLIC_URL}/downloads/${info}" "$(curl -fsS "${PUBLIC_URL}/downloads/${info}" | json_build)" "$expected"
+    done
+fi
+if (( ${#MISMATCHES[@]} )); then
+    printf 'error: %s\n' "${MISMATCHES[@]}" >&2
+    die "${HOST} does not serve one build: see above"
+fi
+
+echo "==> Deployed build ${BUILD} (${COMMIT}) to ${HOST} (${MODE})"

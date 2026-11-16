@@ -6,7 +6,16 @@ use crate::hub::HubHandle;
 use crate::timing::Timing;
 
 pub(crate) const PROTOCOL_VERSION: u32 = 2;
-pub(crate) const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// `2.0.0+<build>` when built with `MG_BUILD_NUMBER` (deploy.sh passes the commit count, which
+/// is also the web bundle's build), else the plain workspace version.
+pub(crate) fn server_version() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    match option_env!("MG_BUILD_NUMBER") {
+        Some(build) if !build.is_empty() => format!("{version}+{build}"),
+        _ => version.to_owned(),
+    }
+}
 
 /// Shared, immutable server-wide state handed to every connection.
 #[derive(Debug)]
@@ -27,7 +36,7 @@ pub(crate) struct ServerContext {
 impl ServerContext {
     pub(crate) fn server_info(&self) -> proto::ServerInfo {
         proto::ServerInfo {
-            server_version: SERVER_VERSION.to_owned(),
+            server_version: server_version(),
             min_protocol_version: PROTOCOL_VERSION,
             max_protocol_version: PROTOCOL_VERSION,
             guests_allowed: self.allow_guests,

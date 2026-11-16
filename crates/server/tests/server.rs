@@ -24,6 +24,35 @@ async fn server_info_is_available_before_sign_in() {
 }
 
 #[tokio::test]
+async fn version_route_reports_the_server_info_version() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let server = TestServer::start().await;
+    let mut client = server.client().await;
+    let Reply::ServerInfo(info) = client
+        .request(Request::ServerInfo(proto::ServerInfoRequest {}))
+        .await
+    else {
+        panic!("expected server info");
+    };
+    assert!(info.server_version.starts_with(env!("CARGO_PKG_VERSION")));
+
+    let mut http = tokio::net::TcpStream::connect(server.address)
+        .await
+        .unwrap();
+    http.write_all(b"GET /version HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut response = String::new();
+    http.read_to_string(&mut response).await.unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    assert!(
+        response.ends_with(&format!("\r\n\r\n{}", info.server_version)),
+        "{response}"
+    );
+}
+
+#[tokio::test]
 async fn unsupported_protocol_is_refused_and_closed() {
     let server = TestServer::start().await;
     let mut client = server.client().await;

@@ -1,7 +1,7 @@
 name: Release
 
-# A `v*` tag publishes a GitHub Release with the Android APK, the server binary and the web
-# bundle. A manual run builds the same files as workflow artifacts without publishing.
+# A `v*` tag publishes a GitHub Release with the Android APK (plus web.json and the zip of its
+# over-the-air web bundle), the server binary and the web bundle. A manual run builds the same files as workflow artifacts without publishing.
 on:
   push:
     tags: ["v*"]
@@ -61,11 +61,17 @@ jobs:
           MG_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           MG_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           MG_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-      - run: cp android/dist/mini-games.apk "$RUNNER_TEMP/mini-games-${{ needs.version.outputs.version }}.apk"
+      # The over-the-air web bundle keeps its names: web.json refers to the zip by name.
+      - run: |
+          cp android/dist/mini-games.apk "$RUNNER_TEMP/mini-games-${{ needs.version.outputs.version }}.apk"
+          cp android/dist/web.json android/dist/web-*.zip "$RUNNER_TEMP/"
       - uses: actions/upload-artifact@v7
         with:
           name: android
-          path: ${{ runner.temp }}/mini-games-*.apk
+          path: |
+            ${{ runner.temp }}/mini-games-*.apk
+            ${{ runner.temp }}/web.json
+            ${{ runner.temp }}/web-*.zip
           if-no-files-found: error
 
   server:

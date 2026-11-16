@@ -2,13 +2,19 @@
 //   node build/android.mjs sync              web bundle + cap sync only
 //   node build/android.mjs apk [debug|release]
 // Signing comes from ../.keys/<variant>-signing.properties locally or from MG_ANDROID_* env vars
-// in CI (see android/app/build.gradle). A release build also writes android/dist/mini-games.apk
-// and android/dist/android.json (build number for the in-app update check; deploy.sh uploads
-// both).
+// in CI (see android/app/build.gradle). A release build also writes to android/dist/ what
+// deploy.sh publishes for the app's update check (docs/android.md, "Updates"):
+//   mini-games.apk + android.json     the whole app
+//   web-<build>.zip + web.json        the same web bundle, for over-the-air updates
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { zipSync } from "fflate";
+
+import { nativeFingerprint } from "./native-fingerprint.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [command = "apk", variant = "release"] = process.argv.slice(2);
@@ -39,10 +45,39 @@ function buildNumber() {
   return count;
 }
 
+/** Files of `directory` keyed by `/`-separated relative path, in a fixed order. */
+function filesUnder(directory) {
+  const paths = readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => resolve(entry.parentPath, entry.name))
+    .sort();
+  // A fixed timestamp: the same bundle always gives the same zip and checksum.
+  const options = { mtime: new Date(1980, 0, 1) };
+  return Object.fromEntries(
+    paths.map((path) => [relative(directory, path).replaceAll("\\", "/"), [readFileSync(path), options]]),
+  );
+}
+
+/** The bundle of `dist/` as the updater plugin expects it: index.html at the zip root. */
+function writeWebBundle(dist, build, versionName, fingerprint) {
+  for (const old of readdirSync(dist).filter((name) => /^web-\d+\.zip$/.test(name))) {
+    rmSync(resolve(dist, old));
+  }
+  const zipName = `web-${build}.zip`;
+  const zip = zipSync(filesUnder(resolve(root, "dist")), { level: 9 });
+  writeFileSync(resolve(dist, zipName), zip);
+  const sha256 = createHash("sha256").update(zip).digest("hex");
+  const info = { build, versionName, nativeFingerprint: fingerprint, zip: zipName, sha256 };
+  writeFileSync(resolve(dist, "web.json"), `${JSON.stringify(info, null, 2)}\n`);
+  console.log(`android/dist/${zipName}: ${(zip.length / 1024).toFixed(0)} KiB for shell ${fingerprint}`);
+}
+
 const build = buildNumber();
+const fingerprint = nativeFingerprint(root);
 const env = {
   ...process.env,
   MG_BUILD_NUMBER: String(build),
+  MG_NATIVE_FINGERPRINT: fingerprint,
   VITE_PLATFORM: "android",
   VITE_SERVER_URL: process.env.MG_ANDROID_SERVER_URL ?? "wss://braintvsminigames.xyz/ws",
 };
@@ -67,11 +102,12 @@ if (command === "apk") {
       resolve(android, "app/build/outputs/apk/release/app-release.apk"),
       resolve(dist, "mini-games.apk"),
     );
+    const versionName = `${version} (${build})`;
     writeFileSync(
       resolve(dist, "android.json"),
-      `${JSON.stringify({ build, versionName: `${version} (${build})`, apk: "mini-games.apk" }, null, 2)}
-`,
+      `${JSON.stringify({ build, versionName, apk: "mini-games.apk" }, null, 2)}\n`,
     );
     console.log(`android/dist/mini-games.apk: ${version} build ${build}`);
+    writeWebBundle(dist, build, versionName, fingerprint);
   }
 }

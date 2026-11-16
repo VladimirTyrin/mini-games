@@ -18,7 +18,7 @@ use super::spawn_error::SpawnError;
 use super::stored_replay::StoredReplay;
 use super::validated_replay::ValidatedReplay;
 use crate::codec;
-use crate::context::SERVER_VERSION;
+use crate::context::server_version;
 use crate::ids::{LobbyId, MatchId, SessionId};
 use crate::limits::Limits;
 use crate::matches::{
@@ -84,7 +84,7 @@ impl Hub {
             settings: Some(lobby.settings),
             seats,
             tick_ms,
-            engine_version: SERVER_VERSION.to_owned(),
+            engine_version: server_version(),
             started_at_unix_ms: crate::clock::unix_millis(),
         };
         let seated = lobby.seats.iter().enumerate().filter_map(|(slot, seat)| {

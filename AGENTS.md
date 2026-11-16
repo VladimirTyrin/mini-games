@@ -17,7 +17,7 @@ Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`.
   `bots/`, `tests/` (see `docs/adding-a-game.md`).
 - `proto/` — wire contract (protobuf; JSON mapping on the WebSocket, binary in replay files).
 - `web-client/` — Vue 3 + Pinia + Tailwind; `web-client/android` — Capacitor app.
-- `deploy.sh`, `deploy/` — production deploy (`./deploy.sh`).
+- `deploy.sh`, `deploy/` — production deploy (`./deploy.sh`, see `docs/deploy.md`).
 
 ## Commands
 
