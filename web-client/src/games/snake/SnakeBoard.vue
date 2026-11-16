@@ -107,21 +107,21 @@ useSwipe(container, { swipe: (direction) => turn(SWIPE_DIRECTIONS[direction]) })
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-2 md:flex-row md:gap-3">
+  <!-- Portrait (phones, tablets held upright): the field takes the full width, the D-pad sits at the
+       bottom edge. Landscape: a side column with the scores on top and the D-pad at the bottom, where
+       the right thumb rests. Width breakpoints alone put an upright iPad into the side layout.
+       contain:size stops a long scoreboard from stretching the row past the screen; it scrolls. -->
+  <div class="flex min-h-0 flex-col gap-2 landscape:flex-row landscape:gap-3">
     <div ref="container" class="relative min-h-0 min-w-0 flex-1 select-none overflow-hidden">
       <canvas ref="canvas" class="absolute inset-0 block" />
     </div>
-    <SnakeControls
-      v-if="controller.mySlot !== null"
-      class="hidden shrink-0 max-md:grid pointer-coarse:grid"
-      @turn="turn"
-    />
-    <SnakeScoreboard
-      v-if="view"
-      :view="view"
-      :seat-names="seatNames"
-      :status="status"
-      class="shrink-0 md:w-60 md:self-start"
-    />
+    <div class="flex shrink-0 flex-col gap-2 landscape:w-60 landscape:gap-3 landscape:[contain:size]">
+      <SnakeScoreboard v-if="view" :view="view" :seat-names="seatNames" :status="status" />
+      <SnakeControls
+        v-if="controller.mySlot !== null"
+        class="hidden max-md:grid pointer-coarse:grid landscape:mt-auto"
+        @turn="turn"
+      />
+    </div>
   </div>
 </template>

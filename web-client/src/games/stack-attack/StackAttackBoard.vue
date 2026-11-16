@@ -179,21 +179,19 @@ useSwipe(container, {
 
 <template>
   <div
-    class="flex min-h-0 flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_15rem] md:grid-rows-[minmax(0,1fr)_auto] md:gap-3"
+    class="flex min-h-0 flex-col gap-2 landscape:grid landscape:grid-cols-[minmax(0,1fr)_15rem] landscape:grid-rows-[minmax(0,1fr)_auto] landscape:gap-3"
   >
     <div ref="container" class="relative min-h-0 min-w-0 flex-1 select-none overflow-hidden">
       <canvas ref="canvas" class="absolute inset-0 block" />
     </div>
-    <StackAttackInfo
-      v-if="view"
-      :view="view"
-      :seat-names="seatNames"
-      :status="status"
-      class="shrink-0 max-md:order-first md:row-span-2 md:self-start"
-    />
+    <!-- contain:size keeps the info column from setting the row height: on a phone held sideways it
+         would otherwise push the controls below the screen; it scrolls instead. -->
+    <div class="shrink-0 portrait:order-first landscape:overflow-y-auto landscape:[contain:size]">
+      <StackAttackInfo v-if="view" :view="view" :seat-names="seatNames" :status="status" />
+    </div>
     <StackAttackControls
       v-if="mySlot !== null"
-      class="hidden shrink-0 max-md:flex pointer-coarse:flex"
+      class="hidden shrink-0 max-md:flex pointer-coarse:flex landscape:col-span-2"
       @press="pacer.press($event)"
       @release="release"
     />

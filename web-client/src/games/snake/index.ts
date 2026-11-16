@@ -32,6 +32,6 @@ export const snakePlugin: GamePlugin = {
   },
   controls: {
     keyboard: "Arrow keys or WASD to turn",
-    touch: "Swipe on the field or use the arrows below it to turn",
+    touch: "Swipe on the field or tap the arrows to turn",
   },
 };

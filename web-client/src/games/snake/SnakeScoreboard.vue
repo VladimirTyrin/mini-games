@@ -34,7 +34,7 @@ const entries = computed(() =>
 <template>
   <aside class="flex min-h-0 flex-col gap-2 rounded-lg bg-panel p-2 md:p-3">
     <p v-if="status" class="text-center text-sm text-gray-300">{{ status }}</p>
-    <ol class="grid max-h-28 grid-cols-2 gap-1 overflow-y-auto md:max-h-none md:grid-cols-1">
+    <ol class="grid max-h-28 grid-cols-2 gap-1 overflow-y-auto landscape:max-h-none landscape:grid-cols-1">
       <li
         v-for="entry in entries"
         :key="entry.slot"

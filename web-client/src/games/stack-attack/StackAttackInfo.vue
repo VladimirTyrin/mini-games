@@ -46,13 +46,13 @@ const workers = computed(() =>
 <template>
   <aside class="flex min-h-0 flex-col gap-2 rounded-lg bg-panel p-2 md:p-3">
     <p v-if="status" class="text-center text-sm text-gray-300">{{ status }}</p>
-    <dl class="grid grid-cols-5 gap-1 text-center md:grid-cols-2 md:text-left">
-      <div v-for="stat in stats" :key="stat.label" class="rounded bg-panel-raised px-1 py-1 md:px-2">
+    <dl class="grid grid-cols-5 gap-1 text-center landscape:grid-cols-2 landscape:text-left">
+      <div v-for="stat in stats" :key="stat.label" class="rounded bg-panel-raised px-1 py-1 landscape:px-2">
         <dt class="text-[0.65rem] uppercase tracking-wide text-gray-400">{{ stat.label }}</dt>
         <dd class="font-mono text-sm font-semibold text-emerald-300">{{ stat.value }}</dd>
       </div>
     </dl>
-    <ul class="grid grid-cols-2 gap-1 md:grid-cols-1">
+    <ul class="grid grid-cols-2 gap-1 landscape:grid-cols-1">
       <li
         v-for="worker in workers"
         :key="worker.slot"
@@ -70,11 +70,11 @@ const workers = computed(() =>
         <span v-if="worker.note" class="text-xs text-rose-300">{{ worker.note }}</span>
       </li>
     </ul>
-    <p class="text-center text-xs text-gray-400 md:text-left">
+    <p class="text-center text-xs text-gray-400 landscape:text-left">
       Push crates to fill a row: a full row clears for {{ POINTS_PER_LINE }} points. Don't get crushed, and
       keep the stack below the red line.
     </p>
-    <p class="text-center text-xs text-gray-400 md:text-left">
+    <p class="text-center text-xs text-gray-400 landscape:text-left">
       Jump into a falling crate to smash it before it lands.
     </p>
   </aside>
