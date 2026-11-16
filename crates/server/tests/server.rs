@@ -223,7 +223,7 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
 
     let paused = host
         .expect(|m| match &m.message {
-            Some(Reply::Paused(p)) => p.pause.clone(),
+            Some(Reply::Paused(p)) => p.pause,
             _ => None,
         })
         .await;
@@ -286,7 +286,7 @@ async fn kicked_member_is_notified_and_can_keep_using_the_server() {
     );
     let closed = guest
         .expect(|m| match &m.message {
-            Some(Reply::LobbyClosed(c)) => Some(c.clone()),
+            Some(Reply::LobbyClosed(c)) => Some(*c),
             _ => None,
         })
         .await;
