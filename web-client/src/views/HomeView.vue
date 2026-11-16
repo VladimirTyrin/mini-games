@@ -62,7 +62,7 @@ async function openReplay(event: Event): Promise<void> {
       <input
         ref="fileInput"
         type="file"
-        accept=".mgreplay,application/octet-stream"
+        accept=".mgreplay"
         class="hidden"
         @change="openReplay"
       />
