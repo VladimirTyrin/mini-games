@@ -5,11 +5,12 @@ import type { MatchCatchUp, MatchResult, TickFrame } from "@/proto/minigames/v2/
 import { Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, MatchSource } from "./match-source";
+import { PlaybackClock } from "./playback-clock";
 import { type SeatPause, seatPauses } from "./seat-pause";
 
 export interface ViewSnapshot {
   view: GameView;
-  /** `performance.now()` when this view was produced; renderers interpolate from it. */
+  /** `performance.now()` when showing this view starts; renderers interpolate from it. */
   at: number;
 }
 
@@ -29,16 +30,20 @@ export class MatchController {
   readonly tickMs: number;
 
   private mirror: Mirror;
+  private readonly clock: PlaybackClock;
   private resyncing = false;
   private readonly unsubscribe: (() => void)[] = [];
 
   constructor(readonly source: MatchSource) {
-    this.tickMs = source.header.tickMs;
     this.mirror = Mirror.forHeader(source.header);
+    // From the game itself: local matches have no server to fill the header's tick_ms.
+    this.tickMs = this.mirror.tickMs;
+    this.clock = new PlaybackClock(this.tickMs);
     this.unsubscribe.push(
       source.on("frame", (frame) => this.onFrame(frame)),
       source.on("catchUp", (catchUp) => this.applyCatchUp(catchUp)),
       source.on("paused", (pauses) => {
+        this.clock.reset();
         this.pauses.value = seatPauses(pauses, performance.now());
         this.resumeAt.value = null;
       }),
@@ -81,7 +86,7 @@ export class MatchController {
       this.source.requestCatchUp();
       return;
     }
-    this.publish();
+    this.publish(this.clock.showAt(Number(frame.tick), performance.now()));
     if (this.mirror.isFinished && !this.ended.value) {
       this.result.value = this.mirror.result();
     }
@@ -103,11 +108,12 @@ export class MatchController {
     this.pauses.value = seatPauses(pauses, now);
     this.resumeAt.value = catchUp.resumeCountdownMs > 0 ? now + catchUp.resumeCountdownMs : null;
     this.previous.value = null;
+    this.clock.reset();
     this.publish();
   }
 
-  private publish(): void {
+  private publish(at = performance.now()): void {
     this.previous.value = this.current.value;
-    this.current.value = { view: this.mirror.view(this.source.mySlot), at: performance.now() };
+    this.current.value = { view: this.mirror.view(this.source.mySlot), at };
   }
 }

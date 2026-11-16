@@ -1,4 +1,4 @@
-use mg_core::{CompactLog, Slot, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
 use mg_registry::{DynMirror, LoadedReplay, create_mirror_from_header, load_replay_file};
 use prost::Message;
@@ -40,6 +40,16 @@ impl MatchMirror {
             mirror,
             replay_log: Some(log),
         })
+    }
+
+    /// Milliseconds per frame for real-time games, 0 for turn-based ones. The game's own clock,
+    /// so renderers interpolate the same way for local, online and replayed matches.
+    #[wasm_bindgen(js_name = tickMs)]
+    pub fn tick_ms(&self) -> u32 {
+        match self.mirror.clock() {
+            Clock::Realtime { tick_ms } => tick_ms,
+            Clock::TurnBased => 0,
+        }
     }
 
     /// Ticks covered by the replay log (its `end_tick`); 0 without one.

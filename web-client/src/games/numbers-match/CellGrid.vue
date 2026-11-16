@@ -9,6 +9,8 @@ const props = defineProps<{
   view: NumbersMatchView;
   selectedIndex: number | null;
   hintedIndices: ReadonlySet<number>;
+  rejectedIndices: ReadonlySet<number>;
+  rejectionSerial: number;
   interactive: boolean;
 }>();
 const emit = defineEmits<{ select: [index: number] }>();
@@ -23,6 +25,7 @@ const motions = computed(() => cellMotions(props.view));
 // Animated cells get a key per accepted command, so their animation restarts from the new view
 // even mid-animation; still cells keep their element.
 function cellKey(index: number): string {
+  if (props.rejectedIndices.has(index)) return `rejected-${props.rejectionSerial}:${index}`;
   const motion = motions.value[index];
   const animated = motion && (motion.rowsShiftedUp > 0 || motion.justRemoved || motion.refillOrder !== null);
   return animated ? `${frameKey.value}:${index}` : String(index);
@@ -35,6 +38,7 @@ function cellClass(index: number, state: NumbersMatchCellState, motion: CellMoti
     empty: state === NumbersMatchCellState.EMPTY,
     selected: index === props.selectedIndex,
     hinted: props.hintedIndices.has(index) && index !== props.selectedIndex,
+    rejected: props.rejectedIndices.has(index),
     shifted: (motion?.rowsShiftedUp ?? 0) > 0,
     "just-removed": motion?.justRemoved ?? false,
     refilled: motion !== undefined && motion.refillOrder !== null,
@@ -141,6 +145,31 @@ watch(frameKey, async () => {
 
 .shifted {
   animation: cell-shift 150ms ease-out both;
+}
+
+.rejected {
+  animation: cell-rejected 420ms ease-out;
+}
+
+@keyframes cell-rejected {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-4px);
+    background: #9f1239;
+  }
+  35% {
+    transform: translateX(4px);
+    background: #9f1239;
+  }
+  55% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
 }
 
 .just-removed {

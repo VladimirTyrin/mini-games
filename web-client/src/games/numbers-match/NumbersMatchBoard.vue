@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { useGameKeys } from "@/input/use-game-keys";
 import { CommandRejectedError } from "@/match/command-rejected-error";
@@ -20,6 +20,20 @@ import CellGrid from "./CellGrid.vue";
 const props = defineProps<{ controller: MatchController }>();
 const toasts = useToastStore();
 const selectedIndex = ref<number | null>(null);
+
+/** A pair the core refused, shown briefly with the reason so the player sees what was wrong. */
+interface Rejection {
+  readonly cells: ReadonlySet<number>;
+  readonly reason: string;
+  /** Restarts the shake when the same cells are refused again. */
+  readonly serial: number;
+}
+const REJECTION_SHOWN_MS = 2_500;
+const NO_CELLS: ReadonlySet<number> = new Set();
+const rejection = ref<Rejection | null>(null);
+let rejectionSerial = 0;
+let rejectionTimer: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(rejectionTimer));
 const sending = ref(false);
 
 const view = computed(() => {
@@ -42,6 +56,7 @@ const activeCellCount = computed(
 );
 
 const status = computed(() => {
+  if (rejection.value) return { text: rejection.value.reason, tone: "text-rose-300" };
   const current = view.value;
   switch (current?.phase) {
     case NumbersMatchPhase.WON:
@@ -62,7 +77,28 @@ const status = computed(() => {
 // Indices refer to the board they were picked on; any change except a shown hint can shift them.
 watch(view, (current) => {
   if (current?.lastAction?.action.case !== "hintShown") selectedIndex.value = null;
+  rejection.value = null;
 });
+
+/** Why the core refused the pair. The value rule is simple to tell; otherwise it is distance. */
+function rejectionReason(first: number, second: number): string {
+  const cells = view.value?.cells ?? [];
+  const a = cells[first]?.value ?? 0;
+  const b = cells[second]?.value ?? 0;
+  return a === b || a + b === 10
+    ? "Too far apart: pairs must touch, or have only crossed-out cells between them"
+    : "Not a pair: equal numbers or a sum of 10";
+}
+
+function showRejection(first: number, second: number): void {
+  clearTimeout(rejectionTimer);
+  rejection.value = {
+    cells: new Set([first, second]),
+    reason: rejectionReason(first, second),
+    serial: ++rejectionSerial,
+  };
+  rejectionTimer = setTimeout(() => (rejection.value = null), REJECTION_SHOWN_MS);
+}
 
 /** `onRejected` replaces the error toast when the core refuses the command. */
 async function send(
@@ -91,6 +127,7 @@ function select(index: number): void {
   selectedIndex.value = null;
   // Like the original game: a cell that does not pair with the selection becomes the selection.
   void send({ command: { case: "removePair", value: { firstIndex: first, secondIndex: index } } }, () => {
+    showRejection(first, index);
     selectedIndex.value = index;
   });
 }
@@ -131,6 +168,8 @@ useGameKeys((key) => {
           :view="view"
           :selected-index="selectedIndex"
           :hinted-indices="hintedIndices"
+          :rejected-indices="rejection?.cells ?? NO_CELLS"
+          :rejection-serial="rejection?.serial ?? 0"
           :interactive="canPlay"
           @select="select"
         />

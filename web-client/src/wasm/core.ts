@@ -105,6 +105,11 @@ export class Mirror {
     return this.inner.nextTick();
   }
 
+  /** Milliseconds per frame from the game's own clock; 0 for turn-based games. */
+  get tickMs(): number {
+    return this.inner.tickMs();
+  }
+
   get isFinished(): boolean {
     return this.inner.isFinished();
   }
