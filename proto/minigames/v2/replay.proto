@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/match.proto";
+
+// Replay file (binary protobuf, extension .mgreplay). Playback is client-side: the frames are
+// exactly the lockstep stream of the match.
+message ReplayFile {
+  // Bumped on incompatible changes to rules or this format.
+  uint32 format_version = 1;
+  MatchHeader header = 2;
+  // Compact: empty frames omitted.
+  repeated TickFrame frames = 3;
+  uint64 end_tick = 4;
+  MatchResult result = 5;
+}
+
+message RequestReplay {
+  string match_id = 1;
+}
+
+message ReplayData {
+  string match_id = 1;
+  bytes replay_file = 2;
+  string suggested_file_name = 3;
+}
+
+// Lobby members watch the same replay; the server only relays the file and the controls.
+message ShareReplay {
+  bytes replay_file = 1;
+  bool host_only_control = 2;
+}
+
+message SharedReplay {
+  bytes replay_file = 1;
+  bool host_only_control = 2;
+}
+
+message ReplayControl {
+  ReplayControlAction action = 1;
+  uint64 tick = 2;
+  // Playback speed in percent (25..=400).
+  uint32 speed_percent = 3;
+}
+
+enum ReplayControlAction {
+  REPLAY_CONTROL_ACTION_UNSPECIFIED = 0;
+  REPLAY_CONTROL_ACTION_PLAY = 1;
+  REPLAY_CONTROL_ACTION_PAUSE = 2;
+  REPLAY_CONTROL_ACTION_SEEK = 3;
+  REPLAY_CONTROL_ACTION_SET_SPEED = 4;
+  REPLAY_CONTROL_ACTION_STOP = 5;
+}

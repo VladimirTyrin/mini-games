@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+enum IdentityKind {
+  IDENTITY_KIND_UNSPECIFIED = 0;
+  IDENTITY_KIND_GUEST = 1;
+  IDENTITY_KIND_GOOGLE = 2;
+  // Network bot authenticated with a server-issued key.
+  IDENTITY_KIND_BOT_CLIENT = 3;
+  // Built-in bot seated by a lobby host; never has a connection.
+  IDENTITY_KIND_BUILT_IN_BOT = 4;
+}
+
+message Identity {
+  IdentityKind kind = 1;
+  // Stable within its kind: Google `sub`, bot key id, or a per-session id for guests.
+  string id = 2;
+  string display_name = 3;
+}

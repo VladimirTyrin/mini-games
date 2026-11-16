@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/game.proto";
+import "minigames/v2/identity.proto";
+
+enum LobbyPhase {
+  LOBBY_PHASE_UNSPECIFIED = 0;
+  LOBBY_PHASE_OPEN = 1;
+  LOBBY_PHASE_IN_MATCH = 2;
+  // Match finished; play-again voting.
+  LOBBY_PHASE_POST_MATCH = 3;
+  // Members watch a shared replay together.
+  LOBBY_PHASE_REPLAY = 4;
+}
+
+message LobbySummary {
+  string lobby_id = 1;
+  string name = 2;
+  GameSettings settings = 3;
+  uint32 seats_taken = 4;
+  uint32 max_seats = 5;
+  uint32 observers = 6;
+  LobbyPhase phase = 7;
+}
+
+message LobbySeat {
+  Identity occupant = 1;
+  // Set only for built-in bot seats.
+  BotKind bot_kind = 2;
+  bool ready = 3;
+  // Disconnected but still within the resume grace period.
+  bool connection_lost = 4;
+}
+
+// Full snapshot, sent on every change: lobbies are small, and snapshots cannot drift the way
+// incremental patches did in v1.
+message LobbyState {
+  string lobby_id = 1;
+  string name = 2;
+  Identity host = 3;
+  GameSettings settings = 4;
+  uint32 max_seats = 5;
+  // Seat order is the in-game slot order; the host always holds seat 0.
+  repeated LobbySeat seats = 6;
+  repeated Identity observers = 7;
+  LobbyPhase phase = 8;
+  repeated Identity play_again_votes = 9;
+}
+
+message ListLobbies {}
+
+message LobbyList {
+  repeated LobbySummary lobbies = 1;
+}
+
+message CreateLobby {
+  string name = 1;
+  GameSettings settings = 2;
+  uint32 max_seats = 3;
+}
+
+message JoinLobby {
+  string lobby_id = 1;
+  bool as_observer = 2;
+}
+
+message LeaveLobby {}
+
+message SetReady {
+  bool ready = 1;
+}
+
+message UpdateLobbySettings {
+  GameSettings settings = 1;
+  uint32 max_seats = 2;
+}
+
+message AddBot {
+  BotKind bot_kind = 1;
+}
+
+message RemoveSeat {
+  uint32 seat = 1;
+}
+
+message KickMember {
+  Identity member = 1;
+}
+
+message SwitchToObserver {}
+
+message SwitchToPlayer {}
+
+message StartMatch {}
+
+message VotePlayAgain {}
+
+message LobbyClosed {
+  LobbyClosedReason reason = 1;
+}
+
+enum LobbyClosedReason {
+  LOBBY_CLOSED_REASON_UNSPECIFIED = 0;
+  LOBBY_CLOSED_REASON_HOST_LEFT = 1;
+  LOBBY_CLOSED_REASON_KICKED = 2;
+  LOBBY_CLOSED_REASON_INACTIVE = 3;
+  LOBBY_CLOSED_REASON_SERVER_SHUTDOWN = 4;
+}
+
+message SendChat {
+  ChatScope scope = 1;
+  string text = 2;
+}
+
+enum ChatScope {
+  CHAT_SCOPE_UNSPECIFIED = 0;
+  // Everyone browsing the lobby list.
+  CHAT_SCOPE_LOBBY_LIST = 1;
+  // Members of the current lobby (players and observers), also during a match.
+  CHAT_SCOPE_LOBBY = 2;
+}
+
+message ChatMessage {
+  ChatScope scope = 1;
+  Identity sender = 2;
+  string text = 3;
+  int64 sent_at_unix_ms = 4;
+}

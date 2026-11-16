@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message TicTacToeSettings {}
+
+message TicTacToeCommand {}
+
+message TicTacToeWorldEvent {}
+
+message TicTacToeView {}
+
+enum TicTacToeBotKind {
+  TIC_TAC_TOE_BOT_KIND_UNSPECIFIED = 0;
+}

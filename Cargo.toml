@@ -2,6 +2,8 @@
 members = [
     "crates/core",
     "crates/games/*",
+    "crates/protocol",
+    "crates/server",
 ]
 # Legacy v1 server: kept only as a reference while porting, removed at the end of the refactor.
 exclude = ["server"]
@@ -37,6 +39,7 @@ debug = true
 
 [workspace.dependencies]
 mg-core = { path = "crates/core" }
+mg-protocol = { path = "crates/protocol" }
 mg-snake = { path = "crates/games/snake" }
 mg-tictactoe = { path = "crates/games/tictactoe" }
 mg-stack-attack = { path = "crates/games/stack-attack" }

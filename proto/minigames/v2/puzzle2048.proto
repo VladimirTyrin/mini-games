@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message Puzzle2048Settings {}
+
+message Puzzle2048Command {}
+
+message Puzzle2048WorldEvent {}
+
+message Puzzle2048View {}

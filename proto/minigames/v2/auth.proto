@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/identity.proto";
+
+// Allowed before Hello, so a client can decide which sign-in options to show.
+message ServerInfoRequest {}
+
+message ServerInfo {
+  string server_version = 1;
+  uint32 min_protocol_version = 2;
+  uint32 max_protocol_version = 3;
+  bool guests_allowed = 4;
+  // Empty when Google sign-in is not configured.
+  string google_client_id = 5;
+}
+
+message Hello {
+  uint32 protocol_version = 1;
+  // Informational (logs, diagnostics).
+  string client_version = 2;
+  oneof credentials {
+    GuestCredentials guest = 10;
+    GoogleCredentials google = 11;
+    BotClientCredentials bot_client = 12;
+    SessionCredentials session = 13;
+  }
+  // From a previous Welcome on this device: reclaims the seat in a lobby or match after a
+  // dropped connection (grace period / pause budget).
+  string resume_token = 20;
+}
+
+message GuestCredentials {
+  string display_name = 1;
+}
+
+message GoogleCredentials {
+  // ID token from Google Identity Services (web) or Credential Manager (Android).
+  string id_token = 1;
+}
+
+message BotClientCredentials {
+  string key = 1;
+}
+
+message SessionCredentials {
+  // A `session_token` from an earlier Welcome; avoids a Google round-trip on every start.
+  string token = 1;
+}
+
+message Welcome {
+  Identity identity = 1;
+  // Long-lived signed token for SessionCredentials; empty for guests.
+  string session_token = 2;
+  string resume_token = 3;
+  ServerInfo server_info = 4;
+  // Set when the resume token restored a lobby seat; the lobby state follows separately.
+  bool resumed = 5;
+}
+
+message SignOut {}

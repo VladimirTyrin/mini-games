@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/game.proto";
+import "minigames/v2/identity.proto";
+
+// Lockstep: the server (authority) streams TickFrames; every client replays them with the same
+// core. The seed never leaves the authority; randomness arrives as world events.
+message MatchHeader {
+  string match_id = 1;
+  GameSettings settings = 2;
+  repeated MatchSeat seats = 3;
+  // 0 for turn-based games (one frame per move).
+  uint32 tick_ms = 4;
+  string engine_version = 5;
+  int64 started_at_unix_ms = 6;
+}
+
+message MatchSeat {
+  uint32 slot = 1;
+  Identity player = 2;
+  // Set only for built-in bots.
+  BotKind bot_kind = 3;
+}
+
+message TickFrame {
+  uint64 tick = 1;
+  repeated FrameInput inputs = 2;
+  // Authority's state hash after this frame; every N frames and on the final frame.
+  optional fixed64 state_hash = 3;
+}
+
+message FrameInput {
+  oneof input {
+    SlotCommand command = 1;
+    GameWorldEvent world = 2;
+    uint32 dropped_slot = 3;
+  }
+}
+
+message SlotCommand {
+  uint32 slot = 1;
+  GameCommand command = 2;
+}
+
+// Full history for late joiners, reconnects and desync recovery. Empty frames are omitted.
+message MatchCatchUp {
+  MatchHeader header = 1;
+  repeated TickFrame frames = 2;
+  // Ticks before this value are covered (missing ticks are empty frames).
+  uint64 next_tick = 3;
+  MatchPause pause = 4;
+}
+
+message SubmitCommand {
+  string match_id = 1;
+  GameCommand command = 2;
+}
+
+// Client's local hash differed from the authority; the server answers with MatchCatchUp.
+message ReportDesync {
+  string match_id = 1;
+  uint64 tick = 2;
+  fixed64 local_hash = 3;
+}
+
+message RequestCatchUp {
+  string match_id = 1;
+}
+
+// Game frozen while a human seat is disconnected.
+message MatchPause {
+  uint32 slot = 1;
+  // Remaining disconnect budget of that seat for this match.
+  uint32 budget_left_ms = 2;
+  // Other players may vote to drop the seat after this many milliseconds (0 = already allowed).
+  uint32 drop_vote_in_ms = 3;
+}
+
+message MatchPaused {
+  string match_id = 1;
+  MatchPause pause = 2;
+}
+
+message MatchResumed {
+  string match_id = 1;
+  // Frames resume after this countdown.
+  uint32 countdown_ms = 2;
+}
+
+message VoteDropPlayer {
+  string match_id = 1;
+  uint32 slot = 2;
+}
+
+message LeaveMatch {
+  string match_id = 1;
+}
+
+enum OutcomeKind {
+  OUTCOME_KIND_UNSPECIFIED = 0;
+  OUTCOME_KIND_WINNER = 1;
+  OUTCOME_KIND_DRAW = 2;
+  OUTCOME_KIND_VICTORY = 3;
+  OUTCOME_KIND_DEFEAT = 4;
+}
+
+message MatchResult {
+  OutcomeKind kind = 1;
+  repeated uint32 winner_slots = 2;
+  // Indexed by slot.
+  repeated int64 scores = 3;
+}
+
+message MatchEnded {
+  string match_id = 1;
+  MatchResult result = 2;
+  uint64 final_tick = 3;
+}

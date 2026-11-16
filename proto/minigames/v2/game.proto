@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/snake.proto";
+import "minigames/v2/tictactoe.proto";
+import "minigames/v2/stack_attack.proto";
+import "minigames/v2/puzzle2048.proto";
+import "minigames/v2/numbers_match.proto";
+
+// Envelopes dispatching to per-game messages. Adding a game adds one case to each oneof
+// (`cargo xtask new-game` does it).
+
+message GameSettings {
+  oneof game {
+    SnakeSettings snake = 1;
+    TicTacToeSettings tictactoe = 2;
+    StackAttackSettings stack_attack = 3;
+    Puzzle2048Settings puzzle2048 = 4;
+    NumbersMatchSettings numbers_match = 5;
+  }
+}
+
+message GameCommand {
+  oneof game {
+    SnakeCommand snake = 1;
+    TicTacToeCommand tictactoe = 2;
+    StackAttackCommand stack_attack = 3;
+    Puzzle2048Command puzzle2048 = 4;
+    NumbersMatchCommand numbers_match = 5;
+  }
+}
+
+message GameWorldEvent {
+  oneof game {
+    SnakeWorldEvent snake = 1;
+    TicTacToeWorldEvent tictactoe = 2;
+    StackAttackWorldEvent stack_attack = 3;
+    Puzzle2048WorldEvent puzzle2048 = 4;
+    NumbersMatchWorldEvent numbers_match = 5;
+  }
+}
+
+// Render model; only crosses the WASM boundary and is never sent over the network.
+message GameView {
+  oneof game {
+    SnakeView snake = 1;
+    TicTacToeView tictactoe = 2;
+    StackAttackView stack_attack = 3;
+    Puzzle2048View puzzle2048 = 4;
+    NumbersMatchView numbers_match = 5;
+  }
+}
+
+message BotKind {
+  oneof game {
+    SnakeBotKind snake = 1;
+    TicTacToeBotKind tictactoe = 2;
+  }
+}

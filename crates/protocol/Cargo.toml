@@ -1,0 +1,36 @@
+[package]
+name = "mg-protocol"
+description = "Wire types generated from proto/ and the mapping between game domain types and the wire"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# serde impls for the canonical protobuf JSON mapping (server, bots). Off for the WASM client,
+# which receives JSON through protobuf-es and hands binary protobuf to the core.
+json = ["dep:pbjson", "dep:pbjson-types", "dep:serde"]
+
+[dependencies]
+mg-core.workspace = true
+mg-snake.workspace = true
+mg-tictactoe.workspace = true
+mg-stack-attack.workspace = true
+mg-puzzle2048.workspace = true
+mg-numbers-match.workspace = true
+prost.workspace = true
+pbjson = { version = "0.9", optional = true }
+pbjson-types = { version = "0.9", optional = true }
+serde = { workspace = true, optional = true }
+thiserror = "2"
+
+[build-dependencies]
+prost-build = "0.14.6"
+pbjson-build = "0.9"
+protoc-bin-vendored.workspace = true
+
+[dev-dependencies]
+serde_json = "1"

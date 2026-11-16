@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message StackAttackSettings {}
+
+message StackAttackCommand {}
+
+message StackAttackWorldEvent {}
+
+message StackAttackView {}

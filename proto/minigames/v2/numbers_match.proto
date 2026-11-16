@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message NumbersMatchSettings {}
+
+message NumbersMatchCommand {}
+
+message NumbersMatchWorldEvent {}
+
+message NumbersMatchView {}

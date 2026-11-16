@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message SnakeSettings {}
+
+message SnakeCommand {}
+
+message SnakeWorldEvent {}
+
+message SnakeView {}
+
+enum SnakeBotKind {
+  SNAKE_BOT_KIND_UNSPECIFIED = 0;
+}
