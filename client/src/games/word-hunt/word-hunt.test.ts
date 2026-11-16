@@ -4,10 +4,12 @@ import { storage } from "@/platform/storage";
 import { create } from "@bufbuild/protobuf";
 
 import { GameSettingsSchema } from "@/proto/minigames/v2/game_pb";
-import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
+import { WordHuntLanguage, WordHuntLetterMark, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { formatDay, localDayNumber } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
+import { markClass } from "./mark-style";
+import { usesHighContrast } from "./preferences";
 import { finishGame, recordProgress, startGame, statsFor } from "./stats";
 import { wordHuntPlugin } from "./index";
 import { normalizeWord, parseWordList } from "./word-lists";
@@ -124,5 +126,18 @@ describe("plugin", () => {
     });
     const started = wordHuntPlugin.settingsForNewMatch?.(remembered);
     expect(started?.game.case === "wordHunt" && started.game.value.day).toBe(localDayNumber());
+  });
+});
+
+describe("mark colours", () => {
+  it("tell in place from elsewhere by more than green against amber with high contrast", () => {
+    usesHighContrast.value = true;
+    try {
+      expect(markClass(WordHuntLetterMark.CORRECT)).toContain("orange");
+      expect(markClass(WordHuntLetterMark.PRESENT)).toContain("sky");
+    } finally {
+      usesHighContrast.value = false;
+    }
+    expect(markClass(WordHuntLetterMark.CORRECT)).toContain("emerald");
   });
 });

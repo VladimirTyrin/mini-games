@@ -13,7 +13,7 @@ import { seatLabels } from "@/util/players";
 
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
-import { markClass } from "./mark-style";
+import { inPlaceClass, markClass } from "./mark-style";
 import { marksMissingLetters } from "./preferences";
 import { type StatsGame, type StatsProgress, type WordHuntStats, recordProgress, statsFor } from "./stats";
 import WordHuntKeyboard from "./WordHuntKeyboard.vue";
@@ -366,8 +366,8 @@ const gridSize = computed(() => ({
             <div
               v-for="(letter, index) in missedAnswer"
               :key="index"
-              class="flex size-(--tile) items-center justify-center rounded-lg bg-emerald-600 text-[calc(var(--tile)*0.5)] font-bold uppercase text-white shadow-lg shadow-emerald-900/50"
-              :class="prefersReducedMotion() ? '' : 'wh-reveal'"
+              class="flex size-(--tile) items-center justify-center rounded-lg text-[calc(var(--tile)*0.5)] font-bold uppercase shadow-lg shadow-black/40"
+              :class="[inPlaceClass(), prefersReducedMotion() ? '' : 'wh-reveal']"
               :style="{ animationDelay: `${600 + index * 90}ms` }"
             >
               {{ letter }}

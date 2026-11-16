@@ -8,7 +8,7 @@ import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { WordHuntFirstTurn, WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { localDayNumber } from "./daily";
-import { marksMissingLetters } from "./preferences";
+import { marksMissingLetters, usesHighContrast } from "./preferences";
 
 const settings = defineModel<GameSettings>({ required: true });
 const form = useGameSettingsForm(settings, "wordHunt");
@@ -130,6 +130,13 @@ onMounted(() => {
       :options="offOnOptions"
       :model-value="marksMissingLetters ? 1 : 0"
       @update:model-value="setMarksMissing($event === 1)"
+    />
+    <SegmentedField
+      label="High contrast"
+      help="Orange in place, blue elsewhere: easier to tell apart with colour blindness"
+      :options="offOnOptions"
+      :model-value="usesHighContrast ? 1 : 0"
+      @update:model-value="usesHighContrast = $event === 1"
     />
     <p class="pt-3 text-xs text-gray-500">
       Word lists from OpenCorpora, SCOWL (Kevin Atkinson) and wordfreq; licensed CC BY-SA 4.0.
