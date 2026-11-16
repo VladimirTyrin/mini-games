@@ -11,10 +11,9 @@ export type UpdaterPlugin = Pick<
   "list" | "download" | "next" | "setMultiDelay" | "cancelDelay"
 >;
 
-async function updaterPlugin(): Promise<UpdaterPlugin & Pick<CapacitorUpdaterPlugin, "notifyAppReady">> {
-  const { CapacitorUpdater } = await import("@capgo/capacitor-updater");
-  return CapacitorUpdater;
-}
+// A Capacitor plugin object is a proxy that turns every property, `then` included, into a native
+// call. Never return it from an async function or resolve a promise with it: the promise would
+// call `plugin.then(...)` and never settle. Only plain wrappers around it cross async boundaries.
 
 /**
  * Tells the plugin this bundle started; without it the plugin restores the previous bundle.
@@ -22,7 +21,8 @@ async function updaterPlugin(): Promise<UpdaterPlugin & Pick<CapacitorUpdaterPlu
  */
 export async function confirmBundleStarted(): Promise<void> {
   if (!__NATIVE_APP__) return;
-  await (await updaterPlugin()).notifyAppReady();
+  const { CapacitorUpdater } = await import("@capgo/capacitor-updater");
+  await CapacitorUpdater.notifyAppReady();
 }
 
 export interface PluginWebBundles extends WebBundleInstaller {
@@ -58,7 +58,8 @@ export function pluginWebBundles(plugin: UpdaterPlugin): PluginWebBundles {
 
 export async function nativeWebBundles(): Promise<PluginWebBundles | null> {
   if (!__NATIVE_APP__) return null;
-  return pluginWebBundles(await updaterPlugin());
+  const { CapacitorUpdater } = await import("@capgo/capacitor-updater");
+  return pluginWebBundles(CapacitorUpdater);
 }
 
 /** The shell's own build (versionCode = major * 1 000 000 + build, see android/app/build.gradle). */

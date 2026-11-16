@@ -72,6 +72,17 @@ describe("pluginWebBundles", () => {
     expect(plugin.nextBundleId).toBeNull();
   });
 
+  it("can be returned from an async function although the plugin is a Capacitor proxy", async () => {
+    // Like Capacitor's plugin proxy: any unknown property, `then` included, is a native call.
+    const fake = new FakeUpdater([bundle("builtin", "builtin", "success")]);
+    const proxy = new Proxy(fake, {
+      get: (target, property) =>
+        property in target ? Reflect.get(target, property) : () => new Promise<never>(() => {}),
+    });
+    const bundles = await (async () => pluginWebBundles(proxy))();
+    expect(await bundles.installLater(release)).toBe("scheduled");
+  });
+
   it("holds and releases the switch", async () => {
     const plugin = new FakeUpdater([]);
     const bundles = pluginWebBundles(plugin);

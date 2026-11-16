@@ -78,6 +78,10 @@ const env = {
   ...process.env,
   MG_BUILD_NUMBER: String(build),
   MG_NATIVE_FINGERPRINT: fingerprint,
+  MG_COMMIT:
+    process.env.MG_COMMIT ??
+    spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root, encoding: "utf-8" }).stdout?.trim() ??
+    "",
   VITE_PLATFORM: "android",
   VITE_SERVER_URL: process.env.MG_ANDROID_SERVER_URL ?? "wss://braintvsminigames.xyz/ws",
 };
