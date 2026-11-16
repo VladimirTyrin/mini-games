@@ -56,10 +56,7 @@ export const useConnectionStore = defineStore("connection", () => {
     session.value?.close();
     const resumeKey = resumeKeyFor(prefs.serverUrl);
     const created = new Session(prefs.serverUrl, credentials, tabStorage.get(resumeKey) ?? "");
-    created.events.on("state", (next) => {
-      state.value = next;
-      if (next === "replaced") toasts.show("You signed in on another tab or device");
-    });
+    created.events.on("state", (next) => (state.value = next));
     created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken }) => {
       identity.value = who;
       tabStorage.set(resumeKey, resumeToken);
@@ -71,12 +68,24 @@ export const useConnectionStore = defineStore("connection", () => {
       }
     });
     created.events.on("refused", (error) => {
-      if (credentials.kind === "session") prefs.sessionToken = "";
-      toasts.error(error.message);
+      if (credentials.kind !== "session") {
+        toasts.error(error.message);
+        return;
+      }
+      // A stored session the server no longer accepts (expired, server secret or token format
+      // changed): forget it and ask for a fresh sign-in instead of showing the raw error.
+      prefs.sessionToken = "";
+      toasts.show("Your session has expired. Please sign in again.");
     });
     created.events.on("shuttingDown", () => toasts.show("The server is restarting"));
     session.value = created;
     created.connect();
+  }
+
+  /** Takes the session back from the device or tab that signed in after this one. */
+  function continueHere(): void {
+    if (prefs.sessionToken) start({ kind: "session", token: prefs.sessionToken });
+    else if (prefs.guestName) start({ kind: "guest", displayName: prefs.guestName });
   }
 
   function signInAsGuest(name: string): void {
@@ -117,6 +126,7 @@ export const useConnectionStore = defineStore("connection", () => {
     isSignedIn,
     loadServerInfo,
     resumeStoredSession,
+    continueHere,
     signInAsGuest,
     signInWithGoogle,
     signOut,

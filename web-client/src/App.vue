@@ -2,6 +2,7 @@
 import { onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 
+import SignedInElsewhere from "@/components/SignedInElsewhere.vue";
 import ToastList from "@/components/ToastList.vue";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
@@ -36,6 +37,7 @@ onMounted(() => connection.resumeStoredSession());
   <!-- Edge-to-edge on Android: keep content above the gesture bar. -->
   <div class="flex min-h-full flex-col" style="padding-bottom: env(safe-area-inset-bottom)">
     <RouterView />
+    <SignedInElsewhere />
     <ToastList />
   </div>
 </template>
