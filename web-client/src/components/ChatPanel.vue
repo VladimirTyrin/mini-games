@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
 
+import Avatar from "@/components/Avatar.vue";
 import type { ChatMessage } from "@/proto/minigames/v2/lobby_pb";
 
 const props = defineProps<{ messages: ChatMessage[] }>();
@@ -27,9 +28,12 @@ watch(
 <template>
   <section class="flex min-h-0 flex-col rounded-xl bg-panel">
     <ol ref="list" class="max-h-56 min-h-24 flex-1 space-y-1 overflow-y-auto p-3 text-sm">
-      <li v-for="(message, index) in messages" :key="index">
-        <span class="font-semibold text-emerald-300">{{ message.sender?.displayName }}:</span>
-        {{ message.text }}
+      <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
+        <Avatar v-if="message.sender" :url="message.sender.avatarUrl" :name="message.sender.displayName" />
+        <span class="min-w-0 break-words">
+          <span class="font-semibold text-emerald-300">{{ message.sender?.displayName }}:</span>
+          {{ message.text }}
+        </span>
       </li>
       <li v-if="!messages.length" class="text-gray-500">No messages yet</li>
     </ol>

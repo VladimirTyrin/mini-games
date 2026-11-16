@@ -40,10 +40,17 @@ server are pushes (lobby updates, frames, chat, some errors).
 4. Names online are unique (case-insensitive). A guest whose name is in use gets
    `ERROR_CODE_NAME_TAKEN`. Google and bot accounts always get in: if their name is taken they
    are shown as `Name#1a2b`, a suffix derived from the account (the same every time).
+   `Identity.avatar_url` is the Google profile picture (`https://`, hosted on
+   `googleusercontent.com`, at most 512 bytes; anything else is dropped). It is empty for
+   guests, bots and Google accounts without an acceptable picture. Session tokens carry it, so
+   a session sign-in restores it; tokens issued before avatars existed are refused and the
+   client signs in with Google again.
 5. `resume_token` reclaims the same session after a dropped connection (grace period 60 s in
    lobbies; during a match the seat's pause budget applies).
 6. Signing in to an account that is already online moves the session to the new connection;
-   the old one receives `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed. A client must
+   the old one receives `ERROR_CODE_SIGNED_IN_ELSEWHERE` (push) and is closed. If the account's
+   name or avatar changed meanwhile, the session takes the new ones (same name policy) and its
+   lobby receives an updated `LobbyState`. A client must
    not reconnect automatically after it, or two devices would keep taking the session from
    each other.
 7. Ping every 15 s; the server closes connections silent for 45 s.

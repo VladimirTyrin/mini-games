@@ -174,6 +174,9 @@ impl Hub {
                 ));
                 previous.outbound.close();
             }
+            if session.who != who {
+                self.refresh_account(&id, who);
+            }
             id
         } else {
             let Some(display_name) = self.online_name(&who) else {
@@ -237,6 +240,32 @@ impl Hub {
         }
         if let Some(lobby_id) = lobby {
             self.rejoin_lobby(&session_id, &lobby_id, outbound);
+        }
+    }
+
+    /// An account taking over its session may come back with a new profile name or picture;
+    /// the session adopts them under the usual name policy. Lobby members see the change in
+    /// the `LobbyState` that `rejoin_lobby` pushes right after the sign-in.
+    fn refresh_account(&mut self, id: &SessionId, who: Authenticated) {
+        let Some(old_name_key) = self
+            .sessions
+            .get(id)
+            .map(|session| session.display_name.uniqueness_key())
+        else {
+            return;
+        };
+        self.names.remove(&old_name_key);
+        let Some(display_name) = self.online_name(&who) else {
+            // Unreachable for accounts, which always get a name; keep the old one regardless.
+            self.names.insert(old_name_key, id.clone());
+            return;
+        };
+        self.names.insert(display_name.uniqueness_key(), id.clone());
+        let identity = who.to_identity(id.as_str(), &display_name);
+        if let Some(session) = self.sessions.get_mut(id) {
+            session.who = who;
+            session.display_name = display_name;
+            session.identity = identity;
         }
     }
 

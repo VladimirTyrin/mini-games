@@ -10,7 +10,7 @@ use mg_protocol::proto::server_message::Message as Reply;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 
 use super::{Hub, HubCommand, HubHandle, SignIn};
-use crate::auth::DisplayName;
+use crate::auth::{AvatarUrl, DisplayName};
 use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, LobbyId, MatchId, SessionId};
 use crate::matches::MatchAborted;
@@ -82,6 +82,7 @@ fn google(subject: &str, name: &str) -> Authenticated {
     Authenticated::Google {
         subject: subject.into(),
         name: DisplayName::parse(name).unwrap(),
+        avatar: None,
     }
 }
 
@@ -195,6 +196,57 @@ async fn accounts_with_a_taken_name_get_a_stable_suffix_and_guests_are_refused()
     )
     .await;
     assert!(shown_name(&bot).starts_with("alpha#"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_account_back_within_the_grace_period_shows_its_new_name_and_avatar() {
+    let hub = start_hub();
+    let (host, _) = sign_in(&hub, google("sub-1", "Ada")).await;
+    let mut host = host.unwrap();
+    let (member, _) = sign_in(&hub, guest("Member")).await;
+    let mut member = member.unwrap();
+    let lobby = create_lobby(&mut host).await;
+    let joined = member
+        .request(Request::JoinLobby(proto::JoinLobby {
+            lobby_id: lobby.lobby_id.clone(),
+            as_observer: false,
+        }))
+        .await;
+    assert!(matches!(joined, Reply::LobbyState(_)));
+    hub.send(HubCommand::Disconnected {
+        session: host.session.clone(),
+        connection: host.id,
+    });
+
+    let picture = "https://lh3.googleusercontent.com/a/new";
+    let renamed = Authenticated::Google {
+        subject: "sub-1".into(),
+        name: DisplayName::parse("Ada L").unwrap(),
+        avatar: AvatarUrl::parse(picture),
+    };
+    let (again, outcome) = sign_in(&hub, renamed).await;
+    assert_eq!(again.unwrap().session, host.session);
+    let SignInOutcome::Welcome(welcome) = outcome else {
+        panic!("refused: {outcome:?}");
+    };
+    let identity = welcome.identity.unwrap();
+    assert_eq!(identity.display_name, "Ada L");
+    assert_eq!(identity.avatar_url, picture);
+
+    let host_seen_by_member = member
+        .expect(|m| match &m.message {
+            Some(Reply::LobbyState(state)) => state
+                .host
+                .clone()
+                .filter(|host| host.display_name == "Ada L"),
+            _ => None,
+        })
+        .await;
+    assert_eq!(host_seen_by_member.avatar_url, picture);
+
+    // The old name is free again.
+    let (guest_ada, _) = sign_in(&hub, guest("Ada")).await;
+    assert!(guest_ada.is_some());
 }
 
 #[tokio::test(start_paused = true)]

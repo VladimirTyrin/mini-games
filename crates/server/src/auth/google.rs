@@ -7,6 +7,7 @@ use serde::Deserialize;
 use tokio::time::Instant;
 
 use super::auth_error::AuthError;
+use super::avatar_url::AvatarUrl;
 use super::display_name::DisplayName;
 use super::key_fetch_error::KeyFetchError;
 
@@ -32,6 +33,7 @@ pub(crate) trait GoogleKeySource: Send + Sync {
 pub(crate) struct GoogleIdentity {
     pub subject: String,
     pub display_name: DisplayName,
+    pub avatar: Option<AvatarUrl>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +41,7 @@ struct GoogleClaims {
     sub: String,
     name: Option<String>,
     given_name: Option<String>,
+    picture: Option<String>,
 }
 
 struct CachedKeys {
@@ -130,6 +133,7 @@ impl GoogleVerifier {
         Ok(GoogleIdentity {
             subject: claims.sub,
             display_name: DisplayName::sanitize(&raw_name, "Google player"),
+            avatar: claims.picture.as_deref().and_then(AvatarUrl::parse),
         })
     }
 

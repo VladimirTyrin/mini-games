@@ -1,13 +1,21 @@
 use mg_protocol::proto;
 
-use crate::auth::DisplayName;
+use crate::auth::{AvatarUrl, DisplayName};
 
 /// Who a connection proved to be during Hello.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Authenticated {
-    Guest { name: DisplayName },
-    Google { subject: String, name: DisplayName },
-    BotClient { name: DisplayName },
+    Guest {
+        name: DisplayName,
+    },
+    Google {
+        subject: String,
+        name: DisplayName,
+        avatar: Option<AvatarUrl>,
+    },
+    BotClient {
+        name: DisplayName,
+    },
 }
 
 impl Authenticated {
@@ -39,10 +47,18 @@ impl Authenticated {
             Self::Google { subject, .. } => (proto::IdentityKind::Google, subject.clone()),
             Self::BotClient { name } => (proto::IdentityKind::BotClient, name.as_str().to_owned()),
         };
+        let avatar_url = match self {
+            Self::Google {
+                avatar: Some(avatar),
+                ..
+            } => avatar.as_str().to_owned(),
+            Self::Guest { .. } | Self::Google { .. } | Self::BotClient { .. } => String::new(),
+        };
         proto::Identity {
             kind: kind as i32,
             id,
             display_name: display_name.as_str().to_owned(),
+            avatar_url,
         }
     }
 }

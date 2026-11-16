@@ -352,12 +352,14 @@ impl Connection {
                     SessionKind::Google,
                     &identity.subject,
                     &identity.display_name,
+                    identity.avatar.as_ref(),
                     now,
                 );
                 Ok(SignedIn {
                     who: Authenticated::Google {
                         subject: identity.subject,
                         name: identity.display_name,
+                        avatar: identity.avatar,
                     },
                     session_token: token,
                 })
@@ -368,6 +370,7 @@ impl Connection {
                     SessionKind::BotClient,
                     name.as_str(),
                     &name,
+                    None,
                     now,
                 );
                 Ok(SignedIn {
@@ -381,6 +384,7 @@ impl Connection {
                     SessionKind::Google => Authenticated::Google {
                         subject: claims.subject,
                         name: claims.display_name,
+                        avatar: claims.avatar,
                     },
                     SessionKind::BotClient => {
                         if !self.context.bot_keys.is_configured(&claims.display_name) {

@@ -448,6 +448,7 @@ impl Hub {
             kind: proto::IdentityKind::BuiltInBot as i32,
             id: format!("bot-{number}"),
             display_name: format!("Bot {number}"),
+            avatar_url: String::new(),
         };
         lobby.seats.push(LobbySeat::Bot {
             kind: bot_kind,

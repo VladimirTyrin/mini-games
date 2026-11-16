@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
+import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import { pluginBySettings } from "@/games";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
@@ -82,6 +83,7 @@ async function leave(): Promise<void> {
           :key="index"
           class="flex items-center gap-2 rounded bg-panel-raised px-3 py-2"
         >
+          <Avatar v-if="seat.occupant" :url="seat.occupant.avatarUrl" :name="seat.occupant.displayName" />
           <span class="flex-1 truncate">
             {{ seat.occupant?.displayName }}
             <span v-if="seat.botKind" class="text-xs text-gray-400"

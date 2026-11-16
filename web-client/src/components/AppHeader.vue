@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 
+import Avatar from "@/components/Avatar.vue";
 import { useBackHandler } from "@/platform/back-navigation";
 import { useConnectionStore } from "@/stores/connection";
 
@@ -48,9 +49,14 @@ if (props.back) useBackHandler(goBack);
     </button>
     <h1 class="flex-1 truncate text-lg font-semibold">{{ title }}</h1>
     <slot />
-    <span v-if="status" class="flex items-center gap-2 text-xs text-gray-400">
-      <span class="h-2 w-2 rounded-full" :class="status.tone" />
-      {{ status.text }}
+    <span v-if="status" class="flex min-w-0 items-center gap-2 text-xs text-gray-400">
+      <span class="h-2 w-2 shrink-0 rounded-full" :class="status.tone" />
+      <Avatar
+        v-if="connection.state === 'signed-in' && connection.identity"
+        :url="connection.identity.avatarUrl"
+        :name="connection.identity.displayName"
+      />
+      <span class="truncate">{{ status.text }}</span>
     </span>
   </header>
 </template>

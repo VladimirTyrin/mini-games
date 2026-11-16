@@ -113,6 +113,26 @@ fn accepts_valid_token() {
         .unwrap();
     assert_eq!(identity.subject, "1234567890");
     assert_eq!(identity.display_name.as_str(), "Ada Lovelace");
+    assert_eq!(identity.avatar, None);
+}
+
+#[test]
+fn keeps_a_google_hosted_picture_as_the_avatar() {
+    let picture = "https://lh3.googleusercontent.com/a/ACg8ocL=s96-c";
+    let mut claims = valid_claims();
+    claims["picture"] = json!(picture);
+    let identity = verifier().verify(&sign("test-kid", claims)).unwrap();
+    assert_eq!(identity.avatar.unwrap().as_str(), picture);
+    assert_eq!(identity.display_name.as_str(), "Ada Lovelace");
+}
+
+#[test]
+fn drops_a_picture_hosted_elsewhere_but_still_signs_in() {
+    let mut claims = valid_claims();
+    claims["picture"] = json!("https://evil.example/tracker.png");
+    let identity = verifier().verify(&sign("test-kid", claims)).unwrap();
+    assert_eq!(identity.avatar, None);
+    assert_eq!(identity.subject, "1234567890");
 }
 
 #[test]

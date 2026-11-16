@@ -17,4 +17,7 @@ message Identity {
   // Stable within its kind: Google `sub`, bot key id, or a per-session id for guests.
   string id = 2;
   string display_name = 3;
+  // Profile picture: an https URL hosted by Google (googleusercontent.com), Google accounts
+  // only. Empty = no avatar.
+  string avatar_url = 4;
 }
