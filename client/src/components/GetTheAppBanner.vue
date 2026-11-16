@@ -33,9 +33,7 @@ function dismiss(): void {
 <template>
   <div v-if="offer" class="flex items-center gap-3 rounded-xl bg-sky-900/50 p-3 text-sm">
     <template v-if="offer === 'android-app'">
-      <span class="flex-1"
-        >Smoother on your phone: get the Android app — it works offline and updates itself.</span
-      >
+      <span class="flex-1">The Android app: plays offline, updates itself.</span>
       <a :href="APK_URL" class="whitespace-nowrap rounded-full bg-sky-600 px-4 py-2 font-semibold"
         >Get the app</a
       >

@@ -61,6 +61,7 @@ const firstPlayerOptions = computed(() => {
     <SegmentedField
       label="First move"
       help="Plays X"
+      stacked
       :options="firstPlayerOptions"
       :model-value="value.firstPlayer"
       @update:model-value="form.update({ firstPlayer: $event })"

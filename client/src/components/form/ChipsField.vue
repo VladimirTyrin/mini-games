@@ -54,7 +54,10 @@ function chipClass(selected: boolean): string {
           :class="chipClass(!showsCustom && model === option.key)"
           @click="pick(option.key)"
         >
-          <span class="max-w-full truncate text-sm font-semibold">{{ option.label }}</span>
+          <!-- A notch smaller below 360 px, so four chips keep their labels on a 320 px phone. -->
+          <span class="max-w-full truncate text-sm font-semibold max-[359px]:text-[13px]">{{
+            option.label
+          }}</span>
           <span v-if="option.detail" class="max-w-full truncate text-[11px] text-gray-400">
             {{ option.detail }}
           </span>

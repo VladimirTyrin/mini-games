@@ -44,8 +44,11 @@ function start(): void {
 
 <template>
   <AppHeader :title="plugin?.title ?? 'Unknown game'" back="/" />
-  <main v-if="plugin && info && settings" class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
-    <section class="rounded-2xl bg-panel px-4 pt-4">
+  <main
+    v-if="plugin && info && settings"
+    class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4 max-[359px]:p-3"
+  >
+    <section class="rounded-2xl bg-panel px-4 pt-4 max-[359px]:px-3">
       <header class="flex items-start gap-3 border-b border-white/5 pb-3">
         <GameIcon :plugin="plugin" class="size-12 text-3xl" />
         <div class="min-w-0">
