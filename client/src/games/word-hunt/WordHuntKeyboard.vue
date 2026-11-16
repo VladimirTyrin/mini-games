@@ -10,7 +10,7 @@ const props = defineProps<{
   hints: readonly WordHuntKeyHint[];
   disabled: boolean;
 }>();
-const emit = defineEmits<{ letter: [letter: string]; erase: []; enter: [] }>();
+const emit = defineEmits<{ letter: [letter: string]; erase: [] }>();
 
 const markOf = computed(() => new Map(props.hints.map((hint) => [hint.letter, hint.mark])));
 
@@ -37,16 +37,6 @@ function activate(event: MouseEvent, action: () => void): void {
 <template>
   <div class="flex w-full max-w-xl select-none flex-col gap-1.5" @contextmenu.prevent>
     <div v-for="(row, index) in rows" :key="row" class="flex justify-center gap-1">
-      <button
-        v-if="index === rows.length - 1"
-        type="button"
-        aria-label="Enter"
-        class="h-12 min-w-0 flex-[1.6] rounded-md bg-gray-500/40 text-xs font-semibold uppercase text-gray-100 active:brightness-125"
-        @pointerdown="press($event, () => emit('enter'))"
-        @click="activate($event, () => emit('enter'))"
-      >
-        Enter
-      </button>
       <button
         v-for="letter in row"
         :key="letter"

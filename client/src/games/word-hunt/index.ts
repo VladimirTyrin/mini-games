@@ -28,8 +28,8 @@ export const wordHuntPlugin: GamePlugin = {
   },
   botLabel: () => "Bot",
   controls: {
-    keyboard: "Type a word and press Enter",
-    touch: "Tap the letters, then Enter",
+    keyboard: "Type a word: it is checked as soon as its last letter is in",
+    touch: "Tap the letters: the word is checked as soon as its last letter is in",
   },
   settingsForNewMatch(settings) {
     // The word of the day is today's, even with settings remembered from an earlier day.

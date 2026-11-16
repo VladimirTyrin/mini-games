@@ -73,8 +73,11 @@ function refusalText(error: unknown): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/** The last letter sends the guess: there is no Enter to press. */
 function type(letter: string): void {
-  if (canType.value && typed.value.length < wordLength.value) typed.value += letter;
+  if (!canType.value || typed.value.length >= wordLength.value) return;
+  typed.value += letter;
+  if (typed.value.length === wordLength.value) void enter();
 }
 
 function erase(): void {
@@ -233,7 +236,6 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
       :disabled="!canType"
       @letter="type"
       @erase="erase"
-      @enter="enter"
     />
   </div>
 </template>
