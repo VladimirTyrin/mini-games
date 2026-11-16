@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/core",
+    "crates/games/*",
     "server",
 ]
 resolver = "3"
@@ -35,6 +36,11 @@ debug = true
 
 [workspace.dependencies]
 mg-core = { path = "crates/core" }
+mg-snake = { path = "crates/games/snake" }
+mg-tictactoe = { path = "crates/games/tictactoe" }
+mg-stack-attack = { path = "crates/games/stack-attack" }
+mg-puzzle2048 = { path = "crates/games/puzzle2048" }
+mg-numbers-match = { path = "crates/games/numbers-match" }
 
 chrono = "0.4.45"
 clap = { version = "4.6", features = ["derive", "env"] }
