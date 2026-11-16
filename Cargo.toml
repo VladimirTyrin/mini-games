@@ -2,8 +2,9 @@
 members = [
     "crates/core",
     "crates/games/*",
-    "server",
 ]
+# Legacy v1 server: kept only as a reference while porting, removed at the end of the refactor.
+exclude = ["server"]
 resolver = "3"
 
 [workspace.package]
