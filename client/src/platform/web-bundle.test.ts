@@ -20,6 +20,7 @@ function bundle(id: string, version: string, status: BundleStatus): BundleInfo {
 class FakeUpdater implements UpdaterPlugin {
   readonly downloads: DownloadOptions[] = [];
   nextBundleId: string | null = null;
+  activeBundleId: string | null = null;
   switchHeld = false;
 
   constructor(readonly bundles: BundleInfo[]) {}
@@ -37,6 +38,11 @@ class FakeUpdater implements UpdaterPlugin {
     this.nextBundleId = id;
     const found = this.bundles.find((candidate) => candidate.id === id);
     return found ? Promise.resolve(found) : Promise.reject(new Error(`no bundle ${id}`));
+  };
+
+  set: UpdaterPlugin["set"] = ({ id }) => {
+    this.activeBundleId = id;
+    return Promise.resolve();
   };
 
   setMultiDelay: UpdaterPlugin["setMultiDelay"] = () => {
@@ -90,5 +96,15 @@ describe("pluginWebBundles", () => {
     expect(plugin.switchHeld).toBe(true);
     await bundles.holdSwitch(false);
     expect(plugin.switchHeld).toBe(false);
+  });
+
+  it("switches to the scheduled bundle at once when asked", async () => {
+    const plugin = new FakeUpdater([]);
+    const bundles = pluginWebBundles(plugin);
+    await bundles.switchNow();
+    expect(plugin.activeBundleId).toBeNull();
+    await bundles.installLater(release);
+    await bundles.switchNow();
+    expect(plugin.activeBundleId).toBe(plugin.nextBundleId);
   });
 });

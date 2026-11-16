@@ -8,7 +8,7 @@ import type { InstallResult, WebBundleInstaller, WebRelease } from "./app-update
 
 export type UpdaterPlugin = Pick<
   CapacitorUpdaterPlugin,
-  "list" | "download" | "next" | "setMultiDelay" | "cancelDelay"
+  "list" | "download" | "next" | "set" | "setMultiDelay" | "cancelDelay"
 >;
 
 // A Capacitor plugin object is a proxy that turns every property, `then` included, into a native
@@ -32,10 +32,13 @@ export interface PluginWebBundles extends WebBundleInstaller {
    * condition is also cleared by the next cold start: a hold never outlives the process.
    */
   holdSwitch(held: boolean): Promise<void>;
+  /** Switches to the scheduled bundle now: the page reloads into it. */
+  switchNow(): Promise<void>;
 }
 
 /** Reuses an earlier download of the same build; a build that failed to start is not retried. */
 export function pluginWebBundles(plugin: UpdaterPlugin): PluginWebBundles {
+  let scheduled: string | null = null;
   return {
     async installLater(release: WebRelease): Promise<InstallResult> {
       const version = String(release.build);
@@ -47,11 +50,15 @@ export function pluginWebBundles(plugin: UpdaterPlugin): PluginWebBundles {
           ? earlier
           : await plugin.download({ url: release.zipUrl, version, checksum: release.sha256 });
       await plugin.next({ id: bundle.id });
+      scheduled = bundle.id;
       return "scheduled";
     },
     async holdSwitch(held: boolean): Promise<void> {
       if (held) await plugin.setMultiDelay({ delayConditions: [{ kind: "kill" }] });
       else await plugin.cancelDelay();
+    },
+    async switchNow(): Promise<void> {
+      if (scheduled !== null) await plugin.set({ id: scheduled });
     },
   };
 }

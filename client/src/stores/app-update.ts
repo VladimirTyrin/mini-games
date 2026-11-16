@@ -9,6 +9,7 @@ import {
 } from "@/platform/app-update";
 import { nativeWebBundles } from "@/platform/web-bundle";
 
+import { useLobbyStore } from "./lobby";
 import { useMatchStore } from "./match";
 import { usePrefsStore } from "./prefs";
 
@@ -24,6 +25,7 @@ export type UpdateCheckReport = UpdateCheckResult | { readonly kind: "check-fail
 export const useAppUpdateStore = defineStore("app-update", () => {
   const prefs = usePrefsStore();
   const match = useMatchStore();
+  const lobby = useLobbyStore();
   const available = shallowRef<AvailableUpdate | null>(null);
   /** Version name of a downloaded web bundle that is waiting for the switch. */
   const webBundleReady = shallowRef<string | null>(null);
@@ -42,7 +44,11 @@ export const useAppUpdateStore = defineStore("app-update", () => {
       available.value = result.kind === "apk-available" ? result.update : null;
       if (result.kind === "web-bundle-ready") {
         webBundleReady.value = result.versionName;
-        await bundles.holdSwitch(match.controller !== null);
+        // Nothing to lose outside a match and a lobby: switch now, so a new version shows up
+        // without the player doing anything (the page reloads, which looks like a splash).
+        // Otherwise it waits for the app to go to the background, never mid-match.
+        if (match.controller === null && lobby.current === null) await bundles.switchNow();
+        else await bundles.holdSwitch(match.controller !== null);
       }
       return result;
     } catch {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 
+import Avatar from "@/components/Avatar.vue";
 import BotIcon from "@/components/BotIcon.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useGameKeys } from "@/input/use-game-keys";
@@ -45,11 +46,18 @@ const SEAT_COLORS = ["bg-sky-500", "bg-rose-500", "bg-violet-500", "bg-teal-500"
 function seatColor(slot: number): string {
   return SEAT_COLORS[slot % SEAT_COLORS.length] ?? "bg-gray-500";
 }
+const SEAT_RINGS = ["ring-sky-500", "ring-rose-500", "ring-violet-500", "ring-teal-500"] as const;
+function seatRing(slot: number): string {
+  return SEAT_RINGS[slot % SEAT_RINGS.length] ?? "ring-gray-500";
+}
 function seatName(slot: number): string {
   return names[slot] ?? `Player ${slot + 1}`;
 }
 function isBotSeat(slot: number): boolean {
   return header.seats.find((seat) => seat.slot === slot)?.botKind !== undefined;
+}
+function seatPlayer(slot: number) {
+  return header.seats.find((seat) => seat.slot === slot)?.player;
 }
 
 const turnLine = computed(() => {
@@ -293,7 +301,7 @@ const gridSize = computed(() => ({
       <p v-if="turnLine" class="text-sm font-semibold" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">
         {{ turnLine }}
       </p>
-      <div class="wh-grid relative flex flex-col gap-1.5" :style="gridSize">
+      <div class="wh-grid relative flex flex-col gap-1.5" :class="{ 'wh-group': isGroup }" :style="gridSize">
         <div
           ref="scroller"
           class="flex flex-col gap-1.5"
@@ -305,16 +313,28 @@ const gridSize = computed(() => ({
             class="flex items-center gap-1.5"
             :class="{ 'wh-shake': row.current && shakes > 0 && message !== null && !prefersReducedMotion() }"
           >
+            <!-- Who guessed: the player's avatar ringed in their seat colour, a robot for bots. -->
             <span
               v-if="isGroup"
-              class="flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-              :class="row.by === null ? 'invisible' : seatColor(row.by)"
+              class="flex size-7 shrink-0 items-center justify-center rounded-full ring-2"
+              :class="row.by === null ? 'invisible ring-transparent' : seatRing(row.by)"
               :title="row.by === null ? undefined : seatName(row.by)"
             >
-              <BotIcon v-if="row.by !== null && isBotSeat(row.by)" class="size-4" />
-              <template v-else>{{
-                row.by === null ? "" : seatName(row.by).charAt(0).toUpperCase()
-              }}</template>
+              <template v-if="row.by !== null">
+                <span
+                  v-if="isBotSeat(row.by)"
+                  class="flex size-6 items-center justify-center rounded-full text-white"
+                  :class="seatColor(row.by)"
+                >
+                  <BotIcon class="size-4" />
+                </span>
+                <Avatar
+                  v-else
+                  :url="seatPlayer(row.by)?.avatarUrl ?? ''"
+                  :name="seatName(row.by)"
+                  :player-id="seatPlayer(row.by)?.id"
+                />
+              </template>
             </span>
             <div
               v-for="column in wordLength"
@@ -387,6 +407,17 @@ const gridSize = computed(() => ({
 <style scoped>
 /* Tiles fill the width on phones and the height on short screens, between a floor that keeps
    letters readable and a cap for tablets. */
+/* In a group the author marker takes about two rem of every row's width. */
+.wh-grid.wh-group {
+  --tile: max(
+    1.6rem,
+    min(
+      4.5rem,
+      calc((100vw - 4.5rem) / var(--letters) - 0.375rem),
+      calc((100dvh - 20rem) / var(--rows) - 0.375rem)
+    )
+  );
+}
 /* A group's guesses scroll within about six rows, so the keyboard stays in place. */
 .wh-scroll {
   max-height: calc(6 * (var(--tile) + 0.375rem));
