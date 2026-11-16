@@ -15,13 +15,17 @@ use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, LobbyId, MatchId, ResumeToken, SessionId};
 use crate::matches::MatchAborted;
 use crate::outbound::{Outbound, OutboundReceiver};
+use crate::social::SocialHandle;
 use crate::timing::Timing;
 
 fn start_hub() -> HubHandle {
     let (sender, receiver) = mpsc::unbounded_channel();
     let handle = HubHandle::new(sender);
+    // Social commands go nowhere: these tests are about lobbies and sessions.
+    let (social, _ignored) = mpsc::unbounded_channel();
     let hub = Hub::new(
         handle.clone(),
+        SocialHandle::new(social),
         Arc::new(Semaphore::new(1)),
         Timing::default(),
     );

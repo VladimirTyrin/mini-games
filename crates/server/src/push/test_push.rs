@@ -14,7 +14,7 @@ pub(crate) fn test_notification(sent_at_unix_ms: i64) -> PushNotification {
     PushNotification {
         title: "Mini Games".to_owned(),
         body: "Test notification: tap to see how long it took.".to_owned(),
-        tag: "test",
+        tag: "test".to_owned(),
         data: BTreeMap::from([
             ("kind", "test".to_owned()),
             ("sentAt", sent_at_unix_ms.to_string()),

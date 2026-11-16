@@ -20,6 +20,7 @@ use crate::context::{ServerContext, server_version};
 use crate::hub::{Hub, HubCommand, HubHandle};
 use crate::limits::Limits;
 use crate::push::PushSender;
+use crate::social::{Social, SocialCommand, SocialHandle, Store, StoreError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServeError {
@@ -27,6 +28,8 @@ pub enum ServeError {
     Config(#[source] ConfigError),
     #[error("server I/O failed: {0}")]
     Io(#[source] std::io::Error),
+    #[error("database: {0}")]
+    Database(#[source] StoreError),
 }
 
 #[derive(Clone)]
@@ -64,15 +67,27 @@ fn build_context(
         session_tokens: SessionTokens::new(secret, config.session_days.saturating_mul(24 * 3600)),
         bot_keys: BotKeys::parse(&config.bot_keys)?,
         hub,
-        push: PushSender::configure(
-            &config.fcm_service_account,
-            &config.vapid_private_key,
-            &config.vapid_subject,
-        )
-        .map_err(ConfigError::Push)?,
+        push: Arc::new(
+            PushSender::configure(
+                &config.fcm_service_account,
+                &config.vapid_private_key,
+                &config.vapid_subject,
+            )
+            .map_err(ConfigError::Push)?,
+        ),
         timing: config.timing,
         shutting_down,
     })
+}
+
+fn open_store(config: &Config) -> Result<Store, StoreError> {
+    match &config.database {
+        Some(path) => Store::open(path),
+        None => {
+            tracing::warn!("MG_DATABASE not set: friends are kept in memory until a restart");
+            Store::in_memory()
+        }
+    }
 }
 
 /// Runs the server until `shutdown` resolves; then tells clients and waits (bounded) until
@@ -90,8 +105,29 @@ pub async fn serve(
     let context = Arc::new(
         build_context(&config, hub_handle.clone(), shutting_down).map_err(ServeError::Config)?,
     );
-    let hub_task =
-        tokio::spawn(Hub::new(hub_handle.clone(), bot_cpu, config.timing).run(hub_receiver));
+    let store = Arc::new(open_store(&config).map_err(ServeError::Database)?);
+    let (social_sender, social_receiver) = mpsc::unbounded_channel();
+    let social_handle = SocialHandle::new(social_sender);
+    // Not awaited on shutdown: it holds nothing that needs flushing (every write commits).
+    tokio::spawn(
+        Social::new(
+            store,
+            context.push.clone(),
+            hub_handle.clone(),
+            social_handle.clone(),
+            config.timing,
+        )
+        .run(social_receiver),
+    );
+    let hub_task = tokio::spawn(
+        Hub::new(
+            hub_handle.clone(),
+            social_handle.clone(),
+            bot_cpu,
+            config.timing,
+        )
+        .run(hub_receiver),
+    );
 
     let housekeeping_hub = hub_handle.clone();
     let housekeeping_every = config.timing.housekeeping_every;
@@ -100,6 +136,7 @@ pub async fn serve(
         loop {
             every.tick().await;
             housekeeping_hub.send(HubCommand::Housekeeping);
+            social_handle.send(SocialCommand::Housekeeping);
         }
     });
 

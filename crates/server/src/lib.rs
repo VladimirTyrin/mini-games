@@ -19,6 +19,7 @@ mod matches;
 mod outbound;
 mod player_id;
 mod push;
+mod social;
 mod text;
 mod timing;
 mod token_bucket;

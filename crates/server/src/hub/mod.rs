@@ -13,6 +13,7 @@ mod replay_upload;
 mod request_cooldowns;
 mod session;
 mod shared_replay;
+mod social_handlers;
 mod spawn_error;
 mod stored_replay;
 mod validated_replay;

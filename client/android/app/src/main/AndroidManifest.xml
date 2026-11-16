@@ -22,6 +22,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Friend links (https://braintvsminigames.xyz/f/<code>) open in the app; the site
+                 vouches for it in /.well-known/assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="braintvsminigames.xyz" android:pathPrefix="/f/" />
+            </intent-filter>
+
         </activity>
 
         <provider

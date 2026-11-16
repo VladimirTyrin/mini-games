@@ -7,7 +7,7 @@ pub(crate) struct PushNotification {
     pub(crate) title: String,
     pub(crate) body: String,
     /// A later notification with the same tag replaces this one on the device.
-    pub(crate) tag: &'static str,
+    pub(crate) tag: String,
     /// Handed to the app when the notification is opened. Strings only: FCM data allows no
     /// other values.
     pub(crate) data: BTreeMap<&'static str, String>,

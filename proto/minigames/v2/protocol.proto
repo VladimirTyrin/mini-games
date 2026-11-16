@@ -7,6 +7,7 @@ import "minigames/v2/lobby.proto";
 import "minigames/v2/match.proto";
 import "minigames/v2/push.proto";
 import "minigames/v2/replay.proto";
+import "minigames/v2/social.proto";
 
 // WebSocket text frames carrying the canonical protobuf JSON mapping of these two messages.
 message ClientMessage {
@@ -44,6 +45,18 @@ message ClientMessage {
     ReplayControl replay_control = 52;
 
     RequestTestPush request_test_push = 60;
+    RegisterPushTarget register_push_target = 61;
+
+    ListFriends list_friends = 70;
+    SendFriendRequest send_friend_request = 71;
+    AnswerFriendRequest answer_friend_request = 72;
+    RemoveFriend remove_friend = 73;
+    CreateFriendLink create_friend_link = 74;
+    RevokeFriendLink revoke_friend_link = 75;
+    UseFriendLink use_friend_link = 76;
+    InviteFriend invite_friend = 77;
+    CancelInvite cancel_invite = 78;
+    AnswerInvite answer_invite = 79;
   }
 }
 
@@ -73,6 +86,13 @@ message ServerMessage {
     ReplayData replay_data = 50;
     SharedReplay shared_replay = 51;
     ReplayControl replay_control = 52;
+
+    FriendList friend_list = 70;
+    FriendPresence friend_presence = 71;
+    FriendLink friend_link = 72;
+    InviteUpdate invite_update = 73;
+    GameInvite game_invite = 74;
+    GameInviteClosed game_invite_closed = 75;
   }
 }
 
@@ -118,6 +138,12 @@ enum ErrorCode {
   ERROR_CODE_INVALID_REPLAY = 50;
   // This server has no credentials for that kind of push target.
   ERROR_CODE_PUSH_UNAVAILABLE = 60;
+  // Friends and invitations need a Google account.
+  ERROR_CODE_ACCOUNT_REQUIRED = 70;
+  ERROR_CODE_NOT_FRIENDS = 71;
+  ERROR_CODE_FRIEND_LINK_INVALID = 72;
+  ERROR_CODE_INVITE_CLOSED = 73;
+  ERROR_CODE_ACCOUNT_NOT_FOUND = 74;
 }
 
 message ErrorResponse {

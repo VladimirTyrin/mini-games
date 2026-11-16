@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "xyz.braintvsminigames.app",
+      "sha256_cert_fingerprints": [
+        "06:96:07:21:30:D2:A5:A6:D0:5D:A0:7F:E6:C7:B1:5C:32:FE:A9:0E:1F:34:63:4A:96:83:AC:C9:F5:F8:4C:F0",
+        "43:80:0D:3B:87:F9:77:58:BD:9D:BD:B8:88:74:D7:A1:BD:00:B2:E1:17:FA:BC:62:6C:B6:E1:79:08:6A:59:94"
+      ]
+    }
+  }
+]

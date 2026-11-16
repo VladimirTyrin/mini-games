@@ -2,6 +2,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use mg_protocol::proto;
 use p256::PublicKey;
+use p256::elliptic_curve::sec1::ToSec1Point;
 
 use super::{PushTargetError, WebPushEndpoint};
 
@@ -27,6 +28,14 @@ impl WebPushSubscription {
             client_key,
             auth_secret,
         })
+    }
+
+    pub(crate) fn to_wire(&self) -> proto::WebPushSubscription {
+        proto::WebPushSubscription {
+            endpoint: self.endpoint.url().to_owned(),
+            p256dh: URL_SAFE_NO_PAD.encode(self.client_key.to_sec1_point(false).as_bytes()),
+            auth: URL_SAFE_NO_PAD.encode(self.auth_secret),
+        }
     }
 }
 

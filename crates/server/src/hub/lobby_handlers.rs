@@ -265,6 +265,7 @@ impl Hub {
         if let Some(s) = self.sessions.get_mut(session) {
             s.lobby = None;
         }
+        self.announce_presence(session);
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
         };
@@ -315,6 +316,7 @@ impl Hub {
                 session.lobby = None;
                 session.send(&closed);
             }
+            self.announce_presence(member);
         }
         self.lobby_list_changed();
     }

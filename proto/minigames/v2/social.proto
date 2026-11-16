@@ -1,0 +1,160 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/identity.proto";
+import "minigames/v2/push.proto";
+
+// Friends, friend links and game invitations. Google accounts only: a guest has no account to
+// remember friends by (requests from guests get ERROR_CODE_ACCOUNT_REQUIRED).
+//
+// A friend is an account, not a device: `Identity.id` of a friend is the account id, the part
+// of a device's player id before the dot ("g_<hex>").
+
+// This device receives push notifications at `target` (sent on every sign-in once notifications
+// are allowed; tokens change). Answered with Ack.
+message RegisterPushTarget {
+  PushTarget target = 1;
+}
+
+enum Presence {
+  PRESENCE_UNSPECIFIED = 0;
+  PRESENCE_OFFLINE = 1;
+  PRESENCE_ONLINE = 2;
+  // In a lobby whose match is running.
+  PRESENCE_PLAYING = 3;
+}
+
+message Friend {
+  Identity identity = 1;
+  Presence presence = 2;
+}
+
+// Answers ListFriends and is pushed whenever the list changes (a request, an answer, a removal,
+// a friend link used).
+message FriendList {
+  repeated Friend friends = 1;
+  // Accounts asking to be friends with this one.
+  repeated Identity incoming_requests = 2;
+  // Requests this account sent that are not answered yet.
+  repeated Identity outgoing_requests = 3;
+  repeated FriendLink links = 4;
+}
+
+message ListFriends {}
+
+// Pushed when a friend comes online, goes offline, starts or ends a match.
+message FriendPresence {
+  string account_id = 1;
+  Presence presence = 2;
+}
+
+// `player_id`: an account id or a device's player id (a lobby member, an opponent). Answered
+// with Ack; when the other account had already asked, the two become friends at once.
+message SendFriendRequest {
+  string player_id = 1;
+}
+
+enum FriendRequestAnswer {
+  FRIEND_REQUEST_ANSWER_UNSPECIFIED = 0;
+  FRIEND_REQUEST_ANSWER_ACCEPT = 1;
+  FRIEND_REQUEST_ANSWER_DECLINE = 2;
+}
+
+message AnswerFriendRequest {
+  string account_id = 1;
+  FriendRequestAnswer answer = 2;
+}
+
+// Ends a friendship, or withdraws a request sent to `account_id`.
+message RemoveFriend {
+  string account_id = 1;
+}
+
+enum FriendLinkKind {
+  FRIEND_LINK_KIND_UNSPECIFIED = 0;
+  // The first account to open it becomes a friend; then it is gone.
+  FRIEND_LINK_KIND_SINGLE_USE = 1;
+  // Anyone who opens it until it expires (for group chats).
+  FRIEND_LINK_KIND_MULTI_USE = 2;
+}
+
+// Valid for 7 days. Answered with the new FriendLink; the URL is
+// https://<site>/f/<code>.
+message CreateFriendLink {
+  FriendLinkKind kind = 1;
+}
+
+message FriendLink {
+  string code = 1;
+  FriendLinkKind kind = 2;
+  uint64 expires_at_unix_ms = 3;
+}
+
+message RevokeFriendLink {
+  string code = 1;
+}
+
+// Makes the link's owner and this account friends. Answered with Ack, or
+// ERROR_CODE_FRIEND_LINK_INVALID for an unknown, used or expired link.
+message UseFriendLink {
+  string code = 1;
+}
+
+// Asks a friend into the lobby this session is in. Answered with Ack; InviteUpdate follows.
+message InviteFriend {
+  string account_id = 1;
+}
+
+message CancelInvite {
+  string invite_id = 1;
+}
+
+enum InviteState {
+  INVITE_STATE_UNSPECIFIED = 0;
+  INVITE_STATE_PENDING = 1;
+  INVITE_STATE_ACCEPTED = 2;
+  INVITE_STATE_DECLINED = 3;
+  INVITE_STATE_EXPIRED = 4;
+  INVITE_STATE_CANCELLED = 5;
+}
+
+// Pushed to the inviting session as the invitation moves on.
+message InviteUpdate {
+  string invite_id = 1;
+  Identity friend = 2;
+  InviteState state = 3;
+  uint64 expires_at_unix_ms = 4;
+}
+
+// Pushed to every connected device of the invited account (the same data rides on the push
+// notification for devices that are not connected).
+message GameInvite {
+  string invite_id = 1;
+  Identity from = 2;
+  string lobby_id = 3;
+  string lobby_name = 4;
+  // GameKind id, e.g. "snake".
+  string game = 5;
+  uint64 expires_at_unix_ms = 6;
+}
+
+// Pushed to the invited account's devices once the invitation is answered, expired or
+// cancelled: whatever they show of it can go.
+message GameInviteClosed {
+  string invite_id = 1;
+  InviteState state = 2;
+}
+
+enum InviteAnswer {
+  INVITE_ANSWER_UNSPECIFIED = 0;
+  // Then join `lobby_id` of the GameInvite as usual.
+  INVITE_ANSWER_ACCEPT = 1;
+  INVITE_ANSWER_DECLINE = 2;
+}
+
+// Answered with Ack, or ERROR_CODE_INVITE_CLOSED when it is no longer open.
+message AnswerInvite {
+  string invite_id = 1;
+  InviteAnswer answer = 2;
+}

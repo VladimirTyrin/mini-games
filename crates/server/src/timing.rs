@@ -20,6 +20,8 @@ pub struct Timing {
     /// Lobbies outside a match close after this long without activity.
     pub idle_lobby_timeout: Duration,
     pub housekeeping_every: Duration,
+    /// An unanswered invitation into a lobby closes after this long.
+    pub invite_lifetime: Duration,
 }
 
 impl Default for Timing {
@@ -34,6 +36,7 @@ impl Default for Timing {
             lobby_list_coalesce: Duration::from_millis(250),
             idle_lobby_timeout: Duration::from_secs(60 * 60),
             housekeeping_every: Duration::from_secs(60),
+            invite_lifetime: Duration::from_secs(90),
         }
     }
 }

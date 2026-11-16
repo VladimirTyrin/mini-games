@@ -43,6 +43,11 @@ pub struct Config {
     #[arg(long, env = "MG_MAX_CONNECTIONS_PER_IP", default_value_t = 32)]
     pub max_connections_per_ip: usize,
 
+    /// SQLite database (friends, push targets); created and migrated at start. Without it they
+    /// live in memory until the server stops.
+    #[arg(long, env = "MG_DATABASE")]
+    pub database: Option<PathBuf>,
+
     /// Firebase service account key file, base64: sends pushes to the Android app. Empty: off.
     #[arg(
         long,

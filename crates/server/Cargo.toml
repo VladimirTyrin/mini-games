@@ -31,6 +31,7 @@ hkdf = "0.13"
 hmac = "0.13"
 jsonwebtoken = { version = "12", default-features = false, features = ["rust_crypto", "use_pem"] }
 p256 = { version = "0.14", features = ["ecdh", "ecdsa"] }
+rusqlite = { version = "0.41", default-features = false, features = ["bundled", "cache"] }
 serde = { workspace = true }
 serde_json = "1"
 sha2 = "0.11"

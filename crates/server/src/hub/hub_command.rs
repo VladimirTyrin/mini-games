@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use mg_protocol::proto;
 use tokio::sync::oneshot;
 
@@ -6,6 +8,7 @@ use crate::authenticated::Authenticated;
 use crate::ids::{ConnectionId, ResumeToken, SessionId};
 use crate::matches::{MatchAborted, MatchFinished};
 use crate::outbound::Outbound;
+use crate::social::AccountId;
 
 #[derive(Debug)]
 pub(crate) struct SignIn {
@@ -44,6 +47,15 @@ pub(crate) enum HubCommand {
     ResumeGraceExpired {
         session: SessionId,
         connection: ConnectionId,
+    },
+    /// From the social actor: send to every connected device of the account.
+    DeliverToAccount {
+        account: AccountId,
+        message: proto::ServerMessage,
+    },
+    PresenceOf {
+        accounts: Vec<AccountId>,
+        reply: oneshot::Sender<BTreeMap<AccountId, proto::Presence>>,
     },
     FlushLobbyList,
     Housekeeping,

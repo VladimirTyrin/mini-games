@@ -20,6 +20,7 @@ use crate::ids::{ConnectionId, LobbyId, ResumeToken, SessionId};
 use crate::matches::{MatchControl, MatchRequest};
 use crate::outbound::Outbound;
 use crate::player_id::PlayerId;
+use crate::social::{SocialCommand, SocialHandle};
 use crate::timing::Timing;
 
 /// Owns every session and lobby. Runs as one task and handles one command at a time, so lobby
@@ -27,6 +28,7 @@ use crate::timing::Timing;
 /// elsewhere.
 pub(crate) struct Hub {
     pub(super) handle: HubHandle,
+    pub(super) social: SocialHandle,
     pub(super) bot_cpu: Arc<Semaphore>,
     pub(super) timing: Timing,
     pub(super) sessions: HashMap<SessionId, Session>,
@@ -43,9 +45,15 @@ pub(crate) struct Hub {
 }
 
 impl Hub {
-    pub(crate) fn new(handle: HubHandle, bot_cpu: Arc<Semaphore>, timing: Timing) -> Self {
+    pub(crate) fn new(
+        handle: HubHandle,
+        social: SocialHandle,
+        bot_cpu: Arc<Semaphore>,
+        timing: Timing,
+    ) -> Self {
         Self {
             handle,
+            social,
             bot_cpu,
             timing,
             sessions: HashMap::new(),
@@ -98,6 +106,13 @@ impl Hub {
                     session,
                     connection,
                 } => self.resume_grace_expired(&session, connection),
+                HubCommand::DeliverToAccount { account, message } => {
+                    self.deliver_to_account(&account, &message);
+                }
+                HubCommand::PresenceOf { accounts, reply } => {
+                    // The asker may be gone (shutting down); nothing to do then.
+                    let _sent = reply.send(self.presence_of_accounts(accounts));
+                }
                 HubCommand::FlushLobbyList => self.flush_lobby_list(),
                 HubCommand::Housekeeping => self.housekeeping(),
                 HubCommand::Shutdown => {
@@ -212,6 +227,7 @@ impl Hub {
         if let Some(lobby_id) = lobby {
             self.rejoin_lobby(&session_id, &lobby_id, outbound);
         }
+        self.announce_sign_in(&session_id);
     }
 
     /// A device of this Google account that lost its connection: a sign-in without its resume
@@ -265,6 +281,7 @@ impl Hub {
             }
             self.broadcast_lobby_state(&lobby_id);
         }
+        self.announce_presence(session_id);
         let handle = self.handle.clone();
         let session = session_id.clone();
         let grace = self.timing.resume_grace;
@@ -295,6 +312,15 @@ impl Hub {
                 self.accounts.remove(account);
             }
             self.resume_tokens.remove(&session.resume_token);
+            self.social
+                .send(SocialCommand::SessionEnded(session_id.clone()));
+            if let Some(account) = session
+                .who
+                .google_account()
+                .and_then(|account| crate::social::AccountId::of(account).ok())
+            {
+                self.announce_account_presence(account);
+            }
         }
     }
 
@@ -360,6 +386,19 @@ impl Hub {
             | ClientPayload::SignOut(_)
             | ClientPayload::Ping(_)
             | ClientPayload::RequestTestPush(_) => {}
+            social @ (ClientPayload::RegisterPushTarget(_)
+            | ClientPayload::ListFriends(_)
+            | ClientPayload::SendFriendRequest(_)
+            | ClientPayload::AnswerFriendRequest(_)
+            | ClientPayload::RemoveFriend(_)
+            | ClientPayload::CreateFriendLink(_)
+            | ClientPayload::RevokeFriendLink(_)
+            | ClientPayload::UseFriendLink(_)
+            | ClientPayload::InviteFriend(_)
+            | ClientPayload::CancelInvite(_)
+            | ClientPayload::AnswerInvite(_)) => {
+                self.forward_to_social(session, request_id, social);
+            }
         }
     }
 
@@ -469,6 +508,8 @@ impl Hub {
         };
         let encoded = codec::encode(&codec::push(Message::LobbyState(self.lobby_state(lobby))));
         self.send_to_members(lobby, &encoded);
+        // Every lobby change passes here, a match starting or ending included.
+        self.announce_lobby_presence(lobby_id);
     }
 
     pub(super) fn send_to_members(&self, lobby: &Lobby, encoded: &axum::extract::ws::Utf8Bytes) {

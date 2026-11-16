@@ -43,6 +43,9 @@ macro_rules! string_id {
 string_id!(SessionId, 8);
 string_id!(LobbyId, 4);
 string_id!(MatchId, 8);
+string_id!(InviteId, 8);
+// Whoever has it can become the owner's friend while it lasts: 80 bits, not guessable.
+string_id!(FriendLinkCode, 10);
 // Secret: whoever holds it can take over the session.
 string_id!(ResumeToken, 16);
 

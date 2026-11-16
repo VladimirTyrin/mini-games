@@ -20,4 +20,12 @@ impl PushTarget {
             None => Err(PushTargetError::Missing),
         }
     }
+
+    /// Unique per device: the FCM token or the push endpoint.
+    pub(crate) fn address(&self) -> &str {
+        match self {
+            Self::Fcm(token) => token.as_str(),
+            Self::WebPush(subscription) => subscription.endpoint.url(),
+        }
+    }
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use mg_protocol::proto;
 use tokio::sync::{Semaphore, watch};
 
@@ -28,7 +30,7 @@ pub(crate) struct ServerContext {
     pub player_ids: PlayerIdKey,
     pub bot_keys: BotKeys,
     pub hub: HubHandle,
-    pub push: PushSender,
+    pub push: Arc<PushSender>,
     pub timing: Timing,
     /// Turns `true` when the server stops; connections that never signed in close at once
     /// (signed-in ones are told by the hub).
