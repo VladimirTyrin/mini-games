@@ -51,6 +51,11 @@ const hintedIndices = computed(() => {
 const suggestsRefill = computed(() => view.value?.hint?.hint.case === "suggestRefill");
 const hintsEnabled = computed(() => view.value?.hintMode !== NumbersMatchHintMode.DISABLED);
 const hintsLeftText = computed(() => String(view.value?.hintsLeft ?? "∞"));
+// What the core would refuse anyway: the controls say so up front instead of a refusal afterwards.
+const canRefill = computed(() => canPlay.value && (view.value?.refillsLeft ?? 0) > 0);
+const canHint = computed(
+  () => canPlay.value && hintsEnabled.value && view.value?.hintsLeft !== 0 && view.value?.hint === undefined,
+);
 const activeCellCount = computed(
   () => view.value?.cells.filter((cell) => cell.state === NumbersMatchCellState.ACTIVE).length ?? 0,
 );
@@ -133,11 +138,11 @@ function select(index: number): void {
 }
 
 function refill(): void {
-  void send({ command: { case: "refill", value: {} } });
+  if (canRefill.value) void send({ command: { case: "refill", value: {} } });
 }
 
 function requestHint(): void {
-  if (hintsEnabled.value) void send({ command: { case: "requestHint", value: {} } });
+  if (canHint.value) void send({ command: { case: "requestHint", value: {} } });
 }
 
 useGameKeys((key) => {
@@ -161,7 +166,10 @@ useGameKeys((key) => {
 
 <template>
   <div v-if="view" class="flex flex-col items-center gap-2">
-    <p class="text-sm font-medium" :class="status.tone">{{ status.text }}</p>
+    <!-- Two lines reserved: a longer message (why a pair was refused) must not push the board. -->
+    <p class="flex min-h-10 items-center text-center text-sm leading-5 font-medium" :class="status.tone">
+      {{ status.text }}
+    </p>
     <!-- The absolute scroller keeps a tall board from growing the page: it scrolls inside the
          space the layout leaves instead. -->
     <div class="relative min-h-48 w-full flex-1">
@@ -183,7 +191,7 @@ useGameKeys((key) => {
         label="Refill (R)"
         icon="➕"
         :count="String(view.refillsLeft)"
-        :disabled="!canPlay || view.refillsLeft === 0"
+        :disabled="!canRefill"
         :highlighted="suggestsRefill"
         @press="refill"
       />
@@ -193,7 +201,7 @@ useGameKeys((key) => {
         label="Hint (H)"
         icon="💡"
         :count="hintsLeftText"
-        :disabled="!canPlay || view.hintsLeft === 0"
+        :disabled="!canHint"
         @press="requestHint"
       />
     </div>
