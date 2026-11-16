@@ -5,6 +5,8 @@ import type { MatchController } from "@/match/match-controller";
 import { TicTacToeEndReason, TicTacToeMark } from "@/proto/minigames/v2/tictactoe_pb";
 import { useToastStore } from "@/stores/toasts";
 
+import MarkIcon from "./MarkIcon.vue";
+
 const props = defineProps<{ controller: MatchController }>();
 const toasts = useToastStore();
 const sending = ref(false);
@@ -75,16 +77,20 @@ async function place(index: number): Promise<void> {
     sending.value = false;
   }
 }
-
-const markText = (mark: TicTacToeMark) =>
-  mark === TicTacToeMark.X ? "✕" : mark === TicTacToeMark.O ? "○" : "";
 </script>
 
 <template>
   <div v-if="view" class="flex flex-col items-center gap-3">
     <p class="text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">
       {{ status }}
-      <span v-if="myMark !== null" class="text-sm text-gray-400">(you play {{ markText(myMark) }})</span>
+      <span v-if="myMark !== null" class="inline-flex items-center gap-1 text-sm text-gray-400">
+        (you play
+        <MarkIcon
+          :mark="myMark"
+          class="h-[1em] w-[1em]"
+          :class="myMark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300'"
+        />)
+      </span>
     </p>
     <div
       class="grid w-full max-w-[min(90vw,70vh)] gap-px rounded bg-gray-700 p-px"
@@ -93,7 +99,7 @@ const markText = (mark: TicTacToeMark) =>
       <button
         v-for="(mark, index) in view.cells"
         :key="index"
-        class="flex aspect-square items-center justify-center bg-panel font-bold leading-none"
+        class="flex aspect-square items-center justify-center bg-panel"
         :class="[
           winningCells.has(index) ? 'bg-emerald-800' : '',
           mark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300',
@@ -101,11 +107,10 @@ const markText = (mark: TicTacToeMark) =>
             ? 'ring-1 ring-amber-300 ring-inset'
             : '',
         ]"
-        :style="{ fontSize: `min(${60 / view.fieldWidth}vw, ${45 / view.fieldWidth}vh)` }"
         :disabled="!myTurn || mark !== TicTacToeMark.UNSPECIFIED"
         @click="place(index)"
       >
-        {{ markText(mark) }}
+        <MarkIcon v-if="mark !== TicTacToeMark.UNSPECIFIED" :mark="mark" class="h-[70%] w-[70%]" />
       </button>
     </div>
   </div>
