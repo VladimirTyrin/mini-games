@@ -35,6 +35,7 @@ pub struct Authority<G: Game> {
     hash_policy: HashPolicy,
     /// Empty frames are omitted; see [`crate::expand_compact_log`].
     compact_log: Vec<GameFrame<G>>,
+    rejected_bot_commands: u64,
 }
 
 impl<G: Game> Authority<G> {
@@ -77,6 +78,7 @@ impl<G: Game> Authority<G> {
             next_tick: Tick::ZERO,
             hash_policy,
             compact_log: Vec::new(),
+            rejected_bot_commands: 0,
         })
     }
 
@@ -98,6 +100,11 @@ impl<G: Game> Authority<G> {
 
     pub fn compact_log(&self) -> &[GameFrame<G>] {
         &self.compact_log
+    }
+
+    /// Bots should only produce legal commands; the conformance suite requires this to stay 0.
+    pub fn rejected_bot_commands(&self) -> u64 {
+        self.rejected_bot_commands
     }
 
     pub fn has_pending_inputs(&self) -> bool {
@@ -122,6 +129,8 @@ impl<G: Game> Authority<G> {
 
     /// Applied to the authority state immediately: no `step` runs before the frame is sealed, so
     /// clients applying the same command at the start of the frame reach the same state.
+    /// Turn-based hosts seal a frame after every accepted command: a move may need world events
+    /// (e.g. a spawned tile) before the next move is legal.
     pub fn submit(&mut self, slot: Slot, command: G::Command) -> Result<(), CommandError> {
         match self.players.get(slot.index()) {
             Some(spec) if spec.is_human() && !self.is_dropped(slot) => {}
@@ -187,6 +196,7 @@ impl<G: Game> Authority<G> {
             return false;
         };
         if self.game.apply_command(slot, &command).is_err() {
+            self.rejected_bot_commands += 1;
             return false;
         }
         self.pending_inputs.push(Input::Command { slot, command });

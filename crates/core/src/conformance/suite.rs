@@ -102,6 +102,12 @@ pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, Stri
             .map_err(|e| format!("tick {}: invariant: {e}", frame.tick))?;
     }
 
+    if authority.rejected_bot_commands() > 0 {
+        return Err(format!(
+            "bots produced {} rejected commands",
+            authority.rejected_bot_commands()
+        ));
+    }
     let bots_only = players.iter().all(|p| !p.is_human());
     if bots_only && !realtime && !authority.game().status().is_finished() {
         return Err(format!(
