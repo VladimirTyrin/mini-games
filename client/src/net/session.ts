@@ -28,7 +28,7 @@ export type ConnectionState =
   | "outdated"
   /** Sign-in was refused (bad token, guests disabled). */
   | "rejected"
-  /** The same account signed in elsewhere; reconnecting would take the session back. */
+  /** This session was taken over from another window; reconnecting would take it back. */
   | "replaced";
 
 /** States in which reconnecting cannot help; only a new `connect()` leaves them. */

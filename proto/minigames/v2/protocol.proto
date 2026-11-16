@@ -98,8 +98,9 @@ enum ErrorCode {
   // Was NAME_TAKEN: display names are labels and need not be unique.
   reserved 8;
   reserved "ERROR_CODE_NAME_TAKEN";
-  // Pushed (request_id 0) to a connection whose account signed in on another connection; the
-  // server closes it next. Do not reconnect automatically: the two would keep taking over.
+  // Pushed (request_id 0) to a connection whose session was taken over: resumed from another
+  // connection (a duplicated tab), or a bot's key signed in again. The server closes it next.
+  // Do not reconnect automatically: the two would keep taking over.
   ERROR_CODE_SIGNED_IN_ELSEWHERE = 9;
   ERROR_CODE_LOBBY_NOT_FOUND = 20;
   ERROR_CODE_LOBBY_FULL = 21;

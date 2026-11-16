@@ -160,6 +160,59 @@ async fn each_device_of_a_google_account_is_its_own_player() {
 }
 
 #[tokio::test]
+async fn the_account_part_of_an_id_is_stable_and_differs_between_accounts() {
+    let account_part = |id: &str| id.split('.').next().unwrap_or_default().to_owned();
+    let first = TestServer::start_with(with_session_secret).await;
+    let mut ada = first.client().await;
+    let ada_id = ada
+        .hello(google_session("111", "Ada"), "")
+        .await
+        .unwrap()
+        .identity
+        .unwrap()
+        .id;
+
+    // After a restart with the same secret, the account part is the same.
+    let restarted = TestServer::start_with(with_session_secret).await;
+    let mut again = restarted.client().await;
+    let again_id = again
+        .hello(google_session("111", "Ada"), "")
+        .await
+        .unwrap()
+        .identity
+        .unwrap()
+        .id;
+    let mut other = restarted.client().await;
+    let other_id = other
+        .hello(google_session("222", "Ada"), "")
+        .await
+        .unwrap()
+        .identity
+        .unwrap()
+        .id;
+
+    assert_eq!(account_part(&again_id), account_part(&ada_id));
+    assert_ne!(account_part(&other_id), account_part(&ada_id));
+}
+
+#[tokio::test]
+async fn a_resume_token_does_not_hand_one_account_the_session_of_another() {
+    let server = TestServer::start_with(with_session_secret).await;
+    let mut ada = server.client().await;
+    let welcome = ada.hello(google_session("111", "Ada"), "").await.unwrap();
+    drop(ada);
+
+    let mut mallory = server.client().await;
+    let stolen = mallory
+        .hello(google_session("222", "Mallory"), &welcome.resume_token)
+        .await
+        .unwrap();
+
+    assert!(!stolen.resumed);
+    assert_ne!(stolen.identity.unwrap().id, welcome.identity.unwrap().id);
+}
+
+#[tokio::test]
 async fn a_device_resumes_its_own_session_even_after_a_profile_change() {
     const SUBJECT: &str = "109876543210987654321";
     let server = TestServer::start_with(with_session_secret).await;

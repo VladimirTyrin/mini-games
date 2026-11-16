@@ -14,11 +14,13 @@ import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
 import { useAppUpdateStore } from "@/stores/app-update";
 import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
+import { useToastStore } from "@/stores/toasts";
 
 const router = useRouter();
 const match = useMatchStore();
 const lobby = useLobbyStore();
 const appUpdate = useAppUpdateStore();
+const toasts = useToastStore();
 
 const controller = computed(() => match.controller);
 const plugin = computed(() => pluginBySettings(controller.value?.source.header.settings?.game.case));
@@ -48,11 +50,15 @@ watch(
 
 /** The web build reloads into the new version; the app fetches and switches to its bundle. */
 async function update(): Promise<void> {
-  if (__NATIVE_APP__) {
-    const report = await appUpdate.check();
-    if (report.kind === "web-bundle-ready") return;
+  if (!__NATIVE_APP__) {
+    window.location.reload();
+    return;
   }
-  window.location.reload();
+  // A reload would start the same old bundle again: only a newer one helps.
+  const report = await appUpdate.check();
+  if (report.kind === "web-bundle-ready") return;
+  if (report.kind === "apk-available") await appUpdate.install();
+  else toasts.show("No update is out yet. Try again in a minute.");
 }
 
 /** Set when this screen ends the match itself and navigates on its own. */

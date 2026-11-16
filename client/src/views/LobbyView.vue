@@ -96,9 +96,19 @@ async function start(): Promise<void> {
 
 /** Others would notice: the host's leaving closes the lobby, a member's frees a seat. */
 const confirmingLeave = ref(false);
-const othersInLobby = computed(() => lobby.members.filter((member) => member && !isMe(member)).length > 0);
+/** The people (not bots) who stay; the first of them becomes the host if the host leaves. */
+const othersInLobby = computed(() =>
+  lobby.members.filter(
+    (member): member is Identity => !!member && !isMe(member) && member.kind !== IdentityKind.BUILT_IN_BOT,
+  ),
+);
+const leaveMessage = computed(() => {
+  const [nextHost] = othersInLobby.value;
+  if (!lobby.isHost || !nextHost) return "Your seat goes to whoever joins next.";
+  return `${labelOf(nextHost)} becomes the host.`;
+});
 function requestLeave(): void {
-  if (othersInLobby.value) confirmingLeave.value = true;
+  if (othersInLobby.value.length > 0) confirmingLeave.value = true;
   else void leave();
 }
 
@@ -121,7 +131,7 @@ function kick(): void {
   <ConfirmDialog
     v-if="confirmingLeave"
     title="Leave the lobby?"
-    :message="lobby.isHost ? 'The lobby closes for everyone in it.' : 'Your seat goes to whoever joins next.'"
+    :message="leaveMessage"
     confirm-label="Leave"
     cancel-label="Stay"
     @confirm="leave"

@@ -17,7 +17,8 @@ enum IdentityKind {
 message Identity {
   IdentityKind kind = 1;
   // Opaque and unique among players online; the prefix tells the kind:
-  // `g_…` Google account (derived from the account, the same on every session and device),
+  // `g_….…` one device of a Google account (derived from the account, then the session: each
+  // device or tab of an account is its own player),
   // `b_…` network bot (the same for its key), `u_…` guest (one session),
   // `bot-N` built-in bot (one lobby).
   string id = 2;

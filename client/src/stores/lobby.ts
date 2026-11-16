@@ -63,6 +63,8 @@ export const useLobbyStore = defineStore("lobby", () => {
         current.value = null;
         return;
       }
+      /** Later sign-ins of this session are reconnects. */
+      let reconnecting = false;
       detach.push(
         session.events.on("lobbyList", (list) => (lobbies.value = list.lobbies)),
         session.events.on("lobbyState", (state) => accept(state)),
@@ -82,8 +84,10 @@ export const useLobbyStore = defineStore("lobby", () => {
           } else if (!resumed && current.value) {
             current.value = null;
             lobbyChat.value = [];
-            toasts.show("You were away too long and lost your place in the lobby");
+            // The first sign-in of a new session (another account, say) is no reconnect.
+            if (reconnecting) toasts.show("You were away too long and lost your place in the lobby");
           }
+          reconnecting = true;
           void refresh();
         }),
       );
