@@ -37,10 +37,13 @@ onBeforeUnmount(() => {
   if (revealTimer !== null) clearTimeout(revealTimer);
 });
 
+const isReplay = props.controller.source.kind === "replay";
+
 // Enter or Space starts the next match once the result is up (keys held from the game's last
-// moment do not count: repeats are ignored).
+// moment do not count: repeats are ignored). In a replay Space is the replay bar's play key.
 useGameKeys((key) => {
-  if (!ended.value || resultFolded.value || (key !== "Enter" && key !== " ")) return false;
+  const accepted = key === "Enter" || (key === " " && !isReplay);
+  if (!ended.value || resultFolded.value || !accepted) return false;
   emit("again");
   return true;
 });
@@ -130,17 +133,25 @@ async function voteDrop(slot: number): Promise<void> {
           <span class="font-mono">{{ score }}</span>
         </li>
       </ul>
-      <div class="flex flex-wrap gap-2">
-        <button class="h-11 flex-1 rounded-xl bg-emerald-600 px-4 font-semibold" @click="emit('again')">
-          Play again
+      <!-- No wrapping inside a button: on a narrow phone the row wraps instead. -->
+      <div class="flex flex-wrap gap-2 whitespace-nowrap">
+        <button
+          class="min-h-11 flex-1 rounded-xl bg-emerald-600 px-4 py-2 font-semibold"
+          @click="emit('again')"
+        >
+          {{ isReplay ? "Watch again" : "Play again" }}
           <kbd v-if="showsKeyHint" class="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-xs font-normal"
             >Enter</kbd
           >
         </button>
-        <button v-if="!aborted" class="h-11 rounded-xl bg-panel-raised px-4" @click="emit('replay')">
+        <button
+          v-if="!aborted && !isReplay"
+          class="min-h-11 rounded-xl bg-panel-raised px-4 py-2"
+          @click="emit('replay')"
+        >
           Save replay
         </button>
-        <button class="h-11 rounded-xl bg-panel-raised px-4" @click="emit('leave')">Leave</button>
+        <button class="min-h-11 rounded-xl bg-panel-raised px-4 py-2" @click="emit('leave')">Leave</button>
       </div>
     </div>
   </div>

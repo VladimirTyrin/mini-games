@@ -30,17 +30,20 @@ export class MatchController {
   readonly resultRevealAt: ShallowRef<number | null> = shallowRef(null);
   /** Ended by the authority without a result (server error); there is no replay. */
   readonly aborted = shallowRef(false);
-  readonly tickMs: number;
+  /** The game's own tick; 0 for turn-based games. */
+  readonly gameTickMs: number;
+  /** Replays may play faster or slower than the game; 1 everywhere else. */
+  private playbackRate = 1;
 
   private mirror: Mirror;
-  private readonly clock: PlaybackClock;
+  private clock: PlaybackClock;
   private resyncing = false;
   private readonly unsubscribe: (() => void)[] = [];
 
   constructor(readonly source: MatchSource) {
     this.mirror = Mirror.forHeader(source.header);
     // From the game itself: local matches have no server to fill the header's tick_ms.
-    this.tickMs = this.mirror.tickMs;
+    this.gameTickMs = this.mirror.tickMs;
     this.clock = new PlaybackClock(this.tickMs);
     this.unsubscribe.push(
       source.on("frame", (frame) => this.onFrame(frame)),
@@ -54,6 +57,11 @@ export class MatchController {
         this.pauses.value = [];
         this.resumeAt.value = performance.now() + countdownMs;
       }),
+      source.on("rate", (rate) => {
+        this.playbackRate = rate;
+        // Animations run at the pace frames now arrive at; the old schedule no longer applies.
+        this.clock = new PlaybackClock(this.tickMs);
+      }),
       source.on("ended", (result) => {
         this.result.value = result ?? (this.mirror.isFinished ? this.mirror.result() : null);
         this.aborted.value = this.result.value === null;
@@ -65,6 +73,11 @@ export class MatchController {
       }),
     );
     this.publish();
+  }
+
+  /** Real time between two ticks on screen (the game's tick at the playback speed). */
+  get tickMs(): number {
+    return this.gameTickMs / this.playbackRate;
   }
 
   get mySlot(): number | null {
@@ -116,6 +129,12 @@ export class MatchController {
     this.resumeAt.value = catchUp.resumeCountdownMs > 0 ? now + catchUp.resumeCountdownMs : null;
     this.previous.value = null;
     this.clock.reset();
+    // Seeking a replay back from its end: the match is running again on screen.
+    if (!this.mirror.isFinished && this.ended.value) {
+      this.ended.value = false;
+      this.result.value = null;
+      this.resultRevealAt.value = null;
+    }
     this.publish();
   }
 

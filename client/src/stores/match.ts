@@ -73,8 +73,9 @@ export const useMatchStore = defineStore("match", () => {
   function startReplay(bytes: Uint8Array): void {
     try {
       const source = new ReplayMatchSource(bytes);
-      replay.value = source;
+      // After `run`: it closes the previous match first, which forgets the replay.
       run(source);
+      replay.value = source;
     } catch (error) {
       toasts.error(`Cannot open the replay: ${errorMessage(error)}`);
     }

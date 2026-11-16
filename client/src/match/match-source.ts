@@ -20,6 +20,8 @@ export interface MatchSourceEvents {
   resumed: { countdownMs: number };
   /** `null`: the authority aborted the match (no result, no replay). */
   ended: MatchResult | null;
+  /** Replays only: frames now come this many times as fast as the game's own tick. */
+  rate: number;
 }
 
 export type MatchSourceKind =

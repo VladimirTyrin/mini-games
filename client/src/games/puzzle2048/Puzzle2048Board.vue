@@ -63,6 +63,8 @@ function move(direction: Puzzle2048Direction): void {
 }
 
 useGameKeys((key) => {
+  // Observers and replays: the keys belong to the replay bar.
+  if (props.controller.mySlot === null) return false;
   const direction = directionFromKey(key);
   if (direction === null) return false;
   move(direction);

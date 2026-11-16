@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
@@ -63,9 +63,32 @@ async function leave(): Promise<void> {
   void router.push(kind === "online" ? "/online" : home);
 }
 
+// A board times its animations by `controller.tickMs` once, when it is created; a new replay
+// speed changes that, so the board is rebuilt (it draws from the controller's state).
+const boardKey = ref(0);
+watch(
+  () => match.replay,
+  (replay, _, onCleanup) => {
+    if (!replay) return;
+    let speed = replay.speed;
+    onCleanup(
+      replay.onProgress(() => {
+        if (replay.speed === speed) return;
+        speed = replay.speed;
+        boardKey.value += 1;
+      }),
+    );
+  },
+  { immediate: true },
+);
+
 function again(): void {
   const current = controller.value;
   if (!current) return;
+  if (current.source.kind === "replay") {
+    match.replay?.restart();
+    return;
+  }
   if (current.source.kind === "online") {
     match.close();
     void lobby.votePlayAgain().catch(() => undefined);
@@ -95,7 +118,7 @@ function again(): void {
   />
   <main v-if="controller && plugin" class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3">
     <div class="relative flex min-h-0 flex-1 flex-col">
-      <component :is="plugin.Board" :controller="controller" class="min-h-0 flex-1" />
+      <component :is="plugin.Board" :key="boardKey" :controller="controller" class="min-h-0 flex-1" />
       <MatchOverlay
         :controller="controller"
         :end-reason="endReason"

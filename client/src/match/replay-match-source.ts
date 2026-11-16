@@ -34,12 +34,35 @@ export class ReplayMatchSource implements MatchSource {
   private playing = false;
   private speedPercent = 100;
   private readonly progressHandlers = new Set<() => void>();
+  /** The game's own tick; 0 for turn-based games. */
+  readonly gameTickMs: number;
 
   constructor(bytes: Uint8Array) {
     this.endTick = Mirror.replayEndTick(bytes);
     this.file = fromBinary(ReplayFileSchema, bytes);
     if (!this.file.header) throw new Error("replay has no header");
     this.header = this.file.header;
+    // From the game, not the header: a local match's header has tick_ms 0, which played a
+    // real-time replay at the turn-based pace.
+    const mirror = Mirror.forHeader(this.header);
+    try {
+      this.gameTickMs = mirror.tickMs;
+    } finally {
+      mirror.free();
+    }
+  }
+
+  /** Real time between two frames at the current speed. */
+  get frameMs(): number {
+    return ((this.gameTickMs > 0 ? this.gameTickMs : TURN_BASED_STEP_MS) * 100) / this.speedPercent;
+  }
+
+  get playbackRate(): number {
+    return this.speedPercent / 100;
+  }
+
+  get isTurnBased(): boolean {
+    return this.gameTickMs === 0;
   }
 
   get length(): number {
@@ -93,8 +116,26 @@ export class ReplayMatchSource implements MatchSource {
     this.emitNext();
   }
 
+  stepBack(): void {
+    this.pause();
+    this.seek(this.current - 1);
+  }
+
+  restart(): void {
+    this.seek(0);
+    this.play();
+  }
+
   setSpeed(percent: number): void {
-    this.speedPercent = Math.min(400, Math.max(25, percent));
+    const clamped = Math.min(400, Math.max(25, percent));
+    if (clamped === this.speedPercent) return;
+    this.speedPercent = clamped;
+    this.events.emit("rate", this.playbackRate);
+    // The next frame keeps to the new pace instead of the old one's pending timer.
+    if (this.playing) {
+      if (this.timer) clearTimeout(this.timer);
+      this.schedule();
+    }
     this.notify();
   }
 
@@ -133,14 +174,10 @@ export class ReplayMatchSource implements MatchSource {
 
   private schedule(): void {
     if (!this.playing) return;
-    const baseMs = this.header.tickMs > 0 ? this.header.tickMs : TURN_BASED_STEP_MS;
-    this.timer = setTimeout(
-      () => {
-        this.emitNext();
-        this.schedule();
-      },
-      (baseMs * 100) / this.speedPercent,
-    );
+    this.timer = setTimeout(() => {
+      this.emitNext();
+      this.schedule();
+    }, this.frameMs);
   }
 
   private frameAt(tick: bigint): TickFrame {

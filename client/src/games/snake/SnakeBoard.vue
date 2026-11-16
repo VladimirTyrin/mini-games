@@ -98,6 +98,8 @@ const SWIPE_DIRECTIONS: Record<SwipeDirection, SnakeDirection> = {
 };
 
 useGameKeys((key) => {
+  // Observers and replays: the keys belong to the replay bar.
+  if (props.controller.mySlot === null) return false;
   const direction = KEY_DIRECTIONS.get(key.length === 1 ? key.toLowerCase() : key);
   if (direction === undefined) return false;
   turn(direction);

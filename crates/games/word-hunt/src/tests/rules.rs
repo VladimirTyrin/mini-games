@@ -106,6 +106,21 @@ fn a_malformed_guess_is_rejected_without_using_a_try() {
 }
 
 #[test]
+fn a_word_already_tried_is_refused_without_using_a_try() {
+    let mut game = game_with_answer("ёлка", Language::Russian, false);
+    guess(&mut game, "кошка").unwrap_err();
+    guess(&mut game, "лиса").unwrap();
+    // Case and ё do not make it a new word.
+    for again in ["лиса", "ЛИСА"] {
+        assert_eq!(
+            guess(&mut game, again),
+            Err(CommandError::Illegal("you have already tried this word"))
+        );
+    }
+    assert_eq!(game.view(Viewer::Spectator).guesses.len(), 1);
+}
+
+#[test]
 fn solving_ends_the_game_with_spare_guesses_as_score() {
     let mut game = game_with_answer("crane", Language::English, false);
     guess(&mut game, "cable").unwrap();
@@ -125,11 +140,11 @@ fn solving_ends_the_game_with_spare_guesses_as_score() {
 #[test]
 fn running_out_of_guesses_loses_and_reveals_the_answer() {
     let mut game = game_with_answer("crane", Language::English, false);
-    for _ in 0..5 {
-        guess(&mut game, "plumb").unwrap();
+    for miss in ["plumb", "fight", "dozen", "jumpy", "quick"] {
+        guess(&mut game, miss).unwrap();
         assert_eq!(game.view(Viewer::Spectator).answer, None);
     }
-    guess(&mut game, "plumb").unwrap();
+    guess(&mut game, "vivid").unwrap();
     let view = game.view(Viewer::Spectator);
     assert_eq!(view.phase, Phase::Failed);
     assert_eq!(view.answer.as_deref(), Some("crane"));
