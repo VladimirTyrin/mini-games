@@ -157,3 +157,17 @@ fn authority_frames_replay_through_json() {
     assert!(client.game().status().is_finished());
     assert_eq!(client.game().state_hash(), authority.game().state_hash());
 }
+
+/// Settings from before the first-turn option (field unset) still parse, as a random start.
+#[test]
+fn an_unset_first_turn_means_random() {
+    let mut wire = WordHunt::settings_to_wire(&RawSettings::default());
+    let Some(proto::game_settings::Game::WordHunt(settings)) = wire.game.as_mut() else {
+        panic!("not word hunt settings");
+    };
+    settings.first_turn = 0;
+    assert_eq!(
+        WordHunt::settings_from_wire(&wire).map(|raw| raw.first_turn),
+        Ok(FirstTurn::Random)
+    );
+}

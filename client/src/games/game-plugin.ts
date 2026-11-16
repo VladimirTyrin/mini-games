@@ -29,7 +29,8 @@ export interface GamePlugin {
   SettingsForm: Component;
   Board: Component;
   /** Short human-readable facts for lobby cards, e.g. "15×15", "5 in a row". */
-  describeSettings(settings: GameSettings): string[];
+  /** `seats`: taken seats when known (a lobby), so facts that only apply alone or in a group fit. */
+  describeSettings(settings: GameSettings, seats?: number): string[];
   botLabel(kind: BotKind): string;
   /** Keyboard help shown under the board and on the setup screen. */
   /** How to play, for keyboard and mouse and for touch screens; see `controlsHintFor`. */

@@ -377,7 +377,7 @@ const gridSize = computed(() => ({
     <button
       v-if="canGiveUp"
       type="button"
-      class="text-xs text-gray-400 underline-offset-4 hover:text-gray-200 hover:underline"
+      class="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5"
       @click="confirmingGiveUp = true"
     >
       Give up

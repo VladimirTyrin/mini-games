@@ -1,5 +1,6 @@
 import {
   WordHuntBotKind,
+  WordHuntFirstTurn,
   WordHuntLanguage,
   WordHuntPhase,
   WordHuntPuzzleMode,
@@ -21,15 +22,21 @@ export const wordHuntPlugin: GamePlugin = {
   tagline: "Guess the word: Russian or English",
   SettingsForm,
   Board,
-  describeSettings(settings) {
+  describeSettings(settings, seats) {
     if (settings.game.case !== "wordHunt") return [];
     const value = settings.game.value;
     const facts = [
       value.language === WordHuntLanguage.RUSSIAN ? "Русский" : "English",
       value.mode === WordHuntPuzzleMode.DAILY ? "word of the day" : `${value.wordLength} letters`,
-      `${value.maxGuesses} guesses`,
     ];
-    return value.hardMode ? [...facts, "hard mode"] : facts;
+    // Alone the guesses are limited; a group plays until someone finds the word.
+    if (seats === undefined || seats <= 1) facts.push(`${value.maxGuesses} guesses`);
+    if (seats === undefined || seats > 1) {
+      if (value.firstTurn === WordHuntFirstTurn.HOST_FIRST) facts.push("host first");
+      if (value.firstTurn === WordHuntFirstTurn.HOST_LAST) facts.push("host last");
+    }
+    if (value.hardMode) facts.push("hard mode");
+    return facts;
   },
   botLabel(kind) {
     if (kind.game.case !== "wordHunt") return "Bot";

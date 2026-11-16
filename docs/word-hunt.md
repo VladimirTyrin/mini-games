@@ -8,10 +8,13 @@ elsewhere in the word, grey not in it (repeated letters count only as often as t
 - **Alone** (1 seat): a number of guesses from the settings (4–8). Unlimited words, or the **word
   of the day** (5 letters, the same for everyone that day; the client supplies the day number,
   the game has no clock). Local stats per language (`client/src/games/word-hunt/stats.ts`).
-- **Group** (2–4 seats, people or bots): the players take turns on one board, the first chosen at
-  random; whoever finds the word wins. There is no guess limit to play to, only a safety cap of
-  30 guesses in total (`GROUP_GUESS_CAP`) that ends the game as a draw with the word shown. No
-  turn timer. The word of the day is not available in a group.
+- **Group** (2–4 seats, people or bots): the players take turns on one board in seat order;
+  whoever finds the word wins. The **first turn** setting picks who starts: random, the host (the
+  player in a local game) first, or the host last (the seat before the host starts, so the host
+  closes each round); a first-player event that contradicts it is refused. There is no guess
+  limit to play to, only a safety cap of 30 guesses in total (`GROUP_GUESS_CAP`) that ends the
+  game as a draw with the word shown. No turn timer. The word of the day is not available in a
+  group.
 - **Hard mode** (any mode): every guess must keep the green letters in place and use the letters
   found.
 - **Give up** at any time: alone it is a loss and the word is shown; in a group the seat drops out

@@ -7,8 +7,8 @@ use mg_core::{
 
 use crate::model::Answers;
 use crate::{
-    BotKind, Command, GROUP_GUESS_CAP, Language, Phase, PuzzleMode, RawSettings, Settings,
-    WordHunt, WorldEvent,
+    BotKind, Command, FirstTurn, GROUP_GUESS_CAP, Language, Phase, PuzzleMode, RawSettings,
+    Settings, WordHunt, WorldEvent,
 };
 
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
@@ -265,6 +265,26 @@ fn the_first_turn_follows_the_setting() {
                 WorldEvent::AnswerChosen(_) => None,
             })
     };
-    assert_eq!(first_of(crate::FirstTurn::HostFirst), Some(FIRST));
-    assert_eq!(first_of(crate::FirstTurn::HostLast), Some(THIRD));
+    assert_eq!(first_of(FirstTurn::HostFirst), Some(FIRST));
+    assert_eq!(first_of(FirstTurn::HostLast), Some(THIRD));
+}
+
+#[test]
+fn a_first_player_other_than_the_settings_name_is_refused() {
+    let settings = Settings::parse(RawSettings {
+        first_turn: FirstTurn::HostFirst,
+        ..RawSettings::default()
+    })
+    .unwrap();
+    let mut game = WordHunt::new(&settings, &[HUMAN, BOT]).unwrap();
+    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
+        .unwrap();
+    assert_eq!(
+        game.apply_world(&WorldEvent::FirstPlayerChosen(SECOND)),
+        Err(CommandError::Illegal(
+            "the settings name another first player"
+        ))
+    );
+    game.apply_world(&WorldEvent::FirstPlayerChosen(FIRST))
+        .unwrap();
 }

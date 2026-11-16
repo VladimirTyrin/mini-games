@@ -27,7 +27,9 @@ const prefs = usePrefsStore();
 const state = computed(() => lobby.current);
 const plugin = computed(() => pluginBySettings(state.value?.settings?.game.case));
 const facts = computed(() =>
-  plugin.value && state.value?.settings ? plugin.value.describeSettings(state.value.settings) : [],
+  plugin.value && state.value?.settings
+    ? plugin.value.describeSettings(state.value.settings, state.value.seats.length)
+    : [],
 );
 const info = computed(() => gameCatalog().find((game) => game.id === plugin.value?.id));
 const availableBots = computed(() => (plugin.value && info.value?.hasBots ? botKinds(plugin.value.id) : []));

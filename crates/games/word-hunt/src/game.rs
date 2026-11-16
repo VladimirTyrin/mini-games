@@ -67,6 +67,15 @@ impl WordHunt {
             .collect()
     }
 
+    /// The seat the settings make start; `None` when it is drawn at random.
+    fn fixed_first_player(&self) -> Option<Slot> {
+        match self.settings.first_turn {
+            FirstTurn::Random => None,
+            FirstTurn::HostFirst => self.seats.in_play().next(),
+            FirstTurn::HostLast => self.seats.in_play().last(),
+        }
+    }
+
     fn end(&mut self, phase: Phase, winner: Option<Slot>) {
         self.phase = phase;
         self.winner = winner;
@@ -202,13 +211,12 @@ impl Game for WordHunt {
             let seats: Vec<Slot> = self.seats.in_play().collect();
             // Chosen here even when the settings fix it, so every group game starts the same way
             // on the wire and a replay holds the first player.
-            let first = match self.settings.first_turn {
-                FirstTurn::Random => rng.pick(&seats),
-                FirstTurn::HostFirst => seats.first(),
-                FirstTurn::HostLast => seats.last(),
+            let first = match self.fixed_first_player() {
+                Some(fixed) => Some(fixed),
+                None => rng.pick(&seats).copied(),
             };
             if let Some(first) = first {
-                events.push(WorldEvent::FirstPlayerChosen(*first));
+                events.push(WorldEvent::FirstPlayerChosen(first));
             }
         }
         events
@@ -237,6 +245,14 @@ impl Game for WordHunt {
                     || !self.seats.is_in_play(*slot)
                 {
                     return Err(CommandError::Illegal("the first player is already chosen"));
+                }
+                if self
+                    .fixed_first_player()
+                    .is_some_and(|fixed| fixed != *slot)
+                {
+                    return Err(CommandError::Illegal(
+                        "the settings name another first player",
+                    ));
                 }
                 self.turn = Some(*slot);
                 Ok(())
