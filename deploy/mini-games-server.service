@@ -9,6 +9,9 @@ WorkingDirectory=/opt/mini-games-server
 # MG_SESSION_SECRET, MG_GOOGLE_CLIENT_ID, MG_ALLOW_GUESTS, MG_BOT_KEYS (created by deploy.sh).
 EnvironmentFile=/etc/mini-games-server.env
 Environment=MG_LISTEN=127.0.0.1:5000
+# mimalloc asks for transparent huge pages for its arena: each touched 2 MiB page becomes
+# resident, ~10 MiB at idle instead of ~1 MiB.
+Environment=MIMALLOC_ALLOW_THP=0
 ExecStart=/opt/mini-games-server/mini_games_server
 Restart=always
 RestartSec=3
