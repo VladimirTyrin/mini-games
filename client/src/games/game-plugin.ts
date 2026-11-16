@@ -28,13 +28,16 @@ export interface GamePlugin {
   tagline: string;
   SettingsForm: Component;
   Board: Component;
-  /** Short human-readable facts for lobby cards, e.g. "15×15", "5 in a row". */
-  /** `seats`: taken seats when known (a lobby), so facts that only apply alone or in a group fit. */
+  /**
+   * Short human-readable facts for lobby cards, e.g. "15×15", "5 in a row". `seats`: taken seats
+   * when known (a lobby), so facts that only apply alone or in a group fit.
+   */
   describeSettings(settings: GameSettings, seats?: number): string[];
   botLabel(kind: BotKind): string;
-  /** Keyboard help shown under the board and on the setup screen. */
-  /** How to play, for keyboard and mouse and for touch screens; see `controlsHintFor`. */
+  /** How to play, shown under the board and on the setup screen; see `controlsHintFor`. */
   controls: ControlsHint;
+  /** Space is a game key (Stack Attack's jump): it must not start the next match at the end. */
+  playsWithSpace?: true;
   /** Starting settings on a phone when none are remembered; the core defaults otherwise. */
   narrowScreenSettings?(defaults: GameSettings): GameSettings;
   /**

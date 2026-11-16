@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { pluginBySettings } from "@/games";
 import { prefersTouch } from "@/input/prefers-touch";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
@@ -38,11 +39,15 @@ onBeforeUnmount(() => {
 });
 
 const isReplay = props.controller.source.kind === "replay";
+// Space is the replay bar's play key, and in some games a game key pressed again and again
+// (a jump), which would start a new match the moment the result shows.
+const spacePlaysAgain =
+  !isReplay && !pluginBySettings(props.controller.source.header.settings?.game.case)?.playsWithSpace;
 
-// Enter or Space starts the next match once the result is up (keys held from the game's last
-// moment do not count: repeats are ignored). In a replay Space is the replay bar's play key.
+// Enter (or Space, see above) starts the next match once the result is up (keys held from the
+// game's last moment do not count: repeats are ignored).
 useGameKeys((key) => {
-  const accepted = key === "Enter" || (key === " " && !isReplay);
+  const accepted = key === "Enter" || (key === " " && spacePlaysAgain);
   if (!ended.value || resultFolded.value || !accepted) return false;
   emit("again");
   return true;

@@ -21,6 +21,7 @@ export const stackAttackPlugin: GamePlugin = {
   },
   // Stack Attack has no built-in bot kinds.
   botLabel: () => "Bot",
+  playsWithSpace: true,
   controls: {
     keyboard:
       "Hold ←/→ or A/D to walk and push crates · Space, W or ↑ to jump · jump, then walk to climb a crate",
