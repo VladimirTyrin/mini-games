@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
@@ -78,12 +78,42 @@ const leaveMessage = computed(() =>
     : "This game will be lost.",
 );
 
-function requestLeave(): void {
+/** A match still being played, which leaving would give up. */
+function isRunning(): boolean {
   const current = controller.value;
-  const running = current && current.source.kind !== "replay" && !current.ended.value;
-  if (running) confirmingLeave.value = true;
+  return (
+    current !== null &&
+    current.source.kind !== "replay" &&
+    !current.ended.value &&
+    !current.incompatible.value
+  );
+}
+
+function requestLeave(): void {
+  if (isRunning()) confirmingLeave.value = true;
   else void leave();
 }
+
+// Leaving by the browser's back, an iOS swipe or a toast's link must not leave the match running
+// unseen (bots playing on, the seat held, updates blocked): a running match asks first, a
+// finished one or a replay is closed on the way out.
+onBeforeRouteLeave(() => {
+  if (isLeavingOnPurpose || !controller.value) return true;
+  if (isRunning()) {
+    confirmingLeave.value = true;
+    return false;
+  }
+  isLeavingOnPurpose = true;
+  match.close();
+  return true;
+});
+
+// A reload or a closed tab loses a match being played; the browser asks first.
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (isRunning()) event.preventDefault();
+}
+window.addEventListener("beforeunload", onBeforeUnload);
+onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
 async function leave(): Promise<void> {
   confirmingLeave.value = false;
