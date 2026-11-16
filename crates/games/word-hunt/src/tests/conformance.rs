@@ -119,6 +119,9 @@ impl Conformance for WordHunt {
     /// Mostly well-formed guesses (random letters of the right length), sometimes the wrong
     /// length or a stray character.
     fn arbitrary_command(game: &Self, _slot: Slot, rng: &mut CoreRng) -> Command {
+        if rng.below(40) == 0 {
+            return Command::GiveUp;
+        }
         let view = mg_core::Game::view(game, mg_core::Viewer::Player(Slot::new(0)));
         let letters: Vec<char> = view.settings.language.alphabet().collect();
         let mut length = usize::from(view.settings.word_length().to_u8());
@@ -147,5 +150,5 @@ fn passes_conformance() {
 fn scripted_hash_is_pinned() {
     let setup = solo(RawSettings::default());
     let hash = conformance::scripted_hash(&setup, 42);
-    assert_eq!(hash, 0x2121_F9E2_4157_269C);
+    assert_eq!(hash, 0x7E2C_A294_DFF1_63DA);
 }

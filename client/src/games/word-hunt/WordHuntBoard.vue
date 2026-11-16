@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
 import type { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
 import { WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 import { prefersReducedMotion } from "@/render/reduced-motion";
+import { seatLabels } from "@/util/players";
 
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
@@ -28,7 +30,32 @@ const wordLength = computed(() => settings.value?.wordLength ?? 5);
 const maxGuesses = computed(() => settings.value?.maxGuesses ?? 6);
 const guesses = computed(() => view.value?.guesses ?? []);
 const isPlaying = computed(() => view.value?.phase === WordHuntPhase.GUESSING);
-const canType = computed(() => props.controller.mySlot !== null && isPlaying.value);
+const header = props.controller.source.header;
+/** Two or more seats take turns on this board. */
+const isGroup = header.seats.length > 1;
+const names = seatLabels(header);
+const myTurn = computed(
+  () => props.controller.mySlot !== null && view.value?.turnSlot === props.controller.mySlot,
+);
+const canType = computed(() => isPlaying.value && myTurn.value);
+
+/** Seat colours mark who made each guess; none of them is a hint colour. */
+const SEAT_COLORS = ["bg-sky-500", "bg-rose-500", "bg-violet-500", "bg-teal-500"] as const;
+function seatColor(slot: number): string {
+  return SEAT_COLORS[slot % SEAT_COLORS.length] ?? "bg-gray-500";
+}
+function seatName(slot: number): string {
+  return names[slot] ?? `Player ${slot + 1}`;
+}
+
+const turnLine = computed(() => {
+  const turn = view.value?.turnSlot;
+  if (!isGroup || !isPlaying.value || turn === undefined) return null;
+  if (gaveUp.value) return "You gave up · watching";
+  if (myTurn.value) return "Your turn";
+  const isBot = header.seats.find((seat) => seat.slot === turn)?.botKind !== undefined;
+  return isBot ? `${seatName(turn)} is thinking…` : `${seatName(turn)}'s turn`;
+});
 
 const typed = ref("");
 const submitting = ref(false);
@@ -103,6 +130,26 @@ async function enter(): Promise<void> {
   }
 }
 
+/** In a group the seat drops out and the game goes on, so the button must go away. */
+const gaveUp = ref(false);
+const confirmingGiveUp = ref(false);
+const canGiveUp = computed(() => props.controller.mySlot !== null && isPlaying.value && !gaveUp.value);
+const giveUpMessage = isGroup
+  ? "You drop out and the others play on. The word is shown when the game ends."
+  : "The game ends as a loss and the word is shown.";
+
+async function giveUp(): Promise<void> {
+  confirmingGiveUp.value = false;
+  try {
+    await props.controller.submit({
+      game: { case: "wordHunt", value: { command: { case: "giveUp", value: {} } } },
+    });
+    gaveUp.value = true;
+  } catch (error) {
+    refuse(refusalText(error));
+  }
+}
+
 // Repeats on: holding Backspace or a letter keeps going, like any text field. Enter acts once.
 useGameKeys(
   (key, event) => {
@@ -127,20 +174,45 @@ interface TileRow {
   readonly letters: readonly string[];
   readonly marks: readonly WordHuntLetterMark[] | null;
   readonly current: boolean;
+  /** Group games: who made the guess. */
+  readonly by: number | null;
 }
 
+/**
+ * Alone: a fixed grid of the guesses allowed. In a group there is no fixed number: the guesses
+ * so far and a row for the next one, scrolled to the newest.
+ */
 const rows = computed<TileRow[]>(() => {
   const result: TileRow[] = guesses.value.map((guess) => ({
     letters: [...guess.word],
     marks: guess.marks,
     current: false,
+    by: isGroup ? guess.bySlot : null,
   }));
-  if (isPlaying.value && result.length < maxGuesses.value) {
-    result.push({ letters: [...typed.value], marks: null, current: true });
+  const limit = view.value?.guessLimit ?? maxGuesses.value;
+  if (isPlaying.value && result.length < limit) {
+    result.push({
+      letters: canType.value ? [...typed.value] : [],
+      marks: null,
+      current: true,
+      by: isGroup ? (view.value?.turnSlot ?? null) : null,
+    });
   }
-  while (result.length < maxGuesses.value) result.push({ letters: [], marks: null, current: false });
+  if (!isGroup) {
+    while (result.length < maxGuesses.value)
+      result.push({ letters: [], marks: null, current: false, by: null });
+  }
   return result;
 });
+
+const scroller = ref<HTMLElement | null>(null);
+watch(
+  () => guesses.value.length,
+  async () => {
+    await nextTick();
+    scroller.value?.scrollTo({ top: scroller.value.scrollHeight, behavior: "smooth" });
+  },
+);
 
 function tileClass(row: TileRow, column: number): string {
   const mark = row.marks?.[column];
@@ -171,7 +243,8 @@ const subtitle = computed(() => {
 const statsGame = computed<StatsGame | null>(() => {
   const current = settings.value;
   const { source, mySlot } = props.controller;
-  if (!current || mySlot === null || source.kind === "replay") return null;
+  // Stats are about solving alone; a group game is won or lost against the others.
+  if (!current || mySlot === null || source.kind === "replay" || isGroup) return null;
   return {
     language: current.language,
     key: `${source.header.matchId}:${source.header.startedAtUnixMs}`,
@@ -191,7 +264,9 @@ watch(
   { immediate: true },
 );
 const shownStats = computed(
-  () => stats.value ?? (settings.value && !isPlaying.value ? statsFor(settings.value.language) : null),
+  () =>
+    stats.value ??
+    (settings.value && !isPlaying.value && !isGroup ? statsFor(settings.value.language) : null),
 );
 const winRate = computed(() => {
   const current = shownStats.value;
@@ -205,21 +280,38 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
   <div v-if="view && settings" class="wh-layout flex min-h-0 flex-1 flex-col items-center gap-3">
     <div class="flex flex-col items-center gap-3">
       <p class="text-sm text-gray-400">{{ subtitle }}</p>
+      <p v-if="turnLine" class="text-sm font-semibold" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">
+        {{ turnLine }}
+      </p>
       <div class="wh-grid relative flex flex-col gap-1.5" :style="gridSize">
         <div
-          v-for="(row, rowIndex) in rows"
-          :key="`${rowIndex}-${row.current ? shakes : 0}`"
-          class="flex gap-1.5"
-          :class="{ 'wh-shake': row.current && shakes > 0 && message !== null && !prefersReducedMotion() }"
+          ref="scroller"
+          class="flex flex-col gap-1.5"
+          :class="isGroup ? 'wh-scroll overflow-y-auto overscroll-contain px-1' : ''"
         >
           <div
-            v-for="column in wordLength"
-            :key="column"
-            class="flex size-(--tile) items-center justify-center rounded-lg text-[calc(var(--tile)*0.5)] font-bold uppercase"
-            :class="[tileClass(row, column - 1), rowIndex === revealRow ? 'wh-reveal' : '']"
-            :style="rowIndex === revealRow ? { animationDelay: `${(column - 1) * 90}ms` } : undefined"
+            v-for="(row, rowIndex) in rows"
+            :key="`${rowIndex}-${row.current ? shakes : 0}`"
+            class="flex items-center gap-1.5"
+            :class="{ 'wh-shake': row.current && shakes > 0 && message !== null && !prefersReducedMotion() }"
           >
-            {{ row.letters[column - 1] ?? "" }}
+            <span
+              v-if="isGroup"
+              class="flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+              :class="row.by === null ? 'invisible' : seatColor(row.by)"
+              :title="row.by === null ? undefined : seatName(row.by)"
+            >
+              {{ row.by === null ? "" : seatName(row.by).charAt(0).toUpperCase() }}
+            </span>
+            <div
+              v-for="column in wordLength"
+              :key="column"
+              class="flex size-(--tile) items-center justify-center rounded-lg text-[calc(var(--tile)*0.5)] font-bold uppercase"
+              :class="[tileClass(row, column - 1), rowIndex === revealRow ? 'wh-reveal' : '']"
+              :style="rowIndex === revealRow ? { animationDelay: `${(column - 1) * 90}ms` } : undefined"
+            >
+              {{ row.letters[column - 1] ?? "" }}
+            </div>
           </div>
         </div>
         <div v-if="missedAnswer" class="mt-3 flex flex-col items-center gap-1.5">
@@ -249,6 +341,23 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
         {{ shownStats.bestStreak }})
       </p>
     </div>
+    <button
+      v-if="canGiveUp"
+      type="button"
+      class="text-xs text-gray-400 underline-offset-4 hover:text-gray-200 hover:underline"
+      @click="confirmingGiveUp = true"
+    >
+      Give up
+    </button>
+    <ConfirmDialog
+      v-if="confirmingGiveUp"
+      title="Give up?"
+      :message="giveUpMessage"
+      confirm-label="Give up"
+      cancel-label="Keep guessing"
+      @confirm="giveUp"
+      @cancel="confirmingGiveUp = false"
+    />
     <WordHuntKeyboard
       v-if="controller.mySlot !== null"
       class="wh-keyboard mt-auto"
@@ -265,6 +374,10 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
 <style scoped>
 /* Tiles fill the width on phones and the height on short screens, between a floor that keeps
    letters readable and a cap for tablets. */
+/* A group's guesses scroll within about six rows, so the keyboard stays in place. */
+.wh-scroll {
+  max-height: calc(6 * (var(--tile) + 0.375rem));
+}
 .wh-grid {
   --tile: max(
     1.75rem,

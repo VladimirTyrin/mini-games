@@ -109,5 +109,7 @@ export function useGameSettingsForm<Case extends SettingsCase>(
     acceptedPresets,
     applyPreset,
     audience: computed(() => state.value.audience),
+    /** Seats the settings are for (the player plus opponents, or the lobby's seats). */
+    seats: computed(() => state.value.seats),
   };
 }

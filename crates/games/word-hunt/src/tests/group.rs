@@ -209,3 +209,26 @@ fn a_bot_guesses_from_the_hints_only() {
     }
     assert!(hits <= 1, "{hits} opening hits in 40 games");
 }
+
+#[test]
+fn a_player_may_give_up_out_of_turn_and_the_others_play_on() {
+    let mut game = group(&[HUMAN, HUMAN, HUMAN], FIRST);
+    game.apply_command(THIRD, &Command::GiveUp).unwrap();
+    guess(&mut game, FIRST, "plumb").unwrap();
+    // The turn skips the seat that gave up.
+    assert_eq!(game.view(Viewer::Spectator).turn, Some(SECOND));
+    assert_eq!(
+        game.apply_command(THIRD, &Command::GiveUp),
+        Err(CommandError::Illegal(
+            "only a player still guessing can give up"
+        ))
+    );
+}
+
+#[test]
+fn giving_up_against_a_bot_lets_the_bot_win() {
+    let mut game = group(&[HUMAN, BOT], FIRST);
+    game.apply_command(FIRST, &Command::GiveUp).unwrap();
+    assert_eq!(game.view(Viewer::Spectator).phase, Phase::Forfeited);
+    assert_eq!(outcome(&game).winners, [SECOND]);
+}

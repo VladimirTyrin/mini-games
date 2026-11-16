@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 
 import { useGameSettingsForm } from "@/components/form/settings-form";
 import SegmentedField from "@/components/form/SegmentedField.vue";
@@ -18,10 +18,11 @@ const languageOptions = [
   { value: WordHuntLanguage.RUSSIAN, label: "Русский" },
   { value: WordHuntLanguage.ENGLISH, label: "English" },
 ] as const;
-const modeOptions = [
-  { value: WordHuntPuzzleMode.DAILY, label: "Word of the day" },
-  { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimited" },
-] as const;
+const DAILY_OPTION = { value: WordHuntPuzzleMode.DAILY, label: "Word of the day" } as const;
+const UNLIMITED_OPTION = { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimited" } as const;
+/** With opponents: turns on one word; the word of the day is for playing alone. */
+const isGroup = computed(() => form.seats.value > 1);
+const modeOptions = computed(() => (isGroup.value ? [UNLIMITED_OPTION] : [DAILY_OPTION, UNLIMITED_OPTION]));
 const offOnOptions = [
   { value: 0, label: "Off" },
   { value: 1, label: "On" },
@@ -51,6 +52,15 @@ watch(
   { immediate: true },
 );
 
+// Adding an opponent leaves the word of the day behind.
+watch(
+  isGroup,
+  (group) => {
+    if (group && value.value?.mode === WordHuntPuzzleMode.DAILY) setMode(WordHuntPuzzleMode.UNLIMITED);
+  },
+  { immediate: true },
+);
+
 // Remembered settings (and a lobby's) may carry an earlier day.
 onMounted(() => {
   if (value.value?.mode === WordHuntPuzzleMode.DAILY) setMode(WordHuntPuzzleMode.DAILY);
@@ -66,6 +76,7 @@ onMounted(() => {
       @update:model-value="form.update({ language: $event })"
     />
     <SegmentedField
+      v-if="!isGroup"
       label="Word"
       help="The word of the day is the same for everyone"
       stacked
@@ -81,6 +92,7 @@ onMounted(() => {
       @update:model-value="form.update({ wordLength: $event })"
     />
     <StepperField
+      v-if="!isGroup"
       label="Guesses"
       v-bind="form.field('max_guesses')"
       :model-value="value.maxGuesses"

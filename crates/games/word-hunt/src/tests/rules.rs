@@ -294,3 +294,16 @@ fn every_built_in_answer_is_a_valid_word_and_no_list_is_empty() {
         }
     }
 }
+
+#[test]
+fn giving_up_alone_loses_and_shows_the_word() {
+    let mut game = game_with_answer("crane", Language::English, false);
+    guess(&mut game, "plumb").unwrap();
+    game.apply_command(PLAYER, &Command::GiveUp).unwrap();
+    let view = game.view(Viewer::Spectator);
+    assert_eq!(view.phase, Phase::Failed);
+    assert_eq!(view.answer.as_deref(), Some("crane"));
+    assert!(
+        matches!(game.status(), Status::Finished(outcome) if outcome.kind == OutcomeKind::Defeat)
+    );
+}

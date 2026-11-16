@@ -63,9 +63,10 @@ fn malformed_settings_are_rejected() {
 
 #[test]
 fn commands_and_world_events_round_trip() {
-    let command = Command::Guess("ёлка".into());
-    let wire = binary(&WordHunt::command_to_wire(&command));
-    assert_eq!(WordHunt::command_from_wire(&wire), Ok(command));
+    for command in [Command::Guess("ёлка".into()), Command::GiveUp] {
+        let wire = binary(&WordHunt::command_to_wire(&command));
+        assert_eq!(WordHunt::command_from_wire(&wire), Ok(command));
+    }
     for event in [
         WorldEvent::AnswerChosen("crane".into()),
         WorldEvent::FirstPlayerChosen(mg_core::Slot::new(2)),

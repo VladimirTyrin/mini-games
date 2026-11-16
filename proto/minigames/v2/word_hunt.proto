@@ -30,8 +30,12 @@ message WordHuntSettings {
 message WordHuntCommand {
   oneof command {
     WordHuntGuess guess = 1;
+    WordHuntGiveUp give_up = 2;
   }
 }
+
+// Alone the game is lost and the word shown; in a group the seat drops out.
+message WordHuntGiveUp {}
 
 message WordHuntGuess {
   // As typed; the game normalizes case and ё.

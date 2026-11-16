@@ -72,6 +72,41 @@ impl WordHunt {
         self.winner = winner;
         self.turn = None;
     }
+
+    /// A seat leaves the table (gave up, left, or was dropped). Whoever is left alone wins; with
+    /// no person left the game stops; otherwise the turn moves on if it was the leaver's.
+    fn leave_table(&mut self, slot: Slot) {
+        self.seats.remove(slot);
+        let last_standing = {
+            let mut remaining = self.seats.in_play();
+            match (remaining.next(), remaining.next()) {
+                (Some(last), None) => Some(last),
+                _ => None,
+            }
+        };
+        if let Some(last) = last_standing.filter(|_| self.seats.is_group()) {
+            self.end(Phase::Forfeited, Some(last));
+        } else if !self.seats.any_human_in_play() {
+            self.end(Phase::Abandoned, None);
+        } else if self.turn == Some(slot) {
+            self.turn = self.seats.next_after(slot);
+        }
+    }
+
+    fn give_up(&mut self, slot: Slot) -> Result<(), CommandError> {
+        if self.phase != Phase::Guessing || !self.seats.is_in_play(slot) {
+            return Err(CommandError::Illegal(
+                "only a player still guessing can give up",
+            ));
+        }
+        if self.seats.is_group() {
+            self.leave_table(slot);
+        } else {
+            // Alone it is a loss like running out of guesses: the word is shown.
+            self.end(Phase::Failed, None);
+        }
+        Ok(())
+    }
 }
 
 impl Game for WordHunt {
@@ -124,13 +159,16 @@ impl Game for WordHunt {
         if self.phase.is_over() {
             return Err(CommandError::GameOver);
         }
+        let text = match command {
+            Command::GiveUp => return self.give_up(slot),
+            Command::Guess(text) => text,
+        };
         if self.turn != Some(slot) {
             return Err(CommandError::NotYourTurn);
         }
         let Some(answer) = &self.answer else {
             return Err(CommandError::Illegal("the word is not chosen yet"));
         };
-        let Command::Guess(text) = command;
         let guess = Word::parse(text, self.settings.language, self.settings.word_length())
             .map_err(|error| CommandError::Illegal(error.reason()))?;
         if self.guesses.iter().any(|earlier| earlier.word == guess) {
@@ -208,25 +246,7 @@ impl Game for WordHunt {
         if self.phase.is_over() || !self.seats.is_in_play(slot) {
             return;
         }
-        self.seats.remove(slot);
-        if !self.seats.any_human_in_play() {
-            self.end(Phase::Abandoned, None);
-            return;
-        }
-        let last_standing = {
-            let mut remaining = self.seats.in_play();
-            match (remaining.next(), remaining.next()) {
-                (Some(last), None) => Some(last),
-                _ => None,
-            }
-        };
-        if let Some(last) = last_standing {
-            self.end(Phase::Forfeited, Some(last));
-            return;
-        }
-        if self.turn == Some(slot) {
-            self.turn = self.seats.next_after(slot);
-        }
+        self.leave_table(slot);
     }
 
     fn awaiting(&self) -> Awaiting {

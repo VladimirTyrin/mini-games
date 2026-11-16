@@ -45,16 +45,20 @@ impl WireGame for WordHunt {
             word_hunt_command::Command::Guess(guess) => {
                 Ok(Command::Guess(bounded_word(&guess.word)?))
             }
+            word_hunt_command::Command::GiveUp(_) => Ok(Command::GiveUp),
         }
     }
 
     fn command_to_wire(command: &Command) -> proto::GameCommand {
-        let Command::Guess(word) = command;
+        let command = match command {
+            Command::Guess(word) => {
+                word_hunt_command::Command::Guess(proto::WordHuntGuess { word: word.clone() })
+            }
+            Command::GiveUp => word_hunt_command::Command::GiveUp(proto::WordHuntGiveUp {}),
+        };
         proto::GameCommand {
             game: Some(game_command::Game::WordHunt(proto::WordHuntCommand {
-                command: Some(word_hunt_command::Command::Guess(proto::WordHuntGuess {
-                    word: word.clone(),
-                })),
+                command: Some(command),
             })),
         }
     }

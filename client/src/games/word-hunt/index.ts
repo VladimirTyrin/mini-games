@@ -1,4 +1,9 @@
-import { WordHuntLanguage, WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
+import {
+  WordHuntBotKind,
+  WordHuntLanguage,
+  WordHuntPhase,
+  WordHuntPuzzleMode,
+} from "@/proto/minigames/v2/word_hunt_pb";
 
 import type { GamePlugin } from "../game-plugin";
 
@@ -26,7 +31,17 @@ export const wordHuntPlugin: GamePlugin = {
     ];
     return value.hardMode ? [...facts, "hard mode"] : facts;
   },
-  botLabel: () => "Bot",
+  botLabel(kind) {
+    if (kind.game.case !== "wordHunt") return "Bot";
+    switch (kind.game.value) {
+      case WordHuntBotKind.EASY:
+        return "Easy bot";
+      case WordHuntBotKind.HARD:
+        return "Hard bot";
+      default:
+        return "Medium bot";
+    }
+  },
   controls: {
     keyboard: "Type a word: it is checked as soon as its last letter is in",
     touch: "Tap the letters: the word is checked as soon as its last letter is in",
@@ -45,6 +60,7 @@ export const wordHuntPlugin: GamePlugin = {
     if (view.game.case !== "wordHunt") return null;
     const { answer, phase, guesses } = view.game.value;
     if (phase === WordHuntPhase.SOLVED) return `Found in ${guesses.length}`;
+    if (phase === WordHuntPhase.FORFEITED) return "Everyone else left";
     return answer ? `The word was ${answer.toUpperCase()}` : null;
   },
 };
