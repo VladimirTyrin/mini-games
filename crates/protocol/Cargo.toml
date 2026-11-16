@@ -12,7 +12,7 @@ workspace = true
 [features]
 # serde impls for the canonical protobuf JSON mapping (server, bots). Off for the WASM client,
 # which receives JSON through protobuf-es and hands binary protobuf to the core.
-json = ["dep:pbjson", "dep:pbjson-types", "dep:serde"]
+json = ["dep:pbjson", "dep:serde"]
 
 [dependencies]
 mg-core.workspace = true
@@ -24,7 +24,6 @@ mg-numbers-match.workspace = true
 # xtask:game-deps
 prost.workspace = true
 pbjson = { version = "0.9", optional = true }
-pbjson-types = { version = "0.9", optional = true }
 serde = { workspace = true, optional = true }
 thiserror = "2"
 

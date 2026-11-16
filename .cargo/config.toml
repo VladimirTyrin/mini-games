@@ -3,3 +3,7 @@ linker = "rust-lld"
 
 [alias]
 xtask = "run --quiet --package xtask --"
+
+# Supply-chain cooldown: dependency updates skip versions younger than a week.
+[registry]
+global-min-publish-age = "7 days"
