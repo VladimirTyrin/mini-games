@@ -180,7 +180,7 @@ impl Game for WordHunt {
         let guess = Word::parse(text, self.settings.language, self.settings.word_length())
             .map_err(|error| CommandError::Illegal(error.reason()))?;
         if self.guesses.iter().any(|earlier| earlier.word == guess) {
-            return Err(CommandError::Illegal("you have already tried this word"));
+            return Err(CommandError::Illegal("this word was already tried"));
         }
         if self.settings.hard_mode {
             check_hard_mode(&guess, &self.guesses)

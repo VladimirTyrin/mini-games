@@ -23,8 +23,8 @@ const sizePresets = computed(() =>
 <template>
   <div v-if="value" class="divide-y divide-white/5">
     <ChipsField
-      label="Warehouse size"
-      help="Wider means more crates to dodge"
+      label="Board size"
+      help="More room to walk and push crates"
       :options="sizePresets"
       custom-label="Custom"
       :model-value="matchingPresetKey(sizePresets, value)"

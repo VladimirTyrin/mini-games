@@ -4,6 +4,7 @@ import { computed, ref, watch } from "vue";
 
 import { useGameKeys } from "@/input/use-game-keys";
 import { useSwipe } from "@/input/use-swipe";
+import { seatLabels } from "@/util/players";
 import type { MatchController, ViewSnapshot } from "@/match/match-controller";
 import {
   type StackAttackCommandSchema,
@@ -33,9 +34,8 @@ function stackAttackViewOf(snapshot: ViewSnapshot | null): StackAttackView | nul
 }
 
 const view = computed(() => stackAttackViewOf(props.controller.current.value));
-const seatNames = computed(() =>
-  props.controller.source.header.seats.map((seat) => seat.player?.displayName ?? `Player ${seat.slot + 1}`),
-);
+// Labels, not raw names: two players called the same are told apart ("Alex · 2").
+const seatNames = computed(() => seatLabels(props.controller.source.header));
 const mySlot = computed(() => props.controller.mySlot);
 
 const myWorker = computed(() => {

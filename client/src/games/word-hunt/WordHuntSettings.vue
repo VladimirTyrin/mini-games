@@ -119,7 +119,7 @@ onMounted(() => {
     />
     <SegmentedField
       label="Hard mode"
-      help="Every guess must use the letters you have found"
+      help="Every guess must use the letters found so far"
       :options="offOnOptions"
       :model-value="value.hardMode ? 1 : 0"
       @update:model-value="form.update({ hardMode: $event === 1 })"

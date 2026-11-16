@@ -70,9 +70,9 @@ const status = computed<{ text: string; mark: TicTacToeMark | null }>(() => {
   }
   if (current.currentSlot === undefined) return { text: "Choosing who starts…", mark: null };
   if (watching) {
-    return { text: `${names[current.currentSlot] ?? "A player"} to move`, mark: markOf(current.currentSlot) };
+    return { text: `${names[current.currentSlot] ?? "A player"}'s turn`, mark: markOf(current.currentSlot) };
   }
-  return { text: myTurn.value ? "Your move" : "Opponent's move", mark: null };
+  return { text: myTurn.value ? "Your turn" : "Opponent's turn", mark: null };
 });
 
 async function place(index: number): Promise<void> {

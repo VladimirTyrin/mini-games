@@ -31,7 +31,7 @@ const firstPlayerOptions = computed(() => {
 <template>
   <div v-if="value" class="divide-y divide-white/5">
     <ChipsField
-      label="Board"
+      label="Board size"
       :options="sizePresets"
       custom-label="Custom"
       :model-value="matchingPresetKey(sizePresets, value)"

@@ -4,6 +4,7 @@ import { SnakeBotKind, SnakeDeadSnakeBehavior, SnakeWallCollisionMode } from "@/
 import Board from "./SnakeBoard.vue";
 import SettingsForm from "./SnakeSettings.vue";
 import SnakeIcon from "./SnakeIcon.vue";
+import { snakeSpeedName } from "./speeds";
 
 export const snakePlugin: GamePlugin = {
   id: "snake",
@@ -23,7 +24,7 @@ export const snakePlugin: GamePlugin = {
       value.deadSnakeBehavior === SnakeDeadSnakeBehavior.STAY_ON_FIELD
         ? "dead snakes stay"
         : "dead snakes vanish",
-      `${value.tickIntervalMs} ms tick`,
+      snakeSpeedName(value.tickIntervalMs).toLowerCase(),
     ];
   },
   botLabel(kind) {

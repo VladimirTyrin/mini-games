@@ -6,6 +6,7 @@ import MoreOptions from "@/components/form/MoreOptions.vue";
 import { matchingPresetKey } from "@/components/form/presets";
 import SegmentedField from "@/components/form/SegmentedField.vue";
 import { useGameSettingsForm } from "@/components/form/settings-form";
+import { SNAKE_SPEEDS } from "./speeds";
 import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { SnakeDeadSnakeBehavior, SnakeWallCollisionMode } from "@/proto/minigames/v2/snake_pb";
@@ -23,11 +24,9 @@ const sizePresets = computed(() =>
 );
 
 const speedPresets = computed(() =>
-  form.acceptedPresets([
-    { key: "slow", label: "Slow", patch: { tickIntervalMs: 300 } },
-    { key: "normal", label: "Normal", patch: { tickIntervalMs: 200 } },
-    { key: "fast", label: "Fast", patch: { tickIntervalMs: 120 } },
-  ]),
+  form.acceptedPresets(
+    SNAKE_SPEEDS.map(({ key, label, tickIntervalMs }) => ({ key, label, patch: { tickIntervalMs } })),
+  ),
 );
 
 // Chance per tick while below the cap, in per mille: 1000 refills on the next tick.

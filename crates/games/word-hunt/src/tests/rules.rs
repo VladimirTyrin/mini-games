@@ -114,7 +114,7 @@ fn a_word_already_tried_is_refused_without_using_a_try() {
     for again in ["лиса", "ЛИСА"] {
         assert_eq!(
             guess(&mut game, again),
-            Err(CommandError::Illegal("you have already tried this word"))
+            Err(CommandError::Illegal("this word was already tried"))
         );
     }
     assert_eq!(game.view(Viewer::Spectator).guesses.len(), 1);
