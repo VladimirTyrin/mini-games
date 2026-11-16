@@ -129,8 +129,12 @@ impl StackAttack {
         for crane in &mut self.cranes {
             match crane.state {
                 CraneState::Moving => {
+                    let was_over_column = crane.x == crane.target_x;
                     crane.x = crane.x.step_towards(crane.target_x);
-                    if crane.x != crane.target_x {
+                    // Arriving over the column, the crane holds the crate for a tick before it
+                    // lets go: a crate snapping off the moment the crane stops felt abrupt, and
+                    // the pause gives the workers below a moment to see it coming.
+                    if crane.x != crane.target_x || !was_over_column {
                         continue;
                     }
                     let box_id = self.next_box_id;

@@ -78,6 +78,9 @@ fn a2_two_cranes_never_drop_into_the_same_cell() {
     let first = add_crane(&mut game, 2, 3);
     let second = add_crane(&mut game, 2, 3);
 
+    // Both arrive over the column and hold their crates for a tick.
+    steps(&mut game, 1);
+    assert!(view(&game).boxes.is_empty());
     steps(&mut game, 1);
     let cranes = view(&game).cranes;
     assert_eq!(cranes[0].id, first);

@@ -240,6 +240,13 @@ fn crane_enters_drops_its_box_and_leaves() {
     steps(&mut game, 1);
     assert_eq!(crane(&game).map(|c| c.x), Some(Column::new(0)));
     steps(&mut game, 1);
+    // Over the column it holds the crate for a tick before letting go.
+    assert_eq!(
+        crane(&game).map(|c| (c.x, c.state)),
+        Some((Column::new(1), CraneState::Moving))
+    );
+    assert!(box_cells(&game).is_empty());
+    steps(&mut game, 1);
     assert_eq!(
         crane(&game).map(|c| (c.x, c.state)),
         Some((Column::new(1), CraneState::Dropping))

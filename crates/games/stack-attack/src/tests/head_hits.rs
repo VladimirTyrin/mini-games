@@ -151,7 +151,8 @@ fn a_crate_still_on_the_crane_is_dropped_onto_the_risen_head() {
         put_box(&mut game, 3, y);
     }
     place_worker(&mut game, 0, 3, 5);
-    add_crane(&mut game, 2, 3);
+    // Already over the column and done holding: it lets go this tick.
+    add_crane(&mut game, 3, 3);
 
     // The head rises into the top row just before the crane releases its crate there.
     send(&mut game, 0, Command::Jump);

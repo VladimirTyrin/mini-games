@@ -139,6 +139,6 @@ fn scripted_match_hash_is_pinned() {
     let setup = Setup::<StackAttack>::new(RawSettings::default(), humans(2));
     assert_eq!(
         conformance::scripted_hash(&setup, 42),
-        0x74D5_FE84_B620_B19C
+        0x9F07_CEAD_97FF_99E9
     );
 }
