@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <!-- Favicon: the app icon artwork drawn larger so it reads at 16 px. -->
+  <rect width="108" height="108" rx="22" fill="#111827"/>
+  <g transform="translate(54 56) scale(1.12) translate(-54 -56)">
+    <path fill="#10B981" d="M34,36H74C83,36 88,42 89.5,51L92.5,70C93.6,77.5 87,82 81,78L70.5,71H37.5L27,78C21,82 14.4,77.5 15.5,70L18.5,51C20,42 25,36 34,36Z"/>
+    <path fill="#111827" d="M35,45.5h6v6.5h6.5v6h-6.5v6.5h-6v-6.5h-6.5v-6h6.5z"/>
+    <circle fill="#111827" cx="68" cy="50" r="4.2"/>
+    <circle fill="#111827" cx="77" cy="59" r="4.2"/>
+    <circle fill="#FBBF24" cx="77" cy="50" r="2.4"/>
+    <circle fill="#38BDF8" cx="68" cy="59" r="2.4"/>
+  </g>
+</svg>

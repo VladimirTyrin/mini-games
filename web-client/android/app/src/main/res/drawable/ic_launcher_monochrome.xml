@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icon (Android 13+): one tinted shape, the d-pad and buttons cut out. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="56"
+        android:scaleX="0.72"
+        android:scaleY="0.72">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M34,36H74C83,36 88,42 89.5,51L92.5,70C93.6,77.5 87,82 81,78L70.5,71H37.5L27,78C21,82 14.4,77.5 15.5,70L18.5,51C20,42 25,36 34,36Z M35,45.5h6v6.5h6.5v6h-6.5v6.5h-6v-6.5h-6.5v-6h6.5z M63.8,50a4.2,4.2 0 1,0 8.4,0a4.2,4.2 0 1,0 -8.4,0z M72.8,59a4.2,4.2 0 1,0 8.4,0a4.2,4.2 0 1,0 -8.4,0z" />
+    </group>
+</vector>

@@ -8,6 +8,8 @@ import {
   signInWithGoogleNatively,
 } from "@/platform/google-sign-in";
 import { isNativeApp } from "@/platform/native-app";
+
+import GoogleSignInButton from "./GoogleSignInButton.vue";
 import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 
@@ -72,14 +74,7 @@ watch([googleClientId, googleButton], () => void mountGoogle());
         </button>
       </form>
       <div v-if="googleClientId" class="space-y-1">
-        <button
-          v-if="isNativeApp"
-          class="w-full rounded-full bg-white px-4 py-2 font-semibold text-gray-900"
-          :disabled="busy"
-          @click="signInNatively"
-        >
-          Sign in with Google
-        </button>
+        <GoogleSignInButton v-if="isNativeApp" :disabled="busy" @click="signInNatively" />
         <div v-else ref="googleButton" />
         <p v-if="googleError" class="text-xs text-gray-400">{{ googleError }}</p>
       </div>

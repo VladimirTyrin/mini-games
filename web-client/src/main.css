@@ -27,13 +27,16 @@ body {
   overscroll-behavior: none;
 }
 
-button {
-  cursor: pointer;
-}
+/* In the base layer so utility classes (e.g. `disabled:opacity-100` on board cells) can override. */
+@layer base {
+  button {
+    cursor: pointer;
+  }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
 @media (hover: none) {
