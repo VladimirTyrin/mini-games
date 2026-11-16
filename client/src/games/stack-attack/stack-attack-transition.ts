@@ -45,10 +45,14 @@ export class StackAttackTransition {
     const brokenBoxIds = new Set<number>();
     let finalCrush: FinalCrush | null = null;
     for (const { event } of view.events) {
-      if (event.case === "boxDropped")
-        // A freshly released box falls out of its crane rather than popping up below it.
-        this.boxStarts.set(event.value.boxId, { x: event.value.x, y: view.fieldHeight });
-      else if (event.case === "linesCleared") clearedRows.push(...event.value.rows);
+      if (event.case === "boxDropped") {
+        // A freshly released box falls out of its crane rather than popping up below it. The
+        // crane drops it on the tick it reaches the column, so the box starts where the crane
+        // was and rides along: starting it in the new column put it a cell ahead of the crane.
+        const { boxId, craneId, x } = event.value;
+        const crane = this.cranes.kept.find((pair) => pair.after.id === craneId);
+        this.boxStarts.set(boxId, { x: crane?.before.x ?? x, y: view.fieldHeight });
+      } else if (event.case === "linesCleared") clearedRows.push(...event.value.rows);
       else if (event.case === "boxBroken") brokenBoxIds.add(event.value.boxId);
       else if (event.case === "workerCrushed" && view.endReason === StackAttackEndReason.WORKERS_CRUSHED) {
         const feet = view.workers[event.value.slot]?.feet;
