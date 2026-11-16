@@ -6,6 +6,7 @@ import AppHeader from "@/components/AppHeader.vue";
 import OpponentsCard from "@/components/OpponentsCard.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginById } from "@/games";
+import { controlsHintFor } from "@/games/game-plugin";
 import { initialSettings } from "@/games/initial-settings";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { type LocalSeat, useMatchStore } from "@/stores/match";
@@ -42,7 +43,7 @@ function start(): void {
         <span class="text-3xl leading-none" aria-hidden="true">{{ plugin.icon }}</span>
         <div class="min-w-0">
           <h2 class="font-semibold leading-tight">{{ plugin.tagline }}</h2>
-          <p class="mt-1 text-xs leading-snug text-gray-400">{{ plugin.controlsHint }}</p>
+          <p class="mt-1 text-xs leading-snug text-gray-400">{{ controlsHintFor(plugin) }}</p>
         </div>
       </header>
       <SettingsEditor

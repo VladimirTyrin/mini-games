@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import MatchOverlay from "@/components/MatchOverlay.vue";
 import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
+import { controlsHintFor } from "@/games/game-plugin";
 import { LocalMatchSource } from "@/local/local-match-source";
 import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
 import { useLobbyStore } from "@/stores/lobby";
@@ -102,7 +103,7 @@ function again(): void {
       />
     </div>
     <ReplayBar v-if="match.replay" :replay="match.replay" />
-    <p class="hidden text-center text-xs text-gray-500 md:block">{{ plugin.controlsHint }}</p>
+    <p class="text-center text-xs text-gray-500">{{ controlsHintFor(plugin) }}</p>
     <ChatPanel
       v-if="isOnline && lobby.current"
       :messages="lobby.lobbyChat"

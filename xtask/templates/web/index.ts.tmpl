@@ -15,5 +15,5 @@ export const {{camel}}Plugin: GamePlugin = {
     return settings.game.case === "{{camel}}" ? [`target ${settings.game.value.target}`] : [];
   },
   botLabel: () => "Bot",
-  controlsHint: "Press 1, 2 or 3",
+  controls: { keyboard: "Press 1, 2 or 3", touch: "Tap +1, +2 or +3" },
 };

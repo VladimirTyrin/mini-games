@@ -28,5 +28,8 @@ export const snakePlugin: GamePlugin = {
     if (kind.game.case !== "snake") return "Bot";
     return kind.game.value === SnakeBotKind.RANDOM ? "Random bot" : "Efficient bot";
   },
-  controlsHint: "Arrow keys or WASD to turn · swipe on touch screens",
+  controls: {
+    keyboard: "Arrow keys or WASD to turn",
+    touch: "Swipe on the field or use the arrows below it to turn",
+  },
 };

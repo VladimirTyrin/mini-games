@@ -1,6 +1,7 @@
 import type { Component } from "vue";
 
 import type { BotKind, GameSettings, GameView } from "@/proto/minigames/v2/game_pb";
+import { prefersTouch } from "@/input/prefers-touch";
 
 export type SettingsCase = NonNullable<GameSettings["game"]["case"]>;
 
@@ -28,9 +29,20 @@ export interface GamePlugin {
   describeSettings(settings: GameSettings): string[];
   botLabel(kind: BotKind): string;
   /** Keyboard help shown under the board and on the setup screen. */
-  controlsHint: string;
+  /** How to play, for keyboard and mouse and for touch screens; see `controlsHintFor`. */
+  controls: ControlsHint;
   /** Starting settings on a phone when none are remembered; the core defaults otherwise. */
   narrowScreenSettings?(defaults: GameSettings): GameSettings;
   /** Why the match in `view` ended ("Crushed by a falling crate"), shown with the result. */
   describeEnd?(view: GameView): string | null;
+}
+
+export interface ControlsHint {
+  readonly keyboard: string;
+  readonly touch: string;
+}
+
+/** The hint for the device at hand. */
+export function controlsHintFor(plugin: GamePlugin): string {
+  return prefersTouch() ? plugin.controls.touch : plugin.controls.keyboard;
 }

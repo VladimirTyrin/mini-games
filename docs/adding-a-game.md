@@ -115,7 +115,7 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 
 ## 5. UI (`web-client/src/games/<game>`)
 
-- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controlsHint`, and
+- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controls` (a keyboard and a touch hint), and
   optionally `describeEnd` (why the match ended, shown with the result).
 - Settings form — rows from `components/form` (`StepperField`, `SegmentedField`, `ChipsField`
   presets, `MoreOptions`) through `useGameSettingsForm`: immutable updates, **no hardcoded

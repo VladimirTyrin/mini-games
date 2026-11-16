@@ -37,6 +37,9 @@ export const tictactoePlugin: GamePlugin = {
     if (kind.game.case !== "tictactoe") return "Bot";
     return kind.game.value === TicTacToeBotKind.MINIMAX ? "Minimax bot" : "Random bot";
   },
-  controlsHint: "Click a cell to place your mark",
+  controls: {
+    keyboard: "Click a cell to place your mark",
+    touch: "Tap a cell to place your mark",
+  },
   narrowScreenSettings,
 };

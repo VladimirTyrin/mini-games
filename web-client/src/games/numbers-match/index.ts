@@ -18,5 +18,8 @@ export const numbersMatchPlugin: GamePlugin = {
     return [`hints: ${hintModeLabel(value.hintMode).toLowerCase()}`, `${value.refills} refills`];
   },
   botLabel: () => "Bot",
-  controlsHint: "Tap two equal numbers or two that sum to 10 · H for a hint · R to refill",
+  controls: {
+    keyboard: "Click two equal numbers or two that sum to 10 · H for a hint · R to refill",
+    touch: "Tap two equal numbers or two that sum to 10 · Hint and Refill are below the board",
+  },
 };

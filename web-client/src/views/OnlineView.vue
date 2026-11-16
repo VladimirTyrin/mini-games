@@ -7,6 +7,7 @@ import ChatPanel from "@/components/ChatPanel.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import { gamePlugins, pluginBySettings } from "@/games";
+import { controlsHintFor } from "@/games/game-plugin";
 import { initialSettings } from "@/games/initial-settings";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
@@ -97,7 +98,7 @@ const phaseLabel: Record<number, string> = {
         </div>
         <div class="border-b border-white/5 pb-3">
           <p class="font-medium leading-tight">{{ plugin.tagline }}</p>
-          <p class="mt-1 text-xs text-gray-400">{{ plugin.controlsHint }}</p>
+          <p class="mt-1 text-xs text-gray-400">{{ controlsHintFor(plugin) }}</p>
         </div>
         <input
           v-model="lobbyName"

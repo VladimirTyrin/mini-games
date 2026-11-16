@@ -17,5 +17,8 @@ export const puzzle2048Plugin: GamePlugin = {
     return [`${value.width}×${value.height}`, `to ${value.target}`];
   },
   botLabel: () => "Bot",
-  controlsHint: "Arrow keys or WASD to slide the tiles; swipe on touch screens",
+  controls: {
+    keyboard: "Arrow keys or WASD to slide the tiles",
+    touch: "Swipe to slide the tiles",
+  },
 };
