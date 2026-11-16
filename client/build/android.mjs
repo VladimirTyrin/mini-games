@@ -25,6 +25,8 @@ if (!["sync", "apk"].includes(command) || !["debug", "release"].includes(variant
 
 function run(program, args, options = {}) {
   const result = spawnSync(program, args, { stdio: "inherit", ...options });
+  // A program that never started (missing, or not executable) has no status and printed nothing.
+  if (result.error) console.error(`${program}: ${result.error.message}`);
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 

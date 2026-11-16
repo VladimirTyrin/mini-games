@@ -2,13 +2,13 @@ name: Release
 
 # Bumping `[workspace.package] version` in Cargo.toml on master publishes the GitHub Release
 # `v<version>` with the Android APK (plus web.json and the zip of its over-the-air web bundle),
-# the server binary and the web bundle; the workflow creates the tag. A push whose version is
-# already tagged builds nothing, so the trigger can be broad. A manual run builds the same files
-# as workflow artifacts without publishing.
+# the server binary and the web bundle; the workflow creates the tag. Every push to master runs
+# the few-second version check, and one whose version is already tagged builds nothing, so a
+# failed release is retried by the next push. A manual run builds the same files as workflow
+# artifacts without publishing.
 on:
   push:
     branches: [master]
-    paths: [Cargo.toml, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
