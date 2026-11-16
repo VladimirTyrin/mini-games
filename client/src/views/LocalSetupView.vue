@@ -74,13 +74,20 @@ function start(): void {
       :min-players="info.minPlayers"
       :max-players="info.maxPlayers"
     />
-    <button
-      class="h-13 w-full rounded-xl bg-emerald-600 text-lg font-semibold hover:bg-emerald-500 disabled:opacity-50"
-      :disabled="!!problem || !seatCountOk"
-      @click="start"
+    <!-- Pinned to the bottom of the screen: on a phone the settings are taller than the screen,
+         and Play must not need a scroll. The fade shows that more scrolls beneath it. -->
+    <div
+      class="sticky z-10 -mx-4 bg-linear-to-t from-surface from-70% to-transparent px-4 pt-4 pb-3 max-[359px]:-mx-3 max-[359px]:px-3"
+      style="bottom: env(safe-area-inset-bottom)"
     >
-      {{ seatCountOk ? "Play" : `Needs ${info.minPlayers} players` }}
-    </button>
+      <button
+        class="h-13 w-full rounded-xl bg-emerald-600 text-lg font-semibold shadow-lg shadow-black/40 hover:bg-emerald-500 disabled:bg-emerald-900 disabled:text-white/60"
+        :disabled="!!problem || !seatCountOk"
+        @click="start"
+      >
+        {{ seatCountOk ? "Play" : `Needs ${info.minPlayers} players` }}
+      </button>
+    </div>
     <button class="h-11 w-full text-sm text-gray-400 hover:text-gray-200" @click="router.push('/online')">
       Play with people instead →
     </button>
