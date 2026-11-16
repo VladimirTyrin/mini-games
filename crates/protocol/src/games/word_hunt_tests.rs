@@ -1,6 +1,6 @@
 use mg_core::{Game, PlayerSpec, Viewer};
 use mg_word_hunt::{
-    BotKind, Command, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent,
+    BotKind, Command, FirstTurn, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent,
 };
 use prost::Message;
 
@@ -25,6 +25,7 @@ fn settings_round_trip_unvalidated() {
             hard_mode: true,
             mode: PuzzleMode::Daily,
             day: 20_400,
+            first_turn: FirstTurn::HostLast,
         },
         // Rule validation belongs to the game: the wire keeps even invalid values intact.
         RawSettings {

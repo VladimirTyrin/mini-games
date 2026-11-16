@@ -27,8 +27,8 @@ pub use io::{Command, WorldEvent};
 pub use model::{LetterMark, Phase, ScoredGuess, Word, WordError};
 pub use rules::{GROUP_GUESS_CAP, HardModeViolation};
 pub use settings::{
-    DAILY_WORD_LENGTH, DayNumber, Language, MaxGuesses, Puzzle, PuzzleMode, RawSettings, Settings,
-    WordLength,
+    DAILY_WORD_LENGTH, DayNumber, FirstTurn, Language, MaxGuesses, Puzzle, PuzzleMode, RawSettings,
+    Settings, WordLength,
 };
 pub use view::{KeyHint, View};
 

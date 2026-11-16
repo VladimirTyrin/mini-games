@@ -1,6 +1,6 @@
 use mg_core::{Capped, GameSettings, SettingProblem, SettingRange, SettingsError};
 
-use crate::settings::{Language, Puzzle, PuzzleMode, RawSettings};
+use crate::settings::{FirstTurn, Language, Puzzle, PuzzleMode, RawSettings};
 
 pub type WordLength = Capped<4, 7>;
 pub type MaxGuesses = Capped<4, 8>;
@@ -18,6 +18,7 @@ pub struct Settings {
     pub max_guesses: MaxGuesses,
     pub hard_mode: bool,
     puzzle: Puzzle,
+    pub first_turn: FirstTurn,
 }
 
 impl Settings {
@@ -38,6 +39,7 @@ impl Default for Settings {
             max_guesses: MaxGuesses::constant::<6>(),
             hard_mode: false,
             puzzle: Puzzle::Unlimited,
+            first_turn: FirstTurn::Random,
         }
     }
 }
@@ -70,6 +72,7 @@ impl GameSettings for Settings {
             max_guesses,
             hard_mode: raw.hard_mode,
             puzzle,
+            first_turn: raw.first_turn,
         })
     }
 
@@ -85,6 +88,7 @@ impl GameSettings for Settings {
             hard_mode: self.hard_mode,
             mode,
             day,
+            first_turn: self.first_turn,
         }
     }
 

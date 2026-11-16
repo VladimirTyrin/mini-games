@@ -6,7 +6,7 @@ use mg_core::{
 use crate::io::{Command, WorldEvent};
 use crate::model::{Answers, LetterMark, Phase, ScoredGuess, Seats, Word};
 use crate::rules::{GROUP_GUESS_CAP, check_hard_mode, score};
-use crate::settings::{Puzzle, Settings};
+use crate::settings::{FirstTurn, Puzzle, Settings};
 use crate::view::{KeyHint, View};
 
 pub(crate) const MAX_PLAYERS: u8 = 4;
@@ -200,7 +200,14 @@ impl Game for WordHunt {
         let mut events = vec![WorldEvent::AnswerChosen(answer.text())];
         if self.seats.is_group() {
             let seats: Vec<Slot> = self.seats.in_play().collect();
-            if let Some(first) = rng.pick(&seats) {
+            // Chosen here even when the settings fix it, so every group game starts the same way
+            // on the wire and a replay holds the first player.
+            let first = match self.settings.first_turn {
+                FirstTurn::Random => rng.pick(&seats),
+                FirstTurn::HostFirst => seats.first(),
+                FirstTurn::HostLast => seats.last(),
+            };
+            if let Some(first) = first {
                 events.push(WorldEvent::FirstPlayerChosen(*first));
             }
         }
@@ -330,6 +337,7 @@ impl Game for WordHunt {
         // Alone the seat, its turn and the authors never vary; hashing them only for groups
         // keeps single-player replays recorded before groups existed valid.
         if self.seats.is_group() {
+            hasher.u8(settings.first_turn.hash_code());
             self.seats.hash(hasher);
             hasher.u8(self.turn.map_or(u8::MAX, Slot::get));
             hasher.u8(self.winner.map_or(u8::MAX, Slot::get));

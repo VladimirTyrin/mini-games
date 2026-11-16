@@ -248,3 +248,23 @@ fn the_last_person_giving_up_among_bots_ends_the_game() {
     game.apply_command(FIRST, &Command::GiveUp).unwrap();
     assert_eq!(game.view(Viewer::Spectator).phase, Phase::Abandoned);
 }
+
+#[test]
+fn the_first_turn_follows_the_setting() {
+    let first_of = |first_turn| {
+        let settings = Settings::parse(RawSettings {
+            first_turn,
+            ..RawSettings::default()
+        })
+        .unwrap();
+        let game = WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap();
+        game.roll_world(&mut mg_core::CoreRng::new(3))
+            .into_iter()
+            .find_map(|event| match event {
+                WorldEvent::FirstPlayerChosen(slot) => Some(slot),
+                WorldEvent::AnswerChosen(_) => None,
+            })
+    };
+    assert_eq!(first_of(crate::FirstTurn::HostFirst), Some(FIRST));
+    assert_eq!(first_of(crate::FirstTurn::HostLast), Some(THIRD));
+}

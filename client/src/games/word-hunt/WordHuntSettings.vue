@@ -5,7 +5,7 @@ import { useGameSettingsForm } from "@/components/form/settings-form";
 import SegmentedField from "@/components/form/SegmentedField.vue";
 import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
-import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
+import { WordHuntFirstTurn, WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { localDayNumber } from "./daily";
 import { marksMissingLetters } from "./preferences";
@@ -23,6 +23,14 @@ const UNLIMITED_OPTION = { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimite
 /** With opponents: turns on one word; the word of the day is for playing alone. */
 const isGroup = computed(() => form.seats.value > 1);
 const modeOptions = computed(() => (isGroup.value ? [UNLIMITED_OPTION] : [DAILY_OPTION, UNLIMITED_OPTION]));
+const firstTurnOptions = computed(() => {
+  const local = form.audience.value === "local";
+  return [
+    { value: WordHuntFirstTurn.RANDOM, label: "Random" },
+    { value: WordHuntFirstTurn.HOST_FIRST, label: local ? "Me first" : "Host first" },
+    { value: WordHuntFirstTurn.HOST_LAST, label: local ? "Me last" : "Host last" },
+  ];
+});
 const offOnOptions = [
   { value: 0, label: "Off" },
   { value: 1, label: "On" },
@@ -97,6 +105,17 @@ onMounted(() => {
       v-bind="form.field('max_guesses')"
       :model-value="value.maxGuesses"
       @update:model-value="form.update({ maxGuesses: $event })"
+    />
+    <SegmentedField
+      v-if="isGroup"
+      label="First turn"
+      help="Turns then go round the table"
+      stacked
+      :options="firstTurnOptions"
+      :model-value="
+        value.firstTurn === WordHuntFirstTurn.UNSPECIFIED ? WordHuntFirstTurn.RANDOM : value.firstTurn
+      "
+      @update:model-value="form.update({ firstTurn: $event })"
     />
     <SegmentedField
       label="Hard mode"

@@ -1,9 +1,11 @@
+mod first_turn;
 mod language;
 mod puzzle;
 mod puzzle_mode;
 mod raw_settings;
 mod settings;
 
+pub use first_turn::FirstTurn;
 pub use language::Language;
 pub use puzzle::Puzzle;
 pub use puzzle_mode::PuzzleMode;

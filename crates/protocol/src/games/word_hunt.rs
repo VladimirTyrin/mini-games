@@ -1,7 +1,7 @@
 use mg_core::GameSettings;
 use mg_word_hunt::{
-    BotKind, Command, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings, ScoredGuess,
-    View, WordHunt, WorldEvent,
+    BotKind, Command, FirstTurn, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings,
+    ScoredGuess, View, WordHunt, WorldEvent,
 };
 
 use crate::proto::{
@@ -136,6 +136,15 @@ fn raw_settings_from_wire(settings: &proto::WordHuntSettings) -> Result<RawSetti
         Ok(proto::WordHuntPuzzleMode::Unspecified) => return Err(WireError::Missing("mode")),
         Err(_) => return Err(WireError::UnknownEnumValue("mode")),
     };
+    // Unset in settings and replays from before the option: they meant a random first player.
+    let first_turn = match proto::WordHuntFirstTurn::try_from(settings.first_turn) {
+        Ok(proto::WordHuntFirstTurn::Unspecified | proto::WordHuntFirstTurn::Random) => {
+            FirstTurn::Random
+        }
+        Ok(proto::WordHuntFirstTurn::HostFirst) => FirstTurn::HostFirst,
+        Ok(proto::WordHuntFirstTurn::HostLast) => FirstTurn::HostLast,
+        Err(_) => return Err(WireError::UnknownEnumValue("first_turn")),
+    };
     Ok(RawSettings {
         language,
         word_length: settings.word_length,
@@ -143,6 +152,7 @@ fn raw_settings_from_wire(settings: &proto::WordHuntSettings) -> Result<RawSetti
         hard_mode: settings.hard_mode,
         mode,
         day: settings.day,
+        first_turn,
     })
 }
 
@@ -162,6 +172,12 @@ fn raw_settings_to_wire(settings: &RawSettings) -> proto::WordHuntSettings {
         }
         .into(),
         day: settings.day,
+        first_turn: match settings.first_turn {
+            FirstTurn::Random => proto::WordHuntFirstTurn::Random,
+            FirstTurn::HostFirst => proto::WordHuntFirstTurn::HostFirst,
+            FirstTurn::HostLast => proto::WordHuntFirstTurn::HostLast,
+        }
+        .into(),
     }
 }
 

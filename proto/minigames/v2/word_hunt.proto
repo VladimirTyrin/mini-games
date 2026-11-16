@@ -16,6 +16,17 @@ enum WordHuntPuzzleMode {
   WORD_HUNT_PUZZLE_MODE_DAILY = 2;
 }
 
+// Group games: who makes the first guess; turns then go round in seat order.
+enum WordHuntFirstTurn {
+  // Random; also what settings from before the option mean.
+  WORD_HUNT_FIRST_TURN_UNSPECIFIED = 0;
+  WORD_HUNT_FIRST_TURN_RANDOM = 1;
+  // The host (the player in a local game).
+  WORD_HUNT_FIRST_TURN_HOST_FIRST = 2;
+  // The seat before the host, so the host closes the first round.
+  WORD_HUNT_FIRST_TURN_HOST_LAST = 3;
+}
+
 message WordHuntSettings {
   WordHuntLanguage language = 1;
   uint32 word_length = 2;
@@ -25,6 +36,7 @@ message WordHuntSettings {
   WordHuntPuzzleMode mode = 5;
   // Daily puzzle only: days since 1970-01-01 in the player's time zone.
   uint32 day = 6;
+  WordHuntFirstTurn first_turn = 7;
 }
 
 message WordHuntCommand {

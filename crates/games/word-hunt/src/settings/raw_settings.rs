@@ -1,6 +1,6 @@
 use mg_core::GameSettings;
 
-use crate::settings::{Language, PuzzleMode, Settings};
+use crate::settings::{FirstTurn, Language, PuzzleMode, Settings};
 
 /// [`Settings`] as clients and replay files send them, unchecked.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +14,8 @@ pub struct RawSettings {
     pub mode: PuzzleMode,
     /// Only read in [`PuzzleMode::Daily`].
     pub day: u32,
+    /// Only read in group games.
+    pub first_turn: FirstTurn,
 }
 
 impl Default for RawSettings {

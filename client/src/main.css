@@ -29,6 +29,12 @@ body {
 
 /* In the base layer so utility classes (e.g. `disabled:opacity-100` on board cells) can override. */
 @layer base {
+  /* The app is dark only: native dropdowns, scrollbars and form controls follow, otherwise
+     a <select> opens a white list with the app's light text on it. */
+  :root {
+    color-scheme: dark;
+  }
+
   button {
     cursor: pointer;
   }
