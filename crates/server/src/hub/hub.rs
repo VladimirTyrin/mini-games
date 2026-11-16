@@ -14,6 +14,7 @@ use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
 use super::request_cooldowns::RequestCooldowns;
 use super::session::{Session, SessionConnection};
+use crate::authenticated::Authenticated;
 use crate::codec;
 use crate::ids::{ConnectionId, LobbyId, ResumeToken, SessionId};
 use crate::matches::{MatchControl, MatchRequest};
@@ -132,10 +133,12 @@ impl Hub {
                     .is_some_and(|s| s.who.is_same_player(&who))
             })
             .cloned();
-        let existing = resumable.or_else(|| {
-            who.exclusive_account()
-                .and_then(|key| self.accounts.get(key).cloned())
-        });
+        let existing = resumable
+            .or_else(|| {
+                who.exclusive_account()
+                    .and_then(|key| self.accounts.get(key).cloned())
+            })
+            .or_else(|| self.away_device_session(&who));
 
         let created = existing.is_none();
         let session_id = if let Some(id) = existing {
@@ -209,6 +212,21 @@ impl Hub {
         if let Some(lobby_id) = lobby {
             self.rejoin_lobby(&session_id, &lobby_id, outbound);
         }
+    }
+
+    /// A device of this Google account that lost its connection: a sign-in without its resume
+    /// token (a closed tab, an app the OS killed, a dead phone and the laptop instead) takes it
+    /// back, seat included, rather than leaving it to time out. Connected devices stay separate
+    /// players. One in a lobby first, since that is a seat to get back.
+    fn away_device_session(&self, who: &Authenticated) -> Option<SessionId> {
+        let account = who.google_account()?;
+        let mut away = self.sessions.iter().filter(|(_, session)| {
+            session.connection.is_none() && session.who.google_account() == Some(account)
+        });
+        let first = away.clone().next().map(|(id, _)| id.clone());
+        away.find(|(_, session)| session.lobby.is_some())
+            .map(|(id, _)| id.clone())
+            .or(first)
     }
 
     fn rejoin_lobby(&mut self, session: &SessionId, lobby_id: &LobbyId, outbound: Outbound) {

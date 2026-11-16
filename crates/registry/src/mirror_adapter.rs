@@ -47,7 +47,7 @@ impl<G: WireGame> DynMirror for MirrorAdapter<G> {
 
     fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError> {
         let command = G::command_from_wire(command)?;
-        Ok(self.game_match.game().check_command(slot, &command)?)
+        Ok(self.game_match.check_command(slot, &command)?)
     }
 
     fn status_after(

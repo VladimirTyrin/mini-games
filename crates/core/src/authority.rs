@@ -9,6 +9,7 @@ use crate::input::{GameInput, Input};
 use crate::player_kind::PlayerKind;
 use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
+use crate::seat_check::seat_may_command;
 use crate::seated_bot::SeatedBot;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
@@ -139,16 +140,16 @@ impl<G: Game> Authority<G> {
     /// Turn-based hosts seal a frame after every accepted command: a move may need world events
     /// (e.g. a spawned tile) before the next move is legal.
     pub fn submit(&mut self, slot: Slot, command: G::Command) -> Result<(), CommandError> {
-        match self.players.get(slot.index()) {
-            Some(spec) if spec.is_human() && !self.is_dropped(slot) => {}
-            _ => return Err(CommandError::NotPlaying),
-        }
-        if self.game.status().is_finished() {
-            return Err(CommandError::GameOver);
-        }
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.apply_command(slot, &command)?;
         self.pending_inputs.push(Input::Command { slot, command });
         Ok(())
+    }
+
+    /// What [`Self::submit`] would answer, without changing anything.
+    pub fn check_command(&self, slot: Slot, command: &G::Command) -> Result<(), CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        self.game.check_command(slot, command)
     }
 
     pub fn drop_player(&mut self, slot: Slot) {

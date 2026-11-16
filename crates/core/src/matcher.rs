@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use crate::command_error::CommandError;
 use crate::compact_log::CompactLog;
 use crate::compact_log_entry::CompactLogEntry;
 use crate::frame::{Frame, GameFrame};
@@ -8,7 +9,9 @@ use crate::game::Game;
 use crate::input::Input;
 use crate::logged_frame::LoggedFrame;
 use crate::player_spec::PlayerSpec;
+use crate::seat_check::seat_may_command;
 use crate::setup_error::SetupError;
+use crate::slot::Slot;
 use crate::tick::Tick;
 
 /// Receiving side of lockstep: applies authority frames (clients, observers, replays).
@@ -16,6 +19,8 @@ use crate::tick::Tick;
 pub struct Match<G: Game> {
     game: G,
     players: Vec<PlayerSpec>,
+    /// Seats the frames dropped, so [`Self::check_command`] refuses them as the authority does.
+    dropped: Vec<bool>,
     next_tick: Tick,
 }
 
@@ -24,6 +29,7 @@ impl<G: Game> Match<G> {
         let game = G::new(settings, players)?;
         Ok(Self {
             game,
+            dropped: vec![false; players.len()],
             players: players.to_vec(),
             next_tick: Tick::ZERO,
         })
@@ -39,6 +45,20 @@ impl<G: Game> Match<G> {
 
     pub fn next_tick(&self) -> Tick {
         self.next_tick
+    }
+
+    /// What the authority would answer to `command` from `slot` on this state, without changing
+    /// anything: its seat checks, then [`Game::check_command`].
+    pub fn check_command(&self, slot: Slot, command: &G::Command) -> Result<(), CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        self.game.check_command(slot, command)
+    }
+
+    /// The game right after `command`, if the authority would accept it; see
+    /// [`Game::preview_command`].
+    pub fn preview_command(&self, slot: Slot, command: &G::Command) -> Result<G, CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        self.game.preview_command(slot, command)
     }
 
     /// After an error the state may be partially updated; rebuild from the full log.
@@ -64,6 +84,9 @@ impl<G: Game> Match<G> {
                         return Err(FrameError::UnknownSlot { tick, slot: *slot });
                     }
                     self.game.drop_player(*slot);
+                    if let Some(dropped) = self.dropped.get_mut(slot.index()) {
+                        *dropped = true;
+                    }
                     Ok(())
                 }
             };

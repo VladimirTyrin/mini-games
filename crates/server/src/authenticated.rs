@@ -38,6 +38,14 @@ impl Authenticated {
         }
     }
 
+    /// The Google account, whose devices are separate players; see [`Self::exclusive_account`].
+    pub(crate) fn google_account(&self) -> Option<&PlayerId> {
+        match self {
+            Self::Google { account, .. } => Some(account),
+            Self::Guest { .. } | Self::BotClient { .. } => None,
+        }
+    }
+
     /// Whether a resumed session belongs to this sign-in. An account matches by account, so a
     /// changed profile name or picture still resumes; a guest by name.
     pub(crate) fn is_same_player(&self, other: &Self) -> bool {

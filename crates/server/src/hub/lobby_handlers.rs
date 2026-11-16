@@ -483,6 +483,7 @@ impl Hub {
                 "only bot seats can be removed; kick players instead",
             );
         }
+        lobby.forget_play_again_votes();
         lobby.seats.remove(index);
         self.ack(session, request_id);
         self.after_lobby_change(&lobby_id);

@@ -66,7 +66,7 @@ impl<G: WireGame> DynMirror for TypedMirror<G> {
 
     fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError> {
         let command = G::command_from_wire(command)?;
-        Ok(self.game().check_command(slot, &command)?)
+        Ok(self.game_match.check_command(slot, &command)?)
     }
 
     fn status_after(
@@ -75,7 +75,7 @@ impl<G: WireGame> DynMirror for TypedMirror<G> {
         command: &proto::GameCommand,
     ) -> Result<Status, SubmitError> {
         let command = G::command_from_wire(command)?;
-        Ok(self.game().preview_command(slot, &command)?.status())
+        Ok(self.game_match.preview_command(slot, &command)?.status())
     }
 
     fn status(&self) -> Status {

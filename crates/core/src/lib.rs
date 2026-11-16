@@ -43,6 +43,7 @@ mod outcome_kind;
 mod player_kind;
 mod player_spec;
 mod rng;
+mod seat_check;
 mod seated_bot;
 mod setting_problem;
 mod setting_range;

@@ -373,3 +373,33 @@ async fn an_aborted_match_ends_without_result_and_reopens_the_lobby() {
             .await;
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_device_back_without_its_resume_token_gets_its_seat_back() {
+    let hub = start_hub();
+    let (phone, _) = sign_in(&hub, google("sub-1", "Ada")).await;
+    let mut phone = phone.unwrap();
+    let lobby = create_lobby(&mut phone).await;
+    hub.send(HubCommand::Disconnected {
+        session: phone.session.clone(),
+        connection: phone.id,
+    });
+
+    // The tab was closed (or the phone died): a fresh sign-in, no resume token.
+    let (again, outcome) = sign_in(&hub, google("sub-1", "Ada")).await;
+
+    assert_eq!(again.unwrap().session, phone.session);
+    let SignInOutcome::Welcome(welcome) = outcome else {
+        panic!("refused: {outcome:?}");
+    };
+    assert!(welcome.resumed, "back in lobby {}", lobby.lobby_id);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_second_device_signing_in_while_the_first_is_connected_is_a_new_player() {
+    let hub = start_hub();
+    let (phone, _) = sign_in(&hub, google("sub-1", "Ada")).await;
+    let (laptop, _) = sign_in(&hub, google("sub-1", "Ada")).await;
+
+    assert_ne!(phone.unwrap().session, laptop.unwrap().session);
+}

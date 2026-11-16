@@ -672,3 +672,39 @@ async fn a_player_stepping_aside_to_watch_asks_for_new_votes() {
     assert_ne!(next.match_id, first.match_id);
     assert_eq!(next.seats.len(), 1);
 }
+
+#[tokio::test]
+async fn removing_a_bot_after_a_match_asks_for_new_votes() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    let lobby = create_lobby(&mut host, short_snake(), 3).await;
+    join_ready(&mut guest, &lobby.lobby_id).await;
+    let efficient = proto::BotKind {
+        game: Some(proto::bot_kind::Game::Snake(
+            proto::SnakeBotKind::Efficient as i32,
+        )),
+    };
+    expect_ok(
+        host.request(Request::AddBot(proto::AddBot {
+            bot_kind: Some(efficient),
+        }))
+        .await,
+    );
+    start(&mut host).await;
+    host.expect(match_ended).await;
+    host.expect(post_match).await;
+    expect_ok(
+        guest
+            .request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+            .await,
+    );
+    assert_eq!(host.expect(play_again_votes).await, 1);
+
+    expect_ok(
+        host.request(Request::RemoveSeat(proto::RemoveSeat { seat: 2 }))
+            .await,
+    );
+
+    assert_eq!(host.expect(play_again_votes).await, 0);
+}

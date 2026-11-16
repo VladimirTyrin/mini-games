@@ -99,7 +99,10 @@ impl WordHunt {
         };
         if let Some(last) = last_standing.filter(|_| self.seats.is_group()) {
             self.end(Phase::Forfeited, Some(last));
-        } else if self.seats.has_people() && !self.seats.any_human_in_play() {
+        } else if self.seats.in_play().next().is_none()
+            || (self.seats.has_people() && !self.seats.any_human_in_play())
+        {
+            // Nobody left to guess (a lone bot dropped), or only bots left with people gone.
             self.end(Phase::Abandoned, None);
         } else if self.turn == Some(slot) {
             self.turn = self.seats.next_after(slot);

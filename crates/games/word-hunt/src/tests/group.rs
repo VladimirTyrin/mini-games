@@ -323,3 +323,12 @@ fn a_table_of_bots_plays_on_when_one_is_dropped() {
     assert_eq!(result.kind, OutcomeKind::Winner);
     assert_eq!(result.winners, [FIRST]);
 }
+
+#[test]
+fn a_lone_bot_dropped_ends_the_game() {
+    let mut game = WordHunt::new(&english(), &[BOT]).unwrap();
+    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
+        .unwrap();
+    game.drop_player(FIRST);
+    assert!(game.status().is_finished(), "a game nobody plays must end");
+}
