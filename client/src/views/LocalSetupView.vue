@@ -11,12 +11,14 @@ import { controlsHintFor } from "@/games/game-plugin";
 import { initialSettings } from "@/games/initial-settings";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { type LocalSeat, useMatchStore } from "@/stores/match";
+import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 import { type SettingsProblem, botKinds, gameCatalog } from "@/wasm/core";
 
 const props = defineProps<{ gameId: string }>();
 const router = useRouter();
 const prefs = usePrefsStore();
+const connection = useConnectionStore();
 const match = useMatchStore();
 
 const plugin = pluginById(props.gameId);
@@ -38,7 +40,7 @@ const seatCountOk = computed(() => !!info && seats.value.length >= info.minPlaye
 function start(): void {
   if (!plugin || !settings.value) return;
   prefs.rememberSettings(props.gameId, settings.value);
-  match.startLocal(settings.value, seats.value, prefs.guestName);
+  match.startLocal(settings.value, seats.value, connection.playerName);
 }
 </script>
 

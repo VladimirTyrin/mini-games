@@ -6,6 +6,7 @@ import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
@@ -86,20 +87,54 @@ async function start(): Promise<void> {
     const seats = current.seats.map((seat) => ({ bot: seat.botKind ?? null }));
     const settings = current.settings;
     await lobby.leave();
-    match.startLocal(settings, seats, prefs.guestName || connection.identity?.displayName || "You");
+    match.startLocal(settings, seats, connection.playerName);
     return;
   }
   await lobby.start().catch(() => undefined);
 }
 
+/** Others would notice: the host's leaving closes the lobby, a member's frees a seat. */
+const confirmingLeave = ref(false);
+const othersInLobby = computed(() => lobby.members.filter((member) => member && !isMe(member)).length > 0);
+function requestLeave(): void {
+  if (othersInLobby.value) confirmingLeave.value = true;
+  else void leave();
+}
+
 async function leave(): Promise<void> {
+  confirmingLeave.value = false;
   await lobby.leave();
   void router.push("/online");
+}
+
+const kicking = ref<Identity | null>(null);
+function kick(): void {
+  const member = kicking.value;
+  kicking.value = null;
+  if (member) void lobby.kick(member.id);
 }
 </script>
 
 <template>
-  <AppHeader :title="state?.name ?? 'Lobby'" :back="leave" />
+  <AppHeader :title="state?.name ?? 'Lobby'" :back="requestLeave" />
+  <ConfirmDialog
+    v-if="confirmingLeave"
+    title="Leave the lobby?"
+    :message="lobby.isHost ? 'The lobby closes for everyone in it.' : 'Your seat goes to whoever joins next.'"
+    confirm-label="Leave"
+    cancel-label="Stay"
+    @confirm="leave"
+    @cancel="confirmingLeave = false"
+  />
+  <ConfirmDialog
+    v-if="kicking"
+    :title="`Remove ${labelOf(kicking)}?`"
+    message="They are taken out of the lobby."
+    confirm-label="Remove"
+    cancel-label="Cancel"
+    @confirm="kick"
+    @cancel="kicking = null"
+  />
   <main
     v-if="state && plugin"
     class="mx-auto grid w-full max-w-4xl flex-1 gap-4 p-4 md:grid-cols-[1fr_20rem]"
@@ -175,10 +210,10 @@ async function leave(): Promise<void> {
           </span>
           <button
             v-if="lobby.isHost && seat.botKind"
-            class="text-xs text-gray-400 hover:text-rose-300"
+            class="-my-1 min-h-9 rounded px-2 text-sm text-gray-400 hover:bg-white/5 hover:text-rose-300"
             @click="lobby.removeSeat(index)"
           >
-            remove
+            Remove
           </button>
           <button
             v-else-if="
@@ -187,10 +222,10 @@ async function leave(): Promise<void> {
               !isMe(seat.occupant) &&
               seat.occupant.kind !== IdentityKind.BUILT_IN_BOT
             "
-            class="text-xs text-gray-400 hover:text-rose-300"
-            @click="lobby.kick(seat.occupant.id)"
+            class="-my-1 min-h-9 rounded px-2 text-sm text-gray-400 hover:bg-white/5 hover:text-rose-300"
+            @click="kicking = seat.occupant"
           >
-            kick
+            Kick
           </button>
         </div>
         <div
@@ -200,7 +235,7 @@ async function leave(): Promise<void> {
           <button
             v-for="kind in availableBots"
             :key="plugin.botLabel(kind)"
-            class="rounded bg-panel-raised px-3 py-1 text-sm"
+            class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
             @click="lobby.addBot(kind)"
           >
             + {{ plugin.botLabel(kind) }}

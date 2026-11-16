@@ -5,7 +5,6 @@ import Avatar from "@/components/Avatar.vue";
 import type { GamePlugin } from "@/games/game-plugin";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { useConnectionStore } from "@/stores/connection";
-import { usePrefsStore } from "@/stores/prefs";
 
 /** Bot opponents of a local match; the person on this device always holds the first seat. */
 const bots = defineModel<BotKind[]>({ required: true });
@@ -17,12 +16,11 @@ const props = defineProps<{
 }>();
 
 const connection = useConnectionStore();
-const prefs = usePrefsStore();
 /** The signed-in account when there is one (with its avatar), otherwise the guest name. */
 const me = computed(() => {
   const identity = connection.identity;
   return {
-    name: identity?.displayName || prefs.guestName || "You",
+    name: connection.playerName,
     avatarUrl: identity?.avatarUrl ?? "",
     playerId: identity?.id ?? "",
   };

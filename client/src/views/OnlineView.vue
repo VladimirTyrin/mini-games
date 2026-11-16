@@ -69,9 +69,11 @@ const phaseLabel: Record<number, string> = {
       <div class="flex items-center justify-between">
         <h2 class="text-sm uppercase tracking-wide text-gray-400">Lobbies</h2>
         <div class="flex gap-2">
-          <button class="rounded bg-panel px-3 py-1 text-sm" @click="lobby.refresh()">Refresh</button>
+          <button class="min-h-10 rounded bg-panel px-3 py-2 text-sm" @click="lobby.refresh()">
+            Refresh
+          </button>
           <button
-            class="rounded bg-emerald-600 px-3 py-1 text-sm font-semibold"
+            class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm font-semibold whitespace-nowrap"
             @click="creating = !creating"
           >
             + New lobby
@@ -151,13 +153,13 @@ const phaseLabel: Record<number, string> = {
           </span>
           <button
             v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
-            class="rounded bg-emerald-600 px-3 py-1 text-sm"
+            class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
             @click="lobby.join(summary.lobbyId, false)"
           >
             Join
           </button>
           <button
-            class="rounded bg-panel-raised px-3 py-1 text-sm"
+            class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
             @click="lobby.join(summary.lobbyId, true)"
           >
             Watch

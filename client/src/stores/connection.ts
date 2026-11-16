@@ -24,6 +24,8 @@ export const useConnectionStore = defineStore("connection", () => {
   const serverInfo = ref<ServerInfo | null>(null);
   const serverError = ref<string | null>(null);
   const isSignedIn = computed(() => state.value === "signed-in" && identity.value !== null);
+  /** The name local games seat the player under: the account's when signed in, as on the cards. */
+  const playerName = computed(() => identity.value?.displayName || prefs.guestName || "You");
 
   async function loadServerInfo(): Promise<void> {
     serverError.value = null;
@@ -124,6 +126,7 @@ export const useConnectionStore = defineStore("connection", () => {
     serverInfo,
     serverError,
     isSignedIn,
+    playerName,
     loadServerInfo,
     resumeStoredSession,
     continueHere,
