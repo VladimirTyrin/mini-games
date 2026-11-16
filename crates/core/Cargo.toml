@@ -11,10 +11,5 @@ workspace = true
 
 [features]
 # Generic test-suite every game must pass. Game crates enable it in dev-dependencies.
-conformance = ["dep:proptest"]
+conformance = []
 
-[dependencies]
-proptest = { workspace = true, optional = true }
-
-[dev-dependencies]
-proptest.workspace = true
