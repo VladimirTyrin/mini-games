@@ -1,15 +1,30 @@
 [Unit]
 Description=Mini Games Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/mini-games-server
-ExecStart=/opt/mini-games-server/mini_games_server --static-files-path /opt/mini-games-server/web-client/dist
+EnvironmentFile=-/etc/mini-games-server.env
+ExecStart=/opt/mini-games-server/mini_games_server --static-files-path /opt/mini-games-server/web
 Restart=always
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# Hardening: the server only needs to read its own files and listen on localhost.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target

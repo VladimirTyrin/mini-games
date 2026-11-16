@@ -1,0 +1,30 @@
+# Rendered by deploy.sh (mode: tls).
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name __SERVER_NAME__;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://__DOMAIN__$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    http2 on;
+    server_name __SERVER_NAME__;
+
+    ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:2m;
+    ssl_session_timeout 1d;
+
+    include /etc/nginx/snippets/mini-games-locations.conf;
+}

@@ -1,0 +1,13 @@
+# Rendered by deploy.sh (mode: http).
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name __SERVER_NAME__;
+
+    # ACME http-01 challenges (certbot --webroot); keeps renewals working without stopping nginx.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    include /etc/nginx/snippets/mini-games-locations.conf;
+}
