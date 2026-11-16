@@ -13,13 +13,13 @@ const TOKEN_VERSION: u8 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SessionKind {
+pub(crate) enum SessionKind {
     Google,
     BotClient,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SessionClaims {
+pub(crate) struct SessionClaims {
     pub kind: SessionKind,
     pub subject: String,
     pub display_name: DisplayName,
@@ -37,7 +37,7 @@ struct Payload {
 
 /// Stateless session tokens: `base64url(json payload) . base64url(HMAC-SHA256)`. There is no
 /// database, so revocation is only possible by rotating the secret.
-pub struct SessionTokens {
+pub(crate) struct SessionTokens {
     secret: Vec<u8>,
     lifetime_secs: u64,
 }
@@ -51,7 +51,7 @@ impl std::fmt::Debug for SessionTokens {
 }
 
 impl SessionTokens {
-    pub fn new(secret: Vec<u8>, lifetime_secs: u64) -> Self {
+    pub(crate) fn new(secret: Vec<u8>, lifetime_secs: u64) -> Self {
         Self {
             secret,
             lifetime_secs,
@@ -64,7 +64,7 @@ impl SessionTokens {
             .unwrap_or_else(|_| unreachable!("HMAC takes any key length"))
     }
 
-    pub fn issue(
+    pub(crate) fn issue(
         &self,
         kind: SessionKind,
         subject: &str,
@@ -86,7 +86,7 @@ impl SessionTokens {
         format!("{encoded}.{signature}")
     }
 
-    pub fn verify(&self, token: &str, now_unix: u64) -> Result<SessionClaims, AuthError> {
+    pub(crate) fn verify(&self, token: &str, now_unix: u64) -> Result<SessionClaims, AuthError> {
         let (encoded, signature) = token
             .split_once('.')
             .ok_or(AuthError::InvalidSessionToken)?;

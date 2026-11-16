@@ -56,3 +56,16 @@ pub fn create_mirror(
         GameKind::NumbersMatch => dyn_mirror::mirror::<NumbersMatch>(kind, settings, players),
     }
 }
+
+/// Checks that a bot kind belongs to `kind` and names an existing bot.
+pub fn validate_bot_kind(kind: GameKind, bot: &proto::BotKind) -> Result<(), CreateError> {
+    use mg_protocol::WireBots;
+    match kind {
+        GameKind::Snake => Snake::bot_kind_from_wire(bot).map(|_| ())?,
+        GameKind::TicTacToe => TicTacToe::bot_kind_from_wire(bot).map(|_| ())?,
+        GameKind::StackAttack | GameKind::Puzzle2048 | GameKind::NumbersMatch => {
+            return Err(CreateError::NoBots(kind.info().name));
+        }
+    }
+    Ok(())
+}

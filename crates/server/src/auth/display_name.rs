@@ -5,12 +5,12 @@ use super::auth_error::AuthError;
 /// Name shown to other players. Validated: trimmed, 1..=MAX_CHARS characters, no control or
 /// invisible formatting characters (they allow spoofing other players' names).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DisplayName(String);
+pub(crate) struct DisplayName(String);
 
 impl DisplayName {
-    pub const MAX_CHARS: usize = 24;
+    pub(crate) const MAX_CHARS: usize = 24;
 
-    pub fn parse(raw: &str) -> Result<Self, AuthError> {
+    pub(crate) fn parse(raw: &str) -> Result<Self, AuthError> {
         let trimmed = raw.trim();
         let length = trimmed.chars().count();
         if length == 0 || length > Self::MAX_CHARS {
@@ -28,7 +28,7 @@ impl DisplayName {
     }
 
     /// For names from trusted sources (Google profile, bot config) that may exceed our limits.
-    pub fn sanitize(raw: &str, fallback: &str) -> Self {
+    pub(crate) fn sanitize(raw: &str, fallback: &str) -> Self {
         let cleaned: String = raw
             .trim()
             .chars()
@@ -41,12 +41,12 @@ impl DisplayName {
         }
     }
 
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 
     /// Case-insensitive key used to keep online names unique.
-    pub fn uniqueness_key(&self) -> String {
+    pub(crate) fn uniqueness_key(&self) -> String {
         self.0.to_lowercase()
     }
 }

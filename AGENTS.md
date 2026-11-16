@@ -52,8 +52,12 @@ Zero warnings: clippy and rustc warnings fail CI.
 - **Descriptive names** — names are free: `has_pending_inputs`, not `has_pending`; no `cmd`, `h`,
   `idx` in APIs.
 - One type (struct/enum/trait) per file where practical; `mod.rs` only declares and re-exports.
-- No tuples with more than two elements — introduce a named type. A bool only when both values are
-  obvious from its name; otherwise an enum.
+- A signature must say what it returns: no anonymous tuples in return types or public fields
+  (`-> Result<LobbySetup, SettingsRejection>`, not `-> Result<(GameKind, u8), String>`), never
+  tuples of more than two elements. The sender/receiver pair of a `channel()` constructor is the
+  accepted exception. A bool only when both values are obvious from its name; otherwise an enum.
+- Errors are typed: no `Result<_, String>` in APIs; plain strings only at the outermost boundary
+  (logs, user-facing messages).
 - Keep the underlying cause when wrapping errors. No `let _ = result`.
 - `.clone()`, `.to_string()`, `.to_owned()` need a reason; prefer borrowing, `&'static str`,
   `Arc<str>` for shared strings.

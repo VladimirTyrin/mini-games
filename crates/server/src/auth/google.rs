@@ -13,17 +13,17 @@ const GOOGLE_ISSUERS: [&str; 2] = ["accounts.google.com", "https://accounts.goog
 /// hammer Google.
 const MIN_REFETCH_INTERVAL: Duration = Duration::from_secs(60);
 
-pub struct FetchedKeys {
+pub(crate) struct FetchedKeys {
     pub keys: JwkSet,
     pub max_age: Duration,
 }
 
-pub trait GoogleKeySource: Send + Sync {
+pub(crate) trait GoogleKeySource: Send + Sync {
     fn fetch(&self) -> Result<FetchedKeys, String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GoogleIdentity {
+pub(crate) struct GoogleIdentity {
     pub subject: String,
     pub display_name: DisplayName,
 }
@@ -43,7 +43,7 @@ struct CachedKeys {
 
 /// Verifies Google ID tokens. `verify` may block on HTTP when keys are stale: call it from a
 /// blocking context.
-pub struct GoogleVerifier {
+pub(crate) struct GoogleVerifier {
     client_id: String,
     source: Box<dyn GoogleKeySource>,
     cache: Mutex<Option<CachedKeys>>,
@@ -58,7 +58,7 @@ impl std::fmt::Debug for GoogleVerifier {
 }
 
 impl GoogleVerifier {
-    pub fn new(client_id: String, source: Box<dyn GoogleKeySource>) -> Self {
+    pub(crate) fn new(client_id: String, source: Box<dyn GoogleKeySource>) -> Self {
         Self {
             client_id,
             source,
@@ -66,11 +66,11 @@ impl GoogleVerifier {
         }
     }
 
-    pub fn client_id(&self) -> &str {
+    pub(crate) fn client_id(&self) -> &str {
         &self.client_id
     }
 
-    pub fn verify(&self, id_token: &str) -> Result<GoogleIdentity, AuthError> {
+    pub(crate) fn verify(&self, id_token: &str) -> Result<GoogleIdentity, AuthError> {
         let header = decode_header(id_token).map_err(AuthError::InvalidGoogleToken)?;
         let kid = header.kid.ok_or(AuthError::UnknownGoogleKey)?;
         let key = self.decoding_key(&kid)?;
@@ -129,14 +129,14 @@ impl GoogleVerifier {
 
 /// Fetches Google's JWKS over HTTPS.
 #[derive(Debug)]
-pub struct HttpGoogleKeySource {
+pub(crate) struct HttpGoogleKeySource {
     url: String,
 }
 
 impl HttpGoogleKeySource {
-    pub const GOOGLE_CERTS_URL: &'static str = "https://www.googleapis.com/oauth2/v3/certs";
+    pub(crate) const GOOGLE_CERTS_URL: &'static str = "https://www.googleapis.com/oauth2/v3/certs";
 
-    pub fn new(url: impl Into<String>) -> Self {
+    pub(crate) fn new(url: impl Into<String>) -> Self {
         Self { url: url.into() }
     }
 }

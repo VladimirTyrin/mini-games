@@ -1,5 +1,5 @@
 #[derive(Debug, thiserror::Error)]
-pub enum AuthError {
+pub(crate) enum AuthError {
     #[error("invalid display name: {0}")]
     InvalidDisplayName(&'static str),
     #[error("guests are not allowed on this server")]

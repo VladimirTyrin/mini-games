@@ -3,6 +3,7 @@ use subtle::ConstantTimeEq;
 
 use super::auth_error::AuthError;
 use super::display_name::DisplayName;
+use crate::config::ConfigError;
 
 #[derive(Debug)]
 struct BotKeyEntry {
@@ -13,31 +14,35 @@ struct BotKeyEntry {
 /// Network-bot keys from configuration. Only SHA-256 hashes are configured, so the config file
 /// never contains usable secrets.
 #[derive(Debug, Default)]
-pub struct BotKeys {
+pub(crate) struct BotKeys {
     entries: Vec<BotKeyEntry>,
 }
 
 impl BotKeys {
     /// Format: `name:sha256hex,name2:sha256hex`.
-    pub fn parse(config: &str) -> Result<Self, String> {
+    pub(crate) fn parse(config: &str) -> Result<Self, ConfigError> {
         let mut entries = Vec::new();
         for item in config
             .split(',')
             .map(str::trim)
             .filter(|item| !item.is_empty())
         {
+            let invalid = |reason| ConfigError::BotKey {
+                entry: item.to_owned(),
+                reason,
+            };
             let (name, hash_hex) = item
                 .split_once(':')
-                .ok_or_else(|| format!("bot key `{item}`: expected name:sha256hex"))?;
-            let name = DisplayName::parse(name).map_err(|e| format!("bot key `{item}`: {e}"))?;
+                .ok_or_else(|| invalid("expected name:sha256hex"))?;
+            let name = DisplayName::parse(name).map_err(|_| invalid("invalid bot name"))?;
             let key_sha256 = parse_sha256_hex(hash_hex)
-                .ok_or_else(|| format!("bot key `{item}`: hash must be 64 hex chars"))?;
+                .ok_or_else(|| invalid("hash must be 64 hex characters"))?;
             entries.push(BotKeyEntry { name, key_sha256 });
         }
         Ok(Self { entries })
     }
 
-    pub fn authenticate(&self, key: &str) -> Result<&DisplayName, AuthError> {
+    pub(crate) fn authenticate(&self, key: &str) -> Result<&DisplayName, AuthError> {
         let digest: [u8; 32] = Sha256::digest(key.as_bytes()).into();
         self.entries
             .iter()
@@ -53,7 +58,7 @@ fn parse_sha256_hex(hex: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut out = [0u8; 32];
-    for (byte, pair) in out.iter_mut().zip(hex.as_bytes().chunks_exact(2)) {
+    for (byte, pair) in out.iter_mut().zip(hex.as_bytes().as_chunks::<2>().0) {
         let text = std::str::from_utf8(pair).ok()?;
         *byte = u8::from_str_radix(text, 16).ok()?;
     }

@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 /// Classic token bucket; time is passed in so tests control the clock.
 #[derive(Clone, Debug)]
-pub struct TokenBucket {
+pub(crate) struct TokenBucket {
     capacity: u32,
     refill_every: Duration,
     tokens: u32,
@@ -11,11 +11,16 @@ pub struct TokenBucket {
 
 impl TokenBucket {
     /// Allows bursts of `capacity` and a sustained rate of one token per `refill_every`.
-    pub fn new(capacity: u32, refill_every: Duration, now: Instant) -> Self {
-        Self { capacity, refill_every, tokens: capacity, last_refill: now }
+    pub(crate) fn new(capacity: u32, refill_every: Duration, now: Instant) -> Self {
+        Self {
+            capacity,
+            refill_every,
+            tokens: capacity,
+            last_refill: now,
+        }
     }
 
-    pub fn try_take(&mut self, now: Instant) -> bool {
+    pub(crate) fn try_take(&mut self, now: Instant) -> bool {
         self.refill(now);
         if self.tokens == 0 {
             return false;
