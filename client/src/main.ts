@@ -11,13 +11,18 @@ import { errorMessage } from "./util/error-message";
 
 async function boot(): Promise<void> {
   await loadCore();
-  createApp(App).use(createPinia()).use(router).mount("#app");
+  const pinia = createPinia();
+  createApp(App).use(pinia).use(router).mount("#app");
   await setUpNativeApp();
   if (!__NATIVE_APP__) {
-    // Offline support and silent updates: a new version is fetched in the background and used
-    // from the next start.
-    const { registerSW } = await import("virtual:pwa-register");
-    void registerSW({ immediate: true });
+    // Offline support; new versions are applied outside matches (see web-updates.ts).
+    const [{ registerSW }, { startWebUpdates }, { useMatchStore }] = await Promise.all([
+      import("virtual:pwa-register"),
+      import("./platform/web-updates"),
+      import("./stores/match"),
+    ]);
+    const match = useMatchStore(pinia);
+    startWebUpdates(registerSW, () => match.controller !== null);
   }
 }
 

@@ -38,7 +38,9 @@ export default defineConfig({
     // worker; `disable` still provides the registration module as a no-op.
     VitePWA({
       disable: isAndroidBuild,
-      registerType: "autoUpdate",
+      // "prompt": a new version waits until web-updates.ts applies it, so it never reloads the
+      // page mid-match the way "autoUpdate" does.
+      registerType: "prompt",
       injectRegister: false,
       // public/manifest.webmanifest is the manifest.
       manifest: false,

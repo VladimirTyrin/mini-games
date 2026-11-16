@@ -28,3 +28,12 @@ Every deploy puts exactly one build on the host. The build number is the commit 
 3. after the switch, reads `/version`, `/version.json` and, with `--apk`, the two release files
    from the public address (`https://<domain>`, or `http://<host>` in `--mode http`) and fails
    with a list of what differs.
+
+## How clients pick up a deploy
+
+- Browser and installed web app (PWA, including the iOS home screen): the service worker
+  precaches the bundle. The app asks the browser to re-check `sw.js` whenever it comes back to the
+  foreground and every 30 minutes, since iOS resumes a home-screen app without a navigation.
+  A new version is applied (the page reloads) right away, or as soon as the player leaves the
+  match on screen (`client/src/platform/web-updates.ts`).
+- Android app: see [android.md](android.md), "Updates".
