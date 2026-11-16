@@ -5,12 +5,12 @@
 
 use std::time::{Duration, Instant};
 
-use mg_core::{Bot, Budget, CoreRng, Game};
+use mg_core::{Bot, Budget, CoreRng};
 
 use super::{decide, new_game, place, position};
-use crate::{MINIMAX_BOT_BUDGET, MinimaxBot, RandomBot, TicTacToe};
+use crate::{Command, MINIMAX_BOT_BUDGET, MinimaxBot, RandomBot, TicTacToe};
 
-const LIMIT: Duration = Duration::from_millis(200);
+const LIMIT: Duration = Duration::from_millis(150);
 
 fn timed_move(game: &TicTacToe) -> Duration {
     let started = Instant::now();
@@ -18,27 +18,37 @@ fn timed_move(game: &TicTacToe) -> Duration {
     started.elapsed()
 }
 
-/// Minimax (X) against the random bot; returns the slowest and the mean minimax move.
-fn against_random(size: u32, seed: u64) -> (Duration, Duration) {
-    let mut game = new_game(size, size, 5);
+/// Minimax (X) against the random bot on a square board.
+fn against_random(size: u32, win_count: u32, seed: u64) -> MoveTimes {
+    let mut game = new_game(size, size, win_count);
     let mut rng = CoreRng::new(seed);
     let mut times = Vec::new();
     while game.end().is_none() {
         let slot = game.current_player().unwrap();
-        if slot.get() == 0 {
-            times.push(timed_move(&game));
-            let point = decide(&mut MinimaxBot, &game, MINIMAX_BOT_BUDGET);
-            place(&mut game, point.x, point.y);
+        let command = if slot.get() == 0 {
+            let started = Instant::now();
+            let command =
+                MinimaxBot.decide(&game, slot, &mut rng, &mut Budget::new(MINIMAX_BOT_BUDGET));
+            times.push(started.elapsed());
+            command
         } else {
-            let command = RandomBot
-                .decide(&game, slot, &mut rng, &mut Budget::new(1))
-                .unwrap();
-            game.apply_command(slot, &command).unwrap();
-        }
+            RandomBot.decide(&game, slot, &mut rng, &mut Budget::new(1))
+        };
+        let Some(Command::Place(point)) = command else {
+            panic!("bot returned no move");
+        };
+        place(&mut game, point.x, point.y);
     }
     let total: Duration = times.iter().sum();
-    let slowest = times.iter().copied().max().unwrap_or_default();
-    (slowest, total / times.len().max(1) as u32)
+    MoveTimes {
+        slowest: times.iter().copied().max().unwrap_or_default(),
+        mean: total / times.len().max(1) as u32,
+    }
+}
+
+struct MoveTimes {
+    slowest: Duration,
+    mean: Duration,
 }
 
 #[test]
@@ -52,12 +62,24 @@ fn timing_minimax() {
     let early = timed_move(&position(15, 5, &xs, &os));
     println!("15x15 after 10 moves (legacy bench opening): {early:?}");
 
+    // Long lines make probes expensive: 20×20 / 10..=20 are the worst cases per move.
+    let runs = [
+        (15, 5, 4),
+        (20, 5, 2),
+        (20, 10, 2),
+        (20, 15, 1),
+        (20, 20, 1),
+        (10, 10, 1),
+    ];
     let mut slowest = Duration::ZERO;
-    for size in [15, 20] {
-        for seed in 0..4 {
-            let (max, mean) = against_random(size, seed);
-            println!("{size}x{size} vs random, seed {seed}: slowest {max:?}, mean {mean:?}");
-            slowest = slowest.max(max);
+    for (size, win_count, seeds) in runs {
+        for seed in 0..seeds {
+            let times = against_random(size, win_count, seed);
+            println!(
+                "{size}x{size}/{win_count} vs random, seed {seed}: slowest {:?}, mean {:?}",
+                times.slowest, times.mean
+            );
+            slowest = slowest.max(times.slowest);
         }
     }
 

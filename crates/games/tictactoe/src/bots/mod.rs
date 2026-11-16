@@ -4,6 +4,7 @@ mod minimax_bot;
 mod neighbourhood;
 mod probe;
 mod random_bot;
+mod root_move;
 mod run;
 mod score;
 mod search;

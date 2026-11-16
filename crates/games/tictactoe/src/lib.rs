@@ -16,14 +16,18 @@
 mod board;
 mod bots;
 mod command;
+mod dimensions;
 mod first_player_mode;
 mod game_end;
 mod line_direction;
+mod line_span;
 mod mark;
 mod point;
+mod rules;
 mod settings;
 mod tictactoe;
 mod view;
+mod win_length;
 mod winning_line;
 mod world_event;
 

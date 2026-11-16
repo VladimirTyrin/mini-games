@@ -10,4 +10,12 @@ impl Point {
     pub const fn new(x: u32, y: u32) -> Self {
         Self { x, y }
     }
+
+    /// `None` when the result would leave the non-negative quadrant.
+    pub(crate) fn offset(self, dx: i32, dy: i32) -> Option<Point> {
+        Some(Point::new(
+            self.x.checked_add_signed(dx)?,
+            self.y.checked_add_signed(dy)?,
+        ))
+    }
 }

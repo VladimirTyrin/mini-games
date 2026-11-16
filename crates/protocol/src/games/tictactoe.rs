@@ -1,10 +1,9 @@
-use mg_core::Slot;
 use mg_tictactoe::{
     BotKind, Command, FirstPlayerMode, GameEnd, Mark, PLAYERS, Point, Settings, TicTacToe, View,
     WinningLine, WorldEvent,
 };
 
-use crate::frame_codec::slot_from_wire;
+use crate::frame_codec::{slot_from_wire, slot_to_wire};
 use crate::proto;
 use crate::proto::{TicTacToeBotKind, TicTacToeEndReason, TicTacToeFirstPlayerMode, TicTacToeMark};
 use crate::wire_error::WireError;
@@ -125,6 +124,7 @@ impl WireGame for TicTacToe {
                 current_slot: view.current_player.map(slot_to_wire),
                 last_move: view.last_move.map(point_to_wire),
                 end: view.end.map(game_end_to_wire),
+                you: view.you.map(slot_to_wire),
             })),
         }
     }
@@ -153,10 +153,6 @@ impl WireBots for TicTacToe {
             game: Some(proto::bot_kind::Game::Tictactoe(kind.into())),
         }
     }
-}
-
-fn slot_to_wire(slot: Slot) -> u32 {
-    u32::from(slot.get())
 }
 
 /// Coordinates stay unchecked here: whether they are on the board is a game rule.

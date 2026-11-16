@@ -1,6 +1,9 @@
 use mg_core::{PlayerSpec, SetupError};
 
+use crate::dimensions::Dimensions;
 use crate::first_player_mode::FirstPlayerMode;
+use crate::rules::Rules;
+use crate::win_length::WinLength;
 
 pub const MIN_FIELD_SIZE: u32 = 3;
 pub const MAX_FIELD_SIZE: u32 = 20;
@@ -31,24 +34,16 @@ impl Default for Settings {
 
 impl Settings {
     pub fn validate(&self, players: &[PlayerSpec]) -> Result<(), SetupError> {
+        self.rules(players).map(drop)
+    }
+
+    pub(crate) fn rules(&self, players: &[PlayerSpec]) -> Result<Rules, SetupError> {
         SetupError::check_player_count(players.len(), PLAYERS, PLAYERS)?;
-        SetupError::check_range(
-            "field_width",
-            self.field_width,
-            MIN_FIELD_SIZE,
-            MAX_FIELD_SIZE,
-        )?;
-        SetupError::check_range(
-            "field_height",
-            self.field_height,
-            MIN_FIELD_SIZE,
-            MAX_FIELD_SIZE,
-        )?;
-        SetupError::check_range(
-            "win_count",
-            self.win_count,
-            MIN_WIN_COUNT,
-            self.field_width.min(self.field_height),
-        )
+        let dimensions = Dimensions::new(self.field_width, self.field_height)?;
+        let win_length = WinLength::new(self.win_count, dimensions)?;
+        Ok(Rules {
+            dimensions,
+            win_length,
+        })
     }
 }

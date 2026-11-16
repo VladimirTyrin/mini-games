@@ -2,6 +2,7 @@ use mg_core::Budget;
 
 use super::candidate::Candidate;
 use super::neighbourhood::Neighbourhood;
+use super::root_move::RootMove;
 use super::score::Score;
 use super::search_board::SearchBoard;
 use super::side::Side;
@@ -13,35 +14,32 @@ const ROOT_BEAM: usize = 16;
 const INNER_BEAM: usize = 8;
 const MAX_DEPTH: usize = 32;
 
-/// Iterative-deepening alpha-beta over [`SearchBoard`], one budget node per searched move.
+/// Iterative-deepening alpha-beta over [`SearchBoard`]. The budget is charged with the board's
+/// work (cells visited), including the root probes made before the search started.
 #[derive(Debug)]
 pub(crate) struct Search<'a> {
-    board: SearchBoard,
+    board: &'a mut SearchBoard,
     budget: &'a mut Budget,
+    charged_work: u64,
     budget_exhausted: bool,
     /// Candidate buffers per ply, reused across nodes to keep the search allocation-free.
     buffers: Vec<Vec<Candidate>>,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct RootMove {
-    candidate: Candidate,
-    score: Score,
-}
-
 impl<'a> Search<'a> {
-    pub(crate) fn new(board: SearchBoard, budget: &'a mut Budget) -> Self {
+    pub(crate) fn new(board: &'a mut SearchBoard, budget: &'a mut Budget) -> Self {
         Self {
             board,
             budget,
+            charged_work: 0,
             budget_exhausted: false,
             buffers: Vec::new(),
         }
     }
 
     /// `root` must carry fresh probes. Returns the best move of the deepest completed iteration,
-    /// or the best-ordered move when not even depth 1 fits the budget; `None` only for an empty
-    /// `root`.
+    /// or the best-ordered move when the budget does not even cover the probes made so far;
+    /// `None` only for an empty `root`.
     pub(crate) fn best_move(mut self, root: &[Candidate]) -> Option<Candidate> {
         let mut moves: Vec<RootMove> = root
             .iter()
@@ -55,7 +53,7 @@ impl<'a> Search<'a> {
         });
         moves.truncate(ROOT_BEAM);
         let mut best = moves.first()?.candidate;
-        if moves.len() == 1 {
+        if moves.len() == 1 || !self.charge_work() {
             return Some(best);
         }
         let max_depth = self.board.empty_cells().min(MAX_DEPTH);
@@ -81,9 +79,6 @@ impl<'a> Search<'a> {
     fn score_root(&mut self, moves: &mut [RootMove], depth: usize) -> bool {
         let mut alpha = Score::MIN;
         for root_move in moves.iter_mut() {
-            if !self.budget.spend(1) {
-                return false;
-            }
             let candidate = root_move.candidate;
             root_move.score = if depth == 1 {
                 Score::heuristic(
@@ -125,6 +120,10 @@ impl<'a> Search<'a> {
         for candidate in moves.iter_mut() {
             candidate.probe = self.board.probe(candidate.point);
         }
+        if !self.charge_work() {
+            self.return_buffer(ply, moves);
+            return Score::DRAW;
+        }
         if moves
             .iter()
             .any(|candidate| candidate.probe.of(side).completes_line)
@@ -147,9 +146,6 @@ impl<'a> Search<'a> {
             Side::Opponent => Score::MAX,
         };
         for candidate in &moves {
-            if !self.budget.spend(1) {
-                self.budget_exhausted = true;
-            }
             if self.budget_exhausted {
                 break;
             }
@@ -181,6 +177,18 @@ impl<'a> Search<'a> {
         }
         self.return_buffer(ply, moves);
         best
+    }
+
+    /// Spends the board work done since the last call; `false` once the budget is exhausted,
+    /// after which every score is incomplete and must be ignored.
+    fn charge_work(&mut self) -> bool {
+        let work_done = self.board.work_done();
+        let work = work_done.saturating_sub(self.charged_work);
+        self.charged_work = work_done;
+        if !self.budget.spend(work) {
+            self.budget_exhausted = true;
+        }
+        !self.budget_exhausted
     }
 
     fn take_buffer(&mut self, ply: u32) -> Vec<Candidate> {

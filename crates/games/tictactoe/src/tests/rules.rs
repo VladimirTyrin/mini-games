@@ -362,4 +362,7 @@ fn view_carries_board_geometry_and_players() {
     assert_eq!(game.mark_of(HOST), Some(Mark::X));
     assert_eq!(game.mark_of(GUEST), Some(Mark::O));
     assert_eq!(game.player_with(Mark::O), Some(GUEST));
+    assert_eq!(view.you, Some(GUEST));
+    assert_eq!(game.view(Viewer::Player(HOST)).you, Some(HOST));
+    assert_eq!(game.view(Viewer::Spectator).you, None);
 }

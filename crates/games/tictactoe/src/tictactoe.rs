@@ -11,12 +11,13 @@ use crate::mark::Mark;
 use crate::point::Point;
 use crate::settings::Settings;
 use crate::view::View;
+use crate::win_length::WinLength;
 use crate::world_event::WorldEvent;
 
 #[derive(Clone, Debug)]
 pub struct TicTacToe {
     board: Board,
-    win_count: u32,
+    win_length: WinLength,
     first_player: FirstPlayerMode,
     x_player: Option<Slot>,
     to_move: Mark,
@@ -34,8 +35,8 @@ impl TicTacToe {
         &self.board
     }
 
-    pub(crate) fn win_count(&self) -> u32 {
-        self.win_count
+    pub(crate) fn win_length(&self) -> WinLength {
+        self.win_length
     }
 
     pub fn end(&self) -> Option<GameEnd> {
@@ -84,14 +85,14 @@ impl Game for TicTacToe {
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        settings.validate(players)?;
+        let rules = settings.rules(players)?;
         let x_player = match settings.first_player {
             FirstPlayerMode::Host => Some(Slot::new(0)),
             FirstPlayerMode::Random => None,
         };
         Ok(Self {
-            board: Board::new(settings.field_width, settings.field_height),
-            win_count: settings.win_count,
+            board: Board::new(rules.dimensions),
+            win_length: rules.win_length,
             first_player: settings.first_player,
             x_player,
             to_move: Mark::X,
@@ -117,7 +118,7 @@ impl Game for TicTacToe {
         self.board.place(point, mark)?;
         self.marks_placed += 1;
         self.last_move = Some(point);
-        if let Some(line) = self.board.line_through(point, self.win_count) {
+        if let Some(line) = self.board.line_through(point, self.win_length) {
             self.end = Some(GameEnd::Win { winner: slot, line });
         } else if self.marks_placed == self.board.cell_count() {
             self.end = Some(GameEnd::Draw);
@@ -185,24 +186,30 @@ impl Game for TicTacToe {
         })
     }
 
-    fn view(&self, _viewer: Viewer) -> View {
+    fn view(&self, viewer: Viewer) -> View {
+        let dimensions = self.board.dimensions();
         View {
-            field_width: self.board.width(),
-            field_height: self.board.height(),
-            win_count: self.win_count,
+            field_width: dimensions.width(),
+            field_height: dimensions.height(),
+            win_count: self.win_length.get(),
             cells: self.board.cells().to_vec(),
             x_player: self.player_with(Mark::X),
             o_player: self.player_with(Mark::O),
             current_player: self.current_player(),
             last_move: self.last_move,
             end: self.end,
+            you: match viewer {
+                Viewer::Player(slot) => (slot.get() < crate::settings::PLAYERS).then_some(slot),
+                Viewer::Spectator => None,
+            },
         }
     }
 
     fn hash_state(&self, hasher: &mut StateHasher) {
-        hasher.u32(self.board.width());
-        hasher.u32(self.board.height());
-        hasher.u32(self.win_count);
+        let dimensions = self.board.dimensions();
+        hasher.u32(dimensions.width());
+        hasher.u32(dimensions.height());
+        hasher.u32(self.win_length.get());
         hasher.u8(match self.first_player {
             FirstPlayerMode::Random => 0,
             FirstPlayerMode::Host => 1,

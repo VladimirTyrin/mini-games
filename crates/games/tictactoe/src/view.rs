@@ -4,7 +4,7 @@ use crate::game_end::GameEnd;
 use crate::mark::Mark;
 use crate::point::Point;
 
-/// Everything a client renders. The same for every viewer: TicTacToe has no hidden information.
+/// Everything a client renders. TicTacToe has no hidden information: views differ only in `you`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct View {
     pub field_width: u32,
@@ -19,4 +19,6 @@ pub struct View {
     pub current_player: Option<Slot>,
     pub last_move: Option<Point>,
     pub end: Option<GameEnd>,
+    /// The viewer's own seat; `None` for spectators.
+    pub you: Option<Slot>,
 }

@@ -31,7 +31,7 @@ impl Bot<TicTacToe> for MinimaxBot {
         // budget only bounds the search.
         let chosen = match tactical_move(&mut board, &candidates) {
             Some(candidate) => candidate,
-            None => Search::new(board, budget).best_move(&candidates)?,
+            None => Search::new(&mut board, budget).best_move(&candidates)?,
         };
         Some(Command::Place(chosen.point))
     }

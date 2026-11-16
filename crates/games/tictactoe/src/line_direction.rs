@@ -18,21 +18,14 @@ impl LineDirection {
         LineDirection::AntiDiagonal,
     ];
 
-    /// Column and row delta of one forward step.
-    pub(crate) const fn delta(self) -> (i32, i32) {
-        match self {
+    /// `None` when the result would leave the non-negative quadrant.
+    pub(crate) fn walk(self, from: Point, steps: i32) -> Option<Point> {
+        let (dx, dy): (i32, i32) = match self {
             LineDirection::Horizontal => (1, 0),
             LineDirection::Vertical => (0, 1),
             LineDirection::Diagonal => (1, 1),
             LineDirection::AntiDiagonal => (-1, 1),
-        }
-    }
-
-    /// `None` when the result would leave the non-negative quadrant.
-    pub(crate) fn walk(self, from: Point, steps: i32) -> Option<Point> {
-        let (dx, dy) = self.delta();
-        let x = i64::from(from.x) + i64::from(dx) * i64::from(steps);
-        let y = i64::from(from.y) + i64::from(dy) * i64::from(steps);
-        Some(Point::new(u32::try_from(x).ok()?, u32::try_from(y).ok()?))
+        };
+        from.offset(dx.checked_mul(steps)?, dy.checked_mul(steps)?)
     }
 }

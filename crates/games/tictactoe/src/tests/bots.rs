@@ -5,7 +5,7 @@ use crate::bots::{Candidate, Neighbourhood, Score, Search, SearchBoard, Side};
 use crate::{Command, GameEnd, MINIMAX_BOT_BUDGET, Mark, MinimaxBot, Point, RandomBot, TicTacToe};
 
 /// Small budget so debug-build tests stay fast; strength tests use the default.
-const TEST_BUDGET: u64 = 2_000;
+const TEST_BUDGET: u64 = 1_000_000;
 
 fn chebyshev(a: Point, b: Point) -> u32 {
     a.x.abs_diff(b.x).max(a.y.abs_diff(b.y))
@@ -116,7 +116,7 @@ fn bots_always_return_a_legal_move() {
         let Some(slot) = game.current_player() else {
             continue;
         };
-        for budget in [0, 1, 50, 400] {
+        for budget in [0, 1, 20_000, 200_000] {
             for bot in [&mut MinimaxBot as &mut dyn Bot<TicTacToe>, &mut RandomBot] {
                 let command = bot
                     .decide(&game, slot, &mut rng, &mut Budget::new(budget))
@@ -217,7 +217,7 @@ fn search_blocks_a_loss_even_when_attacking_looks_better() {
     let xs = [(5, 7), (6, 7), (7, 7), (12, 12)];
     let os = [(0, 0), (1, 0), (2, 0), (3, 0)];
     let game = position(15, 5, &xs, &os);
-    let board = SearchBoard::new(&game, Mark::X);
+    let mut board = SearchBoard::new(&game, Mark::X);
     let mut root: Vec<Candidate> = Vec::new();
     board.collect_candidates(Neighbourhood::WithinTwo, &mut root);
     for candidate in &mut root {
@@ -229,8 +229,10 @@ fn search_blocks_a_loss_even_when_attacking_looks_better() {
         .unwrap()
         .point;
     assert_ne!(heuristic_favourite, Point::new(4, 0));
-    let mut budget = Budget::new(10_000);
-    let chosen = Search::new(board, &mut budget).best_move(&root).unwrap();
+    let mut budget = Budget::new(2_000_000);
+    let chosen = Search::new(&mut board, &mut budget)
+        .best_move(&root)
+        .unwrap();
     assert_eq!(chosen.point, Point::new(4, 0));
 }
 
@@ -266,7 +268,12 @@ fn minimax_is_deterministic() {
         };
         let decisions: Vec<Option<Command>> = (0..3)
             .map(|seed| {
-                MinimaxBot.decide(&game, me, &mut CoreRng::new(seed), &mut Budget::new(500))
+                MinimaxBot.decide(
+                    &game,
+                    me,
+                    &mut CoreRng::new(seed),
+                    &mut Budget::new(200_000),
+                )
             })
             .collect();
         assert!(decisions.windows(2).all(|pair| pair[0] == pair[1]));
@@ -276,14 +283,54 @@ fn minimax_is_deterministic() {
 #[test]
 fn minimax_spends_at_most_its_budget() {
     let game = position(15, 5, &[(7, 7), (8, 8)], &[(7, 8)]);
-    for nodes in [0, 1, 10, 500] {
-        let mut budget = Budget::new(nodes);
+    for cells in [0, 1, 1_000, 100_000] {
+        let mut budget = Budget::new(cells);
         MinimaxBot.decide(&game, GUEST, &mut CoreRng::new(0), &mut budget);
-        assert!(budget.remaining() <= nodes);
+        assert!(budget.remaining() <= cells);
     }
-    let mut budget = Budget::new(3_000);
+    let mut budget = Budget::new(TEST_BUDGET);
     MinimaxBot.decide(&game, GUEST, &mut CoreRng::new(0), &mut budget);
-    assert!(budget.remaining() < 2_000, "the search uses its budget");
+    assert!(
+        budget.remaining() < TEST_BUDGET / 2,
+        "the search uses its budget"
+    );
+}
+
+/// The budget bounds the work actually done on every board: it used to be charged one node per
+/// searched move while each node probed every candidate, so long lines cost far more per node
+/// (20×20 / 20 took ~2 s per move).
+#[test]
+fn search_work_stays_within_the_budget_on_every_board() {
+    let mut rng = CoreRng::new(17);
+    for (size, win_count) in [(20, 20), (20, 10), (15, 5), (10, 10), (3, 3)] {
+        let cells = u64::from(size * size);
+        let probe_cells = 4 * (2 * u64::from(win_count) - 1);
+        // Work between two charges: at most one probe and one move update per cell, plus three
+        // candidate scans.
+        let overshoot = cells * (probe_cells + 25 + 3);
+        for moves in [1, size * size / 4, size * size / 2] {
+            let game = random_position(size, win_count, moves as usize, &mut rng);
+            let Some(me) = game.current_player() else {
+                continue;
+            };
+            let mark = game.mark_of(me).unwrap();
+            for budget in [0, 50_000, 400_000] {
+                let mut board = SearchBoard::new(&game, mark);
+                let mut root: Vec<Candidate> = Vec::new();
+                board.collect_candidates(Neighbourhood::WithinTwo, &mut root);
+                for candidate in &mut root {
+                    candidate.probe = board.probe(candidate.point);
+                }
+                let root_work = board.work_done();
+                Search::new(&mut board, &mut Budget::new(budget)).best_move(&root);
+                assert!(
+                    board.work_done() <= root_work.max(budget) + overshoot,
+                    "{size}x{size}/{win_count} after {moves} moves, budget {budget}: {} cells",
+                    board.work_done()
+                );
+            }
+        }
+    }
 }
 
 #[test]

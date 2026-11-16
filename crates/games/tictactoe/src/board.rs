@@ -1,33 +1,29 @@
 use mg_core::CommandError;
 
+use crate::dimensions::Dimensions;
 use crate::line_direction::LineDirection;
 use crate::mark::Mark;
 use crate::point::Point;
+use crate::win_length::WinLength;
 use crate::winning_line::WinningLine;
 
-/// Row-major grid. Dimensions are validated by [`crate::Settings::validate`] before construction.
+/// Row-major grid.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Board {
-    width: u32,
-    height: u32,
+    dimensions: Dimensions,
     cells: Vec<Option<Mark>>,
 }
 
 impl Board {
-    pub(crate) fn new(width: u32, height: u32) -> Self {
+    pub(crate) fn new(dimensions: Dimensions) -> Self {
         Self {
-            width,
-            height,
-            cells: vec![None; width as usize * height as usize],
+            dimensions,
+            cells: vec![None; dimensions.cell_count()],
         }
     }
 
-    pub(crate) fn width(&self) -> u32 {
-        self.width
-    }
-
-    pub(crate) fn height(&self) -> u32 {
-        self.height
+    pub(crate) fn dimensions(&self) -> Dimensions {
+        self.dimensions
     }
 
     pub(crate) fn cells(&self) -> &[Option<Mark>] {
@@ -38,19 +34,16 @@ impl Board {
         self.cells.len()
     }
 
-    fn index(&self, point: Point) -> Option<usize> {
-        (point.x < self.width && point.y < self.height)
-            .then(|| point.y as usize * self.width as usize + point.x as usize)
-    }
-
     pub(crate) fn mark_at(&self, point: Point) -> Option<Mark> {
-        self.index(point)
+        self.dimensions
+            .index_of(point)
             .and_then(|index| self.cells.get(index).copied().flatten())
     }
 
     pub(crate) fn place(&mut self, point: Point, mark: Mark) -> Result<(), CommandError> {
         let cell = self
-            .index(point)
+            .dimensions
+            .index_of(point)
             .and_then(|index| self.cells.get_mut(index))
             .ok_or(CommandError::Illegal("cell is outside the board"))?;
         if cell.is_some() {
@@ -61,14 +54,14 @@ impl Board {
     }
 
     /// The first run (in [`LineDirection::ALL`] order) through `point` that is at least
-    /// `win_count` long.
-    pub(crate) fn line_through(&self, point: Point, win_count: u32) -> Option<WinningLine> {
+    /// `win_length` long.
+    pub(crate) fn line_through(&self, point: Point, win_length: WinLength) -> Option<WinningLine> {
         let mark = self.mark_at(point)?;
         LineDirection::ALL.into_iter().find_map(|direction| {
             let start = self.run_end(point, mark, direction, -1);
             let end = self.run_end(point, mark, direction, 1);
             let length = start.x.abs_diff(end.x).max(start.y.abs_diff(end.y)) + 1;
-            (length >= win_count).then_some(WinningLine { mark, start, end })
+            (length >= win_length.get()).then_some(WinningLine { mark, start, end })
         })
     }
 

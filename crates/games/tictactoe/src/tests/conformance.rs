@@ -8,7 +8,7 @@ use crate::{BotKind, Command, FirstPlayerMode, GameEnd, Mark, Point, Settings, T
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
 const BOT: PlayerSpec = PlayerSpec::BOT;
 /// Keeps `run_all` fast in debug builds; strength is covered by the bot tests.
-const CONFORMANCE_MINIMAX_BUDGET: u64 = 300;
+const CONFORMANCE_MINIMAX_BUDGET: u64 = 100_000;
 
 thread_local! {
     /// `Conformance::bots_for` only sees seat kinds, so the bot kind per seat comes from here;
@@ -85,9 +85,10 @@ impl Conformance for TicTacToe {
     /// Mostly a random empty cell; sometimes any coordinate, on or off the board.
     fn arbitrary_command(game: &Self, _slot: Slot, rng: &mut CoreRng) -> Command {
         let board = game.board();
+        let dimensions = board.dimensions();
         if rng.chance(7, 8) {
-            let empty: Vec<Point> = (0..board.height())
-                .flat_map(|y| (0..board.width()).map(move |x| Point::new(x, y)))
+            let empty: Vec<Point> = dimensions
+                .points()
                 .filter(|point| board.mark_at(*point).is_none())
                 .collect();
             if let Some(point) = rng.pick(&empty) {
@@ -98,8 +99,8 @@ impl Conformance for TicTacToe {
             0 => u32::MAX,
             _ => rng.below(limit + 2),
         };
-        let x = coordinate(rng, board.width());
-        let y = coordinate(rng, board.height());
+        let x = coordinate(rng, dimensions.width());
+        let y = coordinate(rng, dimensions.height());
         Command::Place(Point::new(x, y))
     }
 
@@ -140,7 +141,7 @@ impl Conformance for TicTacToe {
         }
         let lines: Vec<_> = (0..view.field_height)
             .flat_map(|y| (0..view.field_width).map(move |x| Point::new(x, y)))
-            .filter_map(|point| self.board().line_through(point, view.win_count))
+            .filter_map(|point| self.board().line_through(point, self.win_length()))
             .collect();
         match view.end {
             None => {

@@ -152,10 +152,10 @@ fn malformed_world_events_are_rejected() {
         TicTacToe::world_event_from_wire(&wire_first_player(2)),
         Err(WireError::OutOfRange("x_slot"))
     );
-    assert_eq!(
+    assert!(matches!(
         TicTacToe::world_event_from_wire(&wire_first_player(256)),
-        Err(WireError::OutOfRange("slot"))
-    );
+        Err(WireError::IntegerOutOfRange { field: "slot", .. })
+    ));
     let empty = proto::GameWorldEvent {
         game: Some(proto::game_world_event::Game::Tictactoe(
             proto::TicTacToeWorldEvent { event: None },
@@ -220,6 +220,7 @@ fn view_carries_board_players_and_end() {
         (Some(0), Some(1), Some(0))
     );
     assert_eq!((before.last_move, before.end), (None, None));
+    assert_eq!(before.you, None);
 
     // X fills row 0 from the left, O plays row 6.
     for x in 0..4 {
@@ -238,6 +239,7 @@ fn view_carries_board_players_and_end() {
         Some(&i32::from(TicTacToeMark::Unspecified))
     );
     assert_eq!(after.current_slot, None);
+    assert_eq!(after.you, Some(1));
     assert_eq!(after.last_move, Some(proto::TicTacToePoint { x: 3, y: 0 }));
     assert_eq!(
         game.end(),
@@ -276,6 +278,8 @@ fn view_reports_a_disconnect_and_an_unchosen_first_player() {
         (waiting.x_slot, waiting.o_slot, waiting.current_slot),
         (None, None, None)
     );
+    let host = tictactoe_view(&game.view(Viewer::Player(Slot::new(0))));
+    assert_eq!(host.you, Some(0), "a seat is known before its mark");
     game.drop_player(Slot::new(0));
     let ended = tictactoe_view(&game.view(Viewer::Spectator));
     assert_eq!(

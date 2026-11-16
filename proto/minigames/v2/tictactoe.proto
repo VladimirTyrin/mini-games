@@ -78,7 +78,7 @@ message TicTacToeGameEnd {
   TicTacToeWinningLine winning_line = 3;
 }
 
-// The same for every viewer: TicTacToe has no hidden information.
+// TicTacToe has no hidden information: views differ only in `you`.
 message TicTacToeView {
   uint32 field_width = 1;
   uint32 field_height = 2;
@@ -94,6 +94,8 @@ message TicTacToeView {
   TicTacToePoint last_move = 8;
   // Unset while the match runs.
   TicTacToeGameEnd end = 9;
+  // The viewer's own seat; unset for spectators.
+  optional uint32 you = 10;
 }
 
 enum TicTacToeBotKind {

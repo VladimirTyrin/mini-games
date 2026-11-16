@@ -5,9 +5,11 @@ use super::random_bot::RandomBot;
 use crate::tictactoe::TicTacToe;
 
 pub const RANDOM_BOT_BUDGET: u64 = 1;
-/// Search nodes per minimax move, sized to stay well below 200 ms per move on 15×15 / 5 in a
-/// native release build.
-pub const MINIMAX_BOT_BUDGET: u64 = 30_000;
+/// Cells the minimax search may visit per move (probes, candidate scans, move updates). A cell
+/// costs about 2.5–4 ns in a native release build, so a move stays near 100 ms at worst on any
+/// allowed settings; on 15×15 / 5 the search reaches about as many nodes as the old 30 000-node
+/// budget did.
+pub const MINIMAX_BOT_BUDGET: u64 = 20_000_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BotKind {
