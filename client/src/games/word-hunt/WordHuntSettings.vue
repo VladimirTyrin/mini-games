@@ -8,6 +8,7 @@ import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { localDayNumber } from "./daily";
+import { marksMissingLetters } from "./preferences";
 
 const settings = defineModel<GameSettings>({ required: true });
 const form = useGameSettingsForm(settings, "wordHunt");
@@ -21,10 +22,14 @@ const modeOptions = [
   { value: WordHuntPuzzleMode.DAILY, label: "Word of the day" },
   { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimited" },
 ] as const;
-const hardModeOptions = [
+const offOnOptions = [
   { value: 0, label: "Off" },
   { value: 1, label: "On" },
 ] as const;
+
+function setMarksMissing(marks: boolean): void {
+  marksMissingLetters.value = marks;
+}
 
 function setMode(mode: WordHuntPuzzleMode): void {
   if (mode !== WordHuntPuzzleMode.DAILY) {
@@ -84,9 +89,16 @@ onMounted(() => {
     <SegmentedField
       label="Hard mode"
       help="Every guess must use the letters you have found"
-      :options="hardModeOptions"
+      :options="offOnOptions"
       :model-value="value.hardMode ? 1 : 0"
       @update:model-value="form.update({ hardMode: $event === 1 })"
+    />
+    <SegmentedField
+      label="Mark missing letters"
+      help="Darken keyboard letters that are not in the word"
+      :options="offOnOptions"
+      :model-value="marksMissingLetters ? 1 : 0"
+      @update:model-value="setMarksMissing($event === 1)"
     />
     <p class="pt-3 text-xs text-gray-500">
       Word lists from OpenCorpora, SCOWL (Kevin Atkinson) and wordfreq; licensed CC BY-SA 4.0.

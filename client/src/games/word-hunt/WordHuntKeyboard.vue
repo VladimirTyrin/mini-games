@@ -9,16 +9,28 @@ const props = defineProps<{
   rows: readonly string[];
   hints: readonly WordHuntKeyHint[];
   disabled: boolean;
+  /** Darken letters known to be missing; otherwise they look like letters not tried yet. */
+  marksMissing: boolean;
 }>();
 const emit = defineEmits<{ letter: [letter: string]; erase: [] }>();
 
 const markOf = computed(() => new Map(props.hints.map((hint) => [hint.letter, hint.mark])));
 
+const UNTRIED = "bg-gray-500/40 text-gray-100";
+/** Still pressable: a missing letter may be typed on purpose, e.g. to rule others out. */
+const MISSING = "bg-gray-900 text-gray-600 ring-1 ring-inset ring-white/5";
+
 function keyClass(letter: string): string {
   const mark = markOf.value.get(letter);
-  return mark === undefined || mark === WordHuntLetterMark.UNSPECIFIED
-    ? "bg-gray-500/40 text-gray-100"
-    : markClass(mark);
+  switch (mark) {
+    case WordHuntLetterMark.CORRECT:
+    case WordHuntLetterMark.PRESENT:
+      return markClass(mark);
+    case WordHuntLetterMark.ABSENT:
+      return props.marksMissing ? MISSING : UNTRIED;
+    default:
+      return UNTRIED;
+  }
 }
 
 // pointerdown: the key acts the moment the finger lands, and the button never takes focus

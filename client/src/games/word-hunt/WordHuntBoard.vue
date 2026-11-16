@@ -10,6 +10,7 @@ import { prefersReducedMotion } from "@/render/reduced-motion";
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
 import { markClass } from "./mark-style";
+import { marksMissingLetters } from "./preferences";
 import { type StatsGame, type WordHuntStats, finishGame, startGame, statsFor } from "./stats";
 import WordHuntKeyboard from "./WordHuntKeyboard.vue";
 import { type AcceptedWords, acceptedWords, normalizeWord } from "./word-lists";
@@ -254,6 +255,7 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
       :rows="keyboardRows(settings.language)"
       :hints="view.keyboard"
       :disabled="!canType"
+      :marks-missing="marksMissingLetters"
       @letter="type"
       @erase="erase"
     />
