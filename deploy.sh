@@ -94,7 +94,7 @@ fi
 
 echo "==> Uploading to ${HOST}"
 ssh "$HOST" "mkdir -p ${REMOTE_DIR}/web.new ${REMOTE_DIR}/downloads /var/www/certbot && rm -rf ${REMOTE_DIR}/web.new/*"
-tar -C "$WEB_DIST" -czf - . | ssh "$HOST" "tar -xzf - -C ${REMOTE_DIR}/web.new"
+tar -C "$WEB_DIST" -czf - . | ssh "$HOST" "tar --no-same-owner -xzf - -C ${REMOTE_DIR}/web.new"
 scp -q "$BUILD_BINARY" "${HOST}:${REMOTE_DIR}/${BINARY_NAME}.new"
 if [[ -n "$APK" ]]; then
     scp -q "$APK" "${HOST}:${REMOTE_DIR}/downloads/mini-games.apk.new"
@@ -105,7 +105,7 @@ scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${SCRIPT_DIR}/deploy/nginx-w
 
 echo "==> Configuring host (${MODE})"
 ssh "$HOST" MODE="$MODE" DOMAIN="$DOMAIN" EMAIL="$EMAIL" REMOTE_DIR="$REMOTE_DIR" \
-    SERVICE_NAME="$SERVICE_NAME" BINARY_NAME="$BINARY_NAME" bash -s <<'REMOTE'
+    SERVICE_NAME="$SERVICE_NAME" BINARY_NAME="$BINARY_NAME" GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" bash -s <<'REMOTE'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
@@ -116,6 +116,23 @@ if (( ${#need_pkgs[@]} )); then
     apt-get update -qq
     apt-get install -y -qq "${need_pkgs[@]}"
 fi
+
+# Server settings live on the host only. The session secret signs session tokens: it is created
+# once and kept, since replacing it signs every Google user out.
+ENV_FILE=/etc/${SERVICE_NAME}.env
+if [[ ! -f "$ENV_FILE" ]]; then
+    umask 077
+    {
+        echo "MG_SESSION_SECRET=$(od -An -tx1 -N32 /dev/urandom | tr -d ' 
+')"
+        echo "MG_ALLOW_GUESTS=true"
+        echo "MG_BOT_KEYS="
+    } > "$ENV_FILE"
+fi
+# The client ID is public and follows the repository.
+sed -i '/^MG_GOOGLE_CLIENT_ID=/d' "$ENV_FILE"
+echo "MG_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" >> "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 
 # Swap in the new build.
 chmod 755 "${REMOTE_DIR}/${BINARY_NAME}.new"
