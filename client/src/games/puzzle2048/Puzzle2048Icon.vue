@@ -8,6 +8,8 @@
     <text x="14.75" y="19.5" text-anchor="middle" font-size="11" fill="#776e65">2</text>
     <text x="33.25" y="19.5" text-anchor="middle" font-size="11" fill="#ffffff">8</text>
     <text x="14.75" y="38" text-anchor="middle" font-size="9" fill="#ffffff">16</text>
-    <text x="33.25" y="37.5" text-anchor="middle" font-size="7" fill="#ffffff">2048</text>
+    <!-- textLength: four heavy digits overflow the tile in wide system fonts. -->
+    <!-- prettier-ignore -->
+    <text x="33.25" y="37.3" text-anchor="middle" font-size="7" fill="#ffffff" textLength="12" lengthAdjust="spacingAndGlyphs">2048</text>
   </svg>
 </template>
