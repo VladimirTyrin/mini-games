@@ -2,6 +2,8 @@
 import { ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
+import Avatar from "@/components/Avatar.vue";
+import SignInPanel from "@/components/SignInPanel.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { normalizeServerUrl } from "@/platform/server-url";
 import { useAppUpdateStore } from "@/stores/app-update";
@@ -59,12 +61,25 @@ function resetServer(): void {
       </form>
       <button class="text-xs text-gray-400" @click="resetServer">Reset to default</button>
     </section>
-    <section v-if="connection.isSignedIn" class="space-y-2 rounded-xl bg-panel p-4">
+    <section v-if="connection.isSignedIn" class="space-y-3 rounded-xl bg-panel p-4">
       <h2 class="font-semibold">Account</h2>
-      <p class="text-sm text-gray-300">Signed in as {{ connection.identity?.displayName }}</p>
-      <button class="rounded bg-panel-raised px-3 py-1 text-sm" @click="connection.signOut()">
-        Sign out
-      </button>
+      <div class="flex items-center gap-3">
+        <Avatar
+          :url="connection.identity?.avatarUrl ?? ''"
+          :name="connection.identity?.displayName ?? ''"
+          :player-id="connection.identity?.id"
+        />
+        <p class="flex-1 truncate text-sm text-gray-300">
+          Signed in as {{ connection.identity?.displayName }}
+        </p>
+        <button class="rounded bg-panel-raised px-3 py-2 text-sm" @click="connection.signOut()">
+          Sign out
+        </button>
+      </div>
+    </section>
+    <section v-else class="space-y-2">
+      <h2 class="px-1 font-semibold">Account</h2>
+      <SignInPanel />
     </section>
     <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>

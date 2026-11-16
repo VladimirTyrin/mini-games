@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import MatchOverlay from "@/components/MatchOverlay.vue";
 import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
@@ -36,7 +37,23 @@ function onVisibility(): void {
 document.addEventListener("visibilitychange", onVisibility);
 onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisibility));
 
+/** A running match is easy to quit by accident (back gesture, header arrow): ask first. */
+const confirmingLeave = ref(false);
+const leaveMessage = computed(() =>
+  isOnline.value
+    ? "The others will play on without you, and your seat may be dropped."
+    : "This game will be lost.",
+);
+
+function requestLeave(): void {
+  const current = controller.value;
+  const running = current && current.source.kind !== "replay" && !current.ended.value;
+  if (running) confirmingLeave.value = true;
+  else void leave();
+}
+
 async function leave(): Promise<void> {
+  confirmingLeave.value = false;
   const kind = controller.value?.source.kind;
   match.close();
   if (kind === "online") await lobby.leave();
@@ -63,7 +80,16 @@ function again(): void {
 </script>
 
 <template>
-  <AppHeader :title="plugin?.title ?? 'Match'" :back="leave" />
+  <AppHeader :title="plugin?.title ?? 'Match'" :back="requestLeave" />
+  <ConfirmDialog
+    v-if="confirmingLeave"
+    title="Leave the match?"
+    :message="leaveMessage"
+    confirm-label="Leave"
+    cancel-label="Stay"
+    @confirm="leave"
+    @cancel="confirmingLeave = false"
+  />
   <main v-if="controller && plugin" class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3">
     <div class="relative flex min-h-0 flex-1 flex-col">
       <component :is="plugin.Board" :controller="controller" class="min-h-0 flex-1" />

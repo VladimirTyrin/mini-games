@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import Avatar from "@/components/Avatar.vue";
 import type { GamePlugin } from "@/games/game-plugin";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
+import { useConnectionStore } from "@/stores/connection";
+import { usePrefsStore } from "@/stores/prefs";
 
 /** Bot opponents of a local match; the person on this device always holds the first seat. */
 const bots = defineModel<BotKind[]>({ required: true });
@@ -12,6 +15,18 @@ const props = defineProps<{
   minPlayers: number;
   maxPlayers: number;
 }>();
+
+const connection = useConnectionStore();
+const prefs = usePrefsStore();
+/** The signed-in account when there is one (with its avatar), otherwise the guest name. */
+const me = computed(() => {
+  const identity = connection.identity;
+  return {
+    name: identity?.displayName || prefs.guestName || "You",
+    avatarUrl: identity?.avatarUrl ?? "",
+    playerId: identity?.id ?? "",
+  };
+});
 
 const players = computed(() => 1 + bots.value.length);
 const canAdd = computed(() => props.available.length > 0 && players.value < props.maxPlayers);
@@ -45,8 +60,10 @@ function remove(index: number): void {
       </div>
     </header>
     <div class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 px-3">
-      <span aria-hidden="true">🙂</span>
-      <span class="flex-1">You</span>
+      <Avatar :url="me.avatarUrl" :name="me.name" :player-id="me.playerId || undefined" />
+      <span class="min-w-0 flex-1 truncate">
+        {{ me.name }} <span class="text-sm text-gray-400">(you)</span>
+      </span>
     </div>
     <div v-for="(bot, index) in bots" :key="index" class="flex items-center gap-2">
       <label
