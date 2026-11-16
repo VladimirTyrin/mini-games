@@ -62,6 +62,7 @@ mg-tictactoe = { path = "crates/games/tictactoe" }
 mg-stack-attack = { path = "crates/games/stack-attack" }
 mg-puzzle2048 = { path = "crates/games/puzzle2048" }
 mg-numbers-match = { path = "crates/games/numbers-match" }
+mg-word-hunt = { path = "crates/games/word-hunt" }
 # xtask:game-crates
 
 clap = { version = "4.6", features = ["derive", "env"] }

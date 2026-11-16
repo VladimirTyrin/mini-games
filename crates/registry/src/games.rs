@@ -10,6 +10,7 @@ macro_rules! games {
             StackAttack => mg_stack_attack::StackAttack, StackAttack, no_bots;
             Puzzle2048 => mg_puzzle2048::Puzzle2048, Puzzle2048, no_bots;
             NumbersMatch => mg_numbers_match::NumbersMatch, NumbersMatch, no_bots;
+            WordHunt => mg_word_hunt::WordHunt, WordHunt, no_bots;
             // xtask:games
         }
     };

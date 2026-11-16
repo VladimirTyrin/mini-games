@@ -1157,6 +1157,7 @@ dependencies = [
  "mg-snake",
  "mg-stack-attack",
  "mg-tictactoe",
+ "mg-word-hunt",
  "pbjson",
  "pbjson-build",
  "prost",
@@ -1185,6 +1186,7 @@ dependencies = [
  "mg-snake",
  "mg-stack-attack",
  "mg-tictactoe",
+ "mg-word-hunt",
  "serde_json",
  "thiserror",
 ]
@@ -1251,6 +1253,13 @@ dependencies = [
  "mg-tictactoe",
  "prost",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "mg-word-hunt"
+version = "2.0.0"
+dependencies = [
+ "mg-core",
 ]
 
 [[package]]

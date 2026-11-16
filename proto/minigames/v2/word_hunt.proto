@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+enum WordHuntLanguage {
+  WORD_HUNT_LANGUAGE_UNSPECIFIED = 0;
+  WORD_HUNT_LANGUAGE_RUSSIAN = 1;
+  WORD_HUNT_LANGUAGE_ENGLISH = 2;
+}
+
+enum WordHuntPuzzleMode {
+  WORD_HUNT_PUZZLE_MODE_UNSPECIFIED = 0;
+  // A random answer.
+  WORD_HUNT_PUZZLE_MODE_UNLIMITED = 1;
+  // The word of the day, the same for every player of the language.
+  WORD_HUNT_PUZZLE_MODE_DAILY = 2;
+}
+
+message WordHuntSettings {
+  WordHuntLanguage language = 1;
+  uint32 word_length = 2;
+  uint32 max_guesses = 3;
+  // Every guess must reuse the letters already found.
+  bool hard_mode = 4;
+  WordHuntPuzzleMode mode = 5;
+  // Daily puzzle only: days since 1970-01-01 in the player's time zone.
+  uint32 day = 6;
+}
+
+message WordHuntCommand {
+  oneof command {
+    WordHuntGuess guess = 1;
+  }
+}
+
+message WordHuntGuess {
+  // As typed; the game normalizes case and ё.
+  string word = 1;
+}
+
+message WordHuntWorldEvent {
+  oneof event {
+    WordHuntAnswerChosen answer_chosen = 1;
+  }
+}
+
+message WordHuntAnswerChosen {
+  string word = 1;
+}
+
+enum WordHuntLetterMark {
+  WORD_HUNT_LETTER_MARK_UNSPECIFIED = 0;
+  WORD_HUNT_LETTER_MARK_ABSENT = 1;
+  // In the word, elsewhere.
+  WORD_HUNT_LETTER_MARK_PRESENT = 2;
+  // In the word at this position.
+  WORD_HUNT_LETTER_MARK_CORRECT = 3;
+}
+
+enum WordHuntPhase {
+  WORD_HUNT_PHASE_UNSPECIFIED = 0;
+  // Waiting for the answer to be chosen.
+  WORD_HUNT_PHASE_CHOOSING = 1;
+  WORD_HUNT_PHASE_GUESSING = 2;
+  WORD_HUNT_PHASE_SOLVED = 3;
+  // Out of guesses.
+  WORD_HUNT_PHASE_FAILED = 4;
+  WORD_HUNT_PHASE_ABANDONED = 5;
+}
+
+message WordHuntScoredGuess {
+  string word = 1;
+  // One per letter of `word`.
+  repeated WordHuntLetterMark marks = 2;
+}
+
+message WordHuntKeyHint {
+  string letter = 1;
+  WordHuntLetterMark mark = 2;
+}
+
+message WordHuntView {
+  WordHuntSettings settings = 1;
+  WordHuntPhase phase = 2;
+  repeated WordHuntScoredGuess guesses = 3;
+  // Letters guessed so far with their best mark, in alphabet order.
+  repeated WordHuntKeyHint keyboard = 4;
+  // Set once the game is over.
+  optional string answer = 5;
+}

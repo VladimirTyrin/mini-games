@@ -7,6 +7,7 @@ import "minigames/v2/tictactoe.proto";
 import "minigames/v2/stack_attack.proto";
 import "minigames/v2/puzzle2048.proto";
 import "minigames/v2/numbers_match.proto";
+import "minigames/v2/word_hunt.proto";
 // xtask:imports
 
 // Envelopes dispatching to per-game messages. Adding a game adds one case to each oneof
@@ -19,6 +20,7 @@ message GameSettings {
     StackAttackSettings stack_attack = 3;
     Puzzle2048Settings puzzle2048 = 4;
     NumbersMatchSettings numbers_match = 5;
+    WordHuntSettings word_hunt = 6;
     // xtask:GameSettings
   }
 }
@@ -30,6 +32,7 @@ message GameCommand {
     StackAttackCommand stack_attack = 3;
     Puzzle2048Command puzzle2048 = 4;
     NumbersMatchCommand numbers_match = 5;
+    WordHuntCommand word_hunt = 6;
     // xtask:GameCommand
   }
 }
@@ -41,6 +44,7 @@ message GameWorldEvent {
     StackAttackWorldEvent stack_attack = 3;
     Puzzle2048WorldEvent puzzle2048 = 4;
     NumbersMatchWorldEvent numbers_match = 5;
+    WordHuntWorldEvent word_hunt = 6;
     // xtask:GameWorldEvent
   }
 }
@@ -53,6 +57,7 @@ message GameView {
     StackAttackView stack_attack = 3;
     Puzzle2048View puzzle2048 = 4;
     NumbersMatchView numbers_match = 5;
+    WordHuntView word_hunt = 6;
     // xtask:GameView
   }
 }
