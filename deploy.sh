@@ -5,7 +5,7 @@
 #   ./deploy.sh --host root@1.2.3.4 --mode http   # any host by IP, no TLS
 #
 # Options:
-#   --host H        ssh destination (default $DEPLOY_HOST or root@braintvsminigames.xyz)
+#   --host H        ssh destination (default root@146.103.106.44)
 #   --mode M        http | tls (default tls)
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
@@ -19,7 +19,8 @@ BINARY_NAME="mini_games_server"
 SERVICE_NAME="mini-games-server"
 REMOTE_DIR="/opt/mini-games-server"
 
-HOST="${DEPLOY_HOST:-root@braintvsminigames.xyz}"
+HOST="root@146.103.106.44"
+SSH_KEY="${HOME}/.ssh/id_ed25519_github"
 MODE="tls"
 DOMAIN="braintvsminigames.xyz"
 EMAIL=""
@@ -41,7 +42,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-[[ -n "$HOST" ]] || die "no host: pass --host or set DEPLOY_HOST"
+SSH_OPTS=(-o IdentitiesOnly=yes -i "$SSH_KEY")
+ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
+scp() { command scp "${SSH_OPTS[@]}" "$@"; }
 [[ "$MODE" == "http" || "$MODE" == "tls" ]] || die "--mode must be http or tls"
 if [[ "$MODE" == "tls" ]]; then
     [[ -n "$DOMAIN" ]] || die "--domain is required for --mode tls"
