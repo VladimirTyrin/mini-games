@@ -50,7 +50,9 @@ via `lib.rs`, other crates) uses; one type per file. A type the rules consult be
 Replace the sample rules. Keep the shape:
 
 - **Settings** — a plain struct with `Default` (what the UI offers first) and limit consts.
-  `Game::new` validates everything, *before* allocating anything sized by a setting.
+  `Game::new` validates everything, *before* allocating anything sized by a setting. Numeric
+  limits are `SettingRange` consts used by the validation itself; `Settings::ranges()` lists
+  them and `Game::setting_ranges` returns that list, which is how the UI learns the bounds.
 - **Command** — what a seat can do. `apply_command` validates and applies atomically; a
   rejected command must not change state.
 - **WorldEvent** — every random outcome (dealt cards, spawned food, who starts). Produce them
@@ -99,8 +101,10 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 ## 5. UI (`web-client/src/games/<game>`)
 
 - `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controlsHint`.
-- Settings form — shared `NumberField`/`SelectField`, immutable updates, **no hardcoded
-  limits** (the shell shows the core's validation message).
+- Settings form — rows from `components/form` (`StepperField`, `SegmentedField`, `ChipsField`
+  presets, `MoreOptions`) through `useGameSettingsForm`: immutable updates, **no hardcoded
+  limits** (`form.field('<wire name>')` binds the core's bounds and its error to a row; presets
+  the core rejects are dropped). Optional `narrowScreenSettings` picks phone-friendly defaults.
 - Board — render `controller.current.value.view`. Real-time games draw one tick behind and
   interpolate from `controller.previous` with `tickProgress`. Input through `useGameKeys`
   (filters repeats, modifiers, typing) and `useSwipe`; ignore input when

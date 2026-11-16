@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, MAX_QUEUED_COMMANDS, WorldEvent};
@@ -109,6 +109,10 @@ impl Game for StackAttack {
             pending_events: Vec::new(),
             last_frame_events: Vec::new(),
         })
+    }
+
+    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
+        settings.ranges()
     }
 
     fn clock(&self) -> Clock {

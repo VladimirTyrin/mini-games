@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -226,6 +226,10 @@ impl Game for NumbersMatch {
             last_action: None,
             stats: Stats::default(),
         })
+    }
+
+    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
+        settings.ranges()
     }
 
     fn clock(&self) -> Clock {

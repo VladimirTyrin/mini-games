@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
-const budgetsKiB = { js: 120, wasm: 250, css: 30 };
+const budgetsKiB = { js: 125, wasm: 250, css: 30 };
 const totals = { js: 0, wasm: 0, css: 0 };
 const assetName = /[\w.-]+\.(?:js|wasm|css)\b/g;
 

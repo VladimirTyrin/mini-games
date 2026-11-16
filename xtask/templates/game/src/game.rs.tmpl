@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -42,12 +42,16 @@ impl Game for {{Pascal}} {
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        SetupError::check_range("target", settings.target, Settings::MIN_TARGET, Settings::MAX_TARGET)?;
+        Settings::TARGET.check(settings.target)?;
         SetupError::check_player_count(players.len(), Self::INFO.min_players, Self::INFO.max_players)?;
         if players.iter().any(|player| !player.is_human()) {
             return Err(SetupError::InvalidPlayers("this game has no bots".into()));
         }
         Ok(Self { target: settings.target, total: 0, seats: Seats::all_in_play(players.len()), turn: None, winner: None })
+    }
+
+    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
+        settings.ranges()
     }
 
     fn clock(&self) -> Clock {

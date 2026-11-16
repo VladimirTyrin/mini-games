@@ -9,7 +9,7 @@ pub struct Target(u32);
 
 impl Target {
     pub fn new(value: u32) -> Result<Self, SetupError> {
-        SetupError::check_range("target", value, Settings::MIN_TARGET, Settings::MAX_TARGET)?;
+        Settings::TARGET.check(value)?;
         if !value.is_power_of_two() {
             return Err(SetupError::setting(
                 "target",

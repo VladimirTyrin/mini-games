@@ -1,37 +1,32 @@
 <script setup lang="ts">
-import { computed } from "vue";
-
-import NumberField from "@/components/form/NumberField.vue";
-import SelectField from "@/components/form/SelectField.vue";
+import SegmentedField from "@/components/form/SegmentedField.vue";
+import { useGameSettingsForm } from "@/components/form/settings-form";
+import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
-import type { NumbersMatchSettings } from "@/proto/minigames/v2/numbers_match_pb";
 
 import { hintModeOptions } from "./hint-mode-options";
 
 const settings = defineModel<GameSettings>({ required: true });
-
-const value = computed(() =>
-  settings.value.game.case === "numbersMatch" ? settings.value.game.value : null,
-);
-
-function update(patch: Partial<Omit<NumbersMatchSettings, "$typeName">>): void {
-  if (!value.value) return;
-  settings.value = { ...settings.value, game: { case: "numbersMatch", value: { ...value.value, ...patch } } };
-}
+const form = useGameSettingsForm(settings, "numbersMatch");
+const value = form.value;
 </script>
 
 <template>
-  <div v-if="value" class="space-y-2">
-    <SelectField
+  <div v-if="value" class="divide-y divide-white/5">
+    <SegmentedField
       label="Hints"
+      help="Point out a pair you can take"
+      stacked
       :options="hintModeOptions"
       :model-value="value.hintMode"
-      @update:model-value="update({ hintMode: $event })"
+      @update:model-value="form.update({ hintMode: $event })"
     />
-    <NumberField
+    <StepperField
       label="Refills"
+      help="Copy the remaining numbers below"
+      v-bind="form.field('refills')"
       :model-value="value.refills"
-      @update:model-value="update({ refills: $event })"
+      @update:model-value="form.update({ refills: $event })"
     />
   </div>
 </template>

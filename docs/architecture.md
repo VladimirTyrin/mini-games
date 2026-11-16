@@ -73,6 +73,11 @@ secret), never by display name, which may repeat.
   it plays.
 - `games/<id>/` — one plugin per game: settings form + board. Rules and limits come from the
   core; plugins only render and turn input into commands.
+- `components/form/` — the setup rows every settings form is built from (`StepperField`,
+  `SegmentedField`, `ChipsField` presets, `MoreOptions`). `SettingsEditor` asks the WASM core
+  for the numeric bounds (`settingRanges`, from each game's `Settings::ranges`) and for the
+  verdict (`settingsProblem`: field + message), so a stepper stops at the real limit and an
+  error appears under the row it belongs to.
 
 The Android app is the same web build inside Capacitor (built with `VITE_PLATFORM=android`, which
 adds the native back button and Google sign-in); see `docs/android.md`.

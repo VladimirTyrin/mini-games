@@ -1,4 +1,4 @@
-use mg_core::SetupError;
+use mg_core::{SettingRange, SetupError};
 
 use crate::settings::HintMode;
 
@@ -26,7 +26,15 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub const REFILLS: SettingRange = SettingRange::new("refills", 0, MAX_REFILLS);
+
     pub fn validate(&self) -> Result<(), SetupError> {
-        SetupError::check_range("refills", self.refills, 0, MAX_REFILLS)
+        Self::REFILLS.check(self.refills)
+    }
+
+    /// Bounds of every numeric setting; the only list the UI reads (see
+    /// [`mg_core::Game::setting_ranges`]).
+    pub fn ranges(&self) -> Vec<SettingRange> {
+        vec![Self::REFILLS]
     }
 }

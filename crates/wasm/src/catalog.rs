@@ -4,6 +4,8 @@ use mg_registry::{GameKind, bot_kinds, create_mirror};
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
+use crate::settings_problem::SettingsProblem;
+
 fn kind_by_id(game_id: &str) -> Result<GameKind, JsError> {
     GameKind::ALL
         .iter()
@@ -53,16 +55,72 @@ pub fn bot_kinds_delimited(game_id: &str) -> Result<Vec<u8>, JsError> {
     Ok(out)
 }
 
+/// JSON array of `{"field","min","max"}` bounds of the numeric settings, as the game enforces
+/// them for `settings` (a bound may depend on other fields). Field names match
+/// [`SettingsProblem::field`].
+#[wasm_bindgen(js_name = settingRangesJson)]
+pub fn setting_ranges_json(settings: &[u8]) -> Result<String, JsError> {
+    let settings =
+        proto::GameSettings::decode(settings).map_err(|error| JsError::new(&error.to_string()))?;
+    let ranges =
+        mg_registry::setting_ranges(&settings).map_err(|error| JsError::new(&error.to_string()))?;
+    let entries: Vec<String> = ranges
+        .iter()
+        .map(|range| {
+            format!(
+                r#"{{"field":"{}","min":{},"max":{}}}"#,
+                range.field, range.min, range.max
+            )
+        })
+        .collect();
+    Ok(format!("[{}]", entries.join(",")))
+}
+
 /// `None` when the settings are valid for `seats` human players, otherwise the reason. Uses the
 /// game's own rules, so the UI never duplicates limits.
 #[wasm_bindgen(js_name = validateSettings)]
-pub fn validate_settings(settings: &[u8], seats: u8) -> Option<String> {
+pub fn validate_settings(settings: &[u8], seats: u8) -> Option<SettingsProblem> {
     let settings = match proto::GameSettings::decode(settings) {
         Ok(settings) => settings,
-        Err(error) => return Some(error.to_string()),
+        Err(error) => return Some(SettingsProblem::general(error.to_string())),
     };
     let players = vec![PlayerSpec::HUMAN; usize::from(seats)];
     create_mirror(&settings, &players)
         .err()
-        .map(|error| error.to_string())
+        .map(SettingsProblem::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tictactoe_settings(field_width: u32) -> Vec<u8> {
+        let mut settings = mg_registry::default_settings(GameKind::TicTacToe);
+        if let Some(proto::game_settings::Game::Tictactoe(tictactoe)) = settings.game.as_mut() {
+            tictactoe.field_width = field_width;
+        }
+        settings.encode_to_vec()
+    }
+
+    #[test]
+    fn a_rejected_setting_names_its_field() {
+        assert_eq!(validate_settings(&tictactoe_settings(15), 2), None);
+        assert_eq!(
+            validate_settings(&tictactoe_settings(2), 2),
+            Some(SettingsProblem {
+                field: Some("field_width".to_owned()),
+                message: "must be between 3 and 20, got 2".to_owned(),
+            })
+        );
+        let wrong_seats = validate_settings(&tictactoe_settings(15), 3).unwrap();
+        assert_eq!(wrong_seats.field, None);
+    }
+
+    #[test]
+    fn ranges_follow_the_current_settings() {
+        assert_eq!(
+            setting_ranges_json(&tictactoe_settings(9)).unwrap(),
+            r#"[{"field":"field_width","min":3,"max":20},{"field":"field_height","min":3,"max":20},{"field":"win_count","min":3,"max":9}]"#
+        );
+    }
 }

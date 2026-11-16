@@ -1,6 +1,7 @@
 import type { GamePlugin } from "../game-plugin";
 import { TicTacToeBotKind, TicTacToeFirstPlayerMode } from "@/proto/minigames/v2/tictactoe_pb";
 
+import { narrowScreenSettings } from "./board-presets";
 import Board from "./TicTacToeBoard.vue";
 import SettingsForm from "./TicTacToeSettings.vue";
 
@@ -26,4 +27,5 @@ export const tictactoePlugin: GamePlugin = {
     return kind.game.value === TicTacToeBotKind.MINIMAX ? "Minimax bot" : "Random bot";
   },
   controlsHint: "Click a cell to place your mark",
+  narrowScreenSettings,
 };

@@ -22,6 +22,8 @@ struct Add(u32);
 #[derive(Clone, Debug, PartialEq)]
 struct FirstPlayer(Slot);
 
+const RACE_TARGET: SettingRange = SettingRange::new("target", 1, 1000);
+
 fn opponent(slot: Slot) -> Slot {
     Slot::new(1 - slot.get())
 }
@@ -41,7 +43,7 @@ impl Game for Race {
     };
 
     fn new(settings: &RaceSettings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        SetupError::check_range("target", settings.target, 1, 1000)?;
+        RACE_TARGET.check(settings.target)?;
         SetupError::check_player_count(players.len(), 2, 2)?;
         Ok(Self {
             target: settings.target,
@@ -49,6 +51,10 @@ impl Game for Race {
             turn: None,
             winner: None,
         })
+    }
+
+    fn setting_ranges(_settings: &RaceSettings) -> Vec<SettingRange> {
+        vec![RACE_TARGET]
     }
 
     fn clock(&self) -> Clock {

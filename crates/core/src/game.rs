@@ -7,6 +7,7 @@ use crate::game_info::GameInfo;
 use crate::hash::StateHasher;
 use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
+use crate::setting_range::SettingRange;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
 use crate::status::Status;
@@ -32,6 +33,11 @@ pub trait Game: Sized + Send + Debug + 'static {
     /// Settings come from untrusted clients and replay files: validate everything before
     /// allocating anything sized by them.
     fn new(settings: &Self::Settings, players: &[PlayerSpec]) -> Result<Self, SetupError>;
+
+    /// Bounds of every numeric setting, as `new` enforces them for `settings` (a bound may depend
+    /// on another field, e.g. a win length capped by the board). Lets a UI offer only valid
+    /// values; `new` stays the authority on everything else.
+    fn setting_ranges(settings: &Self::Settings) -> Vec<SettingRange>;
 
     fn clock(&self) -> Clock;
 

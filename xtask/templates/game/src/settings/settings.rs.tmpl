@@ -1,3 +1,5 @@
+use mg_core::SettingRange;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     /// Total that ends the game.
@@ -7,6 +9,12 @@ pub struct Settings {
 impl Settings {
     pub const MIN_TARGET: u32 = 5;
     pub const MAX_TARGET: u32 = 100;
+    pub const TARGET: SettingRange = SettingRange::new("target", Self::MIN_TARGET, Self::MAX_TARGET);
+
+    /// Bounds of every numeric setting; the only list the UI reads.
+    pub fn ranges(&self) -> Vec<SettingRange> {
+        vec![Self::TARGET]
+    }
 }
 
 impl Default for Settings {

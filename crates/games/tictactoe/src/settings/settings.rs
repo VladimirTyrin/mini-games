@@ -1,4 +1,4 @@
-use mg_core::{PlayerSpec, SetupError};
+use mg_core::{PlayerSpec, SettingRange, SetupError};
 
 use crate::settings::{Dimensions, FirstPlayerMode, Rules, WinLength};
 
@@ -30,6 +30,26 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub const FIELD_WIDTH: SettingRange =
+        SettingRange::new("field_width", MIN_FIELD_SIZE, MAX_FIELD_SIZE);
+    pub const FIELD_HEIGHT: SettingRange =
+        SettingRange::new("field_height", MIN_FIELD_SIZE, MAX_FIELD_SIZE);
+
+    /// Bounds of every numeric setting; the only list the UI reads (see
+    /// [`mg_core::Game::setting_ranges`]). The `win_count` bound follows the board; a board
+    /// outside the size limits is clamped into them so the bound stays usable while editing.
+    pub fn ranges(&self) -> Vec<SettingRange> {
+        let shorter_side = self
+            .field_width
+            .min(self.field_height)
+            .clamp(MIN_FIELD_SIZE, MAX_FIELD_SIZE);
+        vec![
+            Self::FIELD_WIDTH,
+            Self::FIELD_HEIGHT,
+            WinLength::range(shorter_side),
+        ]
+    }
+
     pub fn validate(&self, players: &[PlayerSpec]) -> Result<(), SetupError> {
         self.rules(players).map(drop)
     }

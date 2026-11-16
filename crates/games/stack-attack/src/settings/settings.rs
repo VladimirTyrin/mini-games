@@ -1,4 +1,4 @@
-use mg_core::SetupError;
+use mg_core::{SettingRange, SetupError};
 
 pub const MIN_FIELD_WIDTH: u32 = 6;
 pub const MAX_FIELD_WIDTH: u32 = 32;
@@ -26,18 +26,19 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub const FIELD_WIDTH: SettingRange =
+        SettingRange::new("field_width", MIN_FIELD_WIDTH, MAX_FIELD_WIDTH);
+    pub const FIELD_HEIGHT: SettingRange =
+        SettingRange::new("field_height", MIN_FIELD_HEIGHT, MAX_FIELD_HEIGHT);
+
     pub fn validate(&self) -> Result<(), SetupError> {
-        SetupError::check_range(
-            "field_width",
-            self.field_width,
-            MIN_FIELD_WIDTH,
-            MAX_FIELD_WIDTH,
-        )?;
-        SetupError::check_range(
-            "field_height",
-            self.field_height,
-            MIN_FIELD_HEIGHT,
-            MAX_FIELD_HEIGHT,
-        )
+        Self::FIELD_WIDTH.check(self.field_width)?;
+        Self::FIELD_HEIGHT.check(self.field_height)
+    }
+
+    /// Bounds of every numeric setting; the only list the UI reads (see
+    /// [`mg_core::Game::setting_ranges`]).
+    pub fn ranges(&self) -> Vec<SettingRange> {
+        vec![Self::FIELD_WIDTH, Self::FIELD_HEIGHT]
     }
 }

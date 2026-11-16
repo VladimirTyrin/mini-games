@@ -3,12 +3,14 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
+import OpponentsCard from "@/components/OpponentsCard.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginById } from "@/games";
+import { initialSettings } from "@/games/initial-settings";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { type LocalSeat, useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
-import { botKinds, defaultSettings, gameCatalog } from "@/wasm/core";
+import { type SettingsProblem, botKinds, gameCatalog } from "@/wasm/core";
 
 const props = defineProps<{ gameId: string }>();
 const router = useRouter();
@@ -17,17 +19,16 @@ const match = useMatchStore();
 
 const plugin = pluginById(props.gameId);
 const info = gameCatalog().find((game) => game.id === props.gameId);
-const settings = ref(prefs.lastSettings(props.gameId) ?? defaultSettings(props.gameId));
+const settings = ref(plugin ? initialSettings(plugin, prefs.lastSettings(props.gameId)) : null);
 const availableBots: BotKind[] = info?.hasBots ? botKinds(props.gameId) : [];
 const bots = ref<BotKind[]>(availableBots[0] && info && info.minPlayers > 1 ? [availableBots[0]] : []);
-const problem = ref<string | null>(null);
+const problem = ref<SettingsProblem | null>(null);
 
 const seats = computed<LocalSeat[]>(() => [{ bot: null }, ...bots.value.map((bot) => ({ bot }))]);
-const canAddBot = computed(() => !!info && availableBots.length > 0 && seats.value.length < info.maxPlayers);
 const seatCountOk = computed(() => !!info && seats.value.length >= info.minPlayers);
 
 function start(): void {
-  if (!plugin) return;
+  if (!plugin || !settings.value) return;
   prefs.rememberSettings(props.gameId, settings.value);
   match.startLocal(settings.value, seats.value, prefs.guestName);
 }
@@ -35,44 +36,39 @@ function start(): void {
 
 <template>
   <AppHeader :title="plugin?.title ?? 'Unknown game'" back="/" />
-  <main v-if="plugin && info" class="mx-auto w-full max-w-lg flex-1 space-y-5 p-4">
-    <section class="space-y-3 rounded-xl bg-panel p-4">
-      <h2 class="font-semibold">Settings</h2>
+  <main v-if="plugin && info && settings" class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
+    <section class="rounded-2xl bg-panel px-4 pt-4">
+      <header class="flex items-start gap-3 border-b border-white/5 pb-3">
+        <span class="text-3xl leading-none" aria-hidden="true">{{ plugin.icon }}</span>
+        <div class="min-w-0">
+          <h2 class="font-semibold leading-tight">{{ plugin.tagline }}</h2>
+          <p class="mt-1 text-xs leading-snug text-gray-400">{{ plugin.controlsHint }}</p>
+        </div>
+      </header>
       <SettingsEditor
         v-model="settings"
         :plugin="plugin"
         :seats="seats.length"
+        audience="local"
         @validity="problem = $event"
       />
     </section>
-    <section v-if="availableBots.length" class="space-y-3 rounded-xl bg-panel p-4">
-      <h2 class="font-semibold">Opponents</h2>
-      <div v-for="(bot, index) in bots" :key="index" class="flex items-center justify-between gap-2">
-        <select v-model="bots[index]" class="flex-1 rounded bg-panel-raised px-2 py-1 text-sm">
-          <option v-for="kind in availableBots" :key="plugin.botLabel(kind)" :value="kind">
-            {{ plugin.botLabel(kind) }}
-          </option>
-        </select>
-        <button class="rounded px-2 text-gray-400 hover:text-rose-300" @click="bots.splice(index, 1)">
-          ✕
-        </button>
-      </div>
-      <button
-        v-if="canAddBot"
-        class="text-sm text-emerald-300"
-        @click="availableBots[0] && bots.push(availableBots[0])"
-      >
-        + Add bot
-      </button>
-    </section>
+    <OpponentsCard
+      v-if="availableBots.length"
+      v-model="bots"
+      :plugin="plugin"
+      :available="availableBots"
+      :min-players="info.minPlayers"
+      :max-players="info.maxPlayers"
+    />
     <button
-      class="w-full rounded-xl bg-emerald-600 py-3 font-semibold hover:bg-emerald-500"
+      class="h-13 w-full rounded-xl bg-emerald-600 text-lg font-semibold hover:bg-emerald-500 disabled:opacity-50"
       :disabled="!!problem || !seatCountOk"
       @click="start"
     >
       {{ seatCountOk ? "Play" : `Needs ${info.minPlayers} players` }}
     </button>
-    <button class="w-full text-sm text-gray-400" @click="router.push('/online')">
+    <button class="h-11 w-full text-sm text-gray-400 hover:text-gray-200" @click="router.push('/online')">
       Play with people instead →
     </button>
   </main>

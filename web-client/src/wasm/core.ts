@@ -57,9 +57,33 @@ export function botKinds(gameId: string): BotKind[] {
   return kinds;
 }
 
+/** Bounds of one numeric setting, keyed by its wire field name (`field_width`, `win_count`...). */
+export interface SettingRange {
+  field: string;
+  min: number;
+  max: number;
+}
+
+/** Why settings are invalid; `field` names the one setting at fault, if there is one. */
+export interface SettingsProblem {
+  field: string | null;
+  message: string;
+}
+
 /** The game's own rules decide; returns the reason when `settings` are invalid. */
-export function settingsProblem(settings: GameSettings, seats: number): string | null {
-  return wasm.validateSettings(toBinary(GameSettingsSchema, settings), seats) ?? null;
+export function settingsProblem(settings: GameSettings, seats: number): SettingsProblem | null {
+  const problem = wasm.validateSettings(toBinary(GameSettingsSchema, settings), seats);
+  if (!problem) return null;
+  try {
+    return { field: problem.field ?? null, message: problem.message };
+  } finally {
+    problem.free();
+  }
+}
+
+/** The numeric bounds the game enforces for `settings`; some follow other fields. */
+export function settingRanges(settings: GameSettings): SettingRange[] {
+  return JSON.parse(wasm.settingRangesJson(toBinary(GameSettingsSchema, settings))) as SettingRange[];
 }
 
 /** Receiving side of lockstep. Call `free()` when done: WASM memory is not garbage-collected. */

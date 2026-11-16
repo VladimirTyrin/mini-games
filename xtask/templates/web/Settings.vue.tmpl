@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed } from "vue";
-
-import NumberField from "@/components/form/NumberField.vue";
+import { useGameSettingsForm } from "@/components/form/settings-form";
+import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 
 const settings = defineModel<GameSettings>({ required: true });
-const value = computed(() => (settings.value.game.case === "{{camel}}" ? settings.value.game.value : null));
-
-function setTarget(target: number): void {
-  if (!value.value) return;
-  settings.value = { ...settings.value, game: { case: "{{camel}}", value: { ...value.value, target } } };
-}
+const form = useGameSettingsForm(settings, "{{camel}}");
+const value = form.value;
 </script>
 
 <template>
-  <NumberField v-if="value" label="Target" :model-value="value.target" @update:model-value="setTarget" />
+  <div v-if="value" class="divide-y divide-white/5">
+    <StepperField
+      label="Target"
+      help="Total that ends the game"
+      v-bind="form.field('target')"
+      :model-value="value.target"
+      @update:model-value="form.update({ target: $event })"
+    />
+  </div>
 </template>

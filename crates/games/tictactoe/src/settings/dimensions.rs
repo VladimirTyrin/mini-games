@@ -1,7 +1,7 @@
-use mg_core::SetupError;
+use mg_core::{SettingRange, SetupError};
 
 use crate::model::{LineDirection, LineSpan, Point};
-use crate::settings::{MAX_FIELD_SIZE, MIN_FIELD_SIZE};
+use crate::settings::Settings;
 
 /// Validated board size: both sides in `MIN_FIELD_SIZE..=MAX_FIELD_SIZE`, so they fit a `u8`
 /// and every coordinate and cell index converts losslessly.
@@ -14,8 +14,8 @@ pub(crate) struct Dimensions {
 impl Dimensions {
     pub(crate) fn new(field_width: u32, field_height: u32) -> Result<Self, SetupError> {
         Ok(Self {
-            width: side("field_width", field_width)?,
-            height: side("field_height", field_height)?,
+            width: side(Settings::FIELD_WIDTH, field_width)?,
+            height: side(Settings::FIELD_HEIGHT, field_height)?,
         })
     }
 
@@ -75,7 +75,7 @@ impl Dimensions {
     }
 }
 
-fn side(field: &'static str, value: u32) -> Result<u8, SetupError> {
-    SetupError::check_range(field, value, MIN_FIELD_SIZE, MAX_FIELD_SIZE)?;
-    u8::try_from(value).map_err(|error| SetupError::setting(field, error.to_string()))
+fn side(range: SettingRange, value: u32) -> Result<u8, SetupError> {
+    range.check(value)?;
+    u8::try_from(value).map_err(|error| SetupError::setting(range.field, error.to_string()))
 }

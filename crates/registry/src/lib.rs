@@ -120,6 +120,17 @@ macro_rules! define_dispatch {
             }
         }
 
+        /// Bounds of the numeric settings as the game enforces them for `settings`.
+        pub fn setting_ranges(
+            settings: &proto::GameSettings,
+        ) -> Result<Vec<mg_core::SettingRange>, WireError> {
+            use mg_core::Game;
+            use mg_protocol::WireGame;
+            match GameKind::of_settings(settings)? {
+                $(GameKind::$kind => Ok(<$game>::setting_ranges(&<$game>::settings_from_wire(settings)?)),)*
+            }
+        }
+
         pub fn default_settings(kind: GameKind) -> proto::GameSettings {
             use mg_protocol::WireGame;
             match kind {

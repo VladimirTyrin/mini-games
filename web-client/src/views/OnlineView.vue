@@ -7,11 +7,12 @@ import ChatPanel from "@/components/ChatPanel.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import { gamePlugins, pluginBySettings } from "@/games";
+import { initialSettings } from "@/games/initial-settings";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
 import { usePrefsStore } from "@/stores/prefs";
-import { defaultSettings, gameCatalog } from "@/wasm/core";
+import { type SettingsProblem, defaultSettings, gameCatalog } from "@/wasm/core";
 
 const connection = useConnectionStore();
 const lobby = useLobbyStore();
@@ -22,14 +23,18 @@ const creating = ref(false);
 const gameId = ref(gamePlugins[0]?.id ?? "snake");
 const settings = ref(defaultSettings(gameId.value));
 const lobbyName = ref("");
-const problem = ref<string | null>(null);
+const problem = ref<SettingsProblem | null>(null);
 const plugin = computed(() => gamePlugins.find((candidate) => candidate.id === gameId.value));
 const gameInfo = computed(() => catalog.find((game) => game.id === gameId.value));
 const maxSeats = computed(() => gameInfo.value?.maxPlayers ?? 2);
 // The lobby fills up later; settings must already be valid for the smallest table.
 const minSeats = computed(() => gameInfo.value?.minPlayers ?? 1);
 
-watch(gameId, (id) => (settings.value = prefs.lastSettings(id) ?? defaultSettings(id)));
+watch(
+  plugin,
+  (current) => current && (settings.value = initialSettings(current, prefs.lastSettings(current.id))),
+  { immediate: true },
+);
 watch(
   () => connection.isSignedIn,
   (signedIn) => signedIn && void lobby.refresh(),
@@ -71,31 +76,49 @@ const phaseLabel: Record<number, string> = {
           </button>
         </div>
       </div>
-      <section v-if="creating && plugin" class="space-y-3 rounded-xl bg-panel p-4">
-        <div class="flex flex-wrap gap-2">
+      <section v-if="creating && plugin" class="space-y-3 rounded-2xl bg-panel p-4">
+        <h2 class="font-semibold">New lobby</h2>
+        <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Game">
           <button
             v-for="candidate in gamePlugins"
             :key="candidate.id"
-            class="rounded-full px-3 py-1 text-sm"
-            :class="candidate.id === gameId ? 'bg-emerald-600' : 'bg-panel-raised'"
+            role="radio"
+            :aria-checked="candidate.id === gameId"
+            class="h-11 rounded-full border px-4 text-sm"
+            :class="
+              candidate.id === gameId
+                ? 'border-emerald-400 bg-emerald-600/25 text-white'
+                : 'border-white/10 bg-panel-raised text-gray-200'
+            "
             @click="gameId = candidate.id"
           >
             {{ candidate.icon }} {{ candidate.title }}
           </button>
         </div>
+        <div class="border-b border-white/5 pb-3">
+          <p class="font-medium leading-tight">{{ plugin.tagline }}</p>
+          <p class="mt-1 text-xs text-gray-400">{{ plugin.controlsHint }}</p>
+        </div>
         <input
           v-model="lobbyName"
           maxlength="48"
           placeholder="Lobby name (optional)"
-          class="w-full rounded bg-panel-raised px-3 py-2 text-sm"
+          aria-label="Lobby name"
+          class="h-12 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
         />
-        <SettingsEditor v-model="settings" :plugin="plugin" :seats="minSeats" @validity="problem = $event" />
+        <SettingsEditor
+          v-model="settings"
+          :plugin="plugin"
+          :seats="minSeats"
+          audience="online"
+          @validity="problem = $event"
+        />
         <button
-          class="w-full rounded bg-emerald-600 py-2 font-semibold"
+          class="h-12 w-full rounded-xl bg-emerald-600 font-semibold hover:bg-emerald-500 disabled:opacity-50"
           :disabled="!!problem"
           @click="create"
         >
-          Create
+          Create lobby
         </button>
       </section>
       <ul class="space-y-2">

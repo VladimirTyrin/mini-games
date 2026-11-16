@@ -1,4 +1,4 @@
-use mg_core::{SetupError, StateHasher};
+use mg_core::{SettingRange, SetupError, StateHasher};
 
 use crate::model::{Cell, Direction, Score, Tile, TileId, TileValue};
 use crate::rules::SlideOutcome;
@@ -16,8 +16,8 @@ pub(crate) struct Board {
 impl Board {
     /// Validates the size before allocating.
     pub(crate) fn empty(width: u32, height: u32) -> Result<Self, SetupError> {
-        let width = Self::checked_size("width", width)?;
-        let height = Self::checked_size("height", height)?;
+        let width = Self::checked_size(Settings::WIDTH, width)?;
+        let height = Self::checked_size(Settings::HEIGHT, height)?;
         Ok(Self {
             width,
             height,
@@ -25,9 +25,9 @@ impl Board {
         })
     }
 
-    fn checked_size(field: &'static str, value: u32) -> Result<u8, SetupError> {
-        SetupError::check_range(field, value, Settings::MIN_SIZE, Settings::MAX_SIZE)?;
-        u8::try_from(value).map_err(|error| SetupError::setting(field, error.to_string()))
+    fn checked_size(range: SettingRange, value: u32) -> Result<u8, SetupError> {
+        range.check(value)?;
+        u8::try_from(value).map_err(|error| SetupError::setting(range.field, error.to_string()))
     }
 
     pub(crate) fn width(&self) -> u8 {

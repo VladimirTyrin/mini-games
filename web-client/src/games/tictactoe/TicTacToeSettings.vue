@@ -1,48 +1,65 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import NumberField from "@/components/form/NumberField.vue";
-import SelectField from "@/components/form/SelectField.vue";
+import ChipsField from "@/components/form/ChipsField.vue";
+import { matchingPresetKey } from "@/components/form/presets";
+import SegmentedField from "@/components/form/SegmentedField.vue";
+import { useGameSettingsForm } from "@/components/form/settings-form";
+import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
-import { type TicTacToeSettings, TicTacToeFirstPlayerMode } from "@/proto/minigames/v2/tictactoe_pb";
+import { TicTacToeFirstPlayerMode } from "@/proto/minigames/v2/tictactoe_pb";
+
+import { boardPresets } from "./board-presets";
 
 const settings = defineModel<GameSettings>({ required: true });
+const form = useGameSettingsForm(settings, "tictactoe");
+const { value, audience } = form;
 
-const value = computed(() => (settings.value.game.case === "tictactoe" ? settings.value.game.value : null));
+const sizePresets = computed(() => form.acceptedPresets(boardPresets));
 
-function update(patch: Partial<Omit<TicTacToeSettings, "$typeName">>): void {
-  if (!value.value) return;
-  settings.value = { ...settings.value, game: { case: "tictactoe", value: { ...value.value, ...patch } } };
-}
-
-const firstPlayerOptions = [
+// Locally seat 0 is always the person holding the device.
+const firstPlayerOptions = computed(() => [
+  { value: TicTacToeFirstPlayerMode.HOST, label: audience.value === "local" ? "You" : "Host" },
   { value: TicTacToeFirstPlayerMode.RANDOM, label: "Random" },
-  { value: TicTacToeFirstPlayerMode.HOST, label: "Host" },
-] as const;
+]);
 </script>
 
 <template>
-  <div v-if="value" class="space-y-2">
-    <NumberField
-      label="Width"
-      :model-value="value.fieldWidth"
-      @update:model-value="update({ fieldWidth: $event })"
-    />
-    <NumberField
-      label="Height"
-      :model-value="value.fieldHeight"
-      @update:model-value="update({ fieldHeight: $event })"
-    />
-    <NumberField
-      label="In a row to win"
-      :model-value="value.winCount"
-      @update:model-value="update({ winCount: $event })"
-    />
-    <SelectField
+  <div v-if="value" class="divide-y divide-white/5">
+    <ChipsField
+      label="Board"
+      :options="sizePresets"
+      custom-label="Custom"
+      :model-value="matchingPresetKey(sizePresets, value)"
+      @update:model-value="form.applyPreset(sizePresets, $event)"
+    >
+      <template #custom>
+        <StepperField
+          label="Width"
+          v-bind="form.field('field_width')"
+          :model-value="value.fieldWidth"
+          @update:model-value="form.update({ fieldWidth: $event })"
+        />
+        <StepperField
+          label="Height"
+          v-bind="form.field('field_height')"
+          :model-value="value.fieldHeight"
+          @update:model-value="form.update({ fieldHeight: $event })"
+        />
+        <StepperField
+          label="In a row to win"
+          v-bind="form.field('win_count')"
+          :model-value="value.winCount"
+          @update:model-value="form.update({ winCount: $event })"
+        />
+      </template>
+    </ChipsField>
+    <SegmentedField
       label="First move"
+      help="Plays X"
       :options="firstPlayerOptions"
       :model-value="value.firstPlayer"
-      @update:model-value="update({ firstPlayer: $event })"
+      @update:model-value="form.update({ firstPlayer: $event })"
     />
   </div>
 </template>

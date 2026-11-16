@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
+import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
+import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
@@ -13,7 +15,7 @@ import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
 import { sameIdentity } from "@/util/players";
-import { botKinds, gameCatalog } from "@/wasm/core";
+import { type SettingsProblem, botKinds, gameCatalog } from "@/wasm/core";
 
 const router = useRouter();
 const connection = useConnectionStore();
@@ -40,6 +42,30 @@ const canStart = computed(
 
 const labelOf = (player: Identity) => lobby.memberLabels.get(player.id) ?? player.displayName;
 const isMe = (player: Identity | undefined) => sameIdentity(player, connection.identity);
+
+const canEditSettings = computed(
+  () =>
+    lobby.isHost && (state.value?.phase === LobbyPhase.OPEN || state.value?.phase === LobbyPhase.POST_MATCH),
+);
+/** Settings being edited by the host; `null` while not editing. */
+const draft = ref<GameSettings | null>(null);
+const draftProblem = ref<SettingsProblem | null>(null);
+
+function editSettings(): void {
+  draft.value = state.value?.settings ?? null;
+}
+
+async function saveSettings(): Promise<void> {
+  const current = state.value;
+  if (!draft.value || !current || !plugin.value) return;
+  await lobby
+    .updateSettings(draft.value, current.maxSeats)
+    .then(() => {
+      if (draft.value && plugin.value) prefs.rememberSettings(plugin.value.id, draft.value);
+      draft.value = null;
+    })
+    .catch(() => undefined);
+}
 
 /** Nobody else is here: play locally instead (no ping, works offline). */
 const startsLocally = computed(() => humanSeats.value === 1 && (state.value?.observers.length ?? 0) === 0);
@@ -70,12 +96,40 @@ async function leave(): Promise<void> {
     class="mx-auto grid w-full max-w-4xl flex-1 gap-4 p-4 md:grid-cols-[1fr_20rem]"
   >
     <div class="space-y-4">
-      <section class="rounded-xl bg-panel p-4">
+      <section class="rounded-2xl bg-panel p-4">
         <div class="mb-2 flex items-center gap-2">
           <span class="text-2xl">{{ plugin.icon }}</span>
           <span class="font-semibold">{{ plugin.title }}</span>
+          <button
+            v-if="canEditSettings && !draft"
+            class="ml-auto h-11 rounded-lg px-3 text-sm text-emerald-300 hover:bg-panel-raised"
+            @click="editSettings"
+          >
+            Edit settings
+          </button>
         </div>
-        <ul class="flex flex-wrap gap-2 text-xs text-gray-300">
+        <template v-if="draft && canEditSettings">
+          <SettingsEditor
+            v-model="draft"
+            :plugin="plugin"
+            :seats="info?.minPlayers ?? 1"
+            audience="online"
+            @validity="draftProblem = $event"
+          />
+          <div class="flex gap-2">
+            <button class="h-11 flex-1 rounded-lg bg-panel-raised text-sm" @click="draft = null">
+              Cancel
+            </button>
+            <button
+              class="h-11 flex-1 rounded-lg bg-emerald-600 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+              :disabled="!!draftProblem"
+              @click="saveSettings"
+            >
+              Save
+            </button>
+          </div>
+        </template>
+        <ul v-else class="flex flex-wrap gap-2 text-xs text-gray-300">
           <li v-for="fact in facts" :key="fact" class="rounded bg-panel-raised px-2 py-1">{{ fact }}</li>
         </ul>
       </section>

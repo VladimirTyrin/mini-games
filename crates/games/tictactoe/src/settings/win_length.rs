@@ -1,4 +1,4 @@
-use mg_core::SetupError;
+use mg_core::{SettingRange, SetupError};
 
 use crate::settings::{Dimensions, MIN_WIN_COUNT};
 
@@ -7,13 +7,12 @@ use crate::settings::{Dimensions, MIN_WIN_COUNT};
 pub(crate) struct WinLength(u8);
 
 impl WinLength {
+    pub(crate) fn range(shorter_side: u32) -> SettingRange {
+        SettingRange::new("win_count", MIN_WIN_COUNT, shorter_side)
+    }
+
     pub(crate) fn new(win_count: u32, dimensions: Dimensions) -> Result<Self, SetupError> {
-        SetupError::check_range(
-            "win_count",
-            win_count,
-            MIN_WIN_COUNT,
-            dimensions.shorter_side(),
-        )?;
+        Self::range(dimensions.shorter_side()).check(win_count)?;
         u8::try_from(win_count)
             .map(Self)
             .map_err(|error| SetupError::setting("win_count", error.to_string()))
