@@ -58,7 +58,7 @@ const isNativeApp = __NATIVE_APP__;
         @click="router.push('/online')"
       >
         🌐 Play online
-        <span class="block text-sm font-normal text-emerald-100">Lobbies, friends, chat</span>
+        <span class="block text-sm font-normal text-emerald-100">Lobbies and chat with other players</span>
       </button>
       <button
         class="rounded-xl bg-panel p-4 text-left font-semibold hover:bg-panel-raised"
