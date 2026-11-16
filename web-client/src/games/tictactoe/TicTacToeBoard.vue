@@ -72,7 +72,7 @@ async function place(index: number): Promise<void> {
       },
     });
   } catch (error) {
-    toasts.error(error instanceof Error ? error.message : String(error));
+    toasts.failure(error);
   } finally {
     sending.value = false;
   }

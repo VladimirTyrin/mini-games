@@ -58,7 +58,7 @@ function move(direction: Puzzle2048Direction): void {
     .submit({ game: { case: "puzzle2048", value: { command: { case: "move", value: direction } } } })
     .catch((error: unknown) => {
       movesAtSubmit = null;
-      toasts.error(error instanceof Error ? error.message : String(error));
+      toasts.failure(error);
     });
 }
 

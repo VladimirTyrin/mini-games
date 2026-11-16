@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { errorMessage } from "@/util/error-message";
 
 export type ToastTone = "info" | "success" | "error";
 
@@ -26,5 +27,10 @@ export const useToastStore = defineStore("toasts", () => {
     toasts.value = toasts.value.filter((toast) => toast.id !== id);
   }
 
-  return { toasts, show, dismiss, error: (text: string) => show(text, "error") };
+  /** Shows a failure from any `catch`: the error's own message, or its text. */
+  function failure(error: unknown): void {
+    show(errorMessage(error), "error");
+  }
+
+  return { toasts, show, dismiss, failure, error: (text: string) => show(text, "error") };
 });

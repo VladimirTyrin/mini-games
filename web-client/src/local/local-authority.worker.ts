@@ -6,6 +6,7 @@ import init, { LocalHost } from "@/wasm/pkg/mg_wasm";
 import wasmUrl from "@/wasm/pkg/mg_wasm_bg.wasm?url";
 
 import type { FromWorker, ToWorker } from "./worker-protocol";
+import { errorMessage } from "@/util/error-message";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -69,7 +70,11 @@ async function handle(message: ToWorker): Promise<void> {
           driveBots();
         }
       } catch (error) {
-        post({ type: "rejected", requestId: message.requestId, message: String(error) });
+        post({
+          type: "rejected",
+          requestId: message.requestId,
+          message: errorMessage(error),
+        });
       }
       break;
     }

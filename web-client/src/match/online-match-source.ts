@@ -8,6 +8,7 @@ import { Emitter } from "@/net/emitter";
 import { RequestError } from "@/net/request-error";
 import type { Session } from "@/net/session";
 
+import { CommandRejectedError } from "./command-rejected-error";
 import type { GameCommandInit, MatchSource, MatchSourceEvents } from "./match-source";
 
 /** The server allows one catch-up per second per session. */
@@ -65,10 +66,17 @@ export class OnlineMatchSource implements MatchSource {
   }
 
   async submit(command: GameCommandInit): Promise<void> {
-    await this.session.request({
-      case: "submitCommand",
-      value: { matchId: this.matchId, command: create(GameCommandSchema, command) },
-    });
+    try {
+      await this.session.request({
+        case: "submitCommand",
+        value: { matchId: this.matchId, command: create(GameCommandSchema, command) },
+      });
+    } catch (error) {
+      if (error instanceof RequestError && error.code === ErrorCode.COMMAND_REJECTED) {
+        throw new CommandRejectedError(error.message, { cause: error });
+      }
+      throw error;
+    }
   }
 
   requestCatchUp(): void {

@@ -7,6 +7,7 @@ import App from "./App.vue";
 import { setUpNativeApp } from "./platform/native-app";
 import { router } from "./router";
 import { loadCore } from "./wasm/core";
+import { errorMessage } from "./util/error-message";
 
 async function boot(): Promise<void> {
   await loadCore();
@@ -15,5 +16,5 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((error: unknown) => {
-  document.body.textContent = `Failed to start: ${error instanceof Error ? error.message : String(error)}`;
+  document.body.textContent = `Failed to start: ${errorMessage(error)}`;
 });

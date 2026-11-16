@@ -45,7 +45,7 @@ export interface MatchSource {
   ): () => void;
   /** Starts delivering events; call after subscribing. */
   start(): void;
-  /** Rejects with a user-facing message when the authority refuses the command. */
+  /** Rejects with `CommandRejectedError` when the authority refuses the command. */
   submit(command: GameCommandInit): Promise<void>;
   requestCatchUp(): void;
   voteDrop(slot: number): Promise<void>;

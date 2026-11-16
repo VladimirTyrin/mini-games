@@ -15,6 +15,7 @@ import { downloadBytes } from "@/platform/download";
 import { useConnectionStore } from "./connection";
 import { sameIdentity } from "./lobby";
 import { useToastStore } from "./toasts";
+import { errorMessage } from "@/util/error-message";
 
 export interface LocalSeat {
   /** `null` for the local player. */
@@ -71,7 +72,7 @@ export const useMatchStore = defineStore("match", () => {
       replay.value = source;
       run(source);
     } catch (error) {
-      toasts.error(`Cannot open the replay: ${error instanceof Error ? error.message : String(error)}`);
+      toasts.error(`Cannot open the replay: ${errorMessage(error)}`);
     }
   }
 
@@ -89,7 +90,7 @@ export const useMatchStore = defineStore("match", () => {
       const bytes = await source.replayFile();
       if (bytes) downloadBytes(bytes, `mini-games-${source.header.matchId}.mgreplay`);
     } catch (error) {
-      toasts.error(error instanceof Error ? error.message : String(error));
+      toasts.failure(error);
     }
   }
 

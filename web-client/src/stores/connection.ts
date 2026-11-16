@@ -11,6 +11,7 @@ import { tabStorage } from "@/platform/storage";
 
 import { usePrefsStore } from "./prefs";
 import { useToastStore } from "./toasts";
+import { errorMessage } from "@/util/error-message";
 
 /** The online session: server info, sign-in state and the live `Session`. */
 export const useConnectionStore = defineStore("connection", () => {
@@ -30,7 +31,7 @@ export const useConnectionStore = defineStore("connection", () => {
       serverInfo.value = await probeServer(prefs.serverUrl);
     } catch (error) {
       serverInfo.value = null;
-      serverError.value = error instanceof Error ? error.message : String(error);
+      serverError.value = errorMessage(error);
     }
   }
 

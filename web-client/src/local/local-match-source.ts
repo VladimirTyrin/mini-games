@@ -1,7 +1,14 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 
 import { GameCommandSchema } from "@/proto/minigames/v2/game_pb";
-import { type MatchHeader, MatchHeaderSchema, TickFrameSchema } from "@/proto/minigames/v2/match_pb";
+import {
+  MatchCatchUpSchema,
+  type MatchHeader,
+  MatchHeaderSchema,
+  TickFrameSchema,
+} from "@/proto/minigames/v2/match_pb";
+import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
+import { CommandRejectedError } from "@/match/command-rejected-error";
 import type { GameCommandInit, MatchSource, MatchSourceEvents } from "@/match/match-source";
 import { Emitter } from "@/net/emitter";
 
@@ -54,8 +61,26 @@ export class LocalMatchSource implements MatchSource {
     });
   }
 
-  /** The local authority cannot desync from itself; nothing to recover. */
-  requestCatchUp(): void {}
+  /**
+   * Rebuilds the page's mirror from the worker's full log. Both run the same core, so this only
+   * matters if the mirror ever refused a frame; without it the board would freeze silently.
+   */
+  requestCatchUp(): void {
+    this.replayFile()
+      .then((bytes) => {
+        if (!bytes) return;
+        const replay = fromBinary(ReplayFileSchema, bytes);
+        this.events.emit(
+          "catchUp",
+          create(MatchCatchUpSchema, {
+            header: replay.header,
+            frames: replay.frames,
+            nextTick: replay.endTick,
+          }),
+        );
+      })
+      .catch((error: unknown) => console.error("local catch-up failed", error));
+  }
 
   voteDrop(): Promise<void> {
     return Promise.resolve();
@@ -95,7 +120,7 @@ export class LocalMatchSource implements MatchSource {
       case "rejected": {
         const pending = this.pending.get(message.requestId);
         this.pending.delete(message.requestId);
-        pending?.reject(new Error(message.message));
+        pending?.reject(new CommandRejectedError(message.message));
         break;
       }
       case "replay":

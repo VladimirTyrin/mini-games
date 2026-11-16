@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from "@/util/error-message";
 import { computed, onMounted, ref, watch } from "vue";
 
 import {
@@ -34,7 +35,7 @@ async function mountGoogle(): Promise<void> {
       connection.signInWithGoogle(idToken),
     );
   } catch (error) {
-    googleError.value = error instanceof Error ? error.message : String(error);
+    googleError.value = errorMessage(error);
   }
 }
 
@@ -44,7 +45,7 @@ async function signInNatively(): Promise<void> {
     connection.signInWithGoogle(await signInWithGoogleNatively(googleClientId.value));
   } catch (error) {
     if (error instanceof GoogleSignInCancelled) return;
-    googleError.value = error instanceof Error ? error.message : String(error);
+    googleError.value = errorMessage(error);
   }
 }
 

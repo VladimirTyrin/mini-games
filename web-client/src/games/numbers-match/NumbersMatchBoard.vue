@@ -3,6 +3,7 @@ import type { MessageInitShape } from "@bufbuild/protobuf";
 import { computed, ref, watch } from "vue";
 
 import { useGameKeys } from "@/input/use-game-keys";
+import { CommandRejectedError } from "@/match/command-rejected-error";
 import type { MatchController } from "@/match/match-controller";
 import {
   NumbersMatchCellState,
@@ -63,13 +64,18 @@ watch(view, (current) => {
   if (current?.lastAction?.action.case !== "hintShown") selectedIndex.value = null;
 });
 
-async function send(command: MessageInitShape<typeof NumbersMatchCommandSchema>): Promise<void> {
+/** `onRejected` replaces the error toast when the core refuses the command. */
+async function send(
+  command: MessageInitShape<typeof NumbersMatchCommandSchema>,
+  onRejected?: () => void,
+): Promise<void> {
   if (!canPlay.value || sending.value) return;
   sending.value = true;
   try {
     await props.controller.submit({ game: { case: "numbersMatch", value: command } });
   } catch (error) {
-    toasts.error(error instanceof Error ? error.message : String(error));
+    if (error instanceof CommandRejectedError && onRejected) onRejected();
+    else toasts.failure(error);
   } finally {
     sending.value = false;
   }
@@ -83,7 +89,10 @@ function select(index: number): void {
     return;
   }
   selectedIndex.value = null;
-  void send({ command: { case: "removePair", value: { firstIndex: first, secondIndex: index } } });
+  // Like the original game: a cell that does not pair with the selection becomes the selection.
+  void send({ command: { case: "removePair", value: { firstIndex: first, secondIndex: index } } }, () => {
+    selectedIndex.value = index;
+  });
 }
 
 function refill(): void {

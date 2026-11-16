@@ -90,7 +90,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     try {
       return await connection.requireSession().request(message);
     } catch (error) {
-      toasts.error(error instanceof Error ? error.message : String(error));
+      toasts.failure(error);
       throw error;
     }
   }

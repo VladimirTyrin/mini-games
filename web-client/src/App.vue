@@ -33,7 +33,8 @@ onMounted(() => connection.resumeStoredSession());
 </script>
 
 <template>
-  <div class="flex min-h-full flex-col">
+  <!-- Edge-to-edge on Android: keep content above the gesture bar. -->
+  <div class="flex min-h-full flex-col" style="padding-bottom: env(safe-area-inset-bottom)">
     <RouterView />
     <ToastList />
   </div>
