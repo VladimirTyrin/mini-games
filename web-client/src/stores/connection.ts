@@ -7,6 +7,7 @@ import type { Credentials } from "@/net/credentials";
 import { probeServer } from "@/net/probe-server";
 import { RequestError } from "@/net/request-error";
 import { type ConnectionState, Session } from "@/net/session";
+import { tabStorage } from "@/platform/storage";
 
 import { usePrefsStore } from "./prefs";
 import { useToastStore } from "./toasts";
@@ -33,19 +34,31 @@ export const useConnectionStore = defineStore("connection", () => {
     }
   }
 
-  /** Signs in with a stored Google session if there is one. */
+  /**
+   * App start: signs in again with a stored Google session, or — after a reload of a tab that was
+   * playing as a guest — with the same guest name, so the server hands the seat back.
+   */
   function resumeStoredSession(): void {
-    if (prefs.sessionToken && !session.value) {
+    if (session.value) return;
+    if (prefs.sessionToken) {
       start({ kind: "session", token: prefs.sessionToken });
+    } else if (prefs.guestName && tabStorage.get(resumeKeyFor(prefs.serverUrl))) {
+      start({ kind: "guest", displayName: prefs.guestName });
     }
+  }
+
+  function resumeKeyFor(serverUrl: string): string {
+    return `mini-games.resume.${serverUrl}`;
   }
 
   function start(credentials: Credentials): void {
     session.value?.close();
-    const created = new Session(prefs.serverUrl, credentials);
+    const resumeKey = resumeKeyFor(prefs.serverUrl);
+    const created = new Session(prefs.serverUrl, credentials, tabStorage.get(resumeKey) ?? "");
     created.events.on("state", (next) => (state.value = next));
-    created.events.on("signedIn", ({ identity: who, sessionToken }) => {
+    created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken }) => {
       identity.value = who;
+      tabStorage.set(resumeKey, resumeToken);
       // A Google sign-in returns a long-lived session token; later reconnects use it instead
       // of the short-lived Google ID token.
       if (sessionToken) {
@@ -72,6 +85,7 @@ export const useConnectionStore = defineStore("connection", () => {
   }
 
   async function signOut(): Promise<void> {
+    tabStorage.remove(resumeKeyFor(prefs.serverUrl));
     await session.value?.signOut();
     session.value = null;
     identity.value = null;

@@ -1,40 +1,53 @@
-import type { ReplayFile } from "@/proto/minigames/v2/replay_pb";
-import type { MatchHeader, TickFrame } from "@/proto/minigames/v2/match_pb";
+import { create, fromBinary } from "@bufbuild/protobuf";
+
+import {
+  MatchCatchUpSchema,
+  type MatchHeader,
+  type TickFrame,
+  TickFrameSchema,
+} from "@/proto/minigames/v2/match_pb";
+import { type ReplayFile, ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
 import { Emitter } from "@/net/emitter";
-import { expandCompactLog } from "@/wasm/core";
+import { Mirror } from "@/wasm/core";
 
 import type { MatchSource, MatchSourceEvents } from "./match-source";
 
 const TURN_BASED_STEP_MS = 700;
 
 /**
- * Plays a replay file client-side. Seeking rebuilds from the start through a catch-up, which the
- * controller already supports; the core replays thousands of frames per millisecond.
+ * Plays a replay file client-side. The file is validated by the core first (format, settings,
+ * bounded frame log), so `endTick` is trustworthy. Empty frames are created per tick on the fly,
+ * never all at once. Seeking replays from the start through a catch-up.
  */
 export class ReplayMatchSource implements MatchSource {
   readonly kind = "replay";
   readonly mySlot = null;
   readonly header: MatchHeader;
   private readonly events = new Emitter<MatchSourceEvents>();
-  private readonly frames: TickFrame[];
-  private position = 0;
+  private readonly file: ReplayFile;
+  private readonly endTick: bigint;
+  /** Number of ticks emitted so far = the next tick to emit. */
+  private position = 0n;
+  /** Index into `file.frames` of the next logged frame. */
+  private nextLogged = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private playing = false;
   private speedPercent = 100;
   private readonly progressHandlers = new Set<() => void>();
 
-  constructor(private readonly file: ReplayFile) {
-    if (!file.header) throw new Error("replay has no header");
-    this.header = file.header;
-    this.frames = [...expandCompactLog(file.frames, 0n, file.endTick)];
+  constructor(bytes: Uint8Array) {
+    this.endTick = Mirror.replayEndTick(bytes);
+    this.file = fromBinary(ReplayFileSchema, bytes);
+    if (!this.file.header) throw new Error("replay has no header");
+    this.header = this.file.header;
   }
 
   get length(): number {
-    return this.frames.length;
+    return Number(this.endTick);
   }
 
   get current(): number {
-    return this.position;
+    return Number(this.position);
   }
 
   get isPlaying(): boolean {
@@ -62,7 +75,7 @@ export class ReplayMatchSource implements MatchSource {
   }
 
   play(): void {
-    if (this.position >= this.frames.length) this.seek(0);
+    if (this.position >= this.endTick) this.seek(0);
     this.playing = true;
     this.schedule();
     this.notify();
@@ -85,17 +98,16 @@ export class ReplayMatchSource implements MatchSource {
     this.notify();
   }
 
-  /** Jumps to `frameCount` applied frames. */
-  seek(frameCount: number): void {
-    this.position = Math.min(Math.max(0, frameCount), this.frames.length);
-    const end = this.frames[this.position - 1]?.tick ?? -1n;
-    this.events.emit("catchUp", {
-      $typeName: "minigames.v2.MatchCatchUp",
-      header: this.header,
-      frames: this.frames.slice(0, this.position),
-      nextTick: end + 1n,
-      pause: undefined,
-    });
+  /** Jumps to the state after `tickCount` ticks. */
+  seek(tickCount: number): void {
+    const target = BigInt(Math.min(Math.max(0, Math.floor(tickCount)), this.length));
+    const logged = this.file.frames.filter((frame) => frame.tick < target);
+    this.position = target;
+    this.nextLogged = logged.length;
+    this.events.emit(
+      "catchUp",
+      create(MatchCatchUpSchema, { header: this.header, frames: logged, nextTick: target }),
+    );
     this.notify();
   }
 
@@ -104,7 +116,7 @@ export class ReplayMatchSource implements MatchSource {
   }
 
   requestCatchUp(): void {
-    this.seek(this.position);
+    this.seek(this.current);
   }
 
   voteDrop(): Promise<void> {
@@ -131,15 +143,24 @@ export class ReplayMatchSource implements MatchSource {
     );
   }
 
+  private frameAt(tick: bigint): TickFrame {
+    const logged = this.file.frames[this.nextLogged];
+    if (logged && logged.tick === tick) {
+      this.nextLogged += 1;
+      return logged;
+    }
+    return create(TickFrameSchema, { tick });
+  }
+
   private emitNext(): void {
-    const frame = this.frames[this.position];
-    if (!frame) {
+    if (this.position >= this.endTick) {
       this.playing = false;
       this.events.emit("ended", this.file.result ?? null);
       this.notify();
       return;
     }
-    this.position += 1;
+    const frame = this.frameAt(this.position);
+    this.position += 1n;
     this.events.emit("frame", frame);
     this.notify();
   }

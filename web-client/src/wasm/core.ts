@@ -1,4 +1,4 @@
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { fromBinary, toBinary } from "@bufbuild/protobuf";
 import { BinaryReader } from "@bufbuild/protobuf/wire";
 
 import {
@@ -10,6 +10,8 @@ import {
   GameViewSchema,
 } from "@/proto/minigames/v2/game_pb";
 import {
+  type MatchCatchUp,
+  MatchCatchUpSchema,
   type MatchHeader,
   MatchHeaderSchema,
   type MatchResult,
@@ -64,8 +66,30 @@ export function settingsProblem(settings: GameSettings, seats: number): string |
 export class Mirror {
   private readonly inner: wasm.MatchMirror;
 
-  constructor(header: MatchHeader) {
-    this.inner = new wasm.MatchMirror(toBinary(MatchHeaderSchema, header));
+  private constructor(inner: wasm.MatchMirror) {
+    this.inner = inner;
+  }
+
+  static forHeader(header: MatchHeader): Mirror {
+    return new Mirror(new wasm.MatchMirror(toBinary(MatchHeaderSchema, header)));
+  }
+
+  /** Validates a whole replay file (format, settings, frame log) and checks its end tick. */
+  static replayEndTick(replayFile: Uint8Array): bigint {
+    const mirror = wasm.MatchMirror.fromReplayFile(replayFile);
+    try {
+      return mirror.replayEndTick();
+    } finally {
+      mirror.free();
+    }
+  }
+
+  /**
+   * Replays the authority's full history (validated by the core: bounded gaps, increasing
+   * ticks), so a hostile catch-up cannot make the page allocate millions of frames.
+   */
+  applyCatchUp(catchUp: MatchCatchUp): void {
+    this.inner.applyCatchUp(toBinary(MatchCatchUpSchema, catchUp));
   }
 
   /** Throws on desync; the caller must rebuild from a full catch-up. */
@@ -96,32 +120,5 @@ export class Mirror {
 
   free(): void {
     this.inner.free();
-  }
-}
-
-export function emptyFrame(tick: bigint): TickFrame {
-  return create(TickFrameSchema, { tick, inputs: [] });
-}
-
-/** Restores a gap-free frame sequence from a compact log that omits empty frames. */
-export function* expandCompactLog(
-  frames: readonly TickFrame[],
-  from: bigint,
-  end: bigint,
-): Generator<TickFrame> {
-  let tick = from;
-  for (const frame of frames) {
-    if (frame.tick < tick) continue;
-    while (tick < frame.tick && tick < end) {
-      yield emptyFrame(tick);
-      tick += 1n;
-    }
-    if (frame.tick >= end) return;
-    yield frame;
-    tick = frame.tick + 1n;
-  }
-  while (tick < end) {
-    yield emptyFrame(tick);
-    tick += 1n;
   }
 }

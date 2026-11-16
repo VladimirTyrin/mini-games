@@ -37,7 +37,7 @@ type PushEvents = { [P in ServerPayload as P["case"]]: P["value"] };
 
 interface SessionEvents extends PushEvents {
   state: ConnectionState;
-  signedIn: { identity: Identity; resumed: boolean; sessionToken: string };
+  signedIn: { identity: Identity; resumed: boolean; sessionToken: string; resumeToken: string };
   refused: RequestError;
 }
 
@@ -64,10 +64,14 @@ export class Session {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private wanted = false;
 
+  /** `resumeToken` from an earlier session in this tab lets a page reload keep its seat. */
   constructor(
     private readonly url: string,
     private credentials: Credentials,
-  ) {}
+    resumeToken = "",
+  ) {
+    this.resumeToken = resumeToken;
+  }
 
   get state(): ConnectionState {
     return this.stateValue;
@@ -154,6 +158,7 @@ export class Session {
           identity: welcome.identity,
           resumed: welcome.resumed,
           sessionToken: welcome.sessionToken,
+          resumeToken: welcome.resumeToken,
         });
       }
     } catch (error) {

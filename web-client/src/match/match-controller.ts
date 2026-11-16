@@ -2,7 +2,7 @@ import { shallowRef, type ShallowRef } from "vue";
 
 import type { GameView } from "@/proto/minigames/v2/game_pb";
 import type { MatchCatchUp, MatchPause, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
-import { expandCompactLog, Mirror } from "@/wasm/core";
+import { Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, MatchSource } from "./match-source";
 
@@ -31,10 +31,10 @@ export class MatchController {
 
   constructor(readonly source: MatchSource) {
     this.tickMs = source.header.tickMs;
-    this.mirror = new Mirror(source.header);
+    this.mirror = Mirror.forHeader(source.header);
     this.unsubscribe.push(
       source.on("frame", (frame) => this.onFrame(frame)),
-      source.on("catchUp", (catchUp) => this.onCatchUp(catchUp)),
+      source.on("catchUp", (catchUp) => this.applyCatchUp(catchUp)),
       source.on("paused", (pause) => {
         this.pause.value = pause;
         this.resumeAt.value = null;
@@ -83,13 +83,13 @@ export class MatchController {
     }
   }
 
-  private onCatchUp(catchUp: MatchCatchUp): void {
+  /** Replaces everything applied so far with the authority's full history. */
+  applyCatchUp(catchUp: MatchCatchUp): void {
     const header = catchUp.header ?? this.source.header;
     this.mirror.free();
-    this.mirror = new Mirror(header);
+    this.mirror = Mirror.forHeader(header);
     try {
-      for (const frame of expandCompactLog(catchUp.frames, 0n, catchUp.nextTick))
-        this.mirror.applyFrame(frame);
+      this.mirror.applyCatchUp(catchUp);
     } catch (error) {
       console.error("catch-up does not replay", error);
     }

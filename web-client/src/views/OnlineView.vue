@@ -23,7 +23,10 @@ const settings = ref(defaultSettings(gameId.value));
 const lobbyName = ref("");
 const problem = ref<string | null>(null);
 const plugin = computed(() => gamePlugins.find((candidate) => candidate.id === gameId.value));
-const maxSeats = computed(() => catalog.find((game) => game.id === gameId.value)?.maxPlayers ?? 2);
+const gameInfo = computed(() => catalog.find((game) => game.id === gameId.value));
+const maxSeats = computed(() => gameInfo.value?.maxPlayers ?? 2);
+// The lobby fills up later; settings must already be valid for the smallest table.
+const minSeats = computed(() => gameInfo.value?.minPlayers ?? 1);
 
 watch(gameId, (id) => (settings.value = prefs.lastSettings(id) ?? defaultSettings(id)));
 watch(
@@ -85,7 +88,7 @@ const phaseLabel: Record<number, string> = {
           placeholder="Lobby name (optional)"
           class="w-full rounded bg-panel-raised px-3 py-2 text-sm"
         />
-        <SettingsEditor v-model="settings" :plugin="plugin" :seats="1" @validity="problem = $event" />
+        <SettingsEditor v-model="settings" :plugin="plugin" :seats="minSeats" @validity="problem = $event" />
         <button
           class="w-full rounded bg-emerald-600 py-2 font-semibold"
           :disabled="!!problem"
