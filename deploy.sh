@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # Deploys the server + web client to a Linux host over SSH.
 #
-#   ./deploy.sh                                   # production: TLS on braintvsminigames.xyz
+#   ./deploy.sh                                   # production: server, web, APK and OTA bundle
+#   ./deploy.sh --no-apk                          # server and web only
 #   ./deploy.sh --host root@1.2.3.4 --mode http   # any host by IP, no TLS
+#
+# Machine-specific toolchain paths (JDK, Android SDK, zig) go to deploy.local.env next to this
+# script (not in git; see deploy.local.env.example).
 #
 # Options:
 #   --host H        ssh destination (default root@146.103.106.44)
 #   --mode M        http | tls (default tls)
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
-#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk, with what
+#   --no-apk        do not build or publish the Android app
+#   --apk FILE      publish this prebuilt APK instead of building one, with what
 #                   build/android.mjs put next to it for the app's update check: android.json,
 #                   and web.json + web-<build>.zip (over-the-air web bundle; 3 newest kept)
 #   --allow-version-mismatch
@@ -37,6 +42,7 @@ EMAIL=""
 SKIP_BUILD=false
 DRY_RUN=false
 APK=""
+BUILD_APK=true
 ALLOW_VERSION_MISMATCH=false
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -49,14 +55,19 @@ while [[ $# -gt 0 ]]; do
         --mode) MODE="$2"; shift 2 ;;
         --domain) DOMAIN="$2"; shift 2 ;;
         --email) EMAIL="$2"; shift 2 ;;
-        --apk) APK="$2"; shift 2 ;;
+        --apk) APK="$2"; BUILD_APK=false; shift 2 ;;
         --allow-version-mismatch) ALLOW_VERSION_MISMATCH=true; shift ;;
         --skip-build) SKIP_BUILD=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
-        -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+        --no-apk) BUILD_APK=false; shift ;;
+        -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
+
+# shellcheck source=/dev/null
+[[ -f "${SCRIPT_DIR}/deploy.local.env" ]] && source "${SCRIPT_DIR}/deploy.local.env"
+[[ "$SKIP_BUILD" == true && "$BUILD_APK" == true ]] && BUILD_APK=false
 
 SSH_OPTS=(-o IdentitiesOnly=yes -i "$SSH_KEY")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
@@ -73,10 +84,22 @@ BUILD="$(git -C "$SCRIPT_DIR" rev-list --count HEAD)" || die "cannot count commi
 COMMIT="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_DIST="${SCRIPT_DIR}/client/dist"
-APK_DIR="$(dirname "${APK:-.}")"
 echo "==> Build ${BUILD} (commit ${COMMIT})"
+[[ -z "$(git -C "$SCRIPT_DIR" status --porcelain)" ]]     || echo "warning: uncommitted changes are deployed as build ${BUILD} (${COMMIT})" >&2
 
-# android.json and web.json must come from this commit too, before anything is built or uploaded.
+if [[ "$BUILD_APK" == true ]]; then
+    # First: it builds the web bundle for the app into client/dist, which the web build replaces.
+    echo "==> Building Android app"
+    (
+        cd "${SCRIPT_DIR}/client"
+        [[ -d node_modules ]] || npm ci
+        npm run android:apk
+    )
+    APK="${SCRIPT_DIR}/client/android/dist/mini-games.apk"
+fi
+APK_DIR="$(dirname "${APK:-.}")"
+
+# android.json and web.json must come from this commit too, before anything is uploaded.
 if [[ -n "$APK" ]]; then
     for info in "${APK_DIR}/android.json" "${APK_DIR}/web.json"; do
         [[ -f "$info" ]] || continue
@@ -94,6 +117,8 @@ if [[ "$SKIP_BUILD" == false ]]; then
     (
         cd "${SCRIPT_DIR}/client"
         [[ -d node_modules ]] || npm ci
+        # The WASM core and protocol code are generated, not in git: build them from this commit.
+        npm run generate
         # No VITE_SERVER_URL: the page served by this host talks to the same host (/ws).
         MG_BUILD_NUMBER="$BUILD" MG_COMMIT="$COMMIT" npm run build
     )
@@ -230,7 +255,23 @@ if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
     journalctl -u "${SERVICE_NAME}" -n 50 --no-pager
     exit 1
 fi
-curl -fsS -o /dev/null http://127.0.0.1/healthz && curl -fsS -o /dev/null http://127.0.0.1/ && echo "==> nginx OK"
+# Each check on its own line: set -e ignores a failure inside an && chain. A redirect does not
+# pass (plain http answers 301 in tls mode): the site itself must answer 200.
+if [[ "$MODE" == "tls" ]]; then
+    RESOLVE=(--resolve "${DOMAIN}:443:127.0.0.1")
+    SITE="https://${DOMAIN}"
+else
+    RESOLVE=()
+    SITE="http://127.0.0.1"
+fi
+for path in /healthz /; do
+    status="$(curl -sS -o /dev/null -w '%{http_code}' "${RESOLVE[@]}" "${SITE}${path}" || true)"
+    if [[ "$status" != 200 ]]; then
+        echo "nginx answers ${SITE}${path} with ${status:-nothing}" >&2
+        exit 1
+    fi
+done
+echo "==> nginx OK"
 rm -rf "${REMOTE_DIR}/web.old"
 REMOTE
 

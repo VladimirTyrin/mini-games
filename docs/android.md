@@ -79,7 +79,7 @@ packages in `package-lock.json`. `build/android.mjs` bakes it into the Android w
 | `web-<build>.zip` | the Android web bundle (`dist/`, `index.html` at the zip root) |
 | `web.json` | `{ build, versionName, nativeFingerprint, zip, sha256 }` |
 
-`./deploy.sh --apk client/android/dist/mini-games.apk` uploads all four to `/downloads/`:
+`./deploy.sh` builds them and uploads all four to `/downloads/`:
 the APK before `android.json`, the zip before `web.json`, so a published file never names one
 that is not there yet. The server keeps the 3 newest `web-*.zip`. The APK files must be of the
 build being deployed (see [deploy.md](deploy.md)).
@@ -91,14 +91,15 @@ updates", the app reads `web.json` and `android.json` from its server
 
 | Published | App does |
 |---|---|
-| `web.json` build newer, same fingerprint, served over https | downloads the zip silently (the plugin checks its SHA-256) and switches to it when the app next goes to the background (leaving or closing it) |
+| `web.json` build newer, same fingerprint, served over https | downloads the zip silently (the plugin checks its SHA-256) and switches to it at once outside a match and an online lobby, otherwise when the app next goes to the background |
 | newer build with another fingerprint, or no `web.json` (older server), or a plain-http server | offers "Update available → Download" for the APK, as long as `android.json` is newer |
 | nothing newer | nothing |
 | a newer build that already failed to start on this device | nothing (it is not retried) |
 
 The OTA part uses `@capgo/capacitor-updater` in manual mode: no Capgo cloud, no update checks of
 its own, statistics off (`capacitor.config.ts`). The switch never happens during a match: while
-a match screen is open the switch is held until the player leaves it. Each start calls
+a match is being played the switch is held until the player leaves it (a match this build cannot
+follow, after a rules change on the server, lets it through). Each start calls
 `notifyAppReady` once the app has mounted; a bundle that does not get that far within 20 s is
 rolled back to the previous one. Installing a new APK drops downloaded bundles and starts from
 the one inside the APK (`resetWhenUpdate`). Plain-http servers get no OTA bundles: the bundle is

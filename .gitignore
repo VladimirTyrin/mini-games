@@ -11,9 +11,12 @@
 
 # OS
 .DS_Store
-Thumbs.dib
+Thumbs.db
 
 .claude
 
 # Signing keys and secrets (local only, back them up!)
 /.keys/
+
+# Machine-specific deploy toolchain paths (see deploy.local.env.example)
+/deploy.local.env
