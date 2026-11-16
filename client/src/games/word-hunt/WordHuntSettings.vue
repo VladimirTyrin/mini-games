@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted, watch } from "vue";
+
 import { useGameSettingsForm } from "@/components/form/settings-form";
 import SegmentedField from "@/components/form/SegmentedField.vue";
 import StepperField from "@/components/form/StepperField.vue";
@@ -6,8 +8,6 @@ import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { localDayNumber } from "./daily";
-
-const DAILY_WORD_LENGTH = 5;
 
 const settings = defineModel<GameSettings>({ required: true });
 const form = useGameSettingsForm(settings, "wordHunt");
@@ -27,13 +27,29 @@ const hardModeOptions = [
 ] as const;
 
 function setMode(mode: WordHuntPuzzleMode): void {
-  // The word of the day has a fixed length (the core refuses others) and today's date.
-  form.update(
-    mode === WordHuntPuzzleMode.DAILY
-      ? { mode, wordLength: DAILY_WORD_LENGTH, day: localDayNumber() }
-      : { mode, day: 0 },
-  );
+  if (mode !== WordHuntPuzzleMode.DAILY) {
+    form.update({ mode, day: 0 });
+    return;
+  }
+  form.update({ mode, day: localDayNumber() });
 }
+
+// The word of the day has the one length the core publishes for it; the ranges follow the mode
+// once the core has seen it, so the length is fitted afterwards.
+watch(
+  () => [value.value?.mode, form.field("word_length").min, form.field("word_length").max] as const,
+  ([mode, min, max]) => {
+    const length = value.value?.wordLength;
+    if (mode !== WordHuntPuzzleMode.DAILY || min === undefined || min !== max || length === min) return;
+    form.update({ wordLength: min });
+  },
+  { immediate: true },
+);
+
+// Remembered settings (and a lobby's) may carry an earlier day.
+onMounted(() => {
+  if (value.value?.mode === WordHuntPuzzleMode.DAILY) setMode(WordHuntPuzzleMode.DAILY);
+});
 </script>
 
 <template>

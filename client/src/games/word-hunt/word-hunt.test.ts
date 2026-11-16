@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { storage } from "@/platform/storage";
-import { WordHuntLanguage } from "@/proto/minigames/v2/word_hunt_pb";
+import { create } from "@bufbuild/protobuf";
+
+import { GameSettingsSchema } from "@/proto/minigames/v2/game_pb";
+import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { formatDay, localDayNumber } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
-import { recordGame, statsFor } from "./stats";
+import { finishGame, startGame, statsFor } from "./stats";
+import { wordHuntPlugin } from "./index";
 import { normalizeWord, parseWordList } from "./word-lists";
 
 describe("word lists", () => {
@@ -54,15 +58,21 @@ describe("daily", () => {
 
 describe("stats", () => {
   beforeEach(() => {
-    storage.remove("mini-games.word-hunt.stats.v1");
+    storage.remove("mini-games.word-hunt.stats.v2");
   });
 
+  const russian = WordHuntLanguage.RUSSIAN;
+  const game = (key: string, dailyDay: number | null = null) => ({ language: russian, key, dailyDay });
+  const play = (key: string, solvedIn: number | null, dailyDay: number | null = null) => {
+    startGame(game(key, dailyDay));
+    return finishGame(game(key, dailyDay), solvedIn);
+  };
+
   it("counts wins, losses and streaks per language", () => {
-    const russian = WordHuntLanguage.RUSSIAN;
-    recordGame({ language: russian, solvedIn: 3, dailyDay: null });
-    recordGame({ language: russian, solvedIn: 4, dailyDay: null });
-    recordGame({ language: russian, solvedIn: null, dailyDay: null });
-    recordGame({ language: russian, solvedIn: 3, dailyDay: null });
+    play("a", 3);
+    play("b", 4);
+    play("c", null);
+    play("d", 3);
     expect(statsFor(russian)).toMatchObject({
       played: 4,
       won: 3,
@@ -73,10 +83,35 @@ describe("stats", () => {
     expect(statsFor(WordHuntLanguage.ENGLISH).played).toBe(0);
   });
 
-  it("counts a word of the day once", () => {
-    const english = WordHuntLanguage.ENGLISH;
-    recordGame({ language: english, solvedIn: 2, dailyDay: 20_000 });
-    recordGame({ language: english, solvedIn: null, dailyDay: 20_000 });
-    expect(statsFor(english)).toMatchObject({ played: 1, won: 1, lastDailyDay: 20_000 });
+  it("counts a game once, however often its result is shown", () => {
+    play("a", 2);
+    startGame(game("a"));
+    finishGame(game("a"), 2);
+    expect(statsFor(russian).played).toBe(1);
+  });
+
+  it("counts a game left after a guess as lost once the next one starts", () => {
+    play("a", 2);
+    startGame(game("left"));
+    expect(statsFor(russian).played).toBe(1);
+    startGame(game("next"));
+    expect(statsFor(russian)).toMatchObject({ played: 2, won: 1, streak: 0 });
+  });
+
+  it("counts the word of the day once, even when it is left and restarted", () => {
+    startGame(game("first try", 20_000));
+    play("second try", 1, 20_000);
+    play("tomorrow", 2, 20_001);
+    expect(statsFor(russian)).toMatchObject({ played: 2, won: 1, lastDailyDay: 20_001 });
+  });
+});
+
+describe("plugin", () => {
+  it("gives the word of the day today's date at every start", () => {
+    const remembered = create(GameSettingsSchema, {
+      game: { case: "wordHunt", value: { mode: WordHuntPuzzleMode.DAILY, day: 5, wordLength: 5 } },
+    });
+    const started = wordHuntPlugin.settingsForNewMatch?.(remembered);
+    expect(started?.game.case === "wordHunt" && started.game.value.day).toBe(localDayNumber());
   });
 });

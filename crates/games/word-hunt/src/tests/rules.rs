@@ -160,6 +160,32 @@ fn hard_mode_requires_found_letters() {
 }
 
 #[test]
+fn hard_mode_keeps_the_count_of_a_found_repeated_letter() {
+    let mut game = game_with_answer("lever", Language::English, true);
+    guess(&mut game, "eerie").unwrap();
+    // Both `e`s were found (one in place), so a guess with a single `e` is refused.
+    assert_eq!(
+        guess(&mut game, "eaten"),
+        Err(CommandError::Illegal(
+            "hard mode: keep every green letter in its place"
+        ))
+    );
+    assert_eq!(
+        guess(&mut game, "seats"),
+        Err(CommandError::Illegal(
+            "hard mode: use every letter you have found"
+        ))
+    );
+    assert_eq!(
+        guess(&mut game, "ferry"),
+        Err(CommandError::Illegal(
+            "hard mode: use every letter you have found"
+        ))
+    );
+    guess(&mut game, "never").unwrap();
+}
+
+#[test]
 fn keyboard_shows_each_guessed_letters_best_mark() {
     let mut game = game_with_answer("crane", Language::English, false);
     guess(&mut game, "nacre").unwrap();

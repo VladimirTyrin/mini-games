@@ -56,7 +56,8 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => url.pathname.includes("/words/"),
             handler: "StaleWhileRevalidate",
-            options: { cacheName: "word-lists" },
+            // Keyed by build (word-lists.ts): two languages, plus the previous build's pair.
+            options: { cacheName: "word-lists", expiration: { maxEntries: 4 } },
           },
         ],
       },

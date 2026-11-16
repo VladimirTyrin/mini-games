@@ -10,7 +10,7 @@ import { prefersReducedMotion } from "@/render/reduced-motion";
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
 import { markClass } from "./mark-style";
-import { type WordHuntStats, recordGame, statsFor } from "./stats";
+import { type StatsGame, type WordHuntStats, finishGame, startGame, statsFor } from "./stats";
 import WordHuntKeyboard from "./WordHuntKeyboard.vue";
 import { type AcceptedWords, acceptedWords, normalizeWord } from "./word-lists";
 
@@ -99,21 +99,25 @@ async function enter(): Promise<void> {
   }
 }
 
-useGameKeys((key, event) => {
-  if (!canType.value || !settings.value) return false;
-  if (key === "Enter") {
-    void enter();
+// Repeats on: holding Backspace or a letter keeps going, like any text field. Enter acts once.
+useGameKeys(
+  (key, event) => {
+    if (!canType.value || !settings.value) return false;
+    if (key === "Enter") {
+      if (!event.repeat) void enter();
+      return true;
+    }
+    if (key === "Backspace") {
+      erase();
+      return true;
+    }
+    const letter = letterForKey(settings.value.language, key, event.code);
+    if (letter === null) return false;
+    type(letter);
     return true;
-  }
-  if (key === "Backspace") {
-    erase();
-    return true;
-  }
-  const letter = letterForKey(settings.value.language, key, event.code);
-  if (letter === null) return false;
-  type(letter);
-  return true;
-});
+  },
+  { allowRepeat: true },
+);
 
 interface TileRow {
   readonly letters: readonly string[];
@@ -153,19 +157,26 @@ const subtitle = computed(() => {
   return current.hardMode ? `${kind} · hard mode` : kind;
 });
 
-/** Counted once per finished game, never for replays or observers. */
+/** The player's own games only: never replays or observed matches. */
+const statsGame = computed<StatsGame | null>(() => {
+  const current = settings.value;
+  const { source, mySlot } = props.controller;
+  if (!current || mySlot === null || source.kind === "replay") return null;
+  return {
+    language: current.language,
+    key: `${source.header.matchId}:${source.header.startedAtUnixMs}`,
+    dailyDay: current.mode === WordHuntPuzzleMode.DAILY ? current.day : null,
+  };
+});
 const stats = ref<WordHuntStats | null>(null);
 watch(
-  () => view.value?.phase,
-  (phase) => {
-    const current = settings.value;
-    if (!current || props.controller.mySlot === null || props.controller.source.kind === "replay") return;
-    if (phase !== WordHuntPhase.SOLVED && phase !== WordHuntPhase.FAILED) return;
-    stats.value = recordGame({
-      language: current.language,
-      solvedIn: phase === WordHuntPhase.SOLVED ? guesses.value.length : null,
-      dailyDay: current.mode === WordHuntPuzzleMode.DAILY ? current.day : null,
-    });
+  [() => guesses.value.length, () => view.value?.phase],
+  ([guessCount, phase]) => {
+    const game = statsGame.value;
+    if (!game || guessCount === 0) return;
+    startGame(game);
+    if (phase === WordHuntPhase.SOLVED) stats.value = finishGame(game, guessCount);
+    else if (phase === WordHuntPhase.FAILED) stats.value = finishGame(game, null);
   },
   { immediate: true },
 );
@@ -177,47 +188,46 @@ const winRate = computed(() => {
   return current && current.played > 0 ? Math.round((100 * current.won) / current.played) : 0;
 });
 
-const tileSize = computed(
-  () =>
-    `min(3.5rem, calc((100vw - 2rem) / ${wordLength.value} - 0.375rem), calc((100dvh - 20rem) / ${maxGuesses.value} - 0.375rem))`,
-);
+const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxGuesses.value }));
 </script>
 
 <template>
-  <div v-if="view && settings" class="flex min-h-0 flex-1 flex-col items-center gap-3">
-    <p class="text-sm text-gray-400">{{ subtitle }}</p>
-    <div class="relative flex flex-col gap-1.5" :style="{ '--tile': tileSize }">
-      <div
-        v-for="(row, rowIndex) in rows"
-        :key="`${rowIndex}-${row.current ? shakes : 0}`"
-        class="flex gap-1.5"
-        :class="{ 'wh-shake': row.current && shakes > 0 && message !== null && !prefersReducedMotion() }"
-      >
+  <div v-if="view && settings" class="wh-layout flex min-h-0 flex-1 flex-col items-center gap-3">
+    <div class="flex flex-col items-center gap-3">
+      <p class="text-sm text-gray-400">{{ subtitle }}</p>
+      <div class="wh-grid relative flex flex-col gap-1.5" :style="gridSize">
         <div
-          v-for="column in wordLength"
-          :key="column"
-          class="flex size-(--tile) items-center justify-center rounded-lg text-[calc(var(--tile)*0.5)] font-bold uppercase"
-          :class="[tileClass(row, column - 1), rowIndex === revealRow ? 'wh-reveal' : '']"
-          :style="rowIndex === revealRow ? { animationDelay: `${(column - 1) * 90}ms` } : undefined"
+          v-for="(row, rowIndex) in rows"
+          :key="`${rowIndex}-${row.current ? shakes : 0}`"
+          class="flex gap-1.5"
+          :class="{ 'wh-shake': row.current && shakes > 0 && message !== null && !prefersReducedMotion() }"
         >
-          {{ row.letters[column - 1] ?? "" }}
+          <div
+            v-for="column in wordLength"
+            :key="column"
+            class="flex size-(--tile) items-center justify-center rounded-lg text-[calc(var(--tile)*0.5)] font-bold uppercase"
+            :class="[tileClass(row, column - 1), rowIndex === revealRow ? 'wh-reveal' : '']"
+            :style="rowIndex === revealRow ? { animationDelay: `${(column - 1) * 90}ms` } : undefined"
+          >
+            {{ row.letters[column - 1] ?? "" }}
+          </div>
         </div>
+        <p
+          v-if="message"
+          role="alert"
+          class="absolute left-1/2 top-1/3 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-900 shadow-lg"
+        >
+          {{ message }}
+        </p>
       </div>
-      <p
-        v-if="message"
-        role="alert"
-        class="absolute left-1/2 top-1/3 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-900 shadow-lg"
-      >
-        {{ message }}
+      <p v-if="shownStats && !isPlaying" class="text-sm text-gray-400">
+        Played {{ shownStats.played }} · won {{ winRate }}% · streak {{ shownStats.streak }} (best
+        {{ shownStats.bestStreak }})
       </p>
     </div>
-    <p v-if="shownStats && !isPlaying" class="text-sm text-gray-400">
-      Played {{ shownStats.played }} · won {{ winRate }}% · streak {{ shownStats.streak }} (best
-      {{ shownStats.bestStreak }})
-    </p>
     <WordHuntKeyboard
       v-if="controller.mySlot !== null"
-      class="mt-auto"
+      class="wh-keyboard mt-auto"
       :rows="keyboardRows(settings.language)"
       :hints="view.keyboard"
       :disabled="!canType"
@@ -229,6 +239,39 @@ const tileSize = computed(
 </template>
 
 <style scoped>
+/* Tiles fill the width on phones and the height on short screens, between a floor that keeps
+   letters readable and a cap for tablets. */
+.wh-grid {
+  --tile: max(
+    1.75rem,
+    min(
+      4.5rem,
+      calc((100vw - 2rem) / var(--letters) - 0.375rem),
+      calc((100dvh - 20rem) / var(--rows) - 0.375rem)
+    )
+  );
+}
+/* A phone held sideways: the keyboard goes beside the board. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .wh-layout {
+    flex-direction: row;
+    justify-content: center;
+  }
+  .wh-keyboard {
+    margin-top: 0;
+    max-width: 50vw;
+  }
+  .wh-grid {
+    --tile: max(
+      1.5rem,
+      min(
+        3rem,
+        calc((100dvh - 9rem) / var(--rows) - 0.375rem),
+        calc((45vw - 2rem) / var(--letters) - 0.375rem)
+      )
+    );
+  }
+}
 .wh-shake {
   animation: wh-shake 360ms ease-in-out;
 }

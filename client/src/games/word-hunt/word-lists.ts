@@ -41,7 +41,9 @@ export function acceptedWords(language: WordHuntLanguage): Promise<AcceptedWords
   if (!file) return Promise.resolve(new Map());
   let pending = loading.get(language);
   if (!pending) {
-    pending = fetch(new URL(file, document.baseURI))
+    // The build number in the URL ties the cached list to the answers built into this app
+    // version: a list cached before an update can never miss a newly added answer.
+    pending = fetch(new URL(`${file}?build=${__APP_BUILD__}`, document.baseURI))
       .then((response) => {
         if (!response.ok) throw new Error(`${file}: HTTP ${response.status}`);
         return response.text();

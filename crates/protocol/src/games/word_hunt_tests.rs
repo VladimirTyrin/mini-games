@@ -1,4 +1,4 @@
-use mg_core::{Game, GameSettings, PlayerSpec, Viewer};
+use mg_core::{Game, PlayerSpec, Viewer};
 use mg_word_hunt::{Command, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent};
 use prost::Message;
 
@@ -111,7 +111,7 @@ fn view_carries_guesses_marks_and_the_revealed_answer() {
 #[cfg(feature = "json")]
 #[test]
 fn authority_frames_replay_through_json() {
-    let settings = Settings::parse(RawSettings {
+    let settings = <Settings as mg_core::GameSettings>::parse(RawSettings {
         language: Language::Russian,
         ..RawSettings::default()
     })

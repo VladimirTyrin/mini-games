@@ -56,7 +56,7 @@ impl GameSettings for Settings {
                 if word_length.get() != DAILY_WORD_LENGTH {
                     return Err(SettingsError::at("word_length")(
                         SettingProblem::RuleBroken {
-                            rule: "the word of the day has 5 letters",
+                            rule: "the word of the day has a fixed length",
                             value: word_length.get(),
                         },
                     ));
@@ -89,14 +89,21 @@ impl GameSettings for Settings {
     }
 
     fn ranges(raw: &RawSettings) -> Vec<SettingRange> {
-        let mut ranges = vec![
-            WordLength::range("word_length"),
-            MaxGuesses::range("max_guesses"),
-        ];
-        // The day only counts for the word of the day.
-        if raw.mode == PuzzleMode::Daily {
-            ranges.push(DayNumber::range("day"));
+        match raw.mode {
+            PuzzleMode::Unlimited => vec![
+                WordLength::range("word_length"),
+                MaxGuesses::range("max_guesses"),
+            ],
+            // The UI reads the daily length from here instead of keeping its own copy.
+            PuzzleMode::Daily => vec![
+                SettingRange {
+                    field: "word_length",
+                    min: DAILY_WORD_LENGTH,
+                    max: DAILY_WORD_LENGTH,
+                },
+                MaxGuesses::range("max_guesses"),
+                DayNumber::range("day"),
+            ],
         }
-        ranges
     }
 }

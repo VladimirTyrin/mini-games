@@ -27,6 +27,11 @@ function press(event: PointerEvent, action: () => void): void {
   event.preventDefault();
   if (!props.disabled) action();
 }
+
+/** Keyboard (Tab, Enter) and screen-reader activation send a click with no pointer. */
+function activate(event: MouseEvent, action: () => void): void {
+  if (event.detail === 0 && !props.disabled) action();
+}
 </script>
 
 <template>
@@ -38,6 +43,7 @@ function press(event: PointerEvent, action: () => void): void {
         aria-label="Enter"
         class="h-12 min-w-0 flex-[1.6] rounded-md bg-gray-500/40 text-xs font-semibold uppercase text-gray-100 active:brightness-125"
         @pointerdown="press($event, () => emit('enter'))"
+        @click="activate($event, () => emit('enter'))"
       >
         Enter
       </button>
@@ -48,6 +54,7 @@ function press(event: PointerEvent, action: () => void): void {
         class="h-12 min-w-0 flex-1 rounded-md text-base font-semibold uppercase transition-colors active:brightness-125"
         :class="keyClass(letter)"
         @pointerdown="press($event, () => emit('letter', letter))"
+        @click="activate($event, () => emit('letter', letter))"
       >
         {{ letter }}
       </button>
@@ -57,6 +64,7 @@ function press(event: PointerEvent, action: () => void): void {
         aria-label="Delete letter"
         class="h-12 min-w-0 flex-[1.6] rounded-md bg-gray-500/40 text-lg text-gray-100 active:brightness-125"
         @pointerdown="press($event, () => emit('erase'))"
+        @click="activate($event, () => emit('erase'))"
       >
         ⌫
       </button>
