@@ -7,7 +7,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
-const budgetsKiB = { js: 125, wasm: 250, css: 30 };
+// js: 135 since the setup forms (+4 KiB) and Stack Attack's vector worker, animation and touch
+// controls (+6 KiB); everything else of the app stays well inside.
+const budgetsKiB = { js: 135, wasm: 250, css: 30 };
 const totals = { js: 0, wasm: 0, css: 0 };
 const assetName = /[\w.-]+\.(?:js|wasm|css)\b/g;
 

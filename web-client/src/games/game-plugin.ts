@@ -1,6 +1,6 @@
 import type { Component } from "vue";
 
-import type { BotKind, GameSettings } from "@/proto/minigames/v2/game_pb";
+import type { BotKind, GameSettings, GameView } from "@/proto/minigames/v2/game_pb";
 
 export type SettingsCase = NonNullable<GameSettings["game"]["case"]>;
 
@@ -31,4 +31,6 @@ export interface GamePlugin {
   controlsHint: string;
   /** Starting settings on a phone when none are remembered; the core defaults otherwise. */
   narrowScreenSettings?(defaults: GameSettings): GameSettings;
+  /** Why the match in `view` ended ("Crushed by a falling crate"), shown with the result. */
+  describeEnd?(view: GameView): string | null;
 }

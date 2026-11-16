@@ -14,8 +14,13 @@ import {
 import { tickProgress } from "@/render/tick-progress";
 import { useCanvas } from "@/render/use-canvas";
 
+import StackAttackControls from "./StackAttackControls.vue";
 import StackAttackInfo from "./StackAttackInfo.vue";
 import { drawStackAttackScene } from "./stack-attack-renderer";
+import { StackAttackTransition } from "./stack-attack-transition";
+import { freeWalkTarget } from "./walk-target";
+import { WorkerAnimator } from "./worker-animator";
+import { type WorkerAction, WorkerInputPacer } from "./worker-input-pacer";
 
 const props = defineProps<{ controller: MatchController }>();
 
@@ -31,9 +36,10 @@ const view = computed(() => stackAttackViewOf(props.controller.current.value));
 const seatNames = computed(() =>
   props.controller.source.header.seats.map((seat) => seat.player?.displayName ?? `Player ${seat.slot + 1}`),
 );
+const mySlot = computed(() => props.controller.mySlot);
 
 const myWorker = computed(() => {
-  const slot = props.controller.mySlot;
+  const slot = mySlot.value;
   return slot === null ? undefined : view.value?.workers[slot];
 });
 const canAct = computed(
@@ -41,69 +47,139 @@ const canAct = computed(
 );
 const status = computed(() => {
   if (!view.value || view.value.endReason !== undefined) return "";
-  if (props.controller.mySlot === null) return "Watching";
+  if (mySlot.value === null) return "Watching";
   if (myWorker.value?.status === StackAttackWorkerStatus.CRUSHED) return "You were crushed — watching";
   return "";
 });
+
+type Command = MessageInitShape<typeof StackAttackCommandSchema>["command"];
+
+function commandFor(action: WorkerAction): Command {
+  if (action === "jump") return { case: "jump", value: {} };
+  const direction = action === "left" ? StackAttackDirection.LEFT : StackAttackDirection.RIGHT;
+  return { case: "move", value: { direction } };
+}
+
+/** Paused or counting down: the authority would refuse commands, and a predicted step would stick. */
+function isHeld(): boolean {
+  const resumeAt = props.controller.resumeAt.value;
+  return props.controller.pauses.value.length > 0 || (resumeAt !== null && resumeAt > performance.now());
+}
+
+const animator = new WorkerAnimator(props.controller.tickMs, props.controller.mySlot);
+const pacer = new WorkerInputPacer((action) => {
+  const current = view.value;
+  const slot = mySlot.value;
+  if (!canAct.value || !current || slot === null || isHeld()) return false;
+  if (action !== "jump") {
+    const target = freeWalkTarget(current, slot, action);
+    if (target !== null) animator.predictWalk(target, performance.now());
+  }
+  props.controller.submit({ game: { case: "stackAttack", value: { command: commandFor(action) } } }).then(
+    () => pacer.acknowledged(),
+    () => pacer.rejected(),
+  );
+  return true;
+});
+
+let transition: StackAttackTransition | null = null;
 
 const { invalidate } = useCanvas(
   canvas,
   container,
   (context, size, now) => {
-    const snapshot = props.controller.current.value;
-    const current = stackAttackViewOf(snapshot);
-    if (!current) {
+    if (!transition) {
       context.clearRect(0, 0, size.width, size.height);
       return;
     }
     drawStackAttackScene(context, size, {
-      view: current,
-      previous: stackAttackViewOf(props.controller.previous.value),
-      progress: tickProgress(snapshot, props.controller.tickMs, now),
+      transition,
+      animator,
+      progress: tickProgress(props.controller.current.value, props.controller.tickMs, now),
+      now,
     });
   },
-  () => tickProgress(props.controller.current.value, props.controller.tickMs, performance.now()) < 1,
+  () => {
+    if (!transition) return false;
+    const now = performance.now();
+    return (
+      transition.view.endReason === undefined ||
+      tickProgress(props.controller.current.value, props.controller.tickMs, now) < 1 ||
+      animator.hasEffectsAt(now)
+    );
+  },
 );
-watch(() => props.controller.current.value, invalidate);
 
-function send(command: MessageInitShape<typeof StackAttackCommandSchema>["command"]): void {
-  if (!canAct.value) return;
-  // Real-time input: a refused command (full queue) is simply dropped.
-  void props.controller.submit({ game: { case: "stackAttack", value: { command } } }).catch(() => undefined);
+watch(
+  () => props.controller.current.value,
+  (snapshot) => {
+    const current = stackAttackViewOf(snapshot);
+    if (!snapshot || !current) {
+      transition = null;
+      invalidate();
+      return;
+    }
+    transition = new StackAttackTransition(
+      current,
+      stackAttackViewOf(props.controller.previous.value),
+      snapshot.at,
+    );
+    pacer.frameArrived(myWorker.value?.queuedCommands ?? 0);
+    if (!canAct.value) pacer.reset();
+    animator.observe(transition, performance.now(), pacer.hasCommandsInFlight);
+    pacer.pump();
+    invalidate();
+  },
+  { immediate: true },
+);
+
+const KEY_ACTIONS = new Map<string, WorkerAction>([
+  ["ArrowLeft", "left"],
+  ["a", "left"],
+  ["ArrowRight", "right"],
+  ["d", "right"],
+  ["ArrowUp", "jump"],
+  ["w", "jump"],
+  [" ", "jump"],
+]);
+const actionOfKey = (key: string) => KEY_ACTIONS.get(key.length === 1 ? key.toLowerCase() : key);
+
+function release(action: WorkerAction): void {
+  if (action !== "jump") pacer.release(action);
 }
 
-const moveLeft = () => send({ case: "move", value: { direction: StackAttackDirection.LEFT } });
-const moveRight = () => send({ case: "move", value: { direction: StackAttackDirection.RIGHT } });
-const jump = () => send({ case: "jump", value: {} });
-
-const KEY_ACTIONS = new Map<string, () => void>([
-  ["ArrowLeft", moveLeft],
-  ["a", moveLeft],
-  ["ArrowRight", moveRight],
-  ["d", moveRight],
-  ["ArrowUp", jump],
-  ["w", jump],
-  [" ", jump],
-]);
-
-useGameKeys((key) => {
-  const action = KEY_ACTIONS.get(key.length === 1 ? key.toLowerCase() : key);
-  if (!action) return false;
-  action();
-  return true;
-});
+useGameKeys(
+  (key) => {
+    const action = actionOfKey(key);
+    if (!action) return false;
+    pacer.press(action);
+    return true;
+  },
+  {
+    release: (key) => {
+      const action = actionOfKey(key);
+      if (action) release(action);
+    },
+    releaseAll: () => pacer.reset(),
+  },
+);
+// Swipes stay as an alternative to the buttons: one swipe, one step (or a jump). Taps do nothing,
+// so a short swipe can no longer jump by accident.
 useSwipe(container, {
   swipe: (direction) => {
-    if (direction === "left") moveLeft();
-    else if (direction === "right") moveRight();
-    else if (direction === "up") jump();
+    if (direction === "up") pacer.press("jump");
+    else if (direction === "left" || direction === "right") {
+      pacer.press(direction);
+      pacer.release(direction);
+    }
   },
-  tap: jump,
 });
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-2 md:flex-row md:gap-3">
+  <div
+    class="flex min-h-0 flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_15rem] md:grid-rows-[minmax(0,1fr)_auto] md:gap-3"
+  >
     <div ref="container" class="relative min-h-0 min-w-0 flex-1 select-none overflow-hidden">
       <canvas ref="canvas" class="absolute inset-0 block" />
     </div>
@@ -112,7 +188,13 @@ useSwipe(container, {
       :view="view"
       :seat-names="seatNames"
       :status="status"
-      class="shrink-0 md:w-60 md:self-start"
+      class="shrink-0 max-md:order-first md:row-span-2 md:self-start"
+    />
+    <StackAttackControls
+      v-if="mySlot !== null"
+      class="hidden shrink-0 max-md:flex pointer-coarse:flex"
+      @press="pacer.press($event)"
+      @release="release"
     />
   </div>
 </template>

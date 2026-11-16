@@ -19,6 +19,10 @@ const lobby = useLobbyStore();
 const controller = computed(() => match.controller);
 const plugin = computed(() => pluginBySettings(controller.value?.source.header.settings?.game.case));
 const isOnline = computed(() => controller.value?.source.kind === "online");
+const endReason = computed(() => {
+  const view = controller.value?.current.value?.view;
+  return view ? (plugin.value?.describeEnd?.(view) ?? null) : null;
+});
 
 onMounted(() => {
   if (!controller.value) void router.replace("/");
@@ -63,7 +67,13 @@ function again(): void {
   <main v-if="controller && plugin" class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3">
     <div class="relative flex min-h-0 flex-1 flex-col">
       <component :is="plugin.Board" :controller="controller" class="min-h-0 flex-1" />
-      <MatchOverlay :controller="controller" @leave="leave" @replay="match.downloadReplay()" @again="again" />
+      <MatchOverlay
+        :controller="controller"
+        :end-reason="endReason"
+        @leave="leave"
+        @replay="match.downloadReplay()"
+        @again="again"
+      />
     </div>
     <ReplayBar v-if="match.replay" :replay="match.replay" />
     <p class="hidden text-center text-xs text-gray-500 md:block">{{ plugin.controlsHint }}</p>

@@ -11,11 +11,14 @@ import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
 import { saveBytes } from "@/platform/download";
+import { Mirror } from "@/wasm/core";
 
 import { useConnectionStore } from "./connection";
 import { useToastStore } from "./toasts";
 import { errorMessage } from "@/util/error-message";
 import { sameIdentity } from "@/util/players";
+
+const LOCAL_REAL_TIME_COUNTDOWN_MS = 3000;
 
 export interface LocalSeat {
   /** `null` for the local player. */
@@ -56,7 +59,8 @@ export const useMatchStore = defineStore("match", () => {
       })),
     });
     const mySlot = seats.findIndex((seat) => seat.bot === null);
-    run(new LocalMatchSource(header, Math.max(0, mySlot)));
+    const countdownMs = Mirror.tickMsFor(header) > 0 ? LOCAL_REAL_TIME_COUNTDOWN_MS : 0;
+    run(new LocalMatchSource(header, Math.max(0, mySlot), countdownMs));
   }
 
   function startOnline(header: MatchHeader): MatchController | null {

@@ -6,6 +6,7 @@ import { Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, MatchSource } from "./match-source";
 import { PlaybackClock } from "./playback-clock";
+import { resultRevealAt } from "./result-reveal";
 import { type SeatPause, seatPauses } from "./seat-pause";
 
 export interface ViewSnapshot {
@@ -25,6 +26,8 @@ export class MatchController {
   readonly resumeAt: ShallowRef<number | null> = shallowRef(null);
   readonly result: ShallowRef<MatchResult | null> = shallowRef(null);
   readonly ended = shallowRef(false);
+  /** `performance.now()` from which the result may cover the board (the ending plays out first). */
+  readonly resultRevealAt: ShallowRef<number | null> = shallowRef(null);
   /** Ended by the authority without a result (server error); there is no replay. */
   readonly aborted = shallowRef(false);
   readonly tickMs: number;
@@ -54,6 +57,10 @@ export class MatchController {
       source.on("ended", (result) => {
         this.result.value = result ?? (this.mirror.isFinished ? this.mirror.result() : null);
         this.aborted.value = this.result.value === null;
+        const now = performance.now();
+        this.resultRevealAt.value = this.aborted.value
+          ? now
+          : resultRevealAt(this.current.value?.at ?? null, this.tickMs, now);
         this.ended.value = true;
       }),
     );

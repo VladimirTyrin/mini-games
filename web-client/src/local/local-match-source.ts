@@ -26,10 +26,14 @@ export class LocalMatchSource implements MatchSource {
   private readonly worker: Worker;
   private nextRequestId = 1;
   private readonly pending = new Map<number, Pending>();
+  private startTimer: ReturnType<typeof setTimeout> | null = null;
+  private started = false;
 
+  /** `countdownMs`: a "3-2-1" before a real-time match starts, so the first crate is no surprise. */
   constructor(
     readonly header: MatchHeader,
     readonly mySlot: number,
+    private readonly countdownMs = 0,
   ) {
     this.worker = new Worker(new URL("./local-authority.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (event: MessageEvent<FromWorker>) => this.onMessage(event.data);
@@ -43,6 +47,17 @@ export class LocalMatchSource implements MatchSource {
   }
 
   start(): void {
+    if (this.countdownMs <= 0) {
+      this.startAuthority();
+      return;
+    }
+    this.events.emit("resumed", { countdownMs: this.countdownMs });
+    this.startTimer = setTimeout(() => this.startAuthority(), this.countdownMs);
+  }
+
+  private startAuthority(): void {
+    this.startTimer = null;
+    this.started = true;
     const seed = crypto.getRandomValues(new Uint32Array(2));
     this.send({
       type: "start",
@@ -53,6 +68,7 @@ export class LocalMatchSource implements MatchSource {
   }
 
   submit(command: GameCommandInit): Promise<void> {
+    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameCommandSchema, create(GameCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -92,6 +108,8 @@ export class LocalMatchSource implements MatchSource {
   }
 
   leave(): void {
+    if (this.startTimer !== null) clearTimeout(this.startTimer);
+    this.startTimer = null;
     this.send({ type: "stop" });
     for (const pending of this.pending.values()) pending.reject(new Error("match closed"));
     this.pending.clear();

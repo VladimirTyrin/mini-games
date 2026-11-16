@@ -1,17 +1,39 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import type { MatchController } from "@/match/match-controller";
 import type { SeatPause } from "@/match/seat-pause";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import { seatLabels } from "@/util/players";
 
-const props = defineProps<{ controller: MatchController }>();
+const props = defineProps<{
+  controller: MatchController;
+  /** Why the match ended, from the game ("Crushed by a falling crate"). */
+  endReason?: string | null;
+}>();
 const emit = defineEmits<{ leave: []; replay: []; again: [] }>();
 
 const now = ref(performance.now());
 const timer = setInterval(() => (now.value = performance.now()), 250);
-onBeforeUnmount(() => clearInterval(timer));
+
+// The result waits until the ending (a crush, the winning move) has been seen.
+const revealed = ref(false);
+let revealTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+  () => props.controller.resultRevealAt.value,
+  (revealAt) => {
+    if (revealTimer !== null) clearTimeout(revealTimer);
+    revealTimer = null;
+    revealed.value = revealAt !== null && revealAt <= performance.now();
+    if (revealAt !== null && !revealed.value)
+      revealTimer = setTimeout(() => (revealed.value = true), revealAt - performance.now());
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  clearInterval(timer);
+  if (revealTimer !== null) clearTimeout(revealTimer);
+});
 
 const pauses = computed(() => props.controller.pauses.value);
 const aborted = computed(() => props.controller.aborted.value);
@@ -23,7 +45,7 @@ const countdown = computed(() => {
   return at && at > now.value ? Math.ceil((at - now.value) / 1000) : null;
 });
 const result = computed(() => props.controller.result.value);
-const ended = computed(() => props.controller.ended.value);
+const ended = computed(() => props.controller.ended.value && revealed.value);
 const mySlot = computed(() => props.controller.mySlot);
 
 const headline = computed(() => {
@@ -59,6 +81,7 @@ async function voteDrop(slot: number): Promise<void> {
     <div class="w-full max-w-sm space-y-3 rounded-xl bg-panel p-5 text-center shadow-xl">
       <template v-if="ended">
         <h2 class="text-2xl font-bold">{{ headline }}</h2>
+        <p v-if="endReason && !aborted" class="text-sm text-gray-300">{{ endReason }}</p>
         <p v-if="aborted" class="text-sm text-gray-300">The server stopped this match. No replay is kept.</p>
         <ul v-if="result" class="space-y-1 text-sm">
           <li v-for="(score, slot) in result.scores" :key="slot" class="flex justify-between">

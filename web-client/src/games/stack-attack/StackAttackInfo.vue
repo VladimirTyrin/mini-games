@@ -3,9 +3,12 @@ import { computed } from "vue";
 
 import { type StackAttackView, StackAttackWorkerStatus } from "@/proto/minigames/v2/stack_attack_pb";
 
-import { workerColor } from "./stack-attack-renderer";
+import { workerColor } from "./worker-palette";
 
 const props = defineProps<{ view: StackAttackView; seatNames: readonly string[]; status: string }>();
+
+// Mirrors the rules' POINTS_PER_LINE (crates/games/stack-attack/src/rules/constants.rs).
+const POINTS_PER_LINE = 100;
 
 const STATUS_NOTES: Partial<Record<StackAttackWorkerStatus, string>> = {
   [StackAttackWorkerStatus.CRUSHED]: "crushed",
@@ -30,6 +33,9 @@ const workers = computed(() =>
     slot: worker.slot,
     name: props.seatNames[worker.slot] ?? `Player ${worker.slot + 1}`,
     isYou: worker.slot === props.view.you,
+    // A local player is often named "You" already: "You (you)" says it twice.
+    showYouTag:
+      worker.slot === props.view.you && props.seatNames[worker.slot]?.trim().toLowerCase() !== "you",
     alive: worker.status === StackAttackWorkerStatus.ALIVE,
     note: STATUS_NOTES[worker.status] ?? "",
     color: workerColor(worker.slot),
@@ -59,10 +65,14 @@ const workers = computed(() =>
         <span class="size-3 shrink-0 rounded-full" :style="{ backgroundColor: worker.color }" />
         <span class="min-w-0 flex-1 truncate">
           {{ worker.name }}
-          <span v-if="worker.isYou" class="text-xs text-gray-400"> (you)</span>
+          <span v-if="worker.showYouTag" class="text-xs text-gray-400"> (you)</span>
         </span>
         <span v-if="worker.note" class="text-xs text-rose-300">{{ worker.note }}</span>
       </li>
     </ul>
+    <p class="text-center text-xs text-gray-400 md:text-left">
+      Push crates to fill a row: a full row clears for {{ POINTS_PER_LINE }} points. Don't get crushed, and
+      keep the stack below the red line.
+    </p>
   </aside>
 </template>

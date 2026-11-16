@@ -2,6 +2,7 @@ import type { GamePlugin } from "../game-plugin";
 
 import Board from "./StackAttackBoard.vue";
 import SettingsForm from "./StackAttackSettings.vue";
+import { describeStackAttackEnd } from "./end-reason";
 
 export const stackAttackPlugin: GamePlugin = {
   id: "stack_attack",
@@ -18,5 +19,7 @@ export const stackAttackPlugin: GamePlugin = {
   },
   // Stack Attack has no built-in bot kinds.
   botLabel: () => "Bot",
-  controlsHint: "←/→ or A/D to move, push crates · Space, W or ↑ to jump · swipe or tap on touch screens",
+  controlsHint:
+    "Hold ←/→ or A/D to walk and push crates · Space, W or ↑ to jump · jump, then walk to climb a crate",
+  describeEnd: describeStackAttackEnd,
 };

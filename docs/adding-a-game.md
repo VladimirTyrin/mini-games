@@ -100,16 +100,24 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 
 ## 5. UI (`web-client/src/games/<game>`)
 
-- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controlsHint`.
+- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controlsHint`, and
+  optionally `describeEnd` (why the match ended, shown with the result).
 - Settings form — rows from `components/form` (`StepperField`, `SegmentedField`, `ChipsField`
   presets, `MoreOptions`) through `useGameSettingsForm`: immutable updates, **no hardcoded
   limits** (`form.field('<wire name>')` binds the core's bounds and its error to a row; presets
   the core rejects are dropped). Optional `narrowScreenSettings` picks phone-friendly defaults.
 - Board — render `controller.current.value.view`. Real-time games draw one tick behind and
   interpolate from `controller.previous` with `tickProgress`. Input through `useGameKeys`
-  (filters repeats, modifiers, typing) and `useSwipe`; ignore input when
-  `controller.mySlot === null` (observers, replays).
-- Mobile: fits portrait phones, large touch targets, no page scroll on swipe.
+  (filters repeats, modifiers, typing; `release`/`releaseAll` for held keys) and `useSwipe`;
+  ignore input when `controller.mySlot === null` (observers, replays). Send real-time commands
+  no faster than the game consumes them (Stack Attack's `WorkerInputPacer`): a backlog is lag.
+- The result overlay waits for the ending to play out (`MatchController.resultRevealAt`: 1.2 s
+  after the last tick's motion for real-time games, 0.8 s for turn-based), so the final crash or
+  winning move is visible. Local real-time matches start after a 3-2-1 countdown.
+- Mobile: fits portrait phones, large touch targets (on-screen buttons for games that need
+  holding, ≥ 64 px), no page scroll on swipe.
+- Respect `prefersReducedMotion()` (`render/reduced-motion.ts`) for decorative motion: squash,
+  shake, particles.
 
 ## 6. Before the PR
 
