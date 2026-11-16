@@ -72,7 +72,11 @@ impl WordHunt {
         match self.settings.first_turn {
             FirstTurn::Random => None,
             FirstTurn::HostFirst => self.seats.in_play().next(),
-            FirstTurn::HostLast => self.seats.in_play().last(),
+            // Turns go up the table, so the host closes every round when the seat after it starts.
+            FirstTurn::HostLast => {
+                let host = self.seats.in_play().next()?;
+                self.seats.next_after(host)
+            }
         }
     }
 
@@ -95,7 +99,7 @@ impl WordHunt {
         };
         if let Some(last) = last_standing.filter(|_| self.seats.is_group()) {
             self.end(Phase::Forfeited, Some(last));
-        } else if !self.seats.any_human_in_play() {
+        } else if self.seats.has_people() && !self.seats.any_human_in_play() {
             self.end(Phase::Abandoned, None);
         } else if self.turn == Some(slot) {
             self.turn = self.seats.next_after(slot);

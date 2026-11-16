@@ -394,7 +394,12 @@ impl MatchActor {
         if let Some(authority) = self.authority.as_mut() {
             authority.drop_player(slot);
         }
-        self.seal_and_broadcast();
+        // Sealing a real-time frame steps the game, so the drop waits for the next tick: sealing
+        // it now would move everyone during a pause, or add a tick between two ticks. A drop that
+        // ends the game goes out at once (a finished game does not step).
+        if self.clock == Clock::TurnBased || self.is_finished() {
+            self.seal_and_broadcast();
+        }
         if was_disconnected {
             self.after_reconnect();
         }

@@ -4,7 +4,7 @@ pub enum FirstTurn {
     Random,
     /// The first seat: the host, or the player in a local game.
     HostFirst,
-    /// The seat before the host, so the host closes the first round.
+    /// The seat after the host, so the host closes every round.
     HostLast,
 }
 

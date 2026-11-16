@@ -93,7 +93,10 @@ impl StackAttack {
             return;
         };
         let new_head = worker.head().above();
+        // Grounded alone is not enough: a line clear or a crate pushed away can take the support
+        // away after this tick's gravity, and the worker only starts to fall on the next tick.
         if worker.state != WorkerState::Grounded
+            || !self.stands_on_something(worker.feet)
             || !self.field.contains(new_head)
             || self.field.has_resting_box_at(new_head)
         {
@@ -166,6 +169,10 @@ impl StackAttack {
     /// on each other (they may overlap).
     fn apply_worker_gravity(&mut self, events: &mut Vec<GameEvent>) {
         for (seat, slot) in Slot::all(self.workers.len()).enumerate() {
+            let supported = self
+                .workers
+                .get(seat)
+                .is_some_and(|worker| self.stands_on_something(worker.feet));
             let Some(worker) = self.workers.get_mut(seat).filter(|w| w.is_alive()) else {
                 continue;
             };
@@ -173,7 +180,6 @@ impl StackAttack {
                 worker.state = WorkerState::Falling;
                 continue;
             }
-            let supported = worker.feet.y == 0 || self.field.is_occupied(worker.feet.below());
             if !supported {
                 worker.feet = worker.feet.below();
                 worker.state = WorkerState::Falling;
@@ -185,6 +191,10 @@ impl StackAttack {
                 });
             }
         }
+    }
+
+    fn stands_on_something(&self, feet: Cell) -> bool {
+        feet.y == 0 || self.field.is_occupied(feet.below())
     }
 
     fn clear_lines(&mut self, events: &mut Vec<GameEvent>) {

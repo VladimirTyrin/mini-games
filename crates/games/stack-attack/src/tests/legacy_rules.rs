@@ -135,6 +135,22 @@ fn jump_needs_ground_and_headroom() {
 }
 
 #[test]
+fn no_jump_off_a_row_that_was_just_cleared() {
+    let mut game = new_game(8, 8, 1);
+    fill_row(&mut game, 0, &[2]);
+    put_falling_box(&mut game, 2, 1);
+    place_worker(&mut game, 0, 4, 1);
+    // The crate settles into the gap and the row clears, leaving the worker standing on nothing.
+    steps(&mut game, 2);
+    assert_eq!(view(&game).lines_cleared, 1);
+
+    send(&mut game, 0, Command::Jump);
+    steps(&mut game, 1);
+
+    assert_eq!(worker(&game, 0).feet.y, 0, "jumped off thin air");
+}
+
+#[test]
 fn jump_then_move_climbs_onto_a_box() {
     let mut game = new_game(8, 8, 1);
     place_worker(&mut game, 0, 3, 0);

@@ -39,6 +39,11 @@ impl Seats {
             .any(|(in_play, human)| *in_play && *human)
     }
 
+    /// A table of bots only (the arena) plays on until one is left.
+    pub(crate) fn has_people(&self) -> bool {
+        self.human.iter().any(|human| *human)
+    }
+
     /// Next seat in play after `slot`, wrapping around.
     pub(crate) fn next_after(&self, slot: Slot) -> Option<Slot> {
         let seats = self.in_play.len();

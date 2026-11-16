@@ -10,7 +10,7 @@ elsewhere in the word, grey not in it (repeated letters count only as often as t
   the game has no clock). Local stats per language (`client/src/games/word-hunt/stats.ts`).
 - **Group** (2–4 seats, people or bots): the players take turns on one board in seat order;
   whoever finds the word wins. The **first turn** setting picks who starts: random, the host (the
-  player in a local game) first, or the host last (the seat before the host starts, so the host
+  player in a local game) first, or the host last (the seat after the host starts, so the host
   closes each round); a first-player event that contradicts it is refused. There is no guess
   limit to play to, only a safety cap of 30 guesses in total (`GROUP_GUESS_CAP`) that ends the
   game as a draw with the word shown. No turn timer. The word of the day is not available in a
@@ -18,7 +18,8 @@ elsewhere in the word, grey not in it (repeated letters count only as often as t
 - **Hard mode** (any mode): every guess must keep the green letters in place and use the letters
   found.
 - **Give up** at any time: alone it is a loss and the word is shown; in a group the seat drops out
-  and the others play on. When one seat is left it wins; with no person left the game stops.
+  and the others play on. When one seat is left it wins; when the last person leaves a table with bots the game stops
+  (a table of bots only, as in the arena, plays on).
 
 A guess must be a word of the right length in the language's alphabet and not tried before. Whether
 it is a real word is the client's check against the word list: the rules only need the letters, so

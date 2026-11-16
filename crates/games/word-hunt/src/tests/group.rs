@@ -266,7 +266,31 @@ fn the_first_turn_follows_the_setting() {
             })
     };
     assert_eq!(first_of(FirstTurn::HostFirst), Some(FIRST));
-    assert_eq!(first_of(FirstTurn::HostLast), Some(THIRD));
+    assert_eq!(first_of(FirstTurn::HostLast), Some(SECOND));
+}
+
+#[test]
+fn with_host_last_the_host_closes_every_round() {
+    let settings = Settings::parse(RawSettings {
+        first_turn: FirstTurn::HostLast,
+        ..RawSettings::default()
+    })
+    .unwrap();
+    let mut game = WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap();
+    for event in game.roll_world(&mut mg_core::CoreRng::new(5)) {
+        game.apply_world(&event).unwrap();
+    }
+    for word in ["plumb", "fight", "dozen", "quick", "jumpy", "vowel"] {
+        let turn = game.view(Viewer::Player(FIRST)).turn.unwrap();
+        guess(&mut game, turn, word).unwrap();
+    }
+    let authors: Vec<Slot> = game
+        .view(Viewer::Player(FIRST))
+        .guesses
+        .iter()
+        .map(|guess| guess.by)
+        .collect();
+    assert_eq!(authors, [SECOND, THIRD, FIRST, SECOND, THIRD, FIRST]);
 }
 
 #[test]
@@ -287,4 +311,15 @@ fn a_first_player_other_than_the_settings_name_is_refused() {
     );
     game.apply_world(&WorldEvent::FirstPlayerChosen(FIRST))
         .unwrap();
+}
+
+#[test]
+fn a_table_of_bots_plays_on_when_one_is_dropped() {
+    let mut game = group(&[BOT, BOT, BOT], FIRST);
+    game.drop_player(SECOND);
+    assert_eq!(game.status(), Status::InProgress);
+    game.drop_player(THIRD);
+    let result = outcome(&game);
+    assert_eq!(result.kind, OutcomeKind::Winner);
+    assert_eq!(result.winners, [FIRST]);
 }

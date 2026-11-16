@@ -551,3 +551,51 @@ async fn chat_and_lobby_names_lose_invisible_characters() {
         .await;
     assert_eq!(chat.text, "hi");
 }
+
+#[tokio::test]
+async fn dropping_a_seat_during_a_pause_does_not_advance_a_real_time_match() {
+    let server = TestServer::start_with(|config| {
+        config.timing = quick_timing();
+        config.timing.drop_vote_after = Duration::ZERO;
+    })
+    .await;
+    let mut host = server.guest("Host").await.client;
+    let mut first = server.guest("First").await.client;
+    let mut second = server.guest("Second").await.client;
+    let lobby = create_lobby(&mut host, snake_settings(), 3).await;
+    join_ready(&mut first, &lobby.lobby_id).await;
+    join_ready(&mut second, &lobby.lobby_id).await;
+    let match_id = start(&mut host).await.match_id;
+
+    drop(first);
+    drop(second);
+    // Frames sealed before the pause arrive before it, on the same connection.
+    let mut last_tick = 0;
+    host.expect(|message| match &message.message {
+        Some(Reply::Frame(frame)) => {
+            last_tick = last_tick.max(frame.tick);
+            None
+        }
+        _ => paused_seats(message).filter(|seats| seats == &[1, 2]),
+    })
+    .await;
+
+    expect_ok(
+        host.request(Request::VoteDropPlayer(proto::VoteDropPlayer {
+            match_id: match_id.clone(),
+            slot: 2,
+        }))
+        .await,
+    );
+    host.send(Request::RequestCatchUp(proto::RequestCatchUp {
+        match_id: match_id.clone(),
+    }))
+    .await;
+    let caught_up = host.expect(catch_up).await;
+
+    assert_eq!(
+        caught_up.next_tick,
+        last_tick + 1,
+        "the paused match moved on"
+    );
+}
