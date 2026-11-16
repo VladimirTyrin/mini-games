@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Deploys the server + web client to a Linux host over SSH.
 #
-#   DEPLOY_HOST=vpn-nl2 ./deploy.sh --mode http                 # by IP, no TLS
-#   DEPLOY_HOST=vpn-nl2 ./deploy.sh --mode tls --domain braintvsminigames.xyz --email you@example.com
+#   ./deploy.sh                                   # production: TLS on braintvsminigames.xyz
+#   ./deploy.sh --host root@1.2.3.4 --mode http   # any host by IP, no TLS
 #
 # Options:
-#   --host H        ssh destination (alias or user@ip); default $DEPLOY_HOST
-#   --mode M        http | tls (default http)
-#   --domain D      required for tls; also used as server_name
+#   --host H        ssh destination (default $DEPLOY_HOST or root@braintvsminigames.xyz)
+#   --mode M        http | tls (default tls)
+#   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
@@ -19,9 +19,9 @@ BINARY_NAME="mini_games_server"
 SERVICE_NAME="mini-games-server"
 REMOTE_DIR="/opt/mini-games-server"
 
-HOST="${DEPLOY_HOST:-}"
-MODE="http"
-DOMAIN=""
+HOST="${DEPLOY_HOST:-root@braintvsminigames.xyz}"
+MODE="tls"
+DOMAIN="braintvsminigames.xyz"
 EMAIL=""
 SKIP_BUILD=false
 DRY_RUN=false
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
         --email) EMAIL="$2"; shift 2 ;;
         --skip-build) SKIP_BUILD=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
-        -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -47,7 +47,7 @@ if [[ "$MODE" == "tls" ]]; then
     [[ -n "$DOMAIN" ]] || die "--domain is required for --mode tls"
     EMAIL="${EMAIL:-admin@${DOMAIN}}"
 fi
-SERVER_NAME="${DOMAIN:-_}"
+if [[ "$MODE" == "http" ]]; then SERVER_NAME="_"; else SERVER_NAME="$DOMAIN"; fi
 
 BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_DIST="${SCRIPT_DIR}/web-client/dist"
@@ -144,7 +144,7 @@ systemctl enable -q "${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 
 for _ in $(seq 1 20); do
-    if curl -fsS -o /dev/null http://127.0.0.1:5000/ui/; then break; fi
+    if curl -fs -o /dev/null http://127.0.0.1:5000/ui/ 2>/dev/null; then break; fi
     sleep 0.5
 done
 if ! systemctl is-active --quiet "${SERVICE_NAME}"; then

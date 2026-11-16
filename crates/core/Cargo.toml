@@ -1,0 +1,20 @@
+[package]
+name = "mg-core"
+description = "Deterministic game core: Game/Bot traits, lockstep Match driver, authority, RNG and state hashing"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Generic test-suite every game must pass. Game crates enable it in dev-dependencies.
+conformance = ["dep:proptest"]
+
+[dependencies]
+proptest = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true
