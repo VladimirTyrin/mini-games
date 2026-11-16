@@ -6,7 +6,8 @@ use wasm_bindgen::prelude::*;
 
 fn kind_by_id(game_id: &str) -> Result<GameKind, JsError> {
     GameKind::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .find(|kind| kind.info().id == game_id)
         .ok_or_else(|| JsError::new(&format!("unknown game `{game_id}`")))
 }
@@ -16,7 +17,8 @@ fn kind_by_id(game_id: &str) -> Result<GameKind, JsError> {
 #[wasm_bindgen(js_name = gameCatalogJson)]
 pub fn game_catalog_json() -> String {
     let entries: Vec<String> = GameKind::ALL
-        .into_iter()
+        .iter()
+        .copied()
         .map(|kind| {
             let info = kind.info();
             format!(

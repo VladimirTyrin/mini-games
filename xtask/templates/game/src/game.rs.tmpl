@@ -1,0 +1,164 @@
+use mg_core::{
+    Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
+    SetupError, Slot, StateHasher, Status, Viewer,
+};
+
+use crate::{Command, Settings, View, WorldEvent};
+
+const MAX_ADD: u32 = 3;
+const MAX_SEATS: u8 = 4;
+
+#[derive(Clone, Debug)]
+pub struct {{Pascal}} {
+    target: u32,
+    total: u32,
+    in_play: Vec<bool>,
+    turn: Option<Slot>,
+    winner: Option<Slot>,
+}
+
+impl {{Pascal}} {
+    fn seats_in_play(&self) -> impl Iterator<Item = Slot> + '_ {
+        Slot::all(self.in_play.len()).filter(|slot| self.is_in_play(*slot))
+    }
+
+    fn is_in_play(&self, slot: Slot) -> bool {
+        self.in_play.get(slot.index()).copied().unwrap_or(false)
+    }
+
+    fn is_over(&self) -> bool {
+        self.winner.is_some() || self.seats_in_play().next().is_none()
+    }
+
+    /// Next seat in play after `slot`, wrapping around.
+    fn next_after(&self, slot: Slot) -> Option<Slot> {
+        let seats = self.in_play.len();
+        (1..=seats)
+            .filter_map(|offset| Slot::try_from((slot.index() + offset) % seats).ok())
+            .find(|candidate| self.is_in_play(*candidate))
+    }
+}
+
+impl Game for {{Pascal}} {
+    type Settings = Settings;
+    type Command = Command;
+    type WorldEvent = WorldEvent;
+    type View = View;
+
+    const INFO: GameInfo = GameInfo {
+        id: "{{snake}}",
+        name: "{{Title}}",
+        min_players: 1,
+        max_players: MAX_SEATS,
+        has_bots: false,
+        cooperative: false,
+    };
+
+    fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
+        SetupError::check_range("target", settings.target, Settings::MIN_TARGET, Settings::MAX_TARGET)?;
+        SetupError::check_player_count(players.len(), Self::INFO.min_players, Self::INFO.max_players)?;
+        if players.iter().any(|player| !player.is_human()) {
+            return Err(SetupError::InvalidPlayers("this game has no bots".into()));
+        }
+        Ok(Self { target: settings.target, total: 0, in_play: vec![true; players.len()], turn: None, winner: None })
+    }
+
+    fn clock(&self) -> Clock {
+        Clock::TurnBased
+    }
+
+    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+        if self.is_over() {
+            return Err(CommandError::GameOver);
+        }
+        if self.turn != Some(slot) {
+            return Err(CommandError::NotYourTurn);
+        }
+        let Command::Add(amount) = *command;
+        if !(1..=MAX_ADD).contains(&amount) {
+            return Err(CommandError::Illegal("add 1, 2 or 3"));
+        }
+        self.total = (self.total + amount).min(self.target);
+        if self.total == self.target {
+            self.winner = Some(slot);
+            self.turn = None;
+        } else {
+            self.turn = self.next_after(slot);
+        }
+        Ok(())
+    }
+
+    fn roll_world(&self, rng: &mut CoreRng) -> Vec<WorldEvent> {
+        if self.turn.is_some() || self.is_over() {
+            return Vec::new();
+        }
+        let seats: Vec<Slot> = self.seats_in_play().collect();
+        rng.pick(&seats).map(|slot| WorldEvent::FirstPlayerChosen(*slot)).into_iter().collect()
+    }
+
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+        let WorldEvent::FirstPlayerChosen(slot) = *event;
+        if self.turn.is_some() || self.total > 0 || !self.is_in_play(slot) {
+            return Err(CommandError::Illegal("the first player is already chosen"));
+        }
+        self.turn = Some(slot);
+        Ok(())
+    }
+
+    fn drop_player(&mut self, slot: Slot) {
+        let Some(in_play) = self.in_play.get_mut(slot.index()) else { return };
+        *in_play = false;
+        if self.turn == Some(slot) {
+            self.turn = self.next_after(slot).filter(|next| *next != slot);
+        }
+        if self.is_over() {
+            self.turn = None;
+        }
+    }
+
+    fn awaiting(&self) -> Awaiting {
+        match self.turn {
+            Some(slot) if !self.is_over() => Awaiting::Turn(slot),
+            _ => Awaiting::Nobody,
+        }
+    }
+
+    fn status(&self) -> Status {
+        if !self.is_over() {
+            return Status::InProgress;
+        }
+        let scores = Slot::all(self.in_play.len())
+            .map(|slot| i64::from(self.winner == Some(slot)))
+            .collect();
+        let (kind, winners) = match (self.winner, self.in_play.len()) {
+            (Some(_), 1) => (OutcomeKind::Victory, Vec::new()),
+            (Some(winner), _) => (OutcomeKind::Winner, vec![winner]),
+            (None, _) => (OutcomeKind::Defeat, Vec::new()),
+        };
+        Status::Finished(Outcome { kind, winners, scores })
+    }
+
+    fn view(&self, viewer: Viewer) -> View {
+        View {
+            target: self.target,
+            total: self.total,
+            you: match viewer {
+                Viewer::Player(slot) => Some(slot),
+                Viewer::Spectator => None,
+            },
+            current: self.turn,
+            winner: self.winner,
+        }
+    }
+
+    fn hash_state(&self, hasher: &mut StateHasher) {
+        hasher.u32(self.target);
+        hasher.u32(self.total);
+        hasher.length(self.in_play.len());
+        for in_play in &self.in_play {
+            hasher.bool(*in_play);
+        }
+        hasher.u8(self.turn.map_or(u8::MAX, Slot::get));
+        hasher.u8(self.winner.map_or(u8::MAX, Slot::get));
+    }
+}

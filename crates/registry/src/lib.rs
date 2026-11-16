@@ -1,5 +1,5 @@
-//! Type-erased access to every game. This is the only place that lists all games: adding a game
-//! adds one arm to each `match` here and in `GameKind` (`cargo xtask new-game` does it).
+//! Type-erased access to every game. Games are listed once, in `games.rs`; every dispatch below
+//! is generated from that list.
 
 #![cfg_attr(
     not(test),
@@ -19,6 +19,7 @@ mod create_error;
 mod dyn_authority;
 mod dyn_mirror;
 mod game_kind;
+mod games;
 mod loaded_replay;
 mod match_header;
 mod mirror_adapter;
@@ -42,50 +43,93 @@ pub use seats_error::SeatsError;
 pub use submit_error::SubmitError;
 
 use mg_core::PlayerSpec;
-use mg_numbers_match::NumbersMatch;
 use mg_protocol::{WireError, proto};
-use mg_puzzle2048::Puzzle2048;
-use mg_snake::Snake;
-use mg_stack_attack::StackAttack;
-use mg_tictactoe::TicTacToe;
 
-/// The seed must stay with the authority host; clients never see it.
-pub fn create_authority(
-    settings: &proto::GameSettings,
-    seats: &[SeatSpec],
-    seed: u64,
-) -> Result<Box<dyn DynAuthority>, CreateError> {
-    let kind = GameKind::of_settings(settings)?;
-    match kind {
-        GameKind::Snake => authority_adapter::with_bots::<Snake>(kind, settings, seats, seed),
-        GameKind::TicTacToe => {
-            authority_adapter::with_bots::<TicTacToe>(kind, settings, seats, seed)
-        }
-        GameKind::StackAttack => {
-            authority_adapter::without_bots::<StackAttack>(kind, settings, seats, seed)
-        }
-        GameKind::Puzzle2048 => {
-            authority_adapter::without_bots::<Puzzle2048>(kind, settings, seats, seed)
-        }
-        GameKind::NumbersMatch => {
-            authority_adapter::without_bots::<NumbersMatch>(kind, settings, seats, seed)
-        }
-    }
+use games::games;
+
+macro_rules! authority_for {
+    (bots, $game:path, $kind:expr, $settings:expr, $seats:expr, $seed:expr) => {
+        authority_adapter::with_bots::<$game>($kind, $settings, $seats, $seed)
+    };
+    (no_bots, $game:path, $kind:expr, $settings:expr, $seats:expr, $seed:expr) => {
+        authority_adapter::without_bots::<$game>($kind, $settings, $seats, $seed)
+    };
 }
 
-pub fn create_mirror(
-    settings: &proto::GameSettings,
-    players: &[PlayerSpec],
-) -> Result<Box<dyn DynMirror>, CreateError> {
-    let kind = GameKind::of_settings(settings)?;
-    match kind {
-        GameKind::Snake => mirror_adapter::mirror::<Snake>(kind, settings, players),
-        GameKind::TicTacToe => mirror_adapter::mirror::<TicTacToe>(kind, settings, players),
-        GameKind::StackAttack => mirror_adapter::mirror::<StackAttack>(kind, settings, players),
-        GameKind::Puzzle2048 => mirror_adapter::mirror::<Puzzle2048>(kind, settings, players),
-        GameKind::NumbersMatch => mirror_adapter::mirror::<NumbersMatch>(kind, settings, players),
-    }
+macro_rules! bot_kinds_for {
+    (bots, $game:path) => {{
+        use mg_core::HasBots;
+        use mg_protocol::WireBots;
+        <$game>::BOT_KINDS
+            .iter()
+            .map(|kind| <$game>::bot_kind_to_wire(*kind))
+            .collect()
+    }};
+    (no_bots, $game:path) => {
+        Vec::new()
+    };
 }
+
+macro_rules! validate_bot_kind_for {
+    (bots, $game:path, $bot:expr, $kind:expr) => {{
+        use mg_protocol::WireBots;
+        <$game>::bot_kind_from_wire($bot)
+            .map(|_| ())
+            .map_err(CreateError::from)
+    }};
+    (no_bots, $game:path, $bot:expr, $kind:expr) => {
+        Err(CreateError::NoBots($kind.info().name))
+    };
+}
+
+macro_rules! define_dispatch {
+    ($($kind:ident => $game:path, $settings_case:ident, $bots:ident;)*) => {
+        /// The seed must stay with the authority host; clients never see it.
+        pub fn create_authority(
+            settings: &proto::GameSettings,
+            seats: &[SeatSpec],
+            seed: u64,
+        ) -> Result<Box<dyn DynAuthority>, CreateError> {
+            let kind = GameKind::of_settings(settings)?;
+            match kind {
+                $(GameKind::$kind => authority_for!($bots, $game, kind, settings, seats, seed),)*
+            }
+        }
+
+        pub fn create_mirror(
+            settings: &proto::GameSettings,
+            players: &[PlayerSpec],
+        ) -> Result<Box<dyn DynMirror>, CreateError> {
+            let kind = GameKind::of_settings(settings)?;
+            match kind {
+                $(GameKind::$kind => mirror_adapter::mirror::<$game>(kind, settings, players),)*
+            }
+        }
+
+        /// Checks that a bot kind belongs to `kind` and names an existing bot.
+        pub fn validate_bot_kind(kind: GameKind, bot: &proto::BotKind) -> Result<(), CreateError> {
+            match kind {
+                $(GameKind::$kind => validate_bot_kind_for!($bots, $game, bot, kind),)*
+            }
+        }
+
+        /// Built-in bot kinds offered for a game, in UI order.
+        pub fn bot_kinds(kind: GameKind) -> Vec<proto::BotKind> {
+            match kind {
+                $(GameKind::$kind => bot_kinds_for!($bots, $game),)*
+            }
+        }
+
+        pub fn default_settings(kind: GameKind) -> proto::GameSettings {
+            use mg_protocol::WireGame;
+            match kind {
+                $(GameKind::$kind => <$game>::settings_to_wire(&Default::default()),)*
+            }
+        }
+    };
+}
+
+games!(define_dispatch);
 
 /// The seed must stay with the authority host; clients never see it.
 pub fn create_authority_from_header(
@@ -106,45 +150,4 @@ fn settings_of(header: &proto::MatchHeader) -> Result<&proto::GameSettings, Wire
         .settings
         .as_ref()
         .ok_or(WireError::Missing("header.settings"))
-}
-
-/// Checks that a bot kind belongs to `kind` and names an existing bot.
-pub fn validate_bot_kind(kind: GameKind, bot: &proto::BotKind) -> Result<(), CreateError> {
-    use mg_protocol::WireBots;
-    match kind {
-        GameKind::Snake => Snake::bot_kind_from_wire(bot).map(|_| ())?,
-        GameKind::TicTacToe => TicTacToe::bot_kind_from_wire(bot).map(|_| ())?,
-        GameKind::StackAttack | GameKind::Puzzle2048 | GameKind::NumbersMatch => {
-            return Err(CreateError::NoBots(kind.info().name));
-        }
-    }
-    Ok(())
-}
-
-/// Built-in bot kinds offered for a game, in UI order.
-pub fn bot_kinds(kind: GameKind) -> Vec<proto::BotKind> {
-    use mg_core::HasBots;
-    use mg_protocol::WireBots;
-    match kind {
-        GameKind::Snake => Snake::BOT_KINDS
-            .iter()
-            .map(|k| Snake::bot_kind_to_wire(*k))
-            .collect(),
-        GameKind::TicTacToe => TicTacToe::BOT_KINDS
-            .iter()
-            .map(|k| TicTacToe::bot_kind_to_wire(*k))
-            .collect(),
-        GameKind::StackAttack | GameKind::Puzzle2048 | GameKind::NumbersMatch => Vec::new(),
-    }
-}
-
-pub fn default_settings(kind: GameKind) -> proto::GameSettings {
-    use mg_protocol::WireGame;
-    match kind {
-        GameKind::Snake => Snake::settings_to_wire(&Default::default()),
-        GameKind::TicTacToe => TicTacToe::settings_to_wire(&Default::default()),
-        GameKind::StackAttack => StackAttack::settings_to_wire(&Default::default()),
-        GameKind::Puzzle2048 => Puzzle2048::settings_to_wire(&Default::default()),
-        GameKind::NumbersMatch => NumbersMatch::settings_to_wire(&Default::default()),
-    }
 }

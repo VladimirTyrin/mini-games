@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+message {{Pascal}}Settings {
+  uint32 target = 1;
+}
+
+message {{Pascal}}Command {
+  oneof command {
+    {{Pascal}}Add add = 1;
+  }
+}
+
+message {{Pascal}}Add {
+  uint32 amount = 1;
+}
+
+message {{Pascal}}WorldEvent {
+  oneof event {
+    {{Pascal}}FirstPlayerChosen first_player_chosen = 1;
+  }
+}
+
+message {{Pascal}}FirstPlayerChosen {
+  uint32 slot = 1;
+}
+
+message {{Pascal}}View {
+  uint32 target = 1;
+  uint32 total = 2;
+  optional uint32 you = 3;
+  optional uint32 current_slot = 4;
+  optional uint32 winner_slot = 5;
+}

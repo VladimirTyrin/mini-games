@@ -1,0 +1,19 @@
+import type { GamePlugin } from "../game-plugin";
+
+import Board from "./{{Pascal}}Board.vue";
+import SettingsForm from "./{{Pascal}}Settings.vue";
+
+export const {{camel}}Plugin: GamePlugin = {
+  id: "{{snake}}",
+  settingsCase: "{{camel}}",
+  title: "{{Title}}",
+  icon: "🎲",
+  tagline: "Reach the target first",
+  SettingsForm,
+  Board,
+  describeSettings(settings) {
+    return settings.game.case === "{{camel}}" ? [`target ${settings.game.value.target}`] : [];
+  },
+  botLabel: () => "Bot",
+  controlsHint: "Press 1, 2 or 3",
+};

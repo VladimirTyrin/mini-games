@@ -1,0 +1,11 @@
+use mg_core::Slot;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct View {
+    pub target: u32,
+    pub total: u32,
+    pub you: Option<Slot>,
+    /// `None` before the first player is chosen and after the game ended.
+    pub current: Option<Slot>,
+    pub winner: Option<Slot>,
+}

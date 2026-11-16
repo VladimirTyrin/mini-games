@@ -1,0 +1,32 @@
+use mg_core::{Authority, CommandError, Game, PlayerSpec, Slot, Status};
+
+use crate::{Command, Settings, {{Pascal}}};
+
+fn started(players: usize) -> Authority<{{Pascal}}> {
+    let mut authority =
+        Authority::<{{Pascal}}>::new(&Settings::default(), &vec![PlayerSpec::HUMAN; players], 7, Vec::new())
+            .unwrap();
+    authority.seal_frame();
+    authority
+}
+
+#[test]
+fn rejects_out_of_turn_and_out_of_range_moves() {
+    let mut authority = started(2);
+    let view = authority.game().view(mg_core::Viewer::Spectator);
+    let current = view.current.unwrap();
+    let other = Slot::new(1 - current.get());
+    assert_eq!(authority.submit(other, Command::Add(1)), Err(CommandError::NotYourTurn));
+    assert!(matches!(authority.submit(current, Command::Add(4)), Err(CommandError::Illegal(_))));
+}
+
+#[test]
+fn reaching_the_target_wins() {
+    let mut authority = started(1);
+    while !authority.game().status().is_finished() {
+        authority.submit(Slot::new(0), Command::Add(3)).unwrap();
+        authority.seal_frame();
+    }
+    assert!(matches!(authority.game().status(), Status::Finished(_)));
+    assert_eq!(authority.game().view(mg_core::Viewer::Spectator).total, Settings::default().target);
+}

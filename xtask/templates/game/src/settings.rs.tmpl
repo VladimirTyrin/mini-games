@@ -1,0 +1,16 @@
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Settings {
+    /// Total that ends the game.
+    pub target: u32,
+}
+
+impl Settings {
+    pub const MIN_TARGET: u32 = 5;
+    pub const MAX_TARGET: u32 = 100;
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { target: 21 }
+    }
+}

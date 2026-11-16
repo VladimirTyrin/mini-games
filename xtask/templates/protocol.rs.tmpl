@@ -1,0 +1,73 @@
+use mg_{{snake_crate}}::{Command, Settings, View, WorldEvent, {{Pascal}}};
+
+use crate::proto::{
+    game_command, game_settings, game_view, game_world_event, {{snake}}_command, {{snake}}_world_event,
+};
+use crate::{WireError, WireGame, proto, slot_from_wire, slot_to_wire};
+
+impl WireGame for {{Pascal}} {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+        match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
+            game_settings::Game::{{PascalField}}(settings) => Ok(Settings { target: settings.target }),
+            _ => Err(WireError::WrongGame),
+        }
+    }
+
+    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+        proto::GameSettings {
+            game: Some(game_settings::Game::{{PascalField}}(proto::{{Pascal}}Settings { target: settings.target })),
+        }
+    }
+
+    fn command_from_wire(command: &proto::GameCommand) -> Result<Command, WireError> {
+        let game_command::Game::{{PascalField}}(command) = command.game.as_ref().ok_or(WireError::Missing("game"))? else {
+            return Err(WireError::WrongGame);
+        };
+        match command.command.as_ref().ok_or(WireError::Missing("command"))? {
+            {{snake}}_command::Command::Add(add) => Ok(Command::Add(add.amount)),
+        }
+    }
+
+    fn command_to_wire(command: &Command) -> proto::GameCommand {
+        let Command::Add(amount) = *command;
+        proto::GameCommand {
+            game: Some(game_command::Game::{{PascalField}}(proto::{{Pascal}}Command {
+                command: Some({{snake}}_command::Command::Add(proto::{{Pascal}}Add { amount })),
+            })),
+        }
+    }
+
+    fn world_event_from_wire(event: &proto::GameWorldEvent) -> Result<WorldEvent, WireError> {
+        let game_world_event::Game::{{PascalField}}(event) = event.game.as_ref().ok_or(WireError::Missing("game"))? else {
+            return Err(WireError::WrongGame);
+        };
+        match event.event.as_ref().ok_or(WireError::Missing("event"))? {
+            {{snake}}_world_event::Event::FirstPlayerChosen(chosen) => {
+                Ok(WorldEvent::FirstPlayerChosen(slot_from_wire(chosen.slot)?))
+            }
+        }
+    }
+
+    fn world_event_to_wire(event: &WorldEvent) -> proto::GameWorldEvent {
+        let WorldEvent::FirstPlayerChosen(slot) = *event;
+        proto::GameWorldEvent {
+            game: Some(game_world_event::Game::{{PascalField}}(proto::{{Pascal}}WorldEvent {
+                event: Some({{snake}}_world_event::Event::FirstPlayerChosen(proto::{{Pascal}}FirstPlayerChosen {
+                    slot: slot_to_wire(slot),
+                })),
+            })),
+        }
+    }
+
+    fn view_to_wire(view: &View) -> proto::GameView {
+        proto::GameView {
+            game: Some(game_view::Game::{{PascalField}}(proto::{{Pascal}}View {
+                target: view.target,
+                total: view.total,
+                you: view.you.map(slot_to_wire),
+                current_slot: view.current.map(slot_to_wire),
+                winner_slot: view.winner.map(slot_to_wire),
+            })),
+        }
+    }
+}

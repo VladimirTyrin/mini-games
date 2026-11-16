@@ -1,0 +1,42 @@
+use mg_core::conformance::{self, Conformance, Setup};
+use mg_core::{CoreRng, PlayerSpec, Slot};
+
+use crate::{Command, Settings, {{Pascal}}};
+
+impl Conformance for {{Pascal}} {
+    fn sample_setups() -> Vec<Setup<Self>> {
+        vec![
+            Setup::new(Settings::default(), vec![PlayerSpec::HUMAN]),
+            Setup::new(Settings { target: Settings::MIN_TARGET }, vec![PlayerSpec::HUMAN; 2]),
+            Setup::new(Settings { target: Settings::MAX_TARGET }, vec![PlayerSpec::HUMAN; 4]),
+        ]
+    }
+
+    fn invalid_setups() -> Vec<Setup<Self>> {
+        vec![
+            Setup::new(Settings { target: 0 }, vec![PlayerSpec::HUMAN]),
+            Setup::new(Settings { target: u32::MAX }, vec![PlayerSpec::HUMAN]),
+            Setup::new(Settings::default(), vec![]),
+            Setup::new(Settings::default(), vec![PlayerSpec::HUMAN; 5]),
+            Setup::new(Settings::default(), vec![PlayerSpec::HUMAN, PlayerSpec::BOT]),
+        ]
+    }
+
+    fn arbitrary_command(_game: &Self, _slot: Slot, rng: &mut CoreRng) -> Command {
+        Command::Add(rng.below(5))
+    }
+}
+
+#[test]
+fn passes_conformance() {
+    conformance::run_all::<{{Pascal}}>(20);
+}
+
+/// Pins the rules: if this value changes, a rule changed — update it deliberately.
+#[test]
+fn scripted_hash_is_pinned() {
+    let setup = Setup::<{{Pascal}}>::new(Settings::default(), vec![PlayerSpec::HUMAN; 2]);
+    let hash = conformance::scripted_hash(&setup, 42);
+    assert_eq!(hash, conformance::scripted_hash(&setup, 42));
+    // xtask leaves the golden value to the author: run once, then assert_eq!(hash, 0x…).
+}
