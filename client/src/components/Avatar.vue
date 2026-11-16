@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
-/** `playerId` picks the fallback colour, so namesakes without pictures still look different. */
-const props = defineProps<{ url: string; name: string; playerId?: string }>();
+import BotIcon from "./BotIcon.vue";
+
+/**
+ * `playerId` picks the fallback colour, so namesakes without pictures still look different.
+ * A bot always shows the robot, never a picture or an initial, so it cannot pass for a person.
+ */
+const props = defineProps<{ url: string; name: string; playerId?: string; bot?: boolean }>();
 
 const FALLBACK_TONES = ["bg-emerald-600", "bg-sky-600", "bg-violet-600", "bg-amber-600", "bg-rose-600"];
 
@@ -22,8 +27,15 @@ const tone = computed(() => {
 </script>
 
 <template>
+  <span
+    v-if="bot"
+    aria-hidden="true"
+    class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-600 text-gray-100"
+  >
+    <BotIcon class="h-4 w-4" />
+  </span>
   <img
-    v-if="showsImage"
+    v-else-if="showsImage"
     :src="url"
     alt=""
     referrerpolicy="no-referrer"

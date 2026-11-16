@@ -147,6 +147,7 @@ async function leave(): Promise<void> {
             :url="seat.occupant.avatarUrl"
             :name="seat.occupant.displayName"
             :player-id="seat.occupant.id"
+            :bot="!!seat.botKind"
           />
           <span class="flex-1 truncate">
             {{ seat.occupant ? labelOf(seat.occupant) : "" }}

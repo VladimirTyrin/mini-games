@@ -35,4 +35,11 @@ describe("Avatar", () => {
     expect(tone("u_a")).not.toBe(tone("u_b"));
     expect(tone("u_a")).toBe(tone("u_a"));
   });
+
+  it("shows a robot for a bot, never a picture or an initial", () => {
+    const avatar = mount(Avatar, { props: { url: "https://example.test/a.png", name: "Bot 1", bot: true } });
+    expect(avatar.find("img").exists()).toBe(false);
+    expect(avatar.find("svg").exists()).toBe(true);
+    expect(avatar.text()).toBe("");
+  });
 });

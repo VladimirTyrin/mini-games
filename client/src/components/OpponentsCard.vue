@@ -70,7 +70,7 @@ function remove(index: number): void {
         class="relative flex h-12 min-w-0 flex-1 items-center gap-3 rounded-lg bg-panel-raised px-3"
         :class="hasChoice ? 'cursor-pointer hover:bg-white/10' : ''"
       >
-        <span aria-hidden="true">🤖</span>
+        <Avatar url="" :name="plugin.botLabel(bot)" bot />
         <span class="flex-1 truncate">{{ plugin.botLabel(bot) }}</span>
         <span v-if="hasChoice" class="text-gray-400" aria-hidden="true">▾</span>
         <!-- The native picker sits invisibly over the row: phones get their own wheel or sheet. -->

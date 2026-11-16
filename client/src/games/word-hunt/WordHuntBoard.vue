@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 
+import BotIcon from "@/components/BotIcon.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
@@ -47,14 +48,16 @@ function seatColor(slot: number): string {
 function seatName(slot: number): string {
   return names[slot] ?? `Player ${slot + 1}`;
 }
+function isBotSeat(slot: number): boolean {
+  return header.seats.find((seat) => seat.slot === slot)?.botKind !== undefined;
+}
 
 const turnLine = computed(() => {
   const turn = view.value?.turnSlot;
   if (!isGroup || !isPlaying.value || turn === undefined) return null;
   if (gaveUp.value) return "You gave up · watching";
   if (myTurn.value) return "Your turn";
-  const isBot = header.seats.find((seat) => seat.slot === turn)?.botKind !== undefined;
-  return isBot ? `${seatName(turn)} is thinking…` : `${seatName(turn)}'s turn`;
+  return isBotSeat(turn) ? `${seatName(turn)} is thinking…` : `${seatName(turn)}'s turn`;
 });
 
 const typed = ref("");
@@ -301,7 +304,10 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
               :class="row.by === null ? 'invisible' : seatColor(row.by)"
               :title="row.by === null ? undefined : seatName(row.by)"
             >
-              {{ row.by === null ? "" : seatName(row.by).charAt(0).toUpperCase() }}
+              <BotIcon v-if="row.by !== null && isBotSeat(row.by)" class="size-4" />
+              <template v-else>{{
+                row.by === null ? "" : seatName(row.by).charAt(0).toUpperCase()
+              }}</template>
             </span>
             <div
               v-for="column in wordLength"
