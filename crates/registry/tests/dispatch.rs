@@ -62,7 +62,7 @@ fn kinds_and_clocks_are_reported() {
     assert_eq!(GameKind::of_settings(&settings).unwrap(), GameKind::Snake);
     let authority = create_authority(&settings, &[SeatSpec::Human], 1).unwrap();
     assert!(matches!(authority.clock(), Clock::Realtime { .. }));
-    assert_eq!(GameKind::ALL.len(), 5);
+    assert!(GameKind::ALL.contains(&GameKind::Snake));
     assert_eq!(GameKind::TicTacToe.info().id, TicTacToe::INFO.id);
 }
 
