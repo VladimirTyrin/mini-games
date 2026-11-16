@@ -24,6 +24,8 @@ const googleButtonShown = ref(false);
 const info = computed(() => connection.serverInfo);
 const googleClientId = computed(() => info.value?.googleClientId ?? "");
 const busy = computed(() => connection.state === "connecting" || connection.state === "reconnecting");
+/** A session is (re)connecting by itself: a sign-in form now would look like being signed out. */
+const connecting = computed(() => connection.session !== null && busy.value);
 
 async function mountGoogle(): Promise<void> {
   if (__NATIVE_APP__ || !googleClientId.value || !googleButton.value) return;
@@ -60,11 +62,24 @@ const isNativeApp = __NATIVE_APP__;
 
 <template>
   <section class="space-y-4 rounded-xl bg-panel p-4">
-    <p v-if="connection.serverError" class="text-sm text-rose-300">
-      {{ connection.serverError }} ({{ prefs.serverUrl }}). Check the server address in Settings.
-    </p>
+    <div v-if="connection.serverError" class="space-y-3">
+      <p class="text-sm text-rose-300">
+        {{ connection.serverError }} ({{ prefs.serverUrl }}). Check your connection or the server address in
+        Settings.
+      </p>
+      <button
+        type="button"
+        class="min-h-11 rounded-lg bg-panel-raised px-4 py-2 text-sm"
+        @click="connection.loadServerInfo()"
+      >
+        Try again
+      </button>
+    </div>
     <p v-else-if="connection.state === 'outdated'" class="text-sm text-rose-300">
       This server runs a newer version. Please update the app.
+    </p>
+    <p v-else-if="connecting" class="animate-pulse text-sm text-gray-300">
+      {{ connection.identity ? `Reconnecting as ${connection.identity.displayName}…` : "Signing in…" }}
     </p>
     <template v-else-if="info">
       <form v-if="info.guestsAllowed" class="flex gap-2" @submit.prevent="connection.signInAsGuest(name)">

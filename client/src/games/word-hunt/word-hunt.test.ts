@@ -8,7 +8,7 @@ import { WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_
 
 import { formatDay, localDayNumber } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
-import { finishGame, startGame, statsFor } from "./stats";
+import { finishGame, recordProgress, startGame, statsFor } from "./stats";
 import { wordHuntPlugin } from "./index";
 import { normalizeWord, parseWordList } from "./word-lists";
 
@@ -96,6 +96,17 @@ describe("stats", () => {
     expect(statsFor(russian).played).toBe(1);
     startGame(game("next"));
     expect(statsFor(russian)).toMatchObject({ played: 2, won: 1, streak: 0 });
+  });
+
+  it("counts a word of the day given up before any guess, so replaying the day gains nothing", () => {
+    recordProgress(game("gave up", 20_000), 0, { kind: "lost" });
+    play("replayed", 1, 20_000);
+    expect(statsFor(russian)).toMatchObject({ played: 1, won: 0, streak: 0 });
+  });
+
+  it("does not count an unlimited word given up before any guess", () => {
+    recordProgress(game("gave up"), 0, { kind: "lost" });
+    expect(statsFor(russian).played).toBe(0);
   });
 
   it("counts the word of the day once, even when it is left and restarted", () => {

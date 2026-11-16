@@ -15,7 +15,7 @@ import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
 import { markClass } from "./mark-style";
 import { marksMissingLetters } from "./preferences";
-import { type StatsGame, type WordHuntStats, finishGame, startGame, statsFor } from "./stats";
+import { type StatsGame, type StatsProgress, type WordHuntStats, recordProgress, statsFor } from "./stats";
 import WordHuntKeyboard from "./WordHuntKeyboard.vue";
 import { type AcceptedWords, acceptedWords, normalizeWord } from "./word-lists";
 
@@ -149,9 +149,18 @@ const gaveUp = computed(() => {
 });
 const confirmingGiveUp = ref(false);
 const canGiveUp = computed(() => props.controller.mySlot !== null && isPlaying.value && !gaveUp.value);
-const giveUpMessage = isGroup
-  ? "You drop out and the others play on. The word is shown when the game ends."
-  : "The game ends as a loss and the word is shown.";
+/** What giving up leads to; it mirrors the rules for a seat leaving a group. */
+const giveUpMessage = computed(() => {
+  if (!isGroup) return "The game ends as a loss and the word is shown.";
+  const mySlot = props.controller.mySlot;
+  const others = (view.value?.playingSlots ?? []).filter((slot) => slot !== mySlot);
+  const [lastOther] = others;
+  if (others.length === 1 && lastOther !== undefined) {
+    return `The game ends and ${seatName(lastOther)} wins. The word is shown.`;
+  }
+  if (others.every(isBotSeat)) return "The game ends: only bots would be left. The word is shown.";
+  return "You drop out and the others play on. The word is shown when the game ends.";
+});
 
 async function giveUp(): Promise<void> {
   confirmingGiveUp.value = false;
@@ -270,10 +279,14 @@ watch(
   [() => guesses.value.length, () => view.value?.phase],
   ([guessCount, phase]) => {
     const game = statsGame.value;
-    if (!game || guessCount === 0) return;
-    startGame(game);
-    if (phase === WordHuntPhase.SOLVED) stats.value = finishGame(game, guessCount);
-    else if (phase === WordHuntPhase.FAILED) stats.value = finishGame(game, null);
+    if (!game) return;
+    const progress: StatsProgress =
+      phase === WordHuntPhase.SOLVED
+        ? { kind: "solved", guesses: guessCount }
+        : phase === WordHuntPhase.FAILED
+          ? { kind: "lost" }
+          : { kind: "playing" };
+    stats.value = recordProgress(game, guessCount, progress) ?? stats.value;
   },
   { immediate: true },
 );

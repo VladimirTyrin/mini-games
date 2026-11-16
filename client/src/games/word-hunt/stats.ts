@@ -101,6 +101,30 @@ export function startGame(game: StatsGame): void {
   save(all);
 }
 
+/** Where a game stands: still going, solved in so many guesses, or lost (given up included). */
+export type StatsProgress =
+  | { readonly kind: "playing" }
+  | { readonly kind: "solved"; readonly guesses: number }
+  | { readonly kind: "lost" };
+
+/**
+ * Records `game` as it stands after `guessCount` guesses; returns the stats once it is over. A
+ * game counts from its first guess; a word of the day given up before one counts too, since the
+ * word is then shown and replaying the day would be a sure win.
+ */
+export function recordProgress(
+  game: StatsGame,
+  guessCount: number,
+  progress: StatsProgress,
+): WordHuntStats | null {
+  const revealedTheDailyWord = progress.kind === "lost" && game.dailyDay !== null;
+  if (guessCount === 0 && !revealedTheDailyWord) return null;
+  startGame(game);
+  if (progress.kind === "solved") return finishGame(game, progress.guesses);
+  if (progress.kind === "lost") return finishGame(game, null);
+  return null;
+}
+
 /** `game` ended; counted only if it was started (see `startGame`) and not counted yet. */
 export function finishGame(game: StatsGame, solvedIn: number | null): WordHuntStats {
   const all = load();
