@@ -38,6 +38,7 @@ fn header(config: &ArenaConfig, index: u32, authority: &dyn DynAuthority) -> pro
                 kind: proto::IdentityKind::BuiltInBot as i32,
                 id: format!("bot-{}", slot.get()),
                 display_name: bot.name.clone(),
+                avatar_url: String::new(),
             }),
             bot_kind: Some(bot.kind),
         })
