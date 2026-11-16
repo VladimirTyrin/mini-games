@@ -10,7 +10,7 @@ import { MatchController } from "@/match/match-controller";
 import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
-import { downloadBytes } from "@/platform/download";
+import { saveBytes } from "@/platform/download";
 
 import { useConnectionStore } from "./connection";
 import { useToastStore } from "./toasts";
@@ -88,7 +88,13 @@ export const useMatchStore = defineStore("match", () => {
     if (!source) return;
     try {
       const bytes = await source.replayFile();
-      if (bytes) downloadBytes(bytes, `mini-games-${source.header.matchId}.mgreplay`);
+      if (!bytes) {
+        toasts.error("This match has no replay");
+        return;
+      }
+      const fileName = `mini-games-${source.header.matchId}.mgreplay`;
+      const outcome = await saveBytes(bytes, fileName);
+      if (outcome === "downloaded") toasts.show(`Replay saved to your downloads as ${fileName}`, "success");
     } catch (error) {
       toasts.failure(error);
     }

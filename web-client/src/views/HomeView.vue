@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isNativeApp } from "@/platform/native-app";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -17,6 +18,8 @@ async function openReplay(event: Event): Promise<void> {
   match.startReplay(new Uint8Array(await file.arrayBuffer()));
   (event.target as HTMLInputElement).value = "";
 }
+// Android does not know the .mgreplay extension and would hide every file behind that filter.
+const replayFileTypes = isNativeApp ? undefined : ".mgreplay";
 </script>
 
 <template>
@@ -59,13 +62,7 @@ async function openReplay(event: Event): Promise<void> {
         🎞 Open a replay
         <span class="block text-sm font-normal text-gray-400">.mgreplay file</span>
       </button>
-      <input
-        ref="fileInput"
-        type="file"
-        accept=".mgreplay"
-        class="hidden"
-        @change="openReplay"
-      />
+      <input ref="fileInput" type="file" :accept="replayFileTypes" class="hidden" @change="openReplay" />
     </section>
   </main>
 </template>
