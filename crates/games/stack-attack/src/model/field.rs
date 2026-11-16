@@ -118,6 +118,29 @@ impl Field {
         true
     }
 
+    pub(crate) fn has_resting_box_at(&self, cell: Cell) -> bool {
+        self.box_at(cell)
+            .and_then(|id| self.get(id))
+            .is_some_and(|cargo| !cargo.falling)
+    }
+
+    /// Removes the box at `cell` only if it is falling; returns its id.
+    pub(crate) fn remove_falling_box_at(&mut self, cell: Cell) -> Option<BoxId> {
+        let id = self.box_at(cell)?;
+        let position = self.boxes.binary_search_by_key(&id, |b| b.id).ok()?;
+        if !self.boxes.get(position).is_some_and(|cargo| cargo.falling) {
+            return None;
+        }
+        self.boxes.remove(position);
+        if let Some(slot) = self
+            .grid_index(cell)
+            .and_then(|index| self.grid.get_mut(index))
+        {
+            *slot = None;
+        }
+        Some(id)
+    }
+
     fn set_falling(&mut self, id: BoxId, falling: bool) {
         if let Some(cargo) = self.get_mut(id) {
             cargo.falling = falling;

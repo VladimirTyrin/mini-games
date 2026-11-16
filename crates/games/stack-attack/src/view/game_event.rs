@@ -26,6 +26,12 @@ pub enum GameEvent {
         to_x: Column,
         by: Slot,
     },
+    /// A jumping worker's head broke a falling box; `cell` is where the box was when hit.
+    BoxBroken {
+        box_id: BoxId,
+        cell: Cell,
+        by: Slot,
+    },
     WorkerJumped {
         slot: Slot,
     },

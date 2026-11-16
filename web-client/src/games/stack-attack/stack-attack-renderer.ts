@@ -103,14 +103,21 @@ function drawMovingBox({ context, layout, frame }: Painter, box: StackAttackBox)
 
 function drawBoxes(painter: Painter): void {
   const { context, layout, frame } = painter;
-  const { transition, progress } = frame;
+  const { transition, progress, now } = frame;
   for (const { after } of transition.boxes.kept) drawMovingBox(painter, after);
   for (const box of transition.boxes.appeared) drawMovingBox(painter, box);
+  for (const box of transition.boxes.vanished) {
+    if (!transition.brokenBoxIds.has(box.id) || !box.cell) continue;
+    // A broken box keeps falling until the rising worker's head reaches it.
+    const row = frame.animator.breakingBoxRowAt(box.id, now);
+    if (row !== null)
+      drawBox(context, layout.cellLeft(box.cell.x), layout.cellTop(row), layout.cellSize, box.patternId);
+  }
   // Boxes of cleared rows fade out under the row flash.
   context.save();
   context.globalAlpha = 1 - progress;
   for (const box of transition.boxes.vanished) {
-    if (box.cell)
+    if (box.cell && !transition.brokenBoxIds.has(box.id))
       drawBox(
         context,
         layout.cellLeft(box.cell.x),

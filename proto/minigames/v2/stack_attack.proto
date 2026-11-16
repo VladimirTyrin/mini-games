@@ -126,6 +126,7 @@ message StackAttackEvent {
     StackAttackWorkerCrushedEvent worker_crushed = 7;
     StackAttackWorkerLeftEvent worker_left = 8;
     StackAttackLinesClearedEvent lines_cleared = 9;
+    StackAttackBoxBrokenEvent box_broken = 10;
   }
 }
 
@@ -175,6 +176,14 @@ message StackAttackWorkerLeftEvent {
 message StackAttackLinesClearedEvent {
   repeated int32 rows = 1;
   uint32 points = 2;
+}
+
+// A jumping worker's head broke a falling box (landed boxes and boxes on a crane cannot be broken).
+message StackAttackBoxBrokenEvent {
+  uint32 box_id = 1;
+  // Where the box was when hit: the cell the head rose into or the one above it.
+  StackAttackCell cell = 2;
+  uint32 by_slot = 3;
 }
 
 message StackAttackView {

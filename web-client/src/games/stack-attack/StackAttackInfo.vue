@@ -74,5 +74,8 @@ const workers = computed(() =>
       Push crates to fill a row: a full row clears for {{ POINTS_PER_LINE }} points. Don't get crushed, and
       keep the stack below the red line.
     </p>
+    <p class="text-center text-xs text-gray-400 md:text-left">
+      Jump into a falling crate to smash it before it lands.
+    </p>
   </aside>
 </template>

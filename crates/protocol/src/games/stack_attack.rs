@@ -263,6 +263,13 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
             to_x: to_x.get(),
             by_slot: slot_to_wire(*by),
         }),
+        GameEvent::BoxBroken { box_id, cell, by } => {
+            Event::BoxBroken(proto::StackAttackBoxBrokenEvent {
+                box_id: box_id.get(),
+                cell: Some(cell_to_wire(*cell)),
+                by_slot: slot_to_wire(*by),
+            })
+        }
         GameEvent::WorkerJumped { slot } => {
             Event::WorkerJumped(proto::StackAttackWorkerJumpedEvent {
                 slot: slot_to_wire(*slot),

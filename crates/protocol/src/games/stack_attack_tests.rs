@@ -1,7 +1,9 @@
 use mg_core::{Game, PlayerSpec, Slot, Viewer};
 use mg_stack_attack::{
-    Column, Command, Direction, PatternId, RawSettings, Settings, Side, StackAttack, WorldEvent,
+    Cell, Column, Command, Direction, GameEvent, PatternId, RawSettings, Settings, Side,
+    StackAttack, WorldEvent,
 };
+use prost::Message;
 
 use crate::proto;
 use crate::proto::{game_command, game_settings, game_world_event};
@@ -189,6 +191,73 @@ fn view_carries_the_render_model() {
             proto::StackAttackWorkerLeftEvent { slot: 0 }
         ))
     )));
+}
+
+#[test]
+fn box_broken_event_survives_the_wire() {
+    let mut game = StackAttack::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
+    let column = game.view(Viewer::Spectator).workers[0].feet.x;
+    let spawn = WorldEvent::CraneSpawned {
+        target_x: Column::new(column),
+        from: Side::Left,
+        pattern: PatternId::new(3).unwrap(),
+    };
+    for _ in 0..50 {
+        if game.apply_world(&spawn).is_ok() {
+            break;
+        }
+        game.step();
+    }
+    // The worker's head is in row 1: jump when the crate is two rows above it.
+    let hit_cell = Cell::new(column, 3);
+    let mut target = None;
+    for _ in 0..50 {
+        target = game
+            .view(Viewer::Spectator)
+            .boxes
+            .iter()
+            .find(|cargo| cargo.falling && cargo.cell == hit_cell)
+            .map(|cargo| cargo.id);
+        if target.is_some() {
+            break;
+        }
+        game.step();
+    }
+    let target = target.expect("the crane's crate never fell above the worker");
+    game.apply_command(Slot::new(0), &Command::Jump).unwrap();
+    game.step();
+
+    let view = game.view(Viewer::Spectator);
+    assert!(view.events.contains(&GameEvent::BoxBroken {
+        box_id: target,
+        cell: hit_cell,
+        by: Slot::new(0),
+    }));
+    let wire = StackAttack::view_to_wire(&view);
+    let decoded = proto::GameView::decode(wire.encode_to_vec().as_slice()).unwrap();
+    assert_eq!(decoded, wire);
+    #[cfg(feature = "json")]
+    let decoded: proto::GameView =
+        serde_json::from_str(&serde_json::to_string(&decoded).unwrap()).unwrap();
+    let Some(proto::game_view::Game::StackAttack(decoded)) = decoded.game else {
+        panic!("wrong view envelope");
+    };
+    let broken: Vec<_> = decoded
+        .events
+        .into_iter()
+        .filter_map(|event| match event.event {
+            Some(proto::stack_attack_event::Event::BoxBroken(broken)) => Some(broken),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        broken,
+        vec![proto::StackAttackBoxBrokenEvent {
+            box_id: target.get(),
+            cell: Some(proto::StackAttackCell { x: column, y: 3 }),
+            by_slot: 0,
+        }]
+    );
 }
 
 #[cfg(feature = "json")]

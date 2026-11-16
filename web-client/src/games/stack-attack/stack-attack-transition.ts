@@ -23,6 +23,8 @@ export class StackAttackTransition {
   readonly boxes: EntityChanges<StackAttackBox>;
   readonly cranes: EntityChanges<StackAttackCrane>;
   readonly clearedRows: readonly number[];
+  /** Boxes a jumping worker's head broke this tick (they are gone from `view`). */
+  readonly brokenBoxIds: ReadonlySet<number>;
   readonly finalCrush: FinalCrush | null;
   /** Where each box present in `view` starts this tick (absent: it does not move). */
   private readonly boxStarts = new Map<number, GridPoint>();
@@ -40,18 +42,21 @@ export class StackAttackTransition {
     for (const { before, after } of this.boxes.kept)
       if (before.cell) this.boxStarts.set(after.id, before.cell);
     const clearedRows: number[] = [];
+    const brokenBoxIds = new Set<number>();
     let finalCrush: FinalCrush | null = null;
     for (const { event } of view.events) {
       if (event.case === "boxDropped")
         // A freshly released box falls out of its crane rather than popping up below it.
         this.boxStarts.set(event.value.boxId, { x: event.value.x, y: view.fieldHeight });
       else if (event.case === "linesCleared") clearedRows.push(...event.value.rows);
+      else if (event.case === "boxBroken") brokenBoxIds.add(event.value.boxId);
       else if (event.case === "workerCrushed" && view.endReason === StackAttackEndReason.WORKERS_CRUSHED) {
         const feet = view.workers[event.value.slot]?.feet;
         if (feet) finalCrush = { boxId: event.value.boxId, feet };
       }
     }
     this.clearedRows = clearedRows;
+    this.brokenBoxIds = brokenBoxIds;
     this.finalCrush = finalCrush;
   }
 

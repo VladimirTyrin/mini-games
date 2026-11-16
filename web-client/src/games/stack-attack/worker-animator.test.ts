@@ -8,6 +8,7 @@ import {
   StackAttackWorkerStatus,
 } from "@/proto/minigames/v2/stack_attack_pb";
 
+import { headHitProgress } from "./head-hit";
 import { StackAttackTransition } from "./stack-attack-transition";
 import { WorkerAnimator } from "./worker-animator";
 import { WORKER_DRAWN_HEIGHT_CELLS } from "./worker-dimensions";
@@ -91,6 +92,32 @@ describe("WorkerAnimator", () => {
     expect(flat?.eyes).toBe("dazed");
     // The box rests on the flattened worker instead of stopping at head height.
     expect(animator.boxRowAt(transition, 7, 1, 2_000)).toBeCloseTo(0.2 * WORKER_DRAWN_HEIGHT_CELLS);
+  });
+
+  it("lets a broken crate fall onto the rising hard hat, then bursts it and bumps the worker", () => {
+    const animator = new WorkerAnimator(TICK_MS, 0);
+    const before = view({ boxes: [{ id: 4, cell: { x: 2, y: 3 }, falling: true }] });
+    animator.observe(new StackAttackTransition(before, null, 0), 0, false);
+    const jumped = view({
+      workers: [{ slot: 0, feet: { x: 2, y: 1 }, status: StackAttackWorkerStatus.ALIVE }],
+      events: [{ event: { case: "boxBroken", value: { boxId: 4, cell: { x: 2, y: 3 }, bySlot: 0 } } }],
+    });
+    const transition = new StackAttackTransition(jumped, before, 1_000);
+    animator.observe(transition, 1_000, false);
+    const hitProgress = headHitProgress(3, {
+      from: { x: 2, y: 0 },
+      to: { x: 2, y: 1 },
+      continuesFall: false,
+    });
+    const hitAt = 1_000 + hitProgress * TICK_MS;
+
+    expect(transition.brokenBoxIds.has(4)).toBe(true);
+    expect(animator.breakingBoxRowAt(4, 1_000)).toBeCloseTo(3);
+    expect(animator.breakingBoxRowAt(4, hitAt - 1)).toBeCloseTo(3 - hitProgress, 1);
+    expect(animator.breakingBoxRowAt(4, hitAt)).toBeNull();
+    expect(animator.particles.isActive(hitAt)).toBe(true);
+    expect(animator.poseAt(0, transition, hitProgress, hitAt - 1)?.scaleY).toBe(1);
+    expect(animator.poseAt(0, transition, hitProgress + 0.35, hitAt + 70)?.scaleY).toBeLessThan(0.95);
   });
 
   it("faces other workers where they last walked", () => {

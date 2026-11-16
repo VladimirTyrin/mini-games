@@ -1,5 +1,6 @@
 //! Stack Attack: cooperative real-time survival. Cranes drop boxes onto the field; workers push
-//! and climb them to complete rows. The game ends when every worker is crushed or gone, or when a
+//! and climb them to complete rows, and break falling ones by jumping into them (a head hit, no
+//! points). The game ends when every worker is crushed or gone, or when a
 //! resting box reaches the top row. Rule changes against the legacy server are listed in
 //! `docs/refactoring-plan.md`, section 7.
 #![cfg_attr(

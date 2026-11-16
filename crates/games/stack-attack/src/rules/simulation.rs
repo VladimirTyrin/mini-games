@@ -9,6 +9,7 @@ use crate::view::GameEvent;
 impl StackAttack {
     /// Phase order matters:
     /// * worker actions run before gravity, so a jump-then-move lands on the box it reached;
+    /// * head hits are part of the jump action, so a broken box never counts for a line clear;
     /// * crush detection runs after line clears, which can shift boxes down into a worker;
     /// * the ceiling check runs last, after clears (A6).
     pub(crate) fn run_tick(&mut self) {
@@ -92,7 +93,7 @@ impl StackAttack {
         let new_head = worker.head().above();
         if worker.state != WorkerState::Grounded
             || !self.field.contains(new_head)
-            || self.field.is_occupied(new_head)
+            || self.field.has_resting_box_at(new_head)
         {
             return;
         }
@@ -100,6 +101,20 @@ impl StackAttack {
             worker.feet = worker.feet.above();
             worker.state = WorkerState::Jumping;
             events.push(GameEvent::WorkerJumped { slot });
+        }
+        // Head hit: the rising head breaks the falling crate it rises into and the falling crate
+        // right above that one, which this tick's gravity would otherwise drop onto it (the cell
+        // below it is empty now). Resolving both here, before cranes and gravity, keeps the hit
+        // independent of the gravity scan; a crane only releases after this, so a crate still on
+        // its hook is never hit.
+        for cell in [new_head, new_head.above()] {
+            if let Some(box_id) = self.field.remove_falling_box_at(cell) {
+                events.push(GameEvent::BoxBroken {
+                    box_id,
+                    cell,
+                    by: slot,
+                });
+            }
         }
     }
 

@@ -3,8 +3,10 @@ import { pulse, segment } from "@/render/easing";
 import { ParticleField } from "@/render/particles";
 import { prefersReducedMotion } from "@/render/reduced-motion";
 
+import { BOX_FRAGMENT_COLORS } from "./box-sprite";
 import { CRUSH_SETTLE_MS, crushedScaleY, settledCrushBoxY, squashedScaleX } from "./crush";
 import { type Facing, FacingTracker } from "./facing";
+import { headHitProgress } from "./head-hit";
 import type { StackAttackTransition } from "./stack-attack-transition";
 import { WalkTween } from "./walk-tween";
 import { type GridPoint, stepWalkProgress, stepX, stepY, type WorkerStep } from "./worker-motion";
@@ -23,6 +25,17 @@ const BREATH_PERIOD_MS = 1500;
 const BLINK_PERIOD_MS = 3700;
 const BLINK_MS = 120;
 const DUST = "#cbd5e1";
+/** The hard hat hitting a crate: a quick squash and dip in the jump pose. */
+const HEAD_BUMP_MS = 140;
+const HEAD_BUMP_SQUASH = 0.14;
+const HEAD_BUMP_DIP_CELLS = 0.06;
+/** Where a broken crate's quarters start (from its centre, in cells) and which way they fly. */
+const SHATTER_QUARTERS: readonly { dx: number; dy: number; angle: number }[] = [
+  { dx: -0.22, dy: 0.22, angle: Math.PI / 2 + 0.6 },
+  { dx: 0.22, dy: 0.22, angle: Math.PI / 2 - 0.6 },
+  { dx: -0.22, dy: -0.22, angle: Math.PI - 0.45 },
+  { dx: 0.22, dy: -0.22, angle: 0.45 },
+];
 
 export type WorkerEyes = "open" | "closed" | "dazed";
 
@@ -51,6 +64,7 @@ interface WorkerTrack {
   /** Vertical move of the previous step, to tell a fall that continues from one that starts. */
   lastStepDy: number;
   landedAt: number;
+  bumpedAt: number;
   pushFrom: number;
   pushUntil: number;
   crushedAt: number;
@@ -67,6 +81,7 @@ function newTrack(slot: number): WorkerTrack {
     step: { from: ORIGIN, to: ORIGIN, continuesFall: false },
     lastStepDy: 0,
     landedAt: NEVER,
+    bumpedAt: NEVER,
     pushFrom: NEVER,
     pushUntil: NEVER,
     crushedAt: NEVER,
@@ -90,6 +105,13 @@ function newTrack(slot: number): WorkerTrack {
   };
 }
 
+/** A box broken by a head hit, drawn falling until the hard hat reaches it. */
+interface BreakingBox {
+  readonly startRow: number;
+  readonly from: number;
+  readonly hitAt: number;
+}
+
 const isAlive = (worker: StackAttackWorker | undefined) => worker?.status === StackAttackWorkerStatus.ALIVE;
 
 /**
@@ -105,6 +127,7 @@ export class WorkerAnimator {
   readonly particles = new ParticleField(96, -18);
   private readonly tracks: WorkerTrack[] = [];
   private readonly facings = new FacingTracker();
+  private readonly breakingBoxes = new Map<number, BreakingBox>();
   private readonly ownWalk: WalkTween;
   private shakeAt = NEVER;
 
@@ -128,6 +151,8 @@ export class WorkerAnimator {
       track.lastStepDy = to.y - from.y;
       this.facings.moved(seat, to.x - from.x);
     });
+    for (const [boxId, breaking] of this.breakingBoxes)
+      if (breaking.hitAt < at) this.breakingBoxes.delete(boxId);
     for (const { event } of view.events) {
       switch (event.case) {
         case "workerLanded": {
@@ -145,6 +170,17 @@ export class WorkerAnimator {
           track.pushFrom = at;
           track.pushUntil = at + this.tickMs * PUSH_POSE_TICKS;
           this.facings.moved(event.value.bySlot, event.value.toX - event.value.fromX);
+          break;
+        }
+        case "boxBroken": {
+          const track = this.tracks[event.value.bySlot];
+          const cell = event.value.cell;
+          if (!track || !cell) break;
+          const hitProgress = headHitProgress(cell.y, track.step);
+          const hitAt = at + hitProgress * this.tickMs;
+          this.breakingBoxes.set(event.value.boxId, { startRow: cell.y, from: at, hitAt });
+          track.bumpedAt = hitAt;
+          this.shatter(cell.x, cell.y - hitProgress, hitAt);
           break;
         }
         case "workerCrushed": {
@@ -207,6 +243,12 @@ export class WorkerAnimator {
       pose.scaleY = 1 - squash;
       pose.scaleX = 1 + squash * 0.8;
     }
+    if (!reducedMotion && now >= track.bumpedAt && now < track.bumpedAt + HEAD_BUMP_MS) {
+      const bump = pulse((now - track.bumpedAt) / HEAD_BUMP_MS);
+      pose.scaleY = 1 - HEAD_BUMP_SQUASH * bump;
+      pose.scaleX = 1 + HEAD_BUMP_SQUASH * 0.6 * bump;
+      pose.y -= HEAD_BUMP_DIP_CELLS * bump;
+    }
     return pose;
   }
 
@@ -220,6 +262,13 @@ export class WorkerAnimator {
     if (row === null || !crush || crush.boxId !== boxId) return row;
     const settleFrom = transition.at + this.tickMs;
     return settledCrushBoxY(row, crush.feet.y, segment(now, settleFrom, settleFrom + CRUSH_SETTLE_MS));
+  }
+
+  /** Row of the bottom edge of a box broken this tick, or `null` once the hard hat has hit it. */
+  breakingBoxRowAt(boxId: number, now: number): number | null {
+    const breaking = this.breakingBoxes.get(boxId);
+    if (!breaking || now >= breaking.hitAt) return null;
+    return breaking.startRow - segment(now, breaking.from, breaking.from + this.tickMs);
   }
 
   /** Vertical screen shake in cells (impact of a crush). */
@@ -236,6 +285,7 @@ export class WorkerAnimator {
     return this.tracks.some(
       (track) =>
         now < track.landedAt + LANDING_SQUASH_MS ||
+        now < track.bumpedAt + HEAD_BUMP_MS ||
         now < track.pushUntil ||
         now < track.crushedAt + CRUSHED_VISIBLE_MS + this.tickMs,
     );
@@ -287,6 +337,7 @@ export class WorkerAnimator {
     this.facings.reset();
     this.ownWalk.reset();
     this.particles.clear();
+    this.breakingBoxes.clear();
     this.shakeAt = NEVER;
   }
 
@@ -306,6 +357,23 @@ export class WorkerAnimator {
         at,
       });
     }
+  }
+
+  /** A crate in column `x`, its bottom edge at `row`, bursts: a chunk and splinters per quarter. */
+  private shatter(x: number, row: number, at: number): void {
+    if (prefersReducedMotion()) return;
+    SHATTER_QUARTERS.forEach(({ dx, dy, angle }, quarter) => {
+      const piece = { x: x + 0.5 + dx, y: row + 0.5 + dy, angle, spread: 0.7, lifeMs: 620, at };
+      const chunkColor = BOX_FRAGMENT_COLORS[quarter % 2] ?? DUST;
+      this.particles.emit({ ...piece, count: 1, speed: 3, size: 0.34, color: chunkColor });
+      this.particles.emit({
+        ...piece,
+        count: 2,
+        speed: 4.5,
+        size: 0.12,
+        color: BOX_FRAGMENT_COLORS[2] ?? DUST,
+      });
+    });
   }
 
   private crushBurst(track: WorkerTrack, at: number): void {

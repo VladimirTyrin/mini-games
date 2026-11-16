@@ -5,6 +5,9 @@ const BOX_EDGE = "#5f2a0e";
 // Dark enough to read at a glance on the orange face (the old mid-orange marks blended in).
 const BOX_MARK = "#4a1d07";
 
+/** Colours of the splinters a broken crate bursts into. */
+export const BOX_FRAGMENT_COLORS: readonly string[] = [BOX_FILL, BOX_SHADE, BOX_LIGHT];
+
 /** A crate with the marking of its pattern (0..8), drawn into a `size` square at (x, y). */
 export function drawBox(
   context: CanvasRenderingContext2D,
