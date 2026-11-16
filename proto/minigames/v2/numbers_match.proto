@@ -2,10 +2,136 @@ syntax = "proto3";
 
 package minigames.v2;
 
-message NumbersMatchSettings {}
+// Cells are addressed by index in reading order: row * columns + column, in the board as it is
+// when the message applies (indices shift when rows are deleted).
 
-message NumbersMatchCommand {}
+enum NumbersMatchHintMode {
+  NUMBERS_MATCH_HINT_MODE_UNSPECIFIED = 0;
+  // 3 hints at the start plus 1 per refill.
+  NUMBERS_MATCH_HINT_MODE_LIMITED = 1;
+  NUMBERS_MATCH_HINT_MODE_UNLIMITED = 2;
+  NUMBERS_MATCH_HINT_MODE_DISABLED = 3;
+}
 
-message NumbersMatchWorldEvent {}
+message NumbersMatchSettings {
+  NumbersMatchHintMode hint_mode = 1;
+  uint32 refills = 2;
+}
 
-message NumbersMatchView {}
+message NumbersMatchCellPair {
+  uint32 first_index = 1;
+  uint32 second_index = 2;
+}
+
+message NumbersMatchRefillCommand {}
+
+message NumbersMatchRequestHintCommand {}
+
+message NumbersMatchCommand {
+  oneof command {
+    NumbersMatchCellPair remove_pair = 1;
+    NumbersMatchRefillCommand refill = 2;
+    NumbersMatchRequestHintCommand request_hint = 3;
+  }
+}
+
+message NumbersMatchBoardDealt {
+  // Digits 1..=9 in reading order.
+  repeated uint32 values = 1;
+}
+
+message NumbersMatchWorldEvent {
+  oneof event {
+    NumbersMatchBoardDealt board_dealt = 1;
+  }
+}
+
+enum NumbersMatchCellState {
+  NUMBERS_MATCH_CELL_STATE_UNSPECIFIED = 0;
+  // Padding after the last value; `value` is 0.
+  NUMBERS_MATCH_CELL_STATE_EMPTY = 1;
+  NUMBERS_MATCH_CELL_STATE_ACTIVE = 2;
+  // Already matched: drawn greyed out.
+  NUMBERS_MATCH_CELL_STATE_REMOVED = 3;
+}
+
+message NumbersMatchCell {
+  uint32 value = 1;
+  NumbersMatchCellState state = 2;
+}
+
+enum NumbersMatchPhase {
+  NUMBERS_MATCH_PHASE_UNSPECIFIED = 0;
+  // Before the first frame deals the board.
+  NUMBERS_MATCH_PHASE_DEALING = 1;
+  NUMBERS_MATCH_PHASE_PLAYING = 2;
+  NUMBERS_MATCH_PHASE_WON = 3;
+  NUMBERS_MATCH_PHASE_LOST = 4;
+}
+
+enum NumbersMatchLossReason {
+  NUMBERS_MATCH_LOSS_REASON_UNSPECIFIED = 0;
+  // No removable pair and no refills left.
+  NUMBERS_MATCH_LOSS_REASON_NO_MOVES = 1;
+  NUMBERS_MATCH_LOSS_REASON_DROPPED = 2;
+}
+
+message NumbersMatchSuggestRefillHint {}
+
+message NumbersMatchHint {
+  oneof hint {
+    // The first removable pair in reading order (first_index < second_index).
+    NumbersMatchCellPair pair = 1;
+    // No pair exists, but a refill is left.
+    NumbersMatchSuggestRefillHint suggest_refill = 2;
+  }
+}
+
+message NumbersMatchPairRemoved {
+  // Indices before rows were deleted.
+  NumbersMatchCellPair pair = 1;
+  // Rows deleted because they had no active cell left, as indices before deletion, ascending.
+  repeated uint32 deleted_rows = 2;
+}
+
+message NumbersMatchRefilled {
+  // Index of the first appended cell.
+  uint32 start_index = 1;
+  repeated uint32 values = 2;
+}
+
+message NumbersMatchHintShown {}
+
+// What the last accepted command did, for animations. Replaced by the next command.
+message NumbersMatchLastAction {
+  oneof action {
+    NumbersMatchPairRemoved pair_removed = 1;
+    NumbersMatchRefilled refilled = 2;
+    NumbersMatchHintShown hint_shown = 3;
+  }
+}
+
+message NumbersMatchStats {
+  uint32 pairs_removed = 1;
+  uint32 refills_used = 2;
+  uint32 hints_used = 3;
+}
+
+message NumbersMatchView {
+  // Reading order; rows * columns cells.
+  repeated NumbersMatchCell cells = 1;
+  uint32 rows = 2;
+  uint32 columns = 3;
+  NumbersMatchPhase phase = 4;
+  // Set only when phase is LOST.
+  NumbersMatchLossReason loss_reason = 5;
+  NumbersMatchHintMode hint_mode = 6;
+  // Unset = unlimited; 0 when hints are disabled.
+  optional uint32 hints_left = 7;
+  uint32 refills_left = 8;
+  // Unset = no hint shown.
+  NumbersMatchHint hint = 9;
+  // Unset before the first command.
+  NumbersMatchLastAction last_action = 10;
+  NumbersMatchStats stats = 11;
+}

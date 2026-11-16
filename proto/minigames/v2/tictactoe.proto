@@ -2,14 +2,104 @@ syntax = "proto3";
 
 package minigames.v2;
 
-message TicTacToeSettings {}
+// (0, 0) is the top-left corner, y grows downwards.
+message TicTacToePoint {
+  uint32 x = 1;
+  uint32 y = 2;
+}
 
-message TicTacToeCommand {}
+enum TicTacToeFirstPlayerMode {
+  TIC_TAC_TOE_FIRST_PLAYER_MODE_UNSPECIFIED = 0;
+  // The authority picks the seat that plays X and announces it as a world event in the first
+  // frame; nobody can move before that.
+  TIC_TAC_TOE_FIRST_PLAYER_MODE_RANDOM = 1;
+  // The lobby host (slot 0) plays X.
+  TIC_TAC_TOE_FIRST_PLAYER_MODE_HOST = 2;
+}
 
-message TicTacToeWorldEvent {}
+// Unvalidated: the game rejects sides outside 3..=20 and a win_count outside
+// 3..=min(field_width, field_height).
+message TicTacToeSettings {
+  uint32 field_width = 1;
+  uint32 field_height = 2;
+  // Marks in a row needed to win.
+  uint32 win_count = 3;
+  TicTacToeFirstPlayerMode first_player = 4;
+}
 
-message TicTacToeView {}
+message TicTacToeCommand {
+  oneof command {
+    // May lie outside the board or on a marked cell; the game rejects such moves.
+    TicTacToePoint place = 1;
+  }
+}
+
+message TicTacToeFirstPlayerChosen {
+  // Plays X and moves first.
+  uint32 x_slot = 1;
+}
+
+message TicTacToeWorldEvent {
+  oneof event {
+    TicTacToeFirstPlayerChosen first_player_chosen = 1;
+  }
+}
+
+enum TicTacToeMark {
+  // An empty cell.
+  TIC_TAC_TOE_MARK_UNSPECIFIED = 0;
+  // Always moves first.
+  TIC_TAC_TOE_MARK_X = 1;
+  TIC_TAC_TOE_MARK_O = 2;
+}
+
+enum TicTacToeEndReason {
+  TIC_TAC_TOE_END_REASON_UNSPECIFIED = 0;
+  TIC_TAC_TOE_END_REASON_WIN = 1;
+  // The board filled up without a line.
+  TIC_TAC_TOE_END_REASON_DRAW = 2;
+  // The loser left, was kicked or ran out of disconnect budget.
+  TIC_TAC_TOE_END_REASON_PLAYER_DISCONNECTED = 3;
+}
+
+// The whole run of equal marks through the winning move, endpoints inclusive; it can be longer
+// than win_count. `start` is the end with the smaller y (the left end on a row).
+message TicTacToeWinningLine {
+  TicTacToeMark mark = 1;
+  TicTacToePoint start = 2;
+  TicTacToePoint end = 3;
+}
+
+message TicTacToeGameEnd {
+  TicTacToeEndReason reason = 1;
+  // Unset for a draw.
+  optional uint32 winner_slot = 2;
+  // Set only when reason is WIN.
+  TicTacToeWinningLine winning_line = 3;
+}
+
+// The same for every viewer: TicTacToe has no hidden information.
+message TicTacToeView {
+  uint32 field_width = 1;
+  uint32 field_height = 2;
+  uint32 win_count = 3;
+  // Row-major, field_width * field_height entries.
+  repeated TicTacToeMark cells = 4;
+  // Unset until the first player is chosen.
+  optional uint32 x_slot = 5;
+  optional uint32 o_slot = 6;
+  // Unset before the first player is chosen and after the game ended.
+  optional uint32 current_slot = 7;
+  // Unset before the first move.
+  TicTacToePoint last_move = 8;
+  // Unset while the match runs.
+  TicTacToeGameEnd end = 9;
+}
 
 enum TicTacToeBotKind {
   TIC_TAC_TOE_BOT_KIND_UNSPECIFIED = 0;
+  // Deterministic alpha-beta search.
+  TIC_TAC_TOE_BOT_KIND_MINIMAX = 1;
+  // Any empty cell within two cells of a mark.
+  TIC_TAC_TOE_BOT_KIND_RANDOM = 2;
 }

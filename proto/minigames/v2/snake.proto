@@ -2,14 +2,120 @@ syntax = "proto3";
 
 package minigames.v2;
 
-message SnakeSettings {}
+// Cells: (0, 0) is the top-left corner, y grows downwards.
+message SnakePoint {
+  uint32 x = 1;
+  uint32 y = 2;
+}
 
-message SnakeCommand {}
+enum SnakeDirection {
+  SNAKE_DIRECTION_UNSPECIFIED = 0;
+  // Towards y = 0.
+  SNAKE_DIRECTION_UP = 1;
+  SNAKE_DIRECTION_DOWN = 2;
+  SNAKE_DIRECTION_LEFT = 3;
+  SNAKE_DIRECTION_RIGHT = 4;
+}
 
-message SnakeWorldEvent {}
+enum SnakeWallCollisionMode {
+  SNAKE_WALL_COLLISION_MODE_UNSPECIFIED = 0;
+  SNAKE_WALL_COLLISION_MODE_DEATH = 1;
+  SNAKE_WALL_COLLISION_MODE_WRAP_AROUND = 2;
+}
 
-message SnakeView {}
+enum SnakeDeadSnakeBehavior {
+  SNAKE_DEAD_SNAKE_BEHAVIOR_UNSPECIFIED = 0;
+  // The body stops being an obstacle; renderers usually hide or fade it.
+  SNAKE_DEAD_SNAKE_BEHAVIOR_DISAPPEAR = 1;
+  SNAKE_DEAD_SNAKE_BEHAVIOR_STAY_ON_FIELD = 2;
+}
+
+enum SnakeDeathReason {
+  SNAKE_DEATH_REASON_UNSPECIFIED = 0;
+  SNAKE_DEATH_REASON_WALL_COLLISION = 1;
+  SNAKE_DEATH_REASON_SELF_COLLISION = 2;
+  // Another snake's body, a head-on collision or a swap of cells.
+  SNAKE_DEATH_REASON_SNAKE_COLLISION = 3;
+  SNAKE_DEATH_REASON_PLAYER_DISCONNECTED = 4;
+}
 
 enum SnakeBotKind {
   SNAKE_BOT_KIND_UNSPECIFIED = 0;
+  SNAKE_BOT_KIND_EFFICIENT = 1;
+  SNAKE_BOT_KIND_RANDOM = 2;
+}
+
+// Ranges are enforced by the game: sizes 10..=100, max food 1..=50, spawn chance 1..=1000 per
+// mille, tick 50..=5000 ms.
+message SnakeSettings {
+  uint32 field_width = 1;
+  uint32 field_height = 2;
+  SnakeWallCollisionMode wall_collision_mode = 3;
+  SnakeDeadSnakeBehavior dead_snake_behavior = 4;
+  uint32 max_food_count = 5;
+  // Chance per tick that one food item spawns while below max_food_count.
+  uint32 food_spawn_permille = 6;
+  uint32 tick_interval_ms = 7;
+}
+
+message SnakeCommand {
+  oneof command {
+    SnakeTurn turn = 1;
+  }
+}
+
+// Queued (up to 2 per snake); each tick consumes one.
+message SnakeTurn {
+  SnakeDirection direction = 1;
+}
+
+message SnakeWorldEvent {
+  oneof event {
+    SnakeSpawnFood spawn_food = 1;
+  }
+}
+
+message SnakeSpawnFood {
+  SnakePoint cell = 1;
+}
+
+message SnakeView {
+  // Steps played so far.
+  uint64 tick = 1;
+  uint32 field_width = 2;
+  uint32 field_height = 3;
+  uint32 tick_interval_ms = 4;
+  SnakeWallCollisionMode wall_collision_mode = 5;
+  SnakeDeadSnakeBehavior dead_snake_behavior = 6;
+  uint32 max_food_count = 7;
+  // Indexed by slot.
+  repeated SnakeSeatView snakes = 8;
+  // In spawn order.
+  repeated SnakePoint food = 9;
+  // The viewer's own seat; unset for spectators.
+  optional uint32 you = 10;
+  // Unset while the match runs.
+  SnakeGameEnd end = 11;
+}
+
+message SnakeSeatView {
+  uint32 slot = 1;
+  bool is_bot = 2;
+  // Head first. Kept after death; see dead_snake_behavior.
+  repeated SnakePoint body = 3;
+  // Direction of the last move (the starting direction before the first one).
+  SnakeDirection direction = 4;
+  // Oldest first.
+  repeated SnakeDirection queued_turns = 5;
+  bool alive = 6;
+  // UNSPECIFIED while alive.
+  SnakeDeathReason death_reason = 7;
+  uint32 score = 8;
+}
+
+message SnakeGameEnd {
+  // Reason of the death that ended the match.
+  SnakeDeathReason reason = 1;
+  // Sole survivor of a multi-seat match; unset for a draw and for solo matches.
+  optional uint32 winner_slot = 2;
 }

@@ -2,10 +2,112 @@ syntax = "proto3";
 
 package minigames.v2;
 
-message Puzzle2048Settings {}
+// Unvalidated: the game rejects sizes outside 2..=10 and targets that are not a power of two in
+// 8..=65536.
+message Puzzle2048Settings {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 target = 3;
+}
 
-message Puzzle2048Command {}
+enum Puzzle2048Direction {
+  PUZZLE2048_DIRECTION_UNSPECIFIED = 0;
+  // Towards row 0.
+  PUZZLE2048_DIRECTION_UP = 1;
+  PUZZLE2048_DIRECTION_DOWN = 2;
+  // Towards column 0.
+  PUZZLE2048_DIRECTION_LEFT = 3;
+  PUZZLE2048_DIRECTION_RIGHT = 4;
+}
 
-message Puzzle2048WorldEvent {}
+message Puzzle2048Command {
+  oneof command {
+    Puzzle2048Direction move = 1;
+  }
+}
 
-message Puzzle2048View {}
+// (0, 0) is the top-left corner.
+message Puzzle2048Cell {
+  uint32 row = 1;
+  uint32 col = 2;
+}
+
+enum Puzzle2048SpawnValue {
+  PUZZLE2048_SPAWN_VALUE_UNSPECIFIED = 0;
+  PUZZLE2048_SPAWN_VALUE_TWO = 1;
+  PUZZLE2048_SPAWN_VALUE_FOUR = 2;
+}
+
+// Two at the start of the game, then one after every accepted move.
+message Puzzle2048TileSpawned {
+  Puzzle2048Cell cell = 1;
+  Puzzle2048SpawnValue value = 2;
+}
+
+message Puzzle2048WorldEvent {
+  oneof event {
+    Puzzle2048TileSpawned tile_spawned = 1;
+  }
+}
+
+enum Puzzle2048Phase {
+  PUZZLE2048_PHASE_UNSPECIFIED = 0;
+  PUZZLE2048_PHASE_PLAYING = 1;
+  PUZZLE2048_PHASE_WON = 2;
+  // No move can change the board.
+  PUZZLE2048_PHASE_LOST = 3;
+  // The player left or was dropped.
+  PUZZLE2048_PHASE_ABANDONED = 4;
+}
+
+// Tile origins describe the latest frame: the latest move and the spawn that followed it (before
+// the first move: the two initial spawns). Animate a frame from the new view alone: slide every
+// `slid` tile from `from`, slide both merge sources into the merged tile's cell, then pop merged
+// tiles and fade in spawned ones.
+
+// The tile existed before the latest move; `from` equals its cell if it stayed put.
+message Puzzle2048SlidOrigin {
+  Puzzle2048Cell from = 1;
+}
+
+// A tile consumed by a merge; its id no longer exists after the move.
+message Puzzle2048MergeSource {
+  uint32 id = 1;
+  Puzzle2048Cell from = 2;
+}
+
+// Always two sources; the first is the one nearer to the edge the move went towards.
+message Puzzle2048MergedOrigin {
+  repeated Puzzle2048MergeSource sources = 1;
+}
+
+message Puzzle2048SpawnedOrigin {}
+
+message Puzzle2048Tile {
+  // Stable while the tile slides; merges and spawns get fresh ids. Never reused in a match.
+  uint32 id = 1;
+  uint32 value = 2;
+  Puzzle2048Cell cell = 3;
+  oneof origin {
+    Puzzle2048SlidOrigin slid = 4;
+    Puzzle2048MergedOrigin merged = 5;
+    Puzzle2048SpawnedOrigin spawned = 6;
+  }
+}
+
+message Puzzle2048View {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 target = 3;
+  // Row-major order.
+  repeated Puzzle2048Tile tiles = 4;
+  // uint32 keeps it a plain number in JSON/TypeScript; the largest reachable score (10x10 board,
+  // target 65536) is far below 2^32.
+  uint32 score = 5;
+  uint32 moves = 6;
+  // 0 before the initial spawns.
+  uint32 highest_tile = 7;
+  // UNSPECIFIED before the first move.
+  Puzzle2048Direction last_move = 8;
+  Puzzle2048Phase phase = 9;
+}

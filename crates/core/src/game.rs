@@ -21,7 +21,7 @@ use crate::viewer::Viewer;
 ///   travels as `WorldEvent`s, so clients never need the seed;
 /// * a rejected command or world event leaves the state untouched;
 /// * [`Game::hash_state`] covers every gameplay-relevant field in a fixed order.
-pub trait Game: Sized + Send + 'static {
+pub trait Game: Sized + Send + Debug + 'static {
     type Settings: Clone + Debug + Send + Sync + 'static;
     type Command: Clone + Debug + PartialEq + Send + Sync + 'static;
     type WorldEvent: Clone + Debug + PartialEq + Send + Sync + 'static;

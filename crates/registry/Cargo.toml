@@ -1,0 +1,23 @@
+[package]
+name = "mg-registry"
+description = "Type-erased access to every game: create authorities and mirrors from wire settings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+json = ["mg-protocol/json"]
+
+[dependencies]
+mg-core.workspace = true
+mg-protocol.workspace = true
+mg-snake.workspace = true
+mg-tictactoe.workspace = true
+mg-stack-attack.workspace = true
+mg-puzzle2048.workspace = true
+mg-numbers-match.workspace = true
+thiserror = "2"
