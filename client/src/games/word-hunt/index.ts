@@ -60,7 +60,6 @@ export const wordHuntPlugin: GamePlugin = {
     if (view.game.case !== "wordHunt") return null;
     const { answer, phase, guesses } = view.game.value;
     if (phase === WordHuntPhase.SOLVED) return `Found in ${guesses.length}`;
-    if (phase === WordHuntPhase.FORFEITED) return "Everyone else left";
     return answer ? `The word was ${answer.toUpperCase()}` : null;
   },
 };

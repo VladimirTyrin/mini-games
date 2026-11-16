@@ -133,8 +133,12 @@ async function enter(): Promise<void> {
   }
 }
 
-/** In a group the seat drops out and the game goes on, so the button must go away. */
-const gaveUp = ref(false);
+/** From the game, so a reload or a reconnect still knows the seat dropped out. */
+const gaveUp = computed(() => {
+  const slot = props.controller.mySlot;
+  const playing = view.value?.playingSlots;
+  return isGroup && slot !== null && playing !== undefined && !playing.includes(slot);
+});
 const confirmingGiveUp = ref(false);
 const canGiveUp = computed(() => props.controller.mySlot !== null && isPlaying.value && !gaveUp.value);
 const giveUpMessage = isGroup
@@ -147,7 +151,6 @@ async function giveUp(): Promise<void> {
     await props.controller.submit({
       game: { case: "wordHunt", value: { command: { case: "giveUp", value: {} } } },
     });
-    gaveUp.value = true;
   } catch (error) {
     refuse(refusalText(error));
   }
@@ -276,7 +279,11 @@ const winRate = computed(() => {
   return current && current.played > 0 ? Math.round((100 * current.won) / current.played) : 0;
 });
 
-const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxGuesses.value }));
+/** A group's scroller shows six rows whatever the solo "Guesses" setting says. */
+const gridSize = computed(() => ({
+  "--letters": wordLength.value,
+  "--rows": isGroup ? 6 : maxGuesses.value,
+}));
 </script>
 
 <template>

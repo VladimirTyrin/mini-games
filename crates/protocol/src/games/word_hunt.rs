@@ -110,6 +110,7 @@ impl WireGame for WordHunt {
                 turn_slot: view.turn.map(slot_to_wire),
                 winner_slot: view.winner.map(slot_to_wire),
                 guess_limit: view.guess_limit,
+                playing_slots: view.playing.iter().copied().map(slot_to_wire).collect(),
             })),
         }
     }

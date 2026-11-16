@@ -118,4 +118,6 @@ message WordHuntView {
   optional uint32 winner_slot = 7;
   // Guesses allowed in total: the setting alone, the safety cap in a group.
   uint32 guess_limit = 8;
+  // Seats still in the game: not given up, not left.
+  repeated uint32 playing_slots = 9;
 }

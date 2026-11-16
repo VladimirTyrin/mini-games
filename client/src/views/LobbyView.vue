@@ -16,7 +16,7 @@ import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
 import { sameIdentity } from "@/util/players";
-import { type SettingsProblem, botKinds, gameCatalog } from "@/wasm/core";
+import { type SettingsProblem, botKinds, gameCatalog, settingsProblem } from "@/wasm/core";
 
 const router = useRouter();
 const connection = useConnectionStore();
@@ -33,6 +33,12 @@ const info = computed(() => gameCatalog().find((game) => game.id === plugin.valu
 const availableBots = computed(() => (plugin.value && info.value?.hasBots ? botKinds(plugin.value.id) : []));
 const mySeat = computed(() => (lobby.mySeatIndex >= 0 ? state.value?.seats[lobby.mySeatIndex] : undefined));
 const humanSeats = computed(() => state.value?.seats.filter((seat) => !seat.botKind).length ?? 0);
+/** Seats the settings must suit: everyone seated now (some rules depend on it). */
+const seatsTaken = computed(() => Math.max(info.value?.minPlayers ?? 1, state.value?.seats.length ?? 0));
+/** Settings that do not suit the table as seated now (e.g. a single-player mode with a guest). */
+const startProblem = computed(() =>
+  state.value?.settings ? settingsProblem(state.value.settings, seatsTaken.value) : null,
+);
 const canStart = computed(
   () =>
     lobby.isHost &&
@@ -113,7 +119,7 @@ async function leave(): Promise<void> {
           <SettingsEditor
             v-model="draft"
             :plugin="plugin"
-            :seats="info?.minPlayers ?? 1"
+            :seats="seatsTaken"
             audience="online"
             @validity="draftProblem = $event"
           />
@@ -228,7 +234,16 @@ async function leave(): Promise<void> {
         >
           Play again
         </button>
-        <button v-if="canStart" class="ml-auto rounded bg-emerald-600 px-6 py-2 font-semibold" @click="start">
+        <p v-if="canStart && startProblem" class="ml-auto text-sm text-rose-300">
+          {{ startProblem.message }} — edit the settings to start
+        </p>
+        <button
+          v-if="canStart"
+          class="rounded bg-emerald-600 px-6 py-2 font-semibold disabled:opacity-50"
+          :class="startProblem ? '' : 'ml-auto'"
+          :disabled="!!startProblem"
+          @click="start"
+        >
           {{ startsLocally ? "Start (offline)" : "Start" }}
         </button>
       </section>

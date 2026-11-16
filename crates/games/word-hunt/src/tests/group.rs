@@ -232,3 +232,19 @@ fn giving_up_against_a_bot_lets_the_bot_win() {
     assert_eq!(game.view(Viewer::Spectator).phase, Phase::Forfeited);
     assert_eq!(outcome(&game).winners, [SECOND]);
 }
+
+#[test]
+fn giving_up_on_ones_own_turn_passes_the_turn() {
+    let mut game = group(&[HUMAN, HUMAN, HUMAN], SECOND);
+    game.apply_command(SECOND, &Command::GiveUp).unwrap();
+    let view = game.view(Viewer::Spectator);
+    assert_eq!(view.turn, Some(THIRD));
+    assert_eq!(view.playing, [FIRST, THIRD]);
+}
+
+#[test]
+fn the_last_person_giving_up_among_bots_ends_the_game() {
+    let mut game = group(&[HUMAN, BOT, BOT], FIRST);
+    game.apply_command(FIRST, &Command::GiveUp).unwrap();
+    assert_eq!(game.view(Viewer::Spectator).phase, Phase::Abandoned);
+}

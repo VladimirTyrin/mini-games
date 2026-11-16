@@ -1,4 +1,4 @@
-use mg_core::{CoreRng, Game, GameSettings, PlayerSpec, Viewer};
+use mg_core::{CoreRng, Game, PlayerSpec, Viewer};
 use mg_puzzle2048::{
     Cell, Command, Direction, Puzzle2048, RawSettings, Settings, SpawnValue, TileOrigin, WorldEvent,
 };
@@ -323,7 +323,7 @@ fn authority_frames_replay_through_json() {
     for (seed, settings) in [
         (
             1,
-            Settings::parse(RawSettings {
+            <Settings as mg_core::GameSettings>::parse(RawSettings {
                 width: 3,
                 height: 3,
                 target: 64,

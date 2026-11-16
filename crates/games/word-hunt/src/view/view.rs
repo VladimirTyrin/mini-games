@@ -19,4 +19,6 @@ pub struct View {
     pub winner: Option<Slot>,
     /// Guesses the game allows in total (the setting alone, the safety cap in a group).
     pub guess_limit: u32,
+    /// Seats still in the game: not given up, not left.
+    pub playing: Vec<Slot>,
 }

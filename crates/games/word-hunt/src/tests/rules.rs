@@ -307,3 +307,15 @@ fn giving_up_alone_loses_and_shows_the_word() {
         matches!(game.status(), Status::Finished(outcome) if outcome.kind == OutcomeKind::Defeat)
     );
 }
+
+/// Single-player state hashes must not change when group play exists, or single-player
+/// replays recorded before it would fail to replay. The value was computed with the code of
+/// 1a85fa3 (before group play) for the same script.
+#[test]
+fn single_player_hash_matches_the_version_before_group_play() {
+    let mut game = game_with_answer("crane", Language::English, false);
+    for text in ["cable", "plumb", "crane"] {
+        guess(&mut game, text).unwrap();
+    }
+    assert_eq!(game.state_hash(), 0x82AC_6C91_4782_D3EB);
+}

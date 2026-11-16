@@ -135,11 +135,6 @@ impl Game for WordHunt {
                 "the word of the day is played alone".into(),
             ));
         }
-        if !players.iter().any(|player| player.is_human()) {
-            return Err(SetupError::InvalidPlayers(
-                "a person must play, not only bots".into(),
-            ));
-        }
         Ok(Self {
             settings: *settings,
             seats: Seats::new(players),
@@ -300,6 +295,7 @@ impl Game for WordHunt {
             turn: self.turn,
             winner: self.winner,
             guess_limit: u32::try_from(self.guess_limit()).unwrap_or(u32::MAX),
+            playing: self.seats.in_play().collect(),
         }
     }
 

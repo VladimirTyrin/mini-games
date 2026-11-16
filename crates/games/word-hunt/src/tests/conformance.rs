@@ -59,6 +59,8 @@ impl Conformance for WordHunt {
                 },
                 vec![BOT, HUMAN, BOT, BOT],
             ),
+            // The bot arena: bots alone.
+            Setup::new(RawSettings::default(), vec![BOT, BOT]),
         ]
     }
 
@@ -88,8 +90,6 @@ impl Conformance for WordHunt {
                 raw(Language::English, 5, PuzzleMode::Daily),
                 vec![HUMAN, BOT],
             ),
-            Setup::new(RawSettings::default(), vec![BOT]),
-            Setup::new(RawSettings::default(), vec![BOT, BOT]),
         ]
     }
 
