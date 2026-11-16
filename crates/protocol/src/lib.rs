@@ -1,6 +1,7 @@
 //! Wire contract (generated from `proto/`) and conversions between game domain types and it.
 
 mod frame_codec;
+mod games;
 mod wire_error;
 mod wire_game;
 
