@@ -6,6 +6,6 @@ pub enum Awaiting {
     Turn(Slot),
     /// Every seat still in play may act (real-time games).
     Simultaneous,
-    /// The game is over.
+    /// No seat can act: the game is over, or it waits for the authority's world event (setup).
     Nobody,
 }
