@@ -1,28 +1,43 @@
 {
   "name": "mini-games-web-client",
-  "version": "0.7.0",
+  "private": true,
   "type": "module",
   "scripts": {
+    "generate": "node build/generate-proto.mjs && node build/build-wasm.mjs",
+    "generate:proto": "node build/generate-proto.mjs",
+    "build:wasm": "node build/build-wasm.mjs",
+    "predev": "npm run generate",
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "prebuild": "npm run generate",
+    "build": "vue-tsc --noEmit && vite build && node build/check-size.mjs",
     "preview": "vite preview",
-    "generate:proto": "node build/generate-proto.js"
+    "pretest": "npm run generate",
+    "test": "vitest run",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5",
-    "vue-router": "^4.5",
-    "pinia": "^3.0",
-    "@bufbuild/protobuf": "^2.0"
+    "@bufbuild/protobuf": "2.17.0",
+    "pinia": "4.1.0",
+    "vue": "3.5.45",
+    "vue-router": "5.5.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2",
-    "typescript": "~5.6",
-    "vite": "^6.0",
-    "vue-tsc": "^2.2",
-    "tailwindcss": "^4.0",
-    "@tailwindcss/vite": "^4.0",
-    "@bufbuild/buf": "^1.47",
-    "@bufbuild/protoc-gen-es": "^2.0",
-    "toml": "^3.0"
+    "@bufbuild/buf": "1.75.0",
+    "@bufbuild/protoc-gen-es": "2.17.0",
+    "@tailwindcss/vite": "4.3.5",
+    "@vitejs/plugin-vue": "6.0.11",
+    "@vue/test-utils": "2.6.0",
+    "eslint": "10.15.0",
+    "eslint-plugin-vue": "10.12.1",
+    "happy-dom": "21.0.4",
+    "prettier": "3.10.1",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0",
+    "vue-tsc": "3.3.14"
   }
 }

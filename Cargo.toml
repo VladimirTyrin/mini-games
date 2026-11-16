@@ -5,6 +5,7 @@ members = [
     "crates/protocol",
     "crates/registry",
     "crates/server",
+    "crates/wasm",
 ]
 # Legacy v1 server: kept only as a reference while porting, removed at the end of the refactor.
 exclude = ["server"]
@@ -34,6 +35,14 @@ print_stderr = "warn"
 lto = "fat"
 codegen-units = 1
 strip = true
+
+# Browser bundle: optimise the WASM core for size.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+panic = "abort"
+# wasm-bindgen reads the target-features section; wasm-opt strips symbols afterwards.
+strip = false
 
 [profile.bench]
 debug = true

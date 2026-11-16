@@ -1,0 +1,6 @@
+dist
+node_modules
+src/proto
+src/wasm/pkg
+android
+package-lock.json

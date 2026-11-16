@@ -1206,6 +1206,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mg-wasm"
+version = "2.0.0"
+dependencies = [
+ "mg-core",
+ "mg-protocol",
+ "mg-registry",
+ "mg-tictactoe",
+ "prost",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "mimalloc"
 version = "0.1.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,108 @@
+import { defineStore } from "pinia";
+import { computed, ref, shallowRef } from "vue";
+
+import type { ServerInfo } from "@/proto/minigames/v2/auth_pb";
+import type { Identity } from "@/proto/minigames/v2/identity_pb";
+import type { Credentials } from "@/net/credentials";
+import { probeServer } from "@/net/probe-server";
+import { RequestError } from "@/net/request-error";
+import { type ConnectionState, Session } from "@/net/session";
+
+import { usePrefsStore } from "./prefs";
+import { useToastStore } from "./toasts";
+
+/** The online session: server info, sign-in state and the live `Session`. */
+export const useConnectionStore = defineStore("connection", () => {
+  const prefs = usePrefsStore();
+  const toasts = useToastStore();
+
+  const session = shallowRef<Session | null>(null);
+  const state = ref<ConnectionState>("offline");
+  const identity = ref<Identity | null>(null);
+  const serverInfo = ref<ServerInfo | null>(null);
+  const serverError = ref<string | null>(null);
+  const isSignedIn = computed(() => state.value === "signed-in" && identity.value !== null);
+
+  async function loadServerInfo(): Promise<void> {
+    serverError.value = null;
+    try {
+      serverInfo.value = await probeServer(prefs.serverUrl);
+    } catch (error) {
+      serverInfo.value = null;
+      serverError.value = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /** Signs in with a stored Google session if there is one. */
+  function resumeStoredSession(): void {
+    if (prefs.sessionToken && !session.value) {
+      start({ kind: "session", token: prefs.sessionToken });
+    }
+  }
+
+  function start(credentials: Credentials): void {
+    session.value?.close();
+    const created = new Session(prefs.serverUrl, credentials);
+    created.events.on("state", (next) => (state.value = next));
+    created.events.on("signedIn", ({ identity: who, sessionToken }) => {
+      identity.value = who;
+      // A Google sign-in returns a long-lived session token; later reconnects use it instead
+      // of the short-lived Google ID token.
+      if (sessionToken) {
+        prefs.sessionToken = sessionToken;
+        created.updateCredentials({ kind: "session", token: sessionToken });
+      }
+    });
+    created.events.on("refused", (error) => {
+      if (credentials.kind === "session") prefs.sessionToken = "";
+      toasts.error(error.message);
+    });
+    created.events.on("shuttingDown", () => toasts.show("The server is restarting"));
+    session.value = created;
+    created.connect();
+  }
+
+  function signInAsGuest(name: string): void {
+    prefs.guestName = name.trim();
+    start({ kind: "guest", displayName: prefs.guestName });
+  }
+
+  function signInWithGoogle(idToken: string): void {
+    start({ kind: "google", idToken });
+  }
+
+  async function signOut(): Promise<void> {
+    await session.value?.signOut();
+    session.value = null;
+    identity.value = null;
+    prefs.sessionToken = "";
+  }
+
+  /** Server URL changed: drop the current session (it belongs to the old server). */
+  function disconnect(): void {
+    session.value?.close();
+    session.value = null;
+    identity.value = null;
+  }
+
+  function requireSession(): Session {
+    if (!session.value || state.value !== "signed-in") throw RequestError.disconnected();
+    return session.value;
+  }
+
+  return {
+    session,
+    state,
+    identity,
+    serverInfo,
+    serverError,
+    isSignedIn,
+    loadServerInfo,
+    resumeStoredSession,
+    signInAsGuest,
+    signInWithGoogle,
+    signOut,
+    disconnect,
+    requireSession,
+  };
+});

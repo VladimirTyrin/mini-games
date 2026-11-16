@@ -1,30 +1,24 @@
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import tailwindcss from "@tailwindcss/vite";
-import { readFileSync } from "fs";
-import { parse } from "toml";
-import { resolve } from "path";
+import { readFileSync } from "node:fs";
+import { fileURLToPath, URL } from "node:url";
 
-function getVersionFromCargoToml(): string {
-  const cargoTomlPath = resolve(__dirname, "../Cargo.toml");
-  const cargoToml = readFileSync(cargoTomlPath, "utf-8");
-  const parsed = parse(cargoToml) as { workspace?: { package?: { version?: string } } };
-  return parsed.workspace?.package?.version ?? "0.0.0";
+import tailwindcss from "@tailwindcss/vite";
+import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
+
+function workspaceVersion(): string {
+  const cargo = readFileSync(new URL("../Cargo.toml", import.meta.url), "utf-8");
+  return /\[workspace\.package\][^[]*?version\s*=\s*"([^"]+)"/s.exec(cargo)?.[1] ?? "0.0.0";
 }
 
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH ?? "/ui/",
+  // Relative base: the same build works on the server root, GitHub Pages and inside Capacitor.
+  base: process.env.VITE_BASE_PATH ?? "./",
   plugins: [vue(), tailwindcss()],
-  define: {
-    __APP_VERSION__: JSON.stringify(getVersionFromCargoToml()),
-  },
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  define: { __APP_VERSION__: JSON.stringify(workspaceVersion()) },
+  build: { target: "es2022", assetsInlineLimit: 0 },
+  worker: { format: "es" },
   server: {
-    proxy: {
-      "/ws": {
-        target: "ws://localhost:5000",
-        ws: true,
-        changeOrigin: true,
-      },
-    },
+    proxy: { "/ws": { target: "ws://127.0.0.1:5000", ws: true } },
   },
 });

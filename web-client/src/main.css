@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #111827;
+  --color-panel: #1f2937;
+  --color-panel-raised: #273244;
+  --color-accent: #34d399;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  color: #e5e7eb;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (hover: none) {
+  /* Sticky hover states on touch screens look like stuck buttons. */
+  .hover\:bg-panel-raised:hover {
+    background: inherit;
+  }
+}
