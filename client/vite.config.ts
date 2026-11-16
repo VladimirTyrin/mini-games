@@ -50,6 +50,15 @@ export default defineConfig({
         navigateFallback: "index.html",
         navigateFallbackDenylist: [/^\/ws/, /^\/downloads\//, /^\/healthz/, /^\/version/, /^\/privacy\.html/],
         cleanupOutdatedCaches: true,
+        // Word Hunt's word lists load only when the game starts; once fetched they stay
+        // available offline and refresh in the background.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes("/words/"),
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "word-lists" },
+          },
+        ],
       },
     }),
   ],

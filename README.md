@@ -1,7 +1,8 @@
 # Mini Games
 
 Small games to play with friends or against bots: **Snake**, **Tic-Tac-Toe** (N in a row),
-**Stack Attack** (co-op crates), **2048** and **Numbers Match**.
+**Stack Attack** (co-op crates), **2048**, **Numbers Match** and **Word Hunt** (guess a Russian
+or English word; word of the day or unlimited).
 
 ## Play
 

@@ -10,6 +10,7 @@ import { MatchController } from "@/match/match-controller";
 import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
+import { pluginBySettings } from "@/games";
 import { downloadInBrowser } from "@/platform/download";
 import { saveReplayFile } from "@/platform/saved-replays";
 import { replayFileNameForMatch } from "@/replays/replay-file-name";
@@ -40,7 +41,8 @@ export const useMatchStore = defineStore("match", () => {
   }
 
   /** Offline match: you plus built-in bots, authority in a Web Worker. */
-  function startLocal(settings: GameSettings, seats: LocalSeat[], playerName: string): void {
+  function startLocal(picked: GameSettings, seats: LocalSeat[], playerName: string): void {
+    const settings = pluginBySettings(picked.game.case)?.settingsForNewMatch?.(picked) ?? picked;
     const header = create(MatchHeaderSchema, {
       matchId: "local",
       settings,

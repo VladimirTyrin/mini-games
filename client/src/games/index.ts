@@ -4,6 +4,7 @@ import { puzzle2048Plugin } from "./puzzle2048";
 import { snakePlugin } from "./snake";
 import { stackAttackPlugin } from "./stack-attack";
 import { tictactoePlugin } from "./tictactoe";
+import { wordHuntPlugin } from "./word-hunt";
 // xtask:imports
 
 /** Every game the UI knows. Order is the order on the home screen. */
@@ -13,6 +14,7 @@ export const gamePlugins: readonly GamePlugin[] = [
   stackAttackPlugin,
   puzzle2048Plugin,
   numbersMatchPlugin,
+  wordHuntPlugin,
   // xtask:plugins
 ];
 

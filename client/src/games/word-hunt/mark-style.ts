@@ -1,0 +1,15 @@
+import { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
+
+/** Tile and key colours: grey absent, amber elsewhere in the word, green in place. */
+export function markClass(mark: WordHuntLetterMark): string {
+  switch (mark) {
+    case WordHuntLetterMark.CORRECT:
+      return "bg-emerald-600 text-white";
+    case WordHuntLetterMark.PRESENT:
+      return "bg-amber-500 text-white";
+    case WordHuntLetterMark.ABSENT:
+      return "bg-gray-700 text-gray-300";
+    default:
+      return "bg-gray-500/40 text-gray-100";
+  }
+}

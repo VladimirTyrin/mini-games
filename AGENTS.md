@@ -1,6 +1,6 @@
 # mini-games — guide for contributors and coding agents
 
-Small multiplayer games (Snake, TicTacToe, Stack Attack, 2048, Numbers Match). One deterministic
+Small multiplayer games (Snake, TicTacToe, Stack Attack, 2048, Numbers Match, Word Hunt). One deterministic
 Rust core runs the rules everywhere: on the server, in the browser (WASM), in the Android app
 (same WASM in a WebView), in network bots and in the local arena.
 

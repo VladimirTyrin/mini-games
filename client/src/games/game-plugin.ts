@@ -36,6 +36,11 @@ export interface GamePlugin {
   controls: ControlsHint;
   /** Starting settings on a phone when none are remembered; the core defaults otherwise. */
   narrowScreenSettings?(defaults: GameSettings): GameSettings;
+  /**
+   * The settings a match starting now uses, from the ones picked on the setup screen (Word Hunt
+   * gives the word of the day today's date). Applied to every local start, Play again included.
+   */
+  settingsForNewMatch?(settings: GameSettings): GameSettings;
   /** Why the match in `view` ended ("Crushed by a falling crate"), shown with the result. */
   describeEnd?(view: GameView): string | null;
 }
