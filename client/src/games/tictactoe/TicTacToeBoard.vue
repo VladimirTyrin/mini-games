@@ -92,14 +92,22 @@ async function place(index: number): Promise<void> {
         />)
       </span>
     </p>
+    <!-- The board's own aspect ratio sizes it and fixed tracks split it, so no cell content can
+         stretch a row: older Safari resolved the mark's percentage height inside aspect-ratio
+         cells as the SVG's default 150px and pulled every row apart after the first move. -->
     <div
-      class="grid w-full max-w-[min(90vw,70vh)] gap-px rounded bg-gray-700 p-px"
-      :style="{ gridTemplateColumns: `repeat(${view.fieldWidth}, minmax(0, 1fr))` }"
+      class="grid w-full gap-px rounded bg-gray-700 p-px"
+      :style="{
+        gridTemplateColumns: `repeat(${view.fieldWidth}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${view.fieldHeight}, minmax(0, 1fr))`,
+        aspectRatio: `${view.fieldWidth} / ${view.fieldHeight}`,
+        maxWidth: `min(90vw, calc(70vh * ${view.fieldWidth} / ${view.fieldHeight}))`,
+      }"
     >
       <button
         v-for="(mark, index) in view.cells"
         :key="index"
-        class="flex aspect-square items-center justify-center disabled:cursor-default disabled:opacity-100"
+        class="relative min-h-0 min-w-0 overflow-hidden disabled:cursor-default disabled:opacity-100"
         :class="[
           winningCells.has(index) ? 'bg-emerald-700' : 'bg-panel',
           mark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300',
@@ -110,7 +118,11 @@ async function place(index: number): Promise<void> {
         :disabled="!myTurn || mark !== TicTacToeMark.UNSPECIFIED"
         @click="place(index)"
       >
-        <MarkIcon v-if="mark !== TicTacToeMark.UNSPECIFIED" :mark="mark" class="h-[70%] w-[70%]" />
+        <MarkIcon
+          v-if="mark !== TicTacToeMark.UNSPECIFIED"
+          :mark="mark"
+          class="absolute left-[15%] top-[15%] h-[70%] w-[70%]"
+        />
       </button>
     </div>
   </div>
