@@ -1,4 +1,5 @@
 using MiniGameNetworkBot;
+using MiniGameNetworkBot.Network;
 using MiniGameNetworkBot.TicTacToe;
 using MiniGameNetworkBot.TicTacToe.Adapters;
 using MiniGameNetworkBot.TicTacToe.Training;
@@ -14,9 +15,10 @@ switch (settings.Mode)
         RunBenchmark(settings);
         break;
     default:
-        await RunGame(settings);
-        break;
+        return await RunGame(settings);
 }
+
+return 0;
 
 static void RunTraining(Settings settings)
 {
@@ -53,7 +55,10 @@ static void RunBenchmark(Settings settings)
         bot1Factory,
         bot2Factory,
         bot1Name,
-        bot2Name);
+        bot2Name,
+        settings.BoardSize,
+        settings.BoardSize,
+        settings.WinCount);
 
     var result = tournament.Run(
         settings.BenchmarkGames,
@@ -63,8 +68,14 @@ static void RunBenchmark(Settings settings)
     LocalTournament.PrintResult(result, bot1Name, bot2Name);
 }
 
-static async Task RunGame(Settings settings)
+static async Task<int> RunGame(Settings settings)
 {
+    if (string.IsNullOrEmpty(settings.BotKey))
+    {
+        Console.Error.WriteLine("A bot key is required: --bot-key KEY or the MG_BOT_KEY environment variable.");
+        return 2;
+    }
+
     var bot = BotFactory.Create(settings.BotType, settings.ModelPath, settings.MinimaxDepth);
     Console.WriteLine($"Using bot: {bot.Name}");
 
@@ -75,44 +86,43 @@ static async Task RunGame(Settings settings)
         cts.Cancel();
     };
 
-    var networkHandler = await GameNetworkHandler.ConnectAsync(
-        settings.ServerAddress,
-        bot.Name,
-        CancellationToken.None).ConfigureAwait(false);
+    await using var session = await BotSession.ConnectAsync(new Uri(settings.ServerUrl), settings.BotKey, cts.Token)
+        .ConfigureAwait(false);
+    Console.WriteLine($"Signed in as {session.Identity.DisplayName} at {settings.ServerUrl}");
 
-    try
+    var runner = new TicTacToeRunner(session, bot, BotFactory.ToServerBotKind(settings.OpponentType));
+    var exitCode = 1;
+    var botTask = Task.Run(async () =>
     {
-        var opponentType = BotFactory.ToServerBotType(settings.OpponentType);
-
-        var botTask = Task.Run(async () =>
+        try
         {
-            try
-            {
-                var runner = new TicTacToeRunner(networkHandler, bot, opponentType);
-                var won = await runner.RunAsync(cts.Token);
-                Console.WriteLine(won ? "We won!" : "We lost!");
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Bot error: {ex.Message}");
-            }
-        });
-
-        if (settings.ShowUi)
-        {
-            TicTacToeUi.Run(networkHandler, cts.Token, () => cts.Cancel());
-            await botTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            var ended = await runner.RunAsync(cts.Token).ConfigureAwait(false);
+            var won = ended.Result is { } result && result.WinnerSlots.Count == 1
+                                                 && runner.MySlot is { } slot && result.WinnerSlots.Contains(slot);
+            Console.WriteLine(ended.Result is null ? "The server aborted the match."
+                : won ? "We won!"
+                : ended.Result.Kind == Minigames.V2.OutcomeKind.Draw ? "Draw."
+                : "We lost!");
+            exitCode = 0;
         }
-        else
+        catch (OperationCanceledException)
         {
-            await botTask.WaitAsync(cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
-    }
-    finally
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Bot error: {ex.Message}");
+        }
+    });
+
+    if (settings.ShowUi)
     {
-        await networkHandler.DisposeAsync().ConfigureAwait(false);
+        TicTacToeUi.Run(runner, $"{bot.Name} [{session.Identity.DisplayName}]", cts.Token, () => cts.Cancel());
+        await botTask.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
     }
+    else
+    {
+        await botTask.WaitAsync(cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+    }
+
+    return exitCode;
 }

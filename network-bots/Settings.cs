@@ -23,7 +23,11 @@ public enum RunMode
 
 public sealed record Settings
 {
-    public string ServerAddress { get; init; } = "https://braintvsminigames.xyz:5443";
+    public const string ProductionServer = "wss://braintvsminigames.xyz/ws";
+    public const string LocalServer = "ws://127.0.0.1:5000/ws";
+
+    public string ServerUrl { get; init; } = ProductionServer;
+    public string? BotKey { get; init; } = Environment.GetEnvironmentVariable("MG_BOT_KEY");
     public bool ShowUi { get; init; } = true;
     public BotType BotType { get; init; } = BotType.Minimax;
     public OpponentType OpponentType { get; init; } = OpponentType.Minimax;
@@ -37,6 +41,8 @@ public sealed record Settings
     public int BenchmarkGames { get; init; } = 100;
     public int BenchmarkThreads { get; init; } = Environment.ProcessorCount;
     public int MinimaxDepth { get; init; } = 2;
+    public int BoardSize { get; init; } = 15;
+    public int WinCount { get; init; } = 5;
 
     public static Settings Parse(string[] args)
     {
@@ -49,7 +55,17 @@ public sealed record Settings
             switch (arg)
             {
                 case "--local":
-                    settings = settings with { ServerAddress = "http://localhost:5001" };
+                    settings = settings with { ServerUrl = LocalServer };
+                    break;
+
+                case "--server":
+                    if (i + 1 < args.Length)
+                        settings = settings with { ServerUrl = args[++i] };
+                    break;
+
+                case "--bot-key":
+                    if (i + 1 < args.Length)
+                        settings = settings with { BotKey = args[++i] };
                     break;
 
                 case "--no-ui":
@@ -59,8 +75,8 @@ public sealed record Settings
                 case "--bot-type" or "-b":
                     if (i + 1 < args.Length)
                     {
-                        if (!Enum.TryParse<BotType>(args[i + 1], ignoreCase: true, out var botType))
-                            throw new ArgumentException($"Invalid bot type: {args[i + 1]}. Valid types are: {string.Join(", ", Enum.GetValues<BotType>())}");
+                        if (!Enum.TryParse<BotType>(args[++i], ignoreCase: true, out var botType))
+                            throw new ArgumentException($"Invalid bot type: {args[i]}. Valid types are: {string.Join(", ", Enum.GetValues<BotType>())}");
 
                         settings = settings with { BotType = botType };
                     }
@@ -105,6 +121,16 @@ public sealed record Settings
                         settings = settings with { MinimaxDepth = depth };
                     break;
 
+                case "--board-size":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var size))
+                        settings = settings with { BoardSize = size };
+                    break;
+
+                case "--win-count":
+                    if (i + 1 < args.Length && int.TryParse(args[++i], out var winCount))
+                        settings = settings with { WinCount = winCount };
+                    break;
+
                 case "--model":
                     if (i + 1 < args.Length)
                         settings = settings with { ModelPath = args[++i] };
@@ -127,21 +153,23 @@ public sealed record Settings
 
     private static void PrintHelp()
     {
-        Console.WriteLine("""
+        Console.WriteLine($"""
             TicTacToe Bot
 
             Usage: dotnet run -- [options]
 
             Modes:
-              (default)               Play against server
+              (default)               Play against a server bot (protocol v2 over WebSocket)
               --train                 Run self-play training
-              --benchmark             Run local bot vs bot tournament
+              --benchmark             Run a local bot vs bot tournament on the Rust core
 
             Play options:
-              --local                 Connect to localhost:5001
+              --server URL            Server WebSocket (default: {ProductionServer})
+              --local                 Same as --server {LocalServer}
+              --bot-key KEY           Bot key from the server operator (or MG_BOT_KEY)
               --no-ui                 Disable UI window
-              --bot-type, -b TYPE     Bot type: Minimax, Mcts, Hybrid (default: Minimax)
-              --opponent, -o TYPE     Server opponent: Minimax, Random (default: Minimax)
+              --bot-type, -b TYPE     Bot type: Minimax, Mcts, Hybrid, Random (default: Minimax)
+              --opponent, -o TYPE     Server bot: Minimax, Random (default: Minimax)
 
             Training options:
               --iterations N          Training iterations (default: 50)
@@ -152,15 +180,17 @@ public sealed record Settings
               --games, -g N           Number of games (default: 100)
               --threads, -t N         Parallel threads (default: CPU count)
               --minimax-depth, -d N   Minimax search depth (default: 2)
+              --board-size N          Board side (default: 15)
+              --win-count N           Marks in a row to win (default: 5)
 
             Common options:
               --model PATH            Neural model path (default: neural_model.dat)
               --help, -h              Show this help
 
             Examples:
-              dotnet run -- --local --bot-type hybrid --model neural_model.dat
+              dotnet run -- --local --bot-key secret --bot-type hybrid --model neural_model.dat
               dotnet run -- --train --iterations 100
-              dotnet run -- --benchmark --bot1 hybrid --bot2 minimax --games 100
+              dotnet run -- --benchmark --bot1 minimax --bot2 random --games 100
             """);
     }
 }

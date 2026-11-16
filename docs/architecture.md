@@ -74,3 +74,11 @@ Google's JWKS, bot keys from configuration; afterwards a stateless HMAC session 
 
 The Android app is the same web build inside Capacitor (built with `VITE_PLATFORM=android`, which
 adds the native back button and Google sign-in); see `docs/android.md`.
+
+## Bots (`crates/arena`, `crates/bot-sdk`, `crates/ffi`, `network-bots`)
+
+Built-in bots run inside the authority. Everything else that plays reuses the same core
+instead of re-implementing rules: `mg-arena` runs bot-vs-bot matches through the registry
+authority, `mg-bot-sdk` is a Rust WebSocket client that mirrors server matches with the core,
+and `mg-ffi` exposes local authorities and mirrors through a C ABI, which the C# bots in
+`network-bots` load via P/Invoke. See `docs/bots.md`.

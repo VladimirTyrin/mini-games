@@ -120,7 +120,7 @@ public sealed class SelfPlayTrainer
 
         while (data.Count < numPositions)
         {
-            var engine = new GameEngine(_width, _height);
+            using var engine = new TicTacToeEngine(_width, _height);
 
             var randomMoves = _random.Next(0, 20);
             for (var i = 0; i < randomMoves && !engine.IsGameOver; i++)
@@ -138,7 +138,7 @@ public sealed class SelfPlayTrainer
             var state = engine.GetBoardState(engine.CurrentPlayer);
             var action = teacherY * _width + teacherX;
 
-            var simEngine = engine.Clone();
+            using var simEngine = engine.Clone();
             simEngine.Place(teacherX, teacherY);
 
             while (!simEngine.IsGameOver)
@@ -214,7 +214,7 @@ public sealed class SelfPlayTrainer
         for (var game = 0; game < numGames; game++)
         {
             var gameData = new List<(float[] State, int Action, Mark Player)>();
-            var engine = new GameEngine(_width, _height);
+            using var engine = new TicTacToeEngine(_width, _height);
 
             while (!engine.IsGameOver)
             {
@@ -334,7 +334,7 @@ public sealed class SelfPlayTrainer
 
         for (var game = 0; game < numGames; game++)
         {
-            var engine = new GameEngine(_width, _height);
+            using var engine = new TicTacToeEngine(_width, _height);
             var botPlaysX = game % 2 == 0;
             var botMark = botPlaysX ? Mark.X : Mark.O;
 
@@ -364,7 +364,7 @@ public sealed class SelfPlayTrainer
 
         public (int X, int Y) GetMove(IBoardView board)
         {
-            var engine = board as GameEngine ?? GameEngine.FromBoard(board);
+            var engine = board as TicTacToeEngine ?? TicTacToeEngine.FromBoard(board);
             return _mcts.GetBestMove(engine, temperature: 0.1f);
         }
     }
@@ -440,7 +440,7 @@ public sealed class SelfPlayTrainer
     {
         var data = new List<(float[] State, int Action, float Reward, Mark Player)>();
         var gameHistory = new List<(float[] State, int Action, Mark Player)>();
-        var engine = new GameEngine(_width, _height);
+        using var engine = new TicTacToeEngine(_width, _height);
 
         while (!engine.IsGameOver)
         {
@@ -475,7 +475,7 @@ public sealed class SelfPlayTrainer
     {
         var data = new List<(float[] State, int Action, float Reward, Mark Player)>();
         var gameHistory = new List<(float[] State, int Action, Mark Player)>();
-        var engine = new GameEngine(_width, _height);
+        using var engine = new TicTacToeEngine(_width, _height);
 
         var networkPlaysX = _random.Next(2) == 0;
         var networkMark = networkPlaysX ? Mark.X : Mark.O;
@@ -628,7 +628,7 @@ public sealed class SelfPlayTrainer
 
         for (var game = 0; game < numGames; game++)
         {
-            var engine = new GameEngine(_width, _height);
+            using var engine = new TicTacToeEngine(_width, _height);
             var networkPlaysX = game % 2 == 0;
             var networkMark = networkPlaysX ? Mark.X : Mark.O;
 

@@ -6,6 +6,7 @@ Rust core runs the rules everywhere: on the server, in the browser (WASM), in th
 
 Design and status: `docs/refactoring-plan.md`. Architecture: `docs/architecture.md`.
 Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.md`.
+Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`.
 
 ## Layout
 

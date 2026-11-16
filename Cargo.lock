@@ -1093,8 +1093,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "mg-arena"
+version = "2.0.0"
+dependencies = [
+ "clap",
+ "mg-core",
+ "mg-protocol",
+ "mg-registry",
+ "prost",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "mg-bot-sdk"
+version = "2.0.0"
+dependencies = [
+ "clap",
+ "futures-util",
+ "mg-arena",
+ "mg-core",
+ "mg-protocol",
+ "mg-registry",
+ "mg-server",
+ "mg-snake",
+ "mg-tictactoe",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-tungstenite 0.30.0",
+]
+
+[[package]]
 name = "mg-core"
 version = "2.0.0"
+
+[[package]]
+name = "mg-ffi"
+version = "2.0.0"
+dependencies = [
+ "mg-core",
+ "mg-protocol",
+ "mg-registry",
+ "mg-tictactoe",
+ "prost",
+ "thiserror",
+]
 
 [[package]]
 name = "mg-numbers-match"

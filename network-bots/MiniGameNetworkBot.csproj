@@ -5,7 +5,17 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <CargoTomlPath>$(MSBuildProjectDirectory)\..\Cargo.toml</CargoTomlPath>
+        <!-- P/Invoke into the Rust core (mg-ffi) passes pointers to pinned buffers. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RepoRoot>$(MSBuildProjectDirectory)\..</RepoRoot>
+        <CargoTomlPath>$(RepoRoot)\Cargo.toml</CargoTomlPath>
+        <!-- The native core is built by cargo; override to use another toolchain or target dir,
+             or set SkipNativeBuild=true and copy the library yourself (see README.md). -->
+        <CargoCommand Condition="'$(CargoCommand)' == ''">cargo</CargoCommand>
+        <CargoTargetDir Condition="'$(CargoTargetDir)' == ''">$(RepoRoot)\target</CargoTargetDir>
+        <NativeLibraryFile Condition="$([MSBuild]::IsOSPlatform('Windows'))">mini_games.dll</NativeLibraryFile>
+        <NativeLibraryFile Condition="$([MSBuild]::IsOSPlatform('Linux'))">libmini_games.so</NativeLibraryFile>
+        <NativeLibraryFile Condition="$([MSBuild]::IsOSPlatform('OSX'))">libmini_games.dylib</NativeLibraryFile>
     </PropertyGroup>
 
     <Target Name="GenerateVersionFromCargo" BeforeTargets="BeforeCompile">
@@ -15,15 +25,27 @@
             <GeneratedVersionFile>$(IntermediateOutputPath)Version.g.cs</GeneratedVersionFile>
         </PropertyGroup>
         <WriteLinesToFile File="$(GeneratedVersionFile)"
-                          Lines="namespace MiniGameNetworkBot%3B%0Ainternal static class VersionInfo%0A{%0A    public const string ServerVersion = &quot;$(VersionMatch)&quot;%3B%0A}"
+                          Lines="namespace MiniGameNetworkBot%3B%0Ainternal static class VersionInfo%0A{%0A    public const string ClientVersion = &quot;$(VersionMatch)&quot;%3B%0A}"
                           Overwrite="true" />
         <ItemGroup>
             <Compile Include="$(GeneratedVersionFile)" />
         </ItemGroup>
     </Target>
 
+    <Target Name="BuildNativeCore" BeforeTargets="Build" Condition="'$(SkipNativeBuild)' != 'true'">
+        <Exec Command="$(CargoCommand) build -p mg-ffi --release --target-dir &quot;$(CargoTargetDir)&quot;"
+              WorkingDirectory="$(RepoRoot)" />
+    </Target>
+
+    <Target Name="CopyNativeCore" AfterTargets="Build" Condition="'$(SkipNativeBuild)' != 'true'">
+        <Copy SourceFiles="$(CargoTargetDir)\release\$(NativeLibraryFile)"
+              DestinationFolder="$(OutDir)"
+              SkipUnchangedFiles="true" />
+    </Target>
+
     <ItemGroup>
-      <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
+      <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+      <PackageReference Include="Grpc.Tools" Version="2.85.0" PrivateAssets="all" />
       <PackageReference Include="Avalonia" Version="11.2.3" />
       <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
       <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
@@ -33,22 +55,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Protobuf Include="../proto/game_service.proto"
-                  Link="proto/game_service.proto"
+        <Protobuf Include="../proto/minigames/v2/*.proto"
                   ProtoRoot="../proto"
-                  GrpcServices="Client"/>
-        <Protobuf Include="../proto/replay.proto"
-                  Link="proto/replay.proto"
-                  ProtoRoot="../proto"
-                  GrpcServices="None"/>
-        <Protobuf Include="../proto/games/snake.proto"
-                  Link="proto/games/snake.proto"
-                  ProtoRoot="../proto"
-                  GrpcServices="None"/>
-        <Protobuf Include="../proto/games/tictactoe.proto"
-                  Link="proto/games/tictactoe.proto"
-                  ProtoRoot="../proto"
-                  GrpcServices="None"/>
+                  GrpcServices="None" />
     </ItemGroup>
 
 </Project>

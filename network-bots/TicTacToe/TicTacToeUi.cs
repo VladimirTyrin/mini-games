@@ -6,9 +6,11 @@ public static class TicTacToeUi
 {
     public static Action? OnWindowClosed { get; set; }
 
-    public static void Run(GameNetworkHandler handler, CancellationToken shutdownToken, Action onWindowClosed)
+    /// <summary>Blocks until the window closes. Updates before the window opens are not shown; the next one redraws everything.</summary>
+    public static void Run(TicTacToeRunner runner, string title, CancellationToken shutdownToken, Action onWindowClosed)
     {
-        App.NetworkHandler = handler;
+        App.Runner = runner;
+        App.WindowTitle = title;
         App.ShutdownToken = shutdownToken;
         OnWindowClosed = onWindowClosed;
 

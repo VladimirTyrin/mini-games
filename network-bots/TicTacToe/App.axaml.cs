@@ -8,7 +8,8 @@ namespace MiniGameNetworkBot.TicTacToe;
 
 public class App : Application
 {
-    public static GameNetworkHandler? NetworkHandler { get; set; }
+    public static TicTacToeRunner? Runner { get; set; }
+    public static string WindowTitle { get; set; } = "TicTacToe Bot";
     public static CancellationToken ShutdownToken { get; set; }
 
     public override void Initialize()
@@ -18,10 +19,10 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && NetworkHandler != null)
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop && Runner != null)
         {
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-            desktop.MainWindow = new GameWindow(NetworkHandler);
+            desktop.MainWindow = new GameWindow(Runner, WindowTitle);
 
             var isShuttingDown = false;
 

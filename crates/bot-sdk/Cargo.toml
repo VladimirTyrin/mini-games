@@ -1,0 +1,28 @@
+[package]
+name = "mg-bot-sdk"
+description = "Network bots for the v2 WebSocket protocol: session, lobby flow, lockstep mirror, strategies"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mg-core.workspace = true
+mg-protocol = { workspace = true, features = ["json"] }
+mg-registry = { workspace = true, features = ["json"] }
+futures-util.workspace = true
+serde_json = "1"
+thiserror = "2"
+tokio = { workspace = true, features = ["net", "time", "macros", "rt"] }
+tokio-tungstenite = "0.30"
+
+[dev-dependencies]
+clap.workspace = true
+mg-arena = { path = "../arena" }
+mg-server = { path = "../server" }
+mg-snake.workspace = true
+mg-tictactoe.workspace = true
+tokio = { workspace = true, features = ["full"] }

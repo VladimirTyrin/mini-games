@@ -16,7 +16,7 @@ public sealed class NeuralMcts
         _explorationConstant = explorationConstant;
     }
 
-    public (int X, int Y) GetBestMove(GameEngine engine, float temperature = 0.1f)
+    public (int X, int Y) GetBestMove(TicTacToeEngine engine, float temperature = 0.1f)
     {
         var moves = engine.GetAvailableMoves();
 
@@ -52,7 +52,7 @@ public sealed class NeuralMcts
         for (var i = 0; i < _simulations; i++)
         {
             var node = root;
-            var simEngine = engine.Clone();
+            using var simEngine = engine.Clone();
 
             // Selection - traverse to leaf
             while (node.IsExpanded && !simEngine.IsGameOver)
@@ -118,7 +118,7 @@ public sealed class NeuralMcts
         }
     }
 
-    public List<(float[] State, int Action, float Value)> GetTrainingData(GameEngine engine)
+    public List<(float[] State, int Action, float Value)> GetTrainingData(TicTacToeEngine engine)
     {
         var root = new MctsNode(null, (-1, -1), engine.CurrentPlayer);
         var moves = engine.GetAvailableMoves();
@@ -134,7 +134,7 @@ public sealed class NeuralMcts
         for (var i = 0; i < _simulations; i++)
         {
             var node = root;
-            var simEngine = engine.Clone();
+            using var simEngine = engine.Clone();
 
             while (node.IsExpanded && !simEngine.IsGameOver)
             {

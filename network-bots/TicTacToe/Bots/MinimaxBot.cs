@@ -15,11 +15,11 @@ public sealed class MinimaxBot : IBot
 
     public (int X, int Y) GetMove(IBoardView board)
     {
-        var engine = board as GameEngine ?? GameEngine.FromBoard(board);
+        var engine = board as TicTacToeEngine ?? TicTacToeEngine.FromBoard(board);
         return GetMoveInternal(engine);
     }
 
-    private (int X, int Y) GetMoveInternal(GameEngine engine)
+    private (int X, int Y) GetMoveInternal(TicTacToeEngine engine)
     {
         var moves = engine.GetAvailableMoves();
         if (moves.Count == 0)
@@ -43,7 +43,7 @@ public sealed class MinimaxBot : IBot
 
         foreach (var (x, y) in moves)
         {
-            var clone = engine.Clone();
+            using var clone = engine.Clone();
             clone.Place(x, y);
             var score = -Negamax(clone, _maxDepth - 1, int.MinValue, int.MaxValue);
 
@@ -57,7 +57,7 @@ public sealed class MinimaxBot : IBot
         return bestMove;
     }
 
-    private int Negamax(GameEngine engine, int depth, int alpha, int beta)
+    private int Negamax(TicTacToeEngine engine, int depth, int alpha, int beta)
     {
         if (engine.IsGameOver)
         {
@@ -77,7 +77,7 @@ public sealed class MinimaxBot : IBot
 
         foreach (var (x, y) in moves)
         {
-            var clone = engine.Clone();
+            using var clone = engine.Clone();
             clone.Place(x, y);
             var score = -Negamax(clone, depth - 1, -beta, -alpha);
 
@@ -91,7 +91,7 @@ public sealed class MinimaxBot : IBot
         return bestScore;
     }
 
-    private int Evaluate(GameEngine engine)
+    private int Evaluate(TicTacToeEngine engine)
     {
         var myMark = engine.CurrentPlayer;
         var oppMark = myMark == Mark.X ? Mark.O : Mark.X;
@@ -99,7 +99,7 @@ public sealed class MinimaxBot : IBot
         return CountThreats(engine, myMark) - CountThreats(engine, oppMark);
     }
 
-    private int CountThreats(GameEngine engine, Mark mark)
+    private int CountThreats(TicTacToeEngine engine, Mark mark)
     {
         var score = 0;
         int[] dx = [1, 0, 1, 1];

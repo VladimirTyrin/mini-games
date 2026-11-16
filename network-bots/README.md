@@ -1,37 +1,71 @@
 # TicTacToe Bot Framework
 
-Framework for creating and testing bots for TicTacToe (15x15, 5 in a row).
+C# bots for TicTacToe (15x15, 5 in a row) that play on the mini-games server over protocol v2
+(WebSocket, protobuf JSON). The game rules come from the Rust core through the `mini_games`
+native library (`crates/ffi`), the same code the server runs; the bots, MCTS and the neural
+network stay in C#. Background: `../docs/bots.md`.
+
+## Build
+
+```bash
+dotnet build network-bots          # from the repository root
+```
+
+The build compiles `../proto/minigames/v2/*.proto`, runs `cargo build -p mg-ffi --release` and
+copies `mini_games.dll` (`libmini_games.so` on Linux) next to the output. Options:
+
+| Property | Default | Meaning |
+|----------|---------|---------|
+| `CargoCommand` | `cargo` | e.g. `"cargo +1.100.0"` |
+| `CargoTargetDir` | `../target` | cargo `--target-dir` |
+| `SkipNativeBuild` | - | `true`: do not run cargo; copy the library into `bin/...` yourself |
+
+The first restore downloads TorchSharp with CUDA (several GB).
 
 ## Quick Start
 
-### Playing against server
+### Playing against a server
+
+A server accepts network bots by key (`MG_BOT_KEYS=name:sha256(key)`, see `../docs/bots.md`).
 
 ```bash
-# Hybrid bot vs server minimax
-dotnet run -- --bot-type hybrid --model neural_model.dat
+# Local server with bot `alpha`, key `secret`
+MG_BOT_KEYS=alpha:2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b cargo run -p mg-server
 
-# Against local server
-dotnet run -- --local --bot-type hybrid
+# Hybrid bot vs the server's minimax
+dotnet run -- --local --bot-key secret --bot-type hybrid --model neural_model.dat
 
-# Against random bot
-dotnet run -- --opponent random --bot-type hybrid
+# Against the server's random bot, without the window
+dotnet run -- --local --bot-key secret --opponent random --no-ui
+
+# Production server; the key can come from the environment
+MG_BOT_KEY=... dotnet run -- --bot-type minimax
 ```
 
+The bot hosts a lobby, seats the server bot, starts the match and mirrors it with the core.
+A dropped connection is resumed with the resume token.
+
 ### Local benchmark
+
+Runs on the Rust core through the native library; an illegal move forfeits the game.
 
 ```bash
 # Hybrid vs Minimax, 100 games
 dotnet run -- --benchmark --bot1 hybrid --bot2 minimax --games 100
 
-# Minimax(d=3) vs Minimax(d=2)
-dotnet run -- --benchmark --bot1 minimax --bot2 minimax --minimax-depth 3 --games 50
+# Minimax(d=3) vs Minimax(d=2) on a smaller board
+dotnet run -- --benchmark --bot1 minimax --bot2 minimax --minimax-depth 3 --games 50 --board-size 9
 ```
+
+Built-in Rust bots play each other with `mg-arena` (`../docs/bots.md`).
 
 ### Common parameters
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--local` | Connect to localhost:5001 | - |
+| `--server URL` | Server WebSocket | `wss://braintvsminigames.xyz/ws` |
+| `--local` | Use `ws://127.0.0.1:5000/ws` | - |
+| `--bot-key KEY` | Bot key (or `MG_BOT_KEY`) | - |
 | `--no-ui` | Disable GUI | - |
 | `--model PATH` | Path to neural network model | neural_model.dat |
 
@@ -39,7 +73,7 @@ dotnet run -- --benchmark --bot1 minimax --bot2 minimax --minimax-depth 3 --game
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--bot-type`, `-b` | Bot type: Minimax, Mcts, Hybrid | Minimax |
+| `--bot-type`, `-b` | Bot type: Minimax, Mcts, Hybrid, Random | Minimax |
 | `--opponent`, `-o` | Server opponent: Minimax, Random | Minimax |
 
 ### Benchmark parameters
@@ -51,15 +85,18 @@ dotnet run -- --benchmark --bot1 minimax --bot2 minimax --minimax-depth 3 --game
 | `--games`, `-g` | Number of games | 100 |
 | `--threads`, `-t` | Thread count | CPU count |
 | `--minimax-depth`, `-d` | Minimax search depth | 2 |
+| `--board-size` | Board side | 15 |
+| `--win-count` | Marks in a row to win | 5 |
 
-## Running local server
+## Layout
 
-```bash
-# From project root
-cargo run -p mini_games_server
-```
-
-Server starts at `http://localhost:5001`.
+- `Native/` — P/Invoke into `mini_games` (`LocalMatch`: a local match; `MatchMirror`: a server
+  match replayed from its frames).
+- `Network/` — WebSocket connection, bot-key sign-in and resume.
+- `TicTacToe/Core/TicTacToeEngine.cs` — the game for bots, tournaments and training, backed by
+  the core. `Clone()` asks the core to replay the game so far, so it costs more than copying an
+  array.
+- `TicTacToe/TicTacToeRunner.cs` — one match against a server bot.
 
 ## Adding your own bot
 

@@ -40,12 +40,12 @@ public static class BotFactory
         };
     }
 
-    public static Tictactoe.TicTacToeBotType ToServerBotType(OpponentType type)
+    public static Minigames.V2.TicTacToeBotKind ToServerBotKind(OpponentType type)
     {
         return type switch
         {
-            OpponentType.Minimax => Tictactoe.TicTacToeBotType.Minimax,
-            OpponentType.Random => Tictactoe.TicTacToeBotType.Random,
+            OpponentType.Minimax => Minigames.V2.TicTacToeBotKind.Minimax,
+            OpponentType.Random => Minigames.V2.TicTacToeBotKind.Random,
             _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown opponent type")
         };
     }

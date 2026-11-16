@@ -120,22 +120,19 @@ public sealed class LocalTournament
     {
         var bot1 = _bot1Factory();
         var bot2 = _bot2Factory();
-        var engine = new GameEngine(_width, _height, _winCount);
+        using var engine = new TicTacToeEngine(_width, _height, _winCount);
 
         var bot1PlaysX = gameIndex % 2 == 0;
         var bot1Mark = bot1PlaysX ? Mark.X : Mark.O;
 
         while (!engine.IsGameOver)
         {
-            var moves = engine.GetAvailableMoves();
-            if (moves.Count == 0)
-                break;
-
-            var isBot1Turn = engine.CurrentPlayer == bot1Mark;
-            var currentBot = isBot1Turn ? bot1 : bot2;
-
+            var mover = engine.CurrentPlayer;
+            var currentBot = mover == bot1Mark ? bot1 : bot2;
             var (x, y) = currentBot.GetMove(engine);
-            engine.Place(x, y);
+            // The core refuses illegal moves; a bot that makes one forfeits.
+            if (!engine.Place(x, y))
+                return new GameResult(bot1PlaysX, mover == Mark.X ? Mark.O : Mark.X, bot1Mark);
         }
 
         return new GameResult(bot1PlaysX, engine.Winner, bot1Mark);

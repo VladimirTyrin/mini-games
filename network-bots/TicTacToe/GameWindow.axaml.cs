@@ -3,19 +3,16 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
-using GameService;
-using Tictactoe;
+using Minigames.V2;
+using MiniGameNetworkBot.TicTacToe.Core;
 
 namespace MiniGameNetworkBot.TicTacToe;
 
+/// <summary>Shows the match the runner plays, as the core's view renders it.</summary>
 public partial class GameWindow : Window
 {
-    private readonly GameNetworkHandler? _networkHandler;
-    private readonly CancellationTokenSource _cts = new();
-    private readonly string _botClientId = string.Empty;
-
-    private TicTacToeGameState? _lastState;
-    private WinningLine? _winningLine;
+    private TicTacToeView? _view;
+    private uint? _mySlot;
 
     private Canvas _boardCanvas = null!;
     private TextBlock _statusText = null!;
@@ -31,18 +28,14 @@ public partial class GameWindow : Window
         InitializeComponent();
     }
 
-    public GameWindow(GameNetworkHandler networkHandler)
+    public GameWindow(TicTacToeRunner runner, string title)
     {
-        _networkHandler = networkHandler;
-        _botClientId = networkHandler.ClientId;
-
         InitializeComponent();
 
-        Title = _botClientId;
+        Title = title;
         _boardCanvas.SizeChanged += (_, _) => RedrawBoard();
-        Closed += (_, _) => _cts.Cancel();
-
-        StartListening();
+        runner.ViewChanged += (view, mySlot) => Dispatcher.UIThread.Post(() => UpdateView(view, mySlot));
+        runner.MatchEnded += (view, ended) => Dispatcher.UIThread.Post(() => ShowEnd(view, ended));
     }
 
     private void InitializeComponent()
@@ -58,107 +51,69 @@ public partial class GameWindow : Window
         _boardSizeText = this.FindControl<TextBlock>("BoardSizeText")!;
     }
 
-    private async void StartListening()
+    private void UpdateView(TicTacToeView view, uint? mySlot)
     {
-        if (_networkHandler is null) return;
+        _view = view;
+        _mySlot = mySlot;
 
-        try
+        var botMark = BotMark();
+        _botMarkText.Text = botMark == Mark.O ? "O" : "X";
+        _opponentMarkText.Text = botMark == Mark.O ? "X" : "O";
+        _moveCountText.Text = $"Move: {view.Cells.Count(cell => cell != TicTacToeMark.Unspecified)}";
+        _winConditionText.Text = $"Win: {view.WinCount} in a row";
+        _boardSizeText.Text = $"Board: {view.FieldWidth}x{view.FieldHeight}";
+
+        if (view.End is null)
         {
-            await foreach (var message in _networkHandler.ReadAllFromThisMomentAsync(_cts.Token))
-            {
-                HandleMessage(message);
-            }
+            var isOurTurn = view.HasCurrentSlot && view.CurrentSlot == mySlot;
+            SetStatus(isOurTurn ? "Our turn - thinking..." : "Opponent's turn", isOurTurn);
         }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
-    private void HandleMessage(ServerMessage message)
-    {
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (message.GameState is { Tictactoe: { } state })
-            {
-                UpdateState(state);
-            }
-            else if (message.GameOver is { } gameOver)
-            {
-                var won = gameOver.Winner?.PlayerId == _botClientId;
-                _winningLine = gameOver.TictactoeInfo?.WinningLine;
-                ShowGameOver(won);
-                RedrawBoard();
-            }
-            else if (message.GameStarting is not null)
-            {
-                _winningLine = null;
-                SetStatus("Game starting...", false);
-            }
-        });
-    }
-
-    private void UpdateState(TicTacToeGameState state)
-    {
-        _lastState = state;
-
-        var botMark = GetBotMark(state);
-        var opponentMark = botMark == 'X' ? 'O' : 'X';
-
-        _botMarkText.Text = botMark.ToString();
-        _opponentMarkText.Text = opponentMark.ToString();
-        _moveCountText.Text = $"Move: {state.Board.Count}";
-        _winConditionText.Text = $"Win: {state.WinCount} in a row";
-        _boardSizeText.Text = $"Board: {state.FieldWidth}x{state.FieldHeight}";
-
-        var isOurTurn = state.CurrentPlayer?.PlayerId == _botClientId;
-        SetStatus(isOurTurn ? "Our turn - thinking..." : "Opponent's turn", isOurTurn);
 
         RedrawBoard();
     }
 
+    private void ShowEnd(TicTacToeView view, MatchEnded ended)
+    {
+        UpdateView(view, _mySlot);
+        var won = ended.Result is { } result && _mySlot is { } slot && result.WinnerSlots.Contains(slot);
+        var draw = ended.Result?.Kind == OutcomeKind.Draw;
+        _statusText.Text = won ? "WE WON!" : draw ? "Draw" : "We lost";
+        _statusText.Foreground = new SolidColorBrush(Color.Parse(won ? "#a6e3a1" : draw ? "#f9e2af" : "#f38ba8"));
+        _statusText.FontSize = 24;
+    }
+
+    private Mark BotMark() =>
+        _view is not null && _mySlot is { } slot ? TicTacToeViews.MarkOf(_view, slot) : Mark.Empty;
+
     private void SetStatus(string status, bool isOurTurn)
     {
         _statusText.Text = status;
-        _statusText.Foreground = isOurTurn
-            ? new SolidColorBrush(Color.Parse("#a6e3a1"))
-            : new SolidColorBrush(Color.Parse("#f9e2af"));
-    }
-
-    private void ShowGameOver(bool won)
-    {
-        _statusText.Text = won ? "WE WON!" : "We lost";
-        _statusText.Foreground = won
-            ? new SolidColorBrush(Color.Parse("#a6e3a1"))
-            : new SolidColorBrush(Color.Parse("#f38ba8"));
-        _statusText.FontSize = 24;
+        _statusText.Foreground = new SolidColorBrush(Color.Parse(isOurTurn ? "#a6e3a1" : "#f9e2af"));
     }
 
     private void RedrawBoard()
     {
-        if (_lastState == null) return;
+        if (_view is null)
+            return;
 
-        var state = _lastState;
+        var view = _view;
         _boardCanvas.Children.Clear();
 
-        var width = (int)state.FieldWidth;
-        var height = (int)state.FieldHeight;
-
+        var width = (int)view.FieldWidth;
+        var height = (int)view.FieldHeight;
         var canvasWidth = _boardCanvas.Bounds.Width;
         var canvasHeight = _boardCanvas.Bounds.Height;
-
-        if (canvasWidth <= 0 || canvasHeight <= 0) return;
+        if (canvasWidth <= 0 || canvasHeight <= 0)
+            return;
 
         var cellSize = Math.Min(canvasWidth / width, canvasHeight / height);
         var offsetX = (canvasWidth - cellSize * width) / 2;
         var offsetY = (canvasHeight - cellSize * height) / 2;
 
         DrawGrid(width, height, cellSize, offsetX, offsetY);
-        DrawMarks(state, cellSize, offsetX, offsetY);
-
-        if (_winningLine is not null)
-        {
-            DrawWinningLine(_winningLine, cellSize, offsetX, offsetY);
-        }
+        DrawMarks(view, cellSize, offsetX, offsetY);
+        if (view.End?.WinningLine is { } line)
+            DrawWinningLine(line, cellSize, offsetX, offsetY);
     }
 
     private void DrawGrid(int width, int height, double cellSize, double offsetX, double offsetY)
@@ -167,45 +122,45 @@ public partial class GameWindow : Window
 
         for (var i = 0; i <= width; i++)
         {
-            var line = new Line
+            _boardCanvas.Children.Add(new Line
             {
                 StartPoint = new Point(offsetX + i * cellSize, offsetY),
                 EndPoint = new Point(offsetX + i * cellSize, offsetY + height * cellSize),
                 Stroke = gridColor,
                 StrokeThickness = 1
-            };
-            _boardCanvas.Children.Add(line);
+            });
         }
 
         for (var i = 0; i <= height; i++)
         {
-            var line = new Line
+            _boardCanvas.Children.Add(new Line
             {
                 StartPoint = new Point(offsetX, offsetY + i * cellSize),
                 EndPoint = new Point(offsetX + width * cellSize, offsetY + i * cellSize),
                 Stroke = gridColor,
                 StrokeThickness = 1
-            };
-            _boardCanvas.Children.Add(line);
+            });
         }
     }
 
-    private void DrawMarks(TicTacToeGameState state, double cellSize, double offsetX, double offsetY)
+    private void DrawMarks(TicTacToeView view, double cellSize, double offsetX, double offsetY)
     {
-        var botMark = GetBotMark(state);
-        var lastMove = state.LastMove;
+        var botMark = BotMark();
+        var width = (int)view.FieldWidth;
 
-        foreach (var cell in state.Board)
+        for (var index = 0; index < view.Cells.Count; index++)
         {
-            var x = (int)cell.X;
-            var y = (int)cell.Y;
-            var isLast = lastMove != null && lastMove.X == x && lastMove.Y == y;
+            var mark = TicTacToeViews.ToMark(view.Cells[index]);
+            if (mark == Mark.Empty)
+                continue;
 
+            var x = index % width;
+            var y = index / width;
             var centerX = offsetX + x * cellSize + cellSize / 2;
             var centerY = offsetY + y * cellSize + cellSize / 2;
             var markSize = cellSize * 0.6;
 
-            if (isLast)
+            if (view.LastMove is { } last && last.X == x && last.Y == y)
             {
                 var highlight = new Rectangle
                 {
@@ -218,52 +173,41 @@ public partial class GameWindow : Window
                 _boardCanvas.Children.Add(highlight);
             }
 
-            if (cell.Mark == MarkType.X)
-            {
-                DrawX(centerX, centerY, markSize, botMark == 'X');
-            }
-            else if (cell.Mark == MarkType.O)
-            {
-                DrawO(centerX, centerY, markSize, botMark == 'O');
-            }
+            if (mark == Mark.X)
+                DrawX(centerX, centerY, markSize, botMark == Mark.X);
+            else
+                DrawO(centerX, centerY, markSize, botMark == Mark.O);
         }
     }
 
     private void DrawX(double centerX, double centerY, double size, bool isBotMark)
     {
-        var color = new SolidColorBrush(isBotMark ? Color.Parse("#89b4fa") : Color.Parse("#f38ba8"));
-
-        var line1 = new Line
+        var color = new SolidColorBrush(Color.Parse(isBotMark ? "#89b4fa" : "#f38ba8"));
+        _boardCanvas.Children.Add(new Line
         {
             StartPoint = new Point(centerX - size / 2, centerY - size / 2),
             EndPoint = new Point(centerX + size / 2, centerY + size / 2),
             Stroke = color,
             StrokeThickness = 3,
             StrokeLineCap = PenLineCap.Round
-        };
-
-        var line2 = new Line
+        });
+        _boardCanvas.Children.Add(new Line
         {
             StartPoint = new Point(centerX + size / 2, centerY - size / 2),
             EndPoint = new Point(centerX - size / 2, centerY + size / 2),
             Stroke = color,
             StrokeThickness = 3,
             StrokeLineCap = PenLineCap.Round
-        };
-
-        _boardCanvas.Children.Add(line1);
-        _boardCanvas.Children.Add(line2);
+        });
     }
 
     private void DrawO(double centerX, double centerY, double size, bool isBotMark)
     {
-        var color = new SolidColorBrush(isBotMark ? Color.Parse("#89b4fa") : Color.Parse("#f38ba8"));
-
         var ellipse = new Ellipse
         {
             Width = size,
             Height = size,
-            Stroke = color,
+            Stroke = new SolidColorBrush(Color.Parse(isBotMark ? "#89b4fa" : "#f38ba8")),
             StrokeThickness = 3
         };
         Canvas.SetLeft(ellipse, centerX - size / 2);
@@ -271,28 +215,17 @@ public partial class GameWindow : Window
         _boardCanvas.Children.Add(ellipse);
     }
 
-    private char GetBotMark(TicTacToeGameState state)
+    private void DrawWinningLine(TicTacToeWinningLine line, double cellSize, double offsetX, double offsetY)
     {
-        if (state.PlayerX?.PlayerId == _botClientId)
-            return 'X';
-        return 'O';
-    }
-
-    private void DrawWinningLine(WinningLine winLine, double cellSize, double offsetX, double offsetY)
-    {
-        var startX = offsetX + winLine.StartX * cellSize + cellSize / 2;
-        var startY = offsetY + winLine.StartY * cellSize + cellSize / 2;
-        var endX = offsetX + winLine.EndX * cellSize + cellSize / 2;
-        var endY = offsetY + winLine.EndY * cellSize + cellSize / 2;
-
-        var line = new Line
+        if (line.Start is not { } start || line.End is not { } end)
+            return;
+        _boardCanvas.Children.Add(new Line
         {
-            StartPoint = new Point(startX, startY),
-            EndPoint = new Point(endX, endY),
+            StartPoint = new Point(offsetX + start.X * cellSize + cellSize / 2, offsetY + start.Y * cellSize + cellSize / 2),
+            EndPoint = new Point(offsetX + end.X * cellSize + cellSize / 2, offsetY + end.Y * cellSize + cellSize / 2),
             Stroke = new SolidColorBrush(Color.Parse("#f9e2af")),
             StrokeThickness = 5,
             StrokeLineCap = PenLineCap.Round
-        };
-        _boardCanvas.Children.Add(line);
+        });
     }
 }
