@@ -28,17 +28,16 @@ export function cssColor(color: RgbColor): string {
   return `rgb(${color.red} ${color.green} ${color.blue})`;
 }
 
-/** Darker: each channel times `factor` (0..1). */
-export function shade(color: RgbColor, factor: number): RgbColor {
-  return {
-    red: Math.round(color.red * factor),
-    green: Math.round(color.green * factor),
-    blue: Math.round(color.blue * factor),
-  };
-}
+// The sheet is drawn in mid greens; brightness scaled by this keeps the outline darker than the
+// fill while the fill lands close to the seat colour.
+const SPRITE_TINT_GAIN = 1.8;
 
-/** Lighter: `amount` (0..1) of the way to white. */
-export function tint(color: RgbColor, amount: number): RgbColor {
-  const towardsWhite = (channel: number) => Math.round(channel + (255 - channel) * amount);
-  return { red: towardsWhite(color.red), green: towardsWhite(color.green), blue: towardsWhite(color.blue) };
+/** A sheet pixel recoloured for a seat: its brightness times the seat colour, as v1 did. */
+export function tintedBySprite(color: RgbColor, sheetPixel: RgbColor): RgbColor {
+  const brightness = ((sheetPixel.red + sheetPixel.green + sheetPixel.blue) / 765) * SPRITE_TINT_GAIN;
+  return {
+    red: Math.min(255, Math.round(color.red * brightness)),
+    green: Math.min(255, Math.round(color.green * brightness)),
+    blue: Math.min(255, Math.round(color.blue * brightness)),
+  };
 }

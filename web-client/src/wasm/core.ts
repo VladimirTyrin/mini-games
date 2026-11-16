@@ -98,16 +98,6 @@ export class Mirror {
     return new Mirror(new wasm.MatchMirror(toBinary(MatchHeaderSchema, header)));
   }
 
-  /** Milliseconds per frame of the header's game; 0 for turn-based games. */
-  static tickMsFor(header: MatchHeader): number {
-    const mirror = Mirror.forHeader(header);
-    try {
-      return mirror.tickMs;
-    } finally {
-      mirror.free();
-    }
-  }
-
   /** Validates a whole replay file (format, settings, frame log) and checks its end tick. */
   static replayEndTick(replayFile: Uint8Array): bigint {
     const mirror = wasm.MatchMirror.fromReplayFile(replayFile);

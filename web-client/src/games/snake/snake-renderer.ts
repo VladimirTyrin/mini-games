@@ -7,16 +7,17 @@ import {
 import type { CanvasSize } from "@/render/use-canvas";
 
 import { type CellPosition, type FieldSize, type GridCell, sameCell, wrappedCopies } from "./snake-geometry";
-import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, shade, snakeColor, tint } from "./snake-palette";
+import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, snakeColor, tintedBySprite } from "./snake-palette";
 import { type SnakeBodyPath, snakeBodyPath } from "./snake-path";
 import type { SnakeSpriteSheet } from "./snake-sprite-sheet";
+import { TUBE } from "./snake-sprites";
 
 export interface SnakeScene {
   readonly view: SnakeView;
   /** The view one tick earlier; rendering runs from it to `view` as `progress` goes 0..1. */
   readonly previous: SnakeView | null;
   readonly progress: number;
-  /** The apple picture; `null` until it loads (a red circle is drawn meanwhile). */
+  /** Apple and head sprites; `null` until they load (plain shapes are drawn meanwhile). */
   readonly sprites: SnakeSpriteSheet | null;
 }
 
@@ -190,11 +191,10 @@ function borderShifts(points: readonly CellPosition[], field: FieldSize): CellPo
   return shifts;
 }
 
-const BODY_WIDTH = 0.62;
-const OUTLINE_WIDTH = 0.08;
-const HEAD_RADIUS = 0.4;
 /** Largest corner radius: half a cell keeps a turn inside its cell. */
 const CORNER_RADIUS = 0.5;
+/** Head drawn as a plain disc until the sprite sheet has loaded. */
+const FALLBACK_HEAD_RADIUS = 0.4;
 
 function distance(from: CellPosition, to: CellPosition): number {
   return Math.hypot(to.x - from.x, to.y - from.y);
@@ -230,60 +230,39 @@ function traceLine(
   context.lineTo(last.x * cellSize, last.y * cellSize);
 }
 
+/** The v1 tube along the centre line: outline, side bands and centre, recoloured for the seat. */
 function drawBody(frame: Frame, points: readonly CellPosition[], color: RgbColor): void {
   if (points.length < 2) return;
   const { context, cellSize } = frame;
   traceLine(context, points, cellSize);
   context.lineCap = "round";
   context.lineJoin = "round";
-  context.strokeStyle = cssColor(shade(color, 0.55));
-  context.lineWidth = (BODY_WIDTH + 2 * OUTLINE_WIDTH) * cellSize;
-  context.stroke();
-  context.strokeStyle = cssColor(color);
-  context.lineWidth = BODY_WIDTH * cellSize;
-  context.stroke();
-  // A lighter stripe along the back gives the body some volume.
-  context.strokeStyle = cssColor(tint(color, 0.35));
-  context.lineWidth = BODY_WIDTH * 0.32 * cellSize;
-  context.stroke();
+  const layers = [
+    { width: TUBE.width, sheetColor: TUBE.outline },
+    { width: TUBE.width - 2 * TUBE.outlineWidth, sheetColor: TUBE.side },
+    { width: TUBE.centreWidth, sheetColor: TUBE.centre },
+  ];
+  for (const layer of layers) {
+    context.strokeStyle = cssColor(tintedBySprite(color, layer.sheetColor));
+    context.lineWidth = layer.width * cellSize;
+    context.stroke();
+  }
 }
 
 function drawHead(frame: Frame, path: SnakeBodyPath, color: RgbColor): void {
-  const { context, cellSize } = frame;
+  const { context, cellSize, scene } = frame;
   const head = path.points[0];
   if (!head) return;
   const x = head.x * cellSize;
   const y = head.y * cellSize;
-  const forward = { x: Math.cos(path.heading), y: Math.sin(path.heading) };
-  const side = { x: -forward.y, y: forward.x };
-
+  if (scene.sprites) {
+    scene.sprites.drawHead(context, color, x, y, cellSize, path.heading);
+    return;
+  }
   context.beginPath();
-  context.arc(x, y, (HEAD_RADIUS + OUTLINE_WIDTH) * cellSize, 0, Math.PI * 2);
-  context.fillStyle = cssColor(shade(color, 0.55));
-  context.fill();
-  context.beginPath();
-  context.arc(x, y, HEAD_RADIUS * cellSize, 0, Math.PI * 2);
+  context.arc(x, y, FALLBACK_HEAD_RADIUS * cellSize, 0, Math.PI * 2);
   context.fillStyle = cssColor(color);
   context.fill();
-
-  for (const sign of [-1, 1]) {
-    const eyeX = x + (forward.x * 0.14 + side.x * 0.17 * sign) * cellSize;
-    const eyeY = y + (forward.y * 0.14 + side.y * 0.17 * sign) * cellSize;
-    context.beginPath();
-    context.arc(eyeX, eyeY, 0.11 * cellSize, 0, Math.PI * 2);
-    context.fillStyle = "#ffffff";
-    context.fill();
-    context.beginPath();
-    context.arc(
-      eyeX + forward.x * 0.04 * cellSize,
-      eyeY + forward.y * 0.04 * cellSize,
-      0.06 * cellSize,
-      0,
-      Math.PI * 2,
-    );
-    context.fillStyle = "#111827";
-    context.fill();
-  }
 }
 
 function drawYouRing(frame: Frame, head: CellPosition | undefined): void {

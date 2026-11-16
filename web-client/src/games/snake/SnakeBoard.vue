@@ -9,6 +9,7 @@ import { tickProgress } from "@/render/tick-progress";
 import { useCanvas } from "@/render/use-canvas";
 import { seatLabels } from "@/util/players";
 
+import SnakeControls from "./SnakeControls.vue";
 import SnakeScoreboard from "./SnakeScoreboard.vue";
 import { drawSnakeScene } from "./snake-renderer";
 import { loadSnakeSpriteSheet, type SnakeSpriteSheet } from "./snake-sprite-sheet";
@@ -110,6 +111,11 @@ useSwipe(container, { swipe: (direction) => turn(SWIPE_DIRECTIONS[direction]) })
     <div ref="container" class="relative min-h-0 min-w-0 flex-1 select-none overflow-hidden">
       <canvas ref="canvas" class="absolute inset-0 block" />
     </div>
+    <SnakeControls
+      v-if="controller.mySlot !== null"
+      class="hidden shrink-0 max-md:grid pointer-coarse:grid"
+      @turn="turn"
+    />
     <SnakeScoreboard
       v-if="view"
       :view="view"
