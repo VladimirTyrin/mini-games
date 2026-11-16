@@ -55,7 +55,10 @@ export const useConnectionStore = defineStore("connection", () => {
     session.value?.close();
     const resumeKey = resumeKeyFor(prefs.serverUrl);
     const created = new Session(prefs.serverUrl, credentials, tabStorage.get(resumeKey) ?? "");
-    created.events.on("state", (next) => (state.value = next));
+    created.events.on("state", (next) => {
+      state.value = next;
+      if (next === "replaced") toasts.show("You signed in on another tab or device");
+    });
     created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken }) => {
       identity.value = who;
       tabStorage.set(resumeKey, resumeToken);

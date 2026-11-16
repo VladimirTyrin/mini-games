@@ -18,6 +18,8 @@ const status = computed(() => {
       return { text: "connecting…", tone: "bg-amber-400" };
     case "outdated":
       return { text: "update the app", tone: "bg-rose-500" };
+    case "replaced":
+      return { text: "signed in elsewhere", tone: "bg-gray-500" };
     default:
       return null;
   }

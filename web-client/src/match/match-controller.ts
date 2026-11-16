@@ -1,10 +1,11 @@
 import { shallowRef, type ShallowRef } from "vue";
 
 import type { GameView } from "@/proto/minigames/v2/game_pb";
-import type { MatchCatchUp, MatchPause, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
+import type { MatchCatchUp, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
 import { Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, MatchSource } from "./match-source";
+import { type SeatPause, seatPauses } from "./seat-pause";
 
 export interface ViewSnapshot {
   view: GameView;
@@ -19,10 +20,12 @@ export interface ViewSnapshot {
 export class MatchController {
   readonly current: ShallowRef<ViewSnapshot | null> = shallowRef(null);
   readonly previous: ShallowRef<ViewSnapshot | null> = shallowRef(null);
-  readonly pause: ShallowRef<MatchPause | null> = shallowRef(null);
+  readonly pauses: ShallowRef<SeatPause[]> = shallowRef([]);
   readonly resumeAt: ShallowRef<number | null> = shallowRef(null);
   readonly result: ShallowRef<MatchResult | null> = shallowRef(null);
   readonly ended = shallowRef(false);
+  /** Ended by the authority without a result (server error); there is no replay. */
+  readonly aborted = shallowRef(false);
   readonly tickMs: number;
 
   private mirror: Mirror;
@@ -35,16 +38,17 @@ export class MatchController {
     this.unsubscribe.push(
       source.on("frame", (frame) => this.onFrame(frame)),
       source.on("catchUp", (catchUp) => this.applyCatchUp(catchUp)),
-      source.on("paused", (pause) => {
-        this.pause.value = pause;
+      source.on("paused", (pauses) => {
+        this.pauses.value = seatPauses(pauses, performance.now());
         this.resumeAt.value = null;
       }),
       source.on("resumed", ({ countdownMs }) => {
-        this.pause.value = null;
+        this.pauses.value = [];
         this.resumeAt.value = performance.now() + countdownMs;
       }),
       source.on("ended", (result) => {
-        this.result.value = result ?? this.mirror.result();
+        this.result.value = result ?? (this.mirror.isFinished ? this.mirror.result() : null);
+        this.aborted.value = this.result.value === null;
         this.ended.value = true;
       }),
     );
@@ -94,7 +98,10 @@ export class MatchController {
       console.error("catch-up does not replay", error);
     }
     this.resyncing = false;
-    this.pause.value = catchUp.pause ?? null;
+    const now = performance.now();
+    const pauses = catchUp.pauses.length > 0 ? catchUp.pauses : catchUp.pause ? [catchUp.pause] : [];
+    this.pauses.value = seatPauses(pauses, now);
+    this.resumeAt.value = catchUp.resumeCountdownMs > 0 ? now + catchUp.resumeCountdownMs : null;
     this.previous.value = null;
     this.publish();
   }

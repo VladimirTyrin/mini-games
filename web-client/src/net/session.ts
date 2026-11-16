@@ -27,7 +27,12 @@ export type ConnectionState =
   /** Server speaks another protocol: the app must be updated, retrying is pointless. */
   | "outdated"
   /** Sign-in was refused (bad token, name taken, guests disabled). */
-  | "rejected";
+  | "rejected"
+  /** The same account signed in elsewhere; reconnecting would take the session back. */
+  | "replaced";
+
+/** States in which reconnecting cannot help; only a new `connect()` leaves them. */
+const FINAL_STATES: ReadonlySet<ConnectionState> = new Set(["outdated", "rejected", "replaced"]);
 
 /** Any client message body; plain objects are fine (protobuf-es init shapes). */
 export type ClientPayload = NonNullable<MessageInitShape<typeof ClientMessageSchema>["message"]>;
@@ -185,6 +190,10 @@ export class Session {
     }
     const payload = message.message;
     if (payload.case === undefined) return;
+    if (payload.case === "error" && payload.value.code === ErrorCode.SIGNED_IN_ELSEWHERE) {
+      this.wanted = false;
+      this.setState("replaced");
+    }
     const pending = message.requestId === 0 ? undefined : this.pending.get(message.requestId);
     if (pending) {
       this.pending.delete(message.requestId);
@@ -205,7 +214,7 @@ export class Session {
     this.clearTimers();
     this.failPending(RequestError.disconnected());
     if (!this.wanted) {
-      if (this.stateValue !== "outdated" && this.stateValue !== "rejected") this.setState("offline");
+      if (!FINAL_STATES.has(this.stateValue)) this.setState("offline");
       return;
     }
     this.setState("reconnecting");

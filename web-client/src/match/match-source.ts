@@ -15,8 +15,10 @@ export interface MatchSourceEvents {
   frame: TickFrame;
   /** Full history; replaces everything applied so far. */
   catchUp: MatchCatchUp;
-  paused: MatchPause;
+  /** Every seat the match now waits for; replaces the previous list. */
+  paused: MatchPause[];
   resumed: { countdownMs: number };
+  /** `null`: the authority aborted the match (no result, no replay). */
   ended: MatchResult | null;
 }
 
