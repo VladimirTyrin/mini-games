@@ -122,11 +122,12 @@ offered the APK instead of the bundle.
 
 ## Releases
 
-To release, bump `[workspace.package] version` in `Cargo.toml` and push to `master`.
-`.github/workflows/release.yml` finds no `v<version>` tag for it, builds the APK (with `web.json`
-and the over-the-air zip), the musl server binary and the server-hosted web bundle, and publishes
-them as the GitHub Release `v<version>`, tagging the pushed commit. Pushes that keep the version
-build nothing. A manual run of the workflow builds the same files as artifacts without publishing.
+To release, bump `[workspace.package] version` in `Cargo.toml` and push to `master`. Once CI
+passes on that commit, `.github/workflows/release.yml` finds no `v<version>` tag for it, builds
+the APK (with `web.json` and the over-the-air zip), the musl server binary and the server-hosted
+web bundle, and publishes them as the GitHub Release `v<version>`, tagging that commit. A red or
+cancelled CI publishes nothing; the next green push releases the version. Pushes that keep the
+version build nothing. A manual run of the workflow builds the same files as artifacts without publishing.
 
 Repository secrets the workflow needs:
 
