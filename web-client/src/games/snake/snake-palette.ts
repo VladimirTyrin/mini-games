@@ -27,3 +27,18 @@ export function snakeColor(slot: number): RgbColor {
 export function cssColor(color: RgbColor): string {
   return `rgb(${color.red} ${color.green} ${color.blue})`;
 }
+
+/** Darker: each channel times `factor` (0..1). */
+export function shade(color: RgbColor, factor: number): RgbColor {
+  return {
+    red: Math.round(color.red * factor),
+    green: Math.round(color.green * factor),
+    blue: Math.round(color.blue * factor),
+  };
+}
+
+/** Lighter: `amount` (0..1) of the way to white. */
+export function tint(color: RgbColor, amount: number): RgbColor {
+  const towardsWhite = (channel: number) => Math.round(channel + (255 - channel) * amount);
+  return { red: towardsWhite(color.red), green: towardsWhite(color.green), blue: towardsWhite(color.blue) };
+}

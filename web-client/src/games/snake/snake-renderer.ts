@@ -7,17 +7,16 @@ import {
 import type { CanvasSize } from "@/render/use-canvas";
 
 import { type CellPosition, type FieldSize, type GridCell, sameCell, wrappedCopies } from "./snake-geometry";
-import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, snakeColor } from "./snake-palette";
-import { poseSnake, type SpritePlacement } from "./snake-pose";
+import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, shade, snakeColor, tint } from "./snake-palette";
+import { type SnakeBodyPath, snakeBodyPath } from "./snake-path";
 import type { SnakeSpriteSheet } from "./snake-sprite-sheet";
-import type { SnakeSpriteName } from "./snake-sprites";
 
 export interface SnakeScene {
   readonly view: SnakeView;
   /** The view one tick earlier; rendering runs from it to `view` as `progress` goes 0..1. */
   readonly previous: SnakeView | null;
   readonly progress: number;
-  /** `null` until the sheet loads (plain shapes are drawn meanwhile). */
+  /** The apple picture; `null` until it loads (a red circle is drawn meanwhile). */
   readonly sprites: SnakeSpriteSheet | null;
 }
 
@@ -123,7 +122,7 @@ function drawApple({ context, scene, cellSize }: Frame, cell: GridCell, scale: n
   const x = (cell.x + 0.5) * cellSize - size / 2;
   const y = (cell.y + 0.5) * cellSize - size / 2;
   if (scene.sprites) {
-    scene.sprites.draw(context, "apple", null, x, y, size);
+    scene.sprites.drawApple(context, x, y, size);
     return;
   }
   context.fillStyle = FOOD_COLOR;
@@ -155,47 +154,140 @@ function drawSnake(frame: Frame, seat: SnakeSeatView): void {
   const opacity = snakeOpacity(seat, previousSeat, scene);
   if (opacity <= 0) return;
   const previousBody = seat.alive && previousSeat ? previousSeat.body : null;
-  const pose = poseSnake(seat.body, seat.direction, previousBody, field, scene.progress);
-  if (!pose) return;
+  const path = snakeBodyPath(seat.body, seat.direction, previousBody, field, scene.progress);
+  if (!path) return;
   const color = seat.alive ? snakeColor(seat.slot) : DEAD_SNAKE_COLOR;
   context.save();
   context.globalAlpha = opacity;
-  for (const placement of pose.placements) drawPlacement(frame, placement, color);
-  if (seat.alive && seat.slot === scene.view.you) drawYouRing(frame, pose.head);
+  // The centre line may run past a wrap-around border; shifted copies show the part that
+  // re-enters on the other side (the field clip hides the rest).
+  for (const shift of borderShifts(path.points, field)) {
+    context.save();
+    context.translate(shift.x * frame.cellSize, shift.y * frame.cellSize);
+    drawBody(frame, path.points, color);
+    drawHead(frame, path, color);
+    context.restore();
+  }
+  if (seat.alive && seat.slot === scene.view.you) drawYouRing(frame, path.points[0]);
   context.restore();
 }
 
-function drawPlacement(frame: Frame, placement: SpritePlacement, color: RgbColor): void {
+/** Offsets (in cells) of the copies of a line that overlap the field. */
+function borderShifts(points: readonly CellPosition[], field: FieldSize): CellPosition[] {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs) - 1;
+  const maxX = Math.max(...xs) + 1;
+  const minY = Math.min(...ys) - 1;
+  const maxY = Math.max(...ys) + 1;
+  const shifts: CellPosition[] = [];
+  for (const x of [-field.width, 0, field.width]) {
+    for (const y of [-field.height, 0, field.height]) {
+      if (maxX + x > 0 && minX + x < field.width && maxY + y > 0 && minY + y < field.height)
+        shifts.push({ x, y });
+    }
+  }
+  return shifts;
+}
+
+const BODY_WIDTH = 0.62;
+const OUTLINE_WIDTH = 0.08;
+const HEAD_RADIUS = 0.4;
+/** Largest corner radius: half a cell keeps a turn inside its cell. */
+const CORNER_RADIUS = 0.5;
+
+function distance(from: CellPosition, to: CellPosition): number {
+  return Math.hypot(to.x - from.x, to.y - from.y);
+}
+
+/** The centre line with rounded corners, in pixels. */
+function traceLine(
+  context: CanvasRenderingContext2D,
+  points: readonly CellPosition[],
+  cellSize: number,
+): void {
+  const distinct = points.filter((point, index) => {
+    const before = points[index - 1];
+    return !before || distance(before, point) > 1e-3;
+  });
+  const [first] = distinct;
+  if (!first) return;
+  context.beginPath();
+  context.moveTo(first.x * cellSize, first.y * cellSize);
+  for (let index = 1; index < distinct.length - 1; index++) {
+    const before = distinct[index - 1];
+    const corner = distinct[index];
+    const after = distinct[index + 1];
+    if (!before || !corner || !after) continue;
+    // The head and tail segments shrink to nothing, so a corner never rounds past them; two
+    // corners in a row share the segment between them.
+    const into = distance(before, corner) * (index === 1 ? 1 : 0.5);
+    const out = distance(corner, after) * (index === distinct.length - 2 ? 1 : 0.5);
+    const radius = Math.min(CORNER_RADIUS, into, out) * cellSize;
+    context.arcTo(corner.x * cellSize, corner.y * cellSize, after.x * cellSize, after.y * cellSize, radius);
+  }
+  const last = distinct.at(-1) ?? first;
+  context.lineTo(last.x * cellSize, last.y * cellSize);
+}
+
+function drawBody(frame: Frame, points: readonly CellPosition[], color: RgbColor): void {
+  if (points.length < 2) return;
   const { context, cellSize } = frame;
-  if (placement.clipTo) {
-    context.save();
-    context.beginPath();
-    for (const area of placement.clipTo)
-      context.rect(area.x * cellSize, area.y * cellSize, area.width * cellSize, area.height * cellSize);
-    context.clip();
-  }
-  for (const copy of wrappedCopies(placement.at, frame.field))
-    drawSprite(frame, placement.sprite, color, copy);
-  if (placement.clipTo) context.restore();
+  traceLine(context, points, cellSize);
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = cssColor(shade(color, 0.55));
+  context.lineWidth = (BODY_WIDTH + 2 * OUTLINE_WIDTH) * cellSize;
+  context.stroke();
+  context.strokeStyle = cssColor(color);
+  context.lineWidth = BODY_WIDTH * cellSize;
+  context.stroke();
+  // A lighter stripe along the back gives the body some volume.
+  context.strokeStyle = cssColor(tint(color, 0.35));
+  context.lineWidth = BODY_WIDTH * 0.32 * cellSize;
+  context.stroke();
 }
 
-function drawSprite(frame: Frame, sprite: SnakeSpriteName, color: RgbColor, at: CellPosition): void {
-  const { context, scene, cellSize } = frame;
-  if (scene.sprites) {
-    scene.sprites.draw(context, sprite, color, at.x * cellSize, at.y * cellSize, cellSize);
-    return;
-  }
-  const inset = cellSize * 0.1;
+function drawHead(frame: Frame, path: SnakeBodyPath, color: RgbColor): void {
+  const { context, cellSize } = frame;
+  const head = path.points[0];
+  if (!head) return;
+  const x = head.x * cellSize;
+  const y = head.y * cellSize;
+  const forward = { x: Math.cos(path.heading), y: Math.sin(path.heading) };
+  const side = { x: -forward.y, y: forward.x };
+
+  context.beginPath();
+  context.arc(x, y, (HEAD_RADIUS + OUTLINE_WIDTH) * cellSize, 0, Math.PI * 2);
+  context.fillStyle = cssColor(shade(color, 0.55));
+  context.fill();
+  context.beginPath();
+  context.arc(x, y, HEAD_RADIUS * cellSize, 0, Math.PI * 2);
   context.fillStyle = cssColor(color);
-  context.fillRect(
-    at.x * cellSize + inset,
-    at.y * cellSize + inset,
-    cellSize - 2 * inset,
-    cellSize - 2 * inset,
-  );
+  context.fill();
+
+  for (const sign of [-1, 1]) {
+    const eyeX = x + (forward.x * 0.14 + side.x * 0.17 * sign) * cellSize;
+    const eyeY = y + (forward.y * 0.14 + side.y * 0.17 * sign) * cellSize;
+    context.beginPath();
+    context.arc(eyeX, eyeY, 0.11 * cellSize, 0, Math.PI * 2);
+    context.fillStyle = "#ffffff";
+    context.fill();
+    context.beginPath();
+    context.arc(
+      eyeX + forward.x * 0.04 * cellSize,
+      eyeY + forward.y * 0.04 * cellSize,
+      0.06 * cellSize,
+      0,
+      Math.PI * 2,
+    );
+    context.fillStyle = "#111827";
+    context.fill();
+  }
 }
 
-function drawYouRing(frame: Frame, head: CellPosition): void {
+function drawYouRing(frame: Frame, head: CellPosition | undefined): void {
+  if (!head) return;
   const { context, cellSize, scene } = frame;
   const elapsedMs = (Number(scene.view.tick) - 1 + scene.progress) * scene.view.tickIntervalMs;
   const visibility = 1 - elapsedMs / YOU_RING_MS;
@@ -203,7 +295,7 @@ function drawYouRing(frame: Frame, head: CellPosition): void {
   context.globalAlpha *= Math.min(1, visibility);
   context.strokeStyle = YOU_RING_COLOR;
   context.lineWidth = Math.max(1.5, cellSize * 0.08);
-  for (const copy of wrappedCopies(head, frame.field)) {
+  for (const copy of wrappedCopies({ x: head.x - 0.5, y: head.y - 0.5 }, frame.field)) {
     context.beginPath();
     context.arc((copy.x + 0.5) * cellSize, (copy.y + 0.5) * cellSize, cellSize * 0.72, 0, Math.PI * 2);
     context.stroke();
