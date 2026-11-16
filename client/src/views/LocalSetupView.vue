@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import GameIcon from "@/components/GameIcon.vue";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
@@ -25,6 +25,12 @@ const settings = ref(plugin ? initialSettings(plugin, prefs.lastSettings(props.g
 const availableBots: BotKind[] = info?.hasBots ? botKinds(props.gameId) : [];
 const bots = ref<BotKind[]>(availableBots[0] && info && info.minPlayers > 1 ? [availableBots[0]] : []);
 const problem = ref<SettingsProblem | null>(null);
+
+// Remembered as they change, not only on Play: leaving the screen (or an app update reloading
+// it) keeps what the player picked.
+watch(settings, (picked) => {
+  if (plugin && picked) prefs.rememberSettings(props.gameId, picked);
+});
 
 const seats = computed<LocalSeat[]>(() => [{ bot: null }, ...bots.value.map((bot) => ({ bot }))]);
 const seatCountOk = computed(() => !!info && seats.value.length >= info.minPlayers);

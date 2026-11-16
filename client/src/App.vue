@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import SignedInElsewhere from "@/components/SignedInElsewhere.vue";
 import ToastList from "@/components/ToastList.vue";
@@ -10,6 +10,7 @@ import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 
 const router = useRouter();
+const route = useRoute();
 const connection = useConnectionStore();
 const lobby = useLobbyStore();
 const match = useMatchStore();
@@ -41,7 +42,9 @@ onMounted(() => {
 <template>
   <!-- Edge-to-edge on Android: keep content above the gesture bar. -->
   <div class="flex min-h-full flex-col" style="padding-bottom: env(safe-area-inset-bottom)">
-    <RouterView />
+    <!-- Keyed by path: a screen reads its route params once, so going straight from one game's
+         setup to another's (history back/forward) must build a fresh screen, not reuse it. -->
+    <RouterView :key="route.path" />
     <SignedInElsewhere />
     <ToastList />
   </div>

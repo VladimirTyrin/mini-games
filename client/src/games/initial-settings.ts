@@ -8,7 +8,8 @@ const NARROW_SCREEN = "(max-width: 639px)";
 
 /** What a setup form starts from: the last settings used, else defaults that suit the screen. */
 export function initialSettings(plugin: GamePlugin, remembered: GameSettings | null): GameSettings {
-  if (remembered) return remembered;
+  // Settings of another game saved under this one's id (an old bug) are ignored, not loaded.
+  if (remembered && remembered.game.case === plugin.settingsCase) return remembered;
   const defaults = defaultSettings(plugin.id);
   const isNarrow = typeof window !== "undefined" && window.matchMedia(NARROW_SCREEN).matches;
   return isNarrow && plugin.narrowScreenSettings ? plugin.narrowScreenSettings(defaults) : defaults;

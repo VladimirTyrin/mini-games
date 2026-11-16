@@ -8,6 +8,7 @@ import type { CanvasSize } from "@/render/use-canvas";
 
 import { type CellPosition, type FieldSize, type GridCell, sameCell, wrappedCopies } from "./snake-geometry";
 import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, snakeColor, tintedBySprite } from "./snake-palette";
+import { type CentrelinePoint, sampleCentreline } from "./snake-centreline";
 import { type SnakeBodyPath, snakeBodyPath } from "./snake-path";
 import type { SnakeSpriteSheet } from "./snake-sprite-sheet";
 import { TUBE } from "./snake-sprites";
@@ -192,62 +193,140 @@ function borderShifts(points: readonly CellPosition[], field: FieldSize): CellPo
   return shifts;
 }
 
-/** Largest corner radius: half a cell keeps a turn inside its cell. */
-const CORNER_RADIUS = 0.5;
 /** Head drawn as a plain disc until the sprite sheet has loaded. */
 const FALLBACK_HEAD_RADIUS = 0.4;
+/** The tail narrows over this length (cells) to TAIL_TIP of the tube's width. */
+const TAIL_TAPER = 2.4;
+const TAIL_TIP = 0.32;
+/** The taper outline starts this far inside the full-width stroke, so no seam shows. */
+const TAPER_OVERLAP = 0.1;
+/** Spots along the back, this far apart (cells). A whole fraction of a cell, so the pattern
+ * lines up again after every tick's one-cell step. */
+const SPOT_SPACING = 0.5;
+/** No spots this close to the head: the head sprite covers it. */
+const SPOT_HEAD_CLEARANCE = 0.55;
 
-function distance(from: CellPosition, to: CellPosition): number {
-  return Math.hypot(to.x - from.x, to.y - from.y);
+/** Width of the tube at `fromTail` cells from the tail end, as a share of the full width. */
+function bodyWidthAt(fromTail: number, taper: number): number {
+  if (fromTail >= taper) return 1;
+  // Quarter sine: the body keeps its girth for most of the taper and narrows near the end.
+  return TAIL_TIP + (1 - TAIL_TIP) * Math.sin(((fromTail / taper) * Math.PI) / 2);
 }
 
-/** The centre line with rounded corners, in pixels. */
-function traceLine(
-  context: CanvasRenderingContext2D,
-  points: readonly CellPosition[],
-  cellSize: number,
-): void {
-  const distinct = points.filter((point, index) => {
-    const before = points[index - 1];
-    return !before || distance(before, point) > 1e-3;
-  });
-  const [first] = distinct;
-  if (!first) return;
-  context.beginPath();
-  context.moveTo(first.x * cellSize, first.y * cellSize);
-  for (let index = 1; index < distinct.length - 1; index++) {
-    const before = distinct[index - 1];
-    const corner = distinct[index];
-    const after = distinct[index + 1];
-    if (!before || !corner || !after) continue;
-    // The head and tail segments shrink to nothing, so a corner never rounds past them; two
-    // corners in a row share the segment between them.
-    const into = distance(before, corner) * (index === 1 ? 1 : 0.5);
-    const out = distance(corner, after) * (index === distinct.length - 2 ? 1 : 0.5);
-    const radius = Math.min(CORNER_RADIUS, into, out) * cellSize;
-    context.arcTo(corner.x * cellSize, corner.y * cellSize, after.x * cellSize, after.y * cellSize, radius);
-  }
-  const last = distinct.at(-1) ?? first;
-  context.lineTo(last.x * cellSize, last.y * cellSize);
-}
-
-/** The v1 tube along the centre line: outline, side bands and centre, recoloured for the seat. */
+/**
+ * The v1 tube along the centre line (outline, side bands, centre, recoloured for the seat),
+ * narrowing towards the tail, with spots that sit on the body itself: they are counted from the
+ * tail end, so they slide forward with the snake and show it moving.
+ */
 function drawBody(frame: Frame, points: readonly CellPosition[], color: RgbColor): void {
   if (points.length < 2) return;
   const { context, cellSize } = frame;
-  traceLine(context, points, cellSize);
-  context.lineCap = "round";
-  context.lineJoin = "round";
+  const line = sampleCentreline(points);
+  const length = line[0]?.fromTail ?? 0;
+  if (line.length < 2 || length <= 0) return;
+  const taper = Math.min(TAIL_TAPER, length * 0.4);
+  // The full-width part is one stroke; the taper is a filled outline per layer, so the three
+  // bands narrow together and the edge stays smooth.
+  const full = line.filter((point) => point.fromTail >= taper);
+  const tail = line.filter((point) => point.fromTail <= taper + TAPER_OVERLAP);
   const layers = [
     { width: TUBE.width, sheetColor: TUBE.outline },
     { width: TUBE.width - 2 * TUBE.outlineWidth, sheetColor: TUBE.side },
     { width: TUBE.centreWidth, sheetColor: TUBE.centre },
   ];
   for (const layer of layers) {
-    context.strokeStyle = cssColor(tintedBySprite(color, layer.sheetColor));
-    context.lineWidth = layer.width * cellSize;
-    context.stroke();
+    const style = cssColor(tintedBySprite(color, layer.sheetColor));
+    if (full.length >= 2) {
+      context.beginPath();
+      for (const [index, point] of full.entries()) {
+        if (index === 0) context.moveTo(point.x * cellSize, point.y * cellSize);
+        else context.lineTo(point.x * cellSize, point.y * cellSize);
+      }
+      // Butt at the tail side, where the taper outline continues it; the head covers the
+      // other end.
+      context.lineCap = "butt";
+      context.lineJoin = "round";
+      context.lineWidth = layer.width * cellSize;
+      context.strokeStyle = style;
+      context.stroke();
+    }
+    fillTaper(context, tail, taper, layer.width * cellSize, cellSize, style);
   }
+  drawSpots(frame, line, length, taper, color);
+}
+
+/**
+ * The narrowing end of one tube layer as a filled outline: both edges offset from the centre
+ * line by half the width there, closed by a round tip.
+ */
+function fillTaper(
+  context: CanvasRenderingContext2D,
+  tail: readonly CentrelinePoint[],
+  taper: number,
+  width: number,
+  cellSize: number,
+  style: string,
+): void {
+  if (tail.length < 2) return;
+  const edge = (point: CentrelinePoint, side: 1 | -1) => {
+    const half = (width * bodyWidthAt(point.fromTail, taper)) / 2;
+    return {
+      x: point.x * cellSize - Math.sin(point.angle) * half * side,
+      y: point.y * cellSize + Math.cos(point.angle) * half * side,
+    };
+  };
+  context.beginPath();
+  for (const [index, point] of tail.entries()) {
+    const left = edge(point, 1);
+    if (index === 0) context.moveTo(left.x, left.y);
+    else context.lineTo(left.x, left.y);
+  }
+  const tip = tail.at(-1);
+  if (tip) {
+    const radius = (width * bodyWidthAt(0, taper)) / 2;
+    // Around the far side of the tail end, from the left edge to the right one.
+    context.arc(tip.x * cellSize, tip.y * cellSize, radius, tip.angle + Math.PI / 2, tip.angle - Math.PI / 2);
+  }
+  for (const point of [...tail].reverse()) {
+    const right = edge(point, -1);
+    context.lineTo(right.x, right.y);
+  }
+  context.closePath();
+  context.fillStyle = style;
+  context.fill();
+}
+
+function drawSpots(
+  frame: Frame,
+  line: readonly CentrelinePoint[],
+  length: number,
+  taper: number,
+  color: RgbColor,
+): void {
+  const { context, cellSize } = frame;
+  context.save();
+  context.fillStyle = cssColor(tintedBySprite(color, TUBE.outline));
+  context.globalAlpha *= 0.7;
+  // `line` runs head first, so its distances from the tail fall; walk them with one cursor.
+  let index = line.length - 1;
+  for (let at = SPOT_SPACING; at < length - SPOT_HEAD_CLEARANCE; at += SPOT_SPACING) {
+    while (index > 0 && (line[index - 1]?.fromTail ?? Infinity) <= at) index--;
+    const point = line[index];
+    if (!point) break;
+    const size = bodyWidthAt(at, taper) * cellSize;
+    context.beginPath();
+    context.ellipse(
+      point.x * cellSize,
+      point.y * cellSize,
+      size * 0.1,
+      size * 0.065,
+      point.angle,
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
+  }
+  context.restore();
 }
 
 function drawHead(frame: Frame, path: SnakeBodyPath, color: RgbColor): void {
