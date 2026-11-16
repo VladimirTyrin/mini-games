@@ -72,6 +72,7 @@ const pacer = new WorkerInputPacer((action) => {
   const slot = mySlot.value;
   if (!canAct.value || !current || slot === null || isHeld()) return false;
   if (action !== "jump") {
+    animator.faceOwn(action === "left" ? -1 : 1);
     const target = freeWalkTarget(current, slot, action);
     if (target !== null) animator.predictWalk(target, performance.now());
   }

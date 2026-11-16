@@ -24,6 +24,13 @@ describe("FacingTracker", () => {
     expect(facings.facing(0)).toBe(-1);
   });
 
+  it("turns towards a blocked press without a move", () => {
+    const tracker = new FacingTracker();
+    tracker.moved(0, 1);
+    tracker.turned(0, -1);
+    expect(tracker.facing(0)).toBe(-1);
+  });
+
   it("forgets everything on reset", () => {
     const facings = new FacingTracker();
     facings.moved(0, -1);

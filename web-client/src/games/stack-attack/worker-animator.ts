@@ -163,6 +163,11 @@ export class WorkerAnimator {
     this.reconcileOwnWalk(transition, now, ownCommandsInFlight);
   }
 
+  /** The player pressed left or right: the own worker looks that way even if it cannot step. */
+  faceOwn(facing: Facing): void {
+    if (this.ownSlot !== null) this.facings.turned(this.ownSlot, facing);
+  }
+
   /** The own worker was just sent towards column `targetX`, which is free in the latest view. */
   predictWalk(targetX: number, now: number): void {
     if (this.ownSlot === null || this.ownWalk.target === null) return;

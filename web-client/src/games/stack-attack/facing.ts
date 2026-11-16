@@ -16,6 +16,11 @@ export class FacingTracker {
     if (dx !== 0) this.facings[slot] = dx > 0 ? 1 : -1;
   }
 
+  /** Looks the given way without moving (a press towards a wall or a crate it cannot push). */
+  turned(slot: number, facing: Facing): void {
+    this.facings[slot] = facing;
+  }
+
   reset(): void {
     this.facings.length = 0;
   }
