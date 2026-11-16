@@ -1,24 +1,35 @@
-use mg_core::SettingRange;
+use mg_core::{Capped, GameSettings, SettingRange, SettingsError};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use crate::settings::RawSettings;
+
+/// Total that ends the game. The bounds live in the type: parsing enforces them and the UI reads
+/// them through `ranges`.
+pub type Target = Capped<5, 100>;
+
+/// Valid by construction (see [`GameSettings::parse`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
-    /// Total that ends the game.
-    pub target: u32,
-}
-
-impl Settings {
-    pub const MIN_TARGET: u32 = 5;
-    pub const MAX_TARGET: u32 = 100;
-    pub const TARGET: SettingRange = SettingRange::new("target", Self::MIN_TARGET, Self::MAX_TARGET);
-
-    /// Bounds of every numeric setting; the only list the UI reads.
-    pub fn ranges(&self) -> Vec<SettingRange> {
-        vec![Self::TARGET]
-    }
+    pub target: Target,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { target: 21 }
+        Self { target: Target::constant::<21>() }
+    }
+}
+
+impl GameSettings for Settings {
+    type Raw = RawSettings;
+
+    fn parse(raw: RawSettings) -> Result<Self, SettingsError> {
+        Ok(Self { target: Target::new(raw.target).map_err(SettingsError::at("target"))? })
+    }
+
+    fn to_raw(&self) -> RawSettings {
+        RawSettings { target: self.target.get() }
+    }
+
+    fn ranges(_raw: &RawSettings) -> Vec<SettingRange> {
+        vec![Target::range("target")]
     }
 }

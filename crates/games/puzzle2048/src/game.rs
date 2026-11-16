@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -118,11 +118,9 @@ impl Game for Puzzle2048 {
         if !players.iter().all(|player| player.is_human()) {
             return Err(SetupError::InvalidPlayers("2048 has no bots".into()));
         }
-        let target = Target::new(settings.target)?;
-        let board = Board::empty(settings.width, settings.height)?;
         Ok(Self {
-            board,
-            target,
+            board: Board::empty(settings.width, settings.height),
+            target: settings.target,
             next_tile_id: TileId::FIRST,
             score: Score::ZERO,
             moves: 0,
@@ -130,10 +128,6 @@ impl Game for Puzzle2048 {
             last_move: None,
             phase: Phase::Playing,
         })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
     }
 
     fn clock(&self) -> Clock {

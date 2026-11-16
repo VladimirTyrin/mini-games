@@ -1,15 +1,21 @@
-use mg_core::Game;
+use mg_core::{Game, GameSettings};
 
 use crate::proto;
 use crate::wire_error::WireError;
 
+/// The unchecked settings form a game parses ([`GameSettings::parse`]).
+pub type RawSettingsOf<G> = <<G as Game>::Settings as GameSettings>::Raw;
+
 /// Conversions between a game's domain types and the `minigames.v2` envelopes.
 ///
-/// `*_from_wire` must validate everything (ranges, enum values) but leave game-rule validation
-/// to the game itself.
+/// `*_from_wire` checks the shape (the right game, required fields, known enum values, integers
+/// that fit) and never clamps or panics; game rules, setting ranges included, stay with the game.
 pub trait WireGame: Game {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Self::Settings, WireError>;
-    fn settings_to_wire(settings: &Self::Settings) -> proto::GameSettings;
+    /// Raw settings: the caller parses them with [`GameSettings::parse`], the one place ranges
+    /// are enforced.
+    fn settings_from_wire(settings: &proto::GameSettings)
+    -> Result<RawSettingsOf<Self>, WireError>;
+    fn settings_to_wire(settings: &RawSettingsOf<Self>) -> proto::GameSettings;
 
     fn command_from_wire(command: &proto::GameCommand) -> Result<Self::Command, WireError>;
     fn command_to_wire(command: &Self::Command) -> proto::GameCommand;

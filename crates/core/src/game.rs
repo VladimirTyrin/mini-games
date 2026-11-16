@@ -4,10 +4,10 @@ use crate::awaiting::Awaiting;
 use crate::clock::Clock;
 use crate::command_error::CommandError;
 use crate::game_info::GameInfo;
+use crate::game_settings::GameSettings;
 use crate::hash::StateHasher;
 use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
-use crate::setting_range::SettingRange;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
 use crate::status::Status;
@@ -23,21 +23,16 @@ use crate::viewer::Viewer;
 /// * a rejected command or world event leaves the state untouched;
 /// * [`Game::hash_state`] covers every gameplay-relevant field in a fixed order.
 pub trait Game: Sized + Send + Debug + 'static {
-    type Settings: Clone + Debug + Send + Sync + 'static;
+    type Settings: GameSettings;
     type Command: Clone + Debug + PartialEq + Send + Sync + 'static;
     type WorldEvent: Clone + Debug + PartialEq + Send + Sync + 'static;
     type View: Debug;
 
     const INFO: GameInfo;
 
-    /// Settings come from untrusted clients and replay files: validate everything before
-    /// allocating anything sized by them.
+    /// `settings` are already parsed ([`GameSettings::parse`]); only what depends on the
+    /// players (seat count, seat kinds) is left to check here.
     fn new(settings: &Self::Settings, players: &[PlayerSpec]) -> Result<Self, SetupError>;
-
-    /// Bounds of every numeric setting, as `new` enforces them for `settings` (a bound may depend
-    /// on another field, e.g. a win length capped by the board). Lets a UI offer only valid
-    /// values; `new` stays the authority on everything else.
-    fn setting_ranges(settings: &Self::Settings) -> Vec<SettingRange>;
 
     fn clock(&self) -> Clock;
 

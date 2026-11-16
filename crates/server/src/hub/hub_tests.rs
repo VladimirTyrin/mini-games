@@ -143,12 +143,14 @@ impl TestConnection {
 }
 
 fn tictactoe() -> proto::GameSettings {
-    <mg_tictactoe::TicTacToe as mg_protocol::WireGame>::settings_to_wire(&mg_tictactoe::Settings {
-        field_width: 3,
-        field_height: 3,
-        win_count: 3,
-        first_player: mg_tictactoe::FirstPlayerMode::Host,
-    })
+    <mg_tictactoe::TicTacToe as mg_protocol::WireGame>::settings_to_wire(
+        &mg_tictactoe::RawSettings {
+            field_width: 3,
+            field_height: 3,
+            win_count: 3,
+            first_player: mg_tictactoe::FirstPlayerMode::Host,
+        },
+    )
 }
 
 async fn create_lobby(host: &mut TestConnection) -> proto::LobbyState {

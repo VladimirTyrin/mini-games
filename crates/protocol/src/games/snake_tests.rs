@@ -1,10 +1,10 @@
 use mg_core::{
-    Authority, BotSeat, CommandError, CoreRng, Game, GameFrame, HasBots, Match, OutcomeKind,
-    PlayerSpec, Slot, Status, Viewer,
+    Authority, BotSeat, CommandError, CoreRng, Game, GameFrame, GameSettings, HasBots, Match,
+    OutcomeKind, PlayerSpec, Slot, Status, Viewer,
 };
 use mg_snake::{
-    BotKind, Command, DeadSnakeBehavior, Direction, Point, Settings, Snake, WallCollisionMode,
-    WorldEvent,
+    BotKind, Command, DeadSnakeBehavior, Direction, Point, RawSettings, Settings, Snake,
+    WallCollisionMode, WorldEvent,
 };
 use prost::Message;
 
@@ -18,7 +18,7 @@ fn snake_settings_wire(settings: proto::SnakeSettings) -> proto::GameSettings {
 }
 
 fn valid_settings_wire() -> proto::SnakeSettings {
-    match Snake::settings_to_wire(&Settings::default()).game {
+    match Snake::settings_to_wire(&RawSettings::default()).game {
         Some(proto::game_settings::Game::Snake(settings)) => settings,
         other => panic!("unexpected {other:?}"),
     }
@@ -49,8 +49,8 @@ fn turn_wire(direction: i32) -> proto::GameCommand {
 #[test]
 fn settings_round_trip() {
     let variants = [
-        Settings::default(),
-        Settings {
+        RawSettings::default(),
+        RawSettings {
             field_width: 100,
             field_height: 10,
             wall_collision_mode: WallCollisionMode::Death,
@@ -192,7 +192,11 @@ fn out_of_range_sizes_pass_the_wire_and_are_rejected_by_the_game() {
         ..valid_settings_wire()
     };
     let settings = Snake::settings_from_wire(&snake_settings_wire(huge)).unwrap();
-    assert!(Snake::new(&settings, &[PlayerSpec::HUMAN]).is_err());
+    assert_eq!(settings.field_width, u32::MAX);
+    assert_eq!(
+        Settings::parse(settings).map_err(|error| error.field),
+        Err("field_width")
+    );
 }
 
 #[test]
@@ -275,13 +279,14 @@ fn malformed_bot_kinds_are_rejected() {
 /// Runs an authority with humans and bots, ships every sealed frame through `transport` and
 /// replays it on a `Match`; returns what crossed the wire.
 fn replay_over_the_wire(transport: impl Fn(&proto::TickFrame) -> proto::TickFrame) -> TrafficSeen {
-    let settings = Settings {
+    let settings = Settings::parse(RawSettings {
         field_width: 40,
         field_height: 40,
         max_food_count: 4,
         food_spawn_permille: 400,
-        ..Settings::default()
-    };
+        ..RawSettings::default()
+    })
+    .unwrap();
     let players = [
         PlayerSpec::HUMAN,
         PlayerSpec::BOT,

@@ -315,7 +315,7 @@ pub(crate) fn expect_error(reply: Reply, code: proto::ErrorCode) -> proto::Error
 }
 
 pub(crate) fn tictactoe_settings(size: u32, win_count: u32) -> proto::GameSettings {
-    mg_tictactoe::TicTacToe::settings_to_wire(&mg_tictactoe::Settings {
+    mg_tictactoe::TicTacToe::settings_to_wire(&mg_tictactoe::RawSettings {
         field_width: size,
         field_height: size,
         win_count,
@@ -325,11 +325,11 @@ pub(crate) fn tictactoe_settings(size: u32, win_count: u32) -> proto::GameSettin
 
 /// Slow, wrapping snake on a large field: nobody dies during a test.
 pub(crate) fn snake_settings() -> proto::GameSettings {
-    mg_snake::Snake::settings_to_wire(&mg_snake::Settings {
+    mg_snake::Snake::settings_to_wire(&mg_snake::RawSettings {
         field_width: 100,
         field_height: 100,
         tick_interval_ms: 5000,
-        ..mg_snake::Settings::default()
+        ..mg_snake::RawSettings::default()
     })
 }
 

@@ -1,15 +1,15 @@
 //! Legacy `game_state.rs` tests (ported) plus game-level additions.
 
 use mg_core::{
-    Awaiting, CommandError, CoreRng, Game, OutcomeKind, PlayerSpec, SetupError, Slot, Status,
-    Viewer,
+    Awaiting, CommandError, CoreRng, Game, GameSettings, OutOfRange, OutcomeKind, PlayerSpec,
+    SettingProblem, SettingsError, SetupError, Slot, Status, Viewer,
 };
 
 use super::support::{at, board, dealt_game, dealt_game_with_seed, pair, settings, value};
 use crate::{
     COLUMNS, CellValue, Command, Hint, HintMode, HintsLeft, INITIAL_CELLS,
-    LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, LastAction, LossReason, MAX_REFILLS,
-    NumbersMatch, Phase, RowIndex, Settings, WorldEvent,
+    LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, LastAction, LossReason, NumbersMatch, Phase,
+    RawSettings, Refills, RowIndex, Settings, WorldEvent,
 };
 
 const PLAYER: Slot = Slot::new(0);
@@ -160,14 +160,21 @@ fn test_fuzz_no_adjacent_horizontal_duplicates() {
 
 #[test]
 fn invalid_setups_are_rejected() {
-    let too_many_refills = Settings {
-        refills: MAX_REFILLS + 1,
-        ..Settings::default()
+    let too_many_refills = RawSettings {
+        refills: Refills::MAX + 1,
+        ..RawSettings::default()
     };
-    assert!(matches!(
-        NumbersMatch::new(&too_many_refills, &[PlayerSpec::HUMAN]),
-        Err(SetupError::InvalidSetting { .. })
-    ));
+    assert_eq!(
+        Settings::parse(too_many_refills),
+        Err(SettingsError {
+            field: "refills",
+            problem: SettingProblem::OutOfRange(OutOfRange {
+                value: 11,
+                min: 0,
+                max: 10
+            }),
+        })
+    );
     assert!(matches!(
         NumbersMatch::new(&Settings::default(), &[]),
         Err(SetupError::PlayerCount { .. })
@@ -184,9 +191,13 @@ fn invalid_setups_are_rejected() {
 
 #[test]
 fn defaults_match_legacy() {
-    let settings = Settings::default();
-    assert_eq!(settings.hint_mode, HintMode::Limited);
-    assert_eq!(settings.refills, 5);
+    assert_eq!(
+        RawSettings::default(),
+        RawSettings {
+            hint_mode: HintMode::Limited,
+            refills: 5
+        }
+    );
 }
 
 #[test]
@@ -242,7 +253,7 @@ fn equal_values_across_a_row_break_are_a_valid_deal() {
 #[test]
 fn deal_without_pairs_and_refills_is_lost_at_once() {
     let settings = Settings {
-        refills: 0,
+        refills: Refills::constant::<0>(),
         ..Settings::default()
     };
     let mut game = NumbersMatch::new(&settings, &[PlayerSpec::HUMAN]).unwrap();
@@ -370,7 +381,7 @@ fn clearing_the_board_wins_with_score_one() {
 #[test]
 fn no_pair_and_no_refill_loses_with_score_zero() {
     let settings = Settings {
-        refills: 0,
+        refills: Refills::constant::<0>(),
         ..Settings::default()
     };
     let mut game = NumbersMatch::with_board(settings, board(&[1, 2, 5, 5, 0, 0, 0, 0, 0]));
@@ -382,7 +393,7 @@ fn no_pair_and_no_refill_loses_with_score_zero() {
 #[test]
 fn no_pair_with_a_refill_left_keeps_playing() {
     let settings = Settings {
-        refills: 1,
+        refills: Refills::constant::<1>(),
         ..Settings::default()
     };
     let mut game = NumbersMatch::with_board(settings, board(&[1, 2, 5, 5, 0, 0, 0, 0, 0]));

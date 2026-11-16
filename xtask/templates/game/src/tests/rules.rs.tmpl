@@ -1,6 +1,6 @@
-use mg_core::{Authority, CommandError, Game, PlayerSpec, Slot, Status};
+use mg_core::{Authority, CommandError, Game, GameSettings, PlayerSpec, Slot, Status};
 
-use crate::{Command, Settings, {{Pascal}}};
+use crate::{Command, RawSettings, Settings, Target, {{Pascal}}};
 
 fn started(players: usize) -> Authority<{{Pascal}}> {
     let mut authority =
@@ -28,5 +28,11 @@ fn reaching_the_target_wins() {
         authority.seal_frame();
     }
     assert!(matches!(authority.game().status(), Status::Finished(_)));
-    assert_eq!(authority.game().view(mg_core::Viewer::Spectator).total, Settings::default().target);
+    assert_eq!(authority.game().view(mg_core::Viewer::Spectator).total, Settings::default().target.get());
+}
+
+#[test]
+fn a_target_outside_its_range_names_the_field() {
+    let error = Settings::parse(RawSettings { target: Target::MAX + 1 }).unwrap_err();
+    assert_eq!(error.field, "target");
 }

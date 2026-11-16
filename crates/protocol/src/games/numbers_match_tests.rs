@@ -1,6 +1,7 @@
 use mg_core::{Authority, CoreRng, Game, GameFrame, Match, PlayerSpec, Slot, Viewer};
 use mg_numbers_match::{
-    CellIndex, CellPair, Command, HintMode, MAX_REFILLS, NumbersMatch, Phase, Settings, WorldEvent,
+    CellIndex, CellPair, Command, HintMode, NumbersMatch, Phase, RawSettings, Refills, Settings,
+    WorldEvent,
 };
 use prost::Message;
 
@@ -60,8 +61,8 @@ fn numbers_match_view(view: proto::GameView) -> proto::NumbersMatchView {
 #[test]
 fn settings_round_trip() {
     for hint_mode in [HintMode::Limited, HintMode::Unlimited, HintMode::Disabled] {
-        for refills in [0, 5, MAX_REFILLS] {
-            let settings = Settings { hint_mode, refills };
+        for refills in [0, 5, Refills::MAX, u32::MAX] {
+            let settings = RawSettings { hint_mode, refills };
             let wire = NumbersMatch::settings_to_wire(&settings);
             assert_eq!(NumbersMatch::settings_from_wire(&wire), Ok(settings));
         }

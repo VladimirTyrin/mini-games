@@ -17,11 +17,15 @@ const { value, audience } = form;
 
 const sizePresets = computed(() => form.acceptedPresets(boardPresets));
 
-// Locally seat 0 is always the person holding the device.
-const firstPlayerOptions = computed(() => [
-  { value: TicTacToeFirstPlayerMode.HOST, label: audience.value === "local" ? "You" : "Host" },
-  { value: TicTacToeFirstPlayerMode.RANDOM, label: "Random" },
-]);
+// Locally seat 0 is always the person holding the device and seat 1 the opponent.
+const firstPlayerOptions = computed(() => {
+  const local = audience.value === "local";
+  return [
+    { value: TicTacToeFirstPlayerMode.HOST, label: local ? "You" : "Host" },
+    { value: TicTacToeFirstPlayerMode.GUEST, label: local ? "Opponent" : "Guest" },
+    { value: TicTacToeFirstPlayerMode.RANDOM, label: "Random" },
+  ];
+});
 </script>
 
 <template>

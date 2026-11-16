@@ -1,12 +1,12 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{Board, Mark, Point};
 use crate::rules::GameEnd;
-use crate::settings::{FirstPlayerMode, Settings, WinLength};
+use crate::settings::{FirstPlayerMode, PLAYERS, Settings, WinLength};
 use crate::view::View;
 
 #[derive(Clone, Debug)]
@@ -20,6 +20,9 @@ pub struct TicTacToe {
     last_move: Option<Point>,
     end: Option<GameEnd>,
 }
+
+const HOST: Slot = Slot::new(0);
+const GUEST: Slot = Slot::new(1);
 
 fn other_seat(slot: Slot) -> Slot {
     Slot::new(1 - slot.get().min(1))
@@ -73,32 +76,29 @@ impl Game for TicTacToe {
     const INFO: GameInfo = GameInfo {
         id: "tictactoe",
         name: "TicTacToe",
-        min_players: crate::settings::PLAYERS,
-        max_players: crate::settings::PLAYERS,
+        min_players: PLAYERS,
+        max_players: PLAYERS,
         has_bots: true,
         cooperative: false,
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        let rules = settings.rules(players)?;
-        let x_player = match settings.first_player {
-            FirstPlayerMode::Host => Some(Slot::new(0)),
+        SetupError::check_player_count(players.len(), PLAYERS, PLAYERS)?;
+        let x_player = match settings.first_player() {
+            FirstPlayerMode::Host => Some(HOST),
+            FirstPlayerMode::Guest => Some(GUEST),
             FirstPlayerMode::Random => None,
         };
         Ok(Self {
-            board: Board::new(rules.dimensions),
-            win_length: rules.win_length,
-            first_player: settings.first_player,
+            board: Board::new(settings.dimensions()),
+            win_length: settings.win_length(),
+            first_player: settings.first_player(),
             x_player,
             to_move: Mark::X,
             marks_placed: 0,
             last_move: None,
             end: None,
         })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
     }
 
     fn clock(&self) -> Clock {
@@ -109,7 +109,7 @@ impl Game for TicTacToe {
         if self.end.is_some() {
             return Err(CommandError::GameOver);
         }
-        if slot.get() >= crate::settings::PLAYERS {
+        if slot.get() >= PLAYERS {
             return Err(CommandError::NotPlaying);
         }
         let mark = self.mark_to_place(slot).ok_or(CommandError::NotYourTurn)?;
@@ -143,7 +143,7 @@ impl Game for TicTacToe {
         {
             return Err(CommandError::Illegal("the first player is already known"));
         }
-        if x_player.get() >= crate::settings::PLAYERS {
+        if x_player.get() >= PLAYERS {
             return Err(CommandError::Illegal("no such seat"));
         }
         self.x_player = Some(x_player);
@@ -152,7 +152,7 @@ impl Game for TicTacToe {
 
     /// Leaving is a technical loss, also before the first move.
     fn drop_player(&mut self, slot: Slot) {
-        if self.end.is_none() && slot.get() < crate::settings::PLAYERS {
+        if self.end.is_none() && slot.get() < PLAYERS {
             self.end = Some(GameEnd::OpponentLeft {
                 winner: other_seat(slot),
             });
@@ -171,7 +171,7 @@ impl Game for TicTacToe {
             return Status::InProgress;
         };
         let winner = end.winner();
-        let scores = Slot::all(usize::from(crate::settings::PLAYERS))
+        let scores = Slot::all(usize::from(PLAYERS))
             .map(|slot| i64::from(winner == Some(slot)))
             .collect();
         Status::Finished(Outcome {
@@ -198,7 +198,7 @@ impl Game for TicTacToe {
             last_move: self.last_move,
             end: self.end,
             you: match viewer {
-                Viewer::Player(slot) => (slot.get() < crate::settings::PLAYERS).then_some(slot),
+                Viewer::Player(slot) => (slot.get() < PLAYERS).then_some(slot),
                 Viewer::Spectator => None,
             },
         }
@@ -212,6 +212,7 @@ impl Game for TicTacToe {
         hasher.u8(match self.first_player {
             FirstPlayerMode::Random => 0,
             FirstPlayerMode::Host => 1,
+            FirstPlayerMode::Guest => 2,
         });
         for cell in self.board.cells() {
             hasher.u8(cell.map_or(0, Mark::code));

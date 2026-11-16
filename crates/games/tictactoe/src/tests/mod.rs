@@ -3,20 +3,26 @@ mod conformance;
 mod rules;
 mod timing;
 
-use mg_core::{Bot, Budget, CoreRng, Game, PlayerSpec, Slot};
+use mg_core::{Bot, Budget, CoreRng, Game, GameSettings, PlayerSpec, Slot};
 
-use crate::{Command, FirstPlayerMode, Point, Settings, TicTacToe};
+use crate::{Command, FirstPlayerMode, Point, RawSettings, Settings, TicTacToe};
 
 const HOST: Slot = Slot::new(0);
 const GUEST: Slot = Slot::new(1);
 
-fn settings(field_width: u32, field_height: u32, win_count: u32) -> Settings {
-    Settings {
+/// Host mode.
+fn raw_settings(field_width: u32, field_height: u32, win_count: u32) -> RawSettings {
+    RawSettings {
         field_width,
         field_height,
         win_count,
         first_player: FirstPlayerMode::Host,
     }
+}
+
+/// Host mode.
+fn settings(field_width: u32, field_height: u32, win_count: u32) -> Settings {
+    Settings::parse(raw_settings(field_width, field_height, win_count)).unwrap()
 }
 
 /// Host mode, two humans: slot 0 is X.

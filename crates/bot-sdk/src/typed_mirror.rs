@@ -2,7 +2,9 @@ use std::borrow::Cow;
 
 use mg_core::{Clock, CompactLog, Match, Status, Tick, Viewer};
 use mg_protocol::{WireError, WireGame, frame_from_wire, proto};
-use mg_registry::{ApplyError, CreateError, DynMirror, GameKind, players_from_header};
+use mg_registry::{
+    ApplyError, CreateError, DynMirror, GameKind, parse_settings, players_from_header,
+};
 
 /// A mirror that keeps the concrete game type, so strategies can read the full game state (the
 /// built-in bots need it). Behaves exactly like the registry's mirror.
@@ -23,7 +25,7 @@ impl<G: WireGame> TypedMirror<G> {
             return Err(WireError::WrongGame.into());
         }
         let game_match = Match::new(
-            &G::settings_from_wire(settings)?,
+            &parse_settings::<G>(settings)?,
             &players_from_header(header)?,
         )?;
         Ok(Self { kind, game_match })

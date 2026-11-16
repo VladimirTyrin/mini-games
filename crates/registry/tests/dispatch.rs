@@ -1,4 +1,4 @@
-use mg_core::{Clock, Game, HasBots, PlayerSpec, Slot, Viewer};
+use mg_core::{Clock, Game, GameSettings, HasBots, PlayerSpec, Slot, Viewer};
 use mg_numbers_match::NumbersMatch;
 use mg_protocol::{WireBots, WireGame, proto};
 use mg_puzzle2048::Puzzle2048;
@@ -11,7 +11,7 @@ fn default_settings<G: WireGame>() -> proto::GameSettings
 where
     G::Settings: Default,
 {
-    G::settings_to_wire(&G::Settings::default())
+    G::settings_to_wire(&G::Settings::default().to_raw())
 }
 
 /// Runs a few frames through the type-erased authority and mirror and checks they agree.

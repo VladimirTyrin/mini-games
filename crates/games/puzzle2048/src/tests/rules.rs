@@ -1,38 +1,41 @@
 use mg_core::{
-    Awaiting, Clock, CommandError, CoreRng, Game, OutcomeKind, PlayerSpec, SetupError, Slot, Status,
+    Awaiting, Clock, CommandError, CoreRng, Game, GameSettings, OutcomeKind, PlayerSpec,
+    SettingProblem, SettingsError, SetupError, Slot, Status,
 };
 
 use super::support::{
-    PLAYER, board, deliver_spawns, play, settings, spawn, started, tile_count, try_move, values,
-    view,
+    PLAYER, board, deliver_spawns, play, raw_settings, settings, spawn, started, tile_count,
+    try_move, values, view,
 };
-use crate::{Command, Direction, Phase, Puzzle2048, Settings, SpawnValue, WorldEvent};
+use crate::{
+    BoardSize, Command, Direction, Phase, Puzzle2048, RawSettings, Settings, SpawnValue, WorldEvent,
+};
 
 fn create(settings: &Settings) -> Result<Puzzle2048, SetupError> {
     Puzzle2048::new(settings, &[PlayerSpec::HUMAN])
 }
 
-fn rejected_field(settings: &Settings) -> &'static str {
-    match create(settings) {
-        Err(SetupError::InvalidSetting { field, .. }) => field,
-        other => panic!("{settings:?} must be rejected, got {other:?}"),
+fn rejected_field(settings: RawSettings) -> &'static str {
+    match Settings::parse(settings) {
+        Err(SettingsError { field, .. }) => field,
+        Ok(parsed) => panic!("{settings:?} must be rejected, got {parsed:?}"),
     }
 }
 
 #[test]
 fn default_settings_match_the_web_defaults() {
-    assert_eq!(Settings::default(), settings(4, 4, 2048));
+    assert_eq!(RawSettings::default(), raw_settings(4, 4, 2048));
     assert!(create(&Settings::default()).is_ok());
 }
 
 #[test]
 fn board_size_limits() {
-    for size in [Settings::MIN_SIZE, Settings::MAX_SIZE] {
+    for size in [BoardSize::MIN, BoardSize::MAX] {
         assert!(create(&settings(size, size, 2048)).is_ok());
     }
     for size in [0, 1, 11, u32::MAX] {
-        assert_eq!(rejected_field(&settings(size, 4, 2048)), "width");
-        assert_eq!(rejected_field(&settings(4, size, 2048)), "height");
+        assert_eq!(rejected_field(raw_settings(size, 4, 2048)), "width");
+        assert_eq!(rejected_field(raw_settings(4, size, 2048)), "height");
     }
 }
 
@@ -43,11 +46,18 @@ fn target_is_a_bounded_power_of_two() {
     }
     for target in [0, 2, 4, 12, 2047, 131_072, 1 << 31, u32::MAX] {
         assert_eq!(
-            rejected_field(&settings(4, 4, target)),
+            rejected_field(raw_settings(4, 4, target)),
             "target",
             "{target}"
         );
     }
+    assert_eq!(
+        Settings::parse(raw_settings(4, 4, 12)).unwrap_err().problem,
+        SettingProblem::RuleBroken {
+            rule: "must be a power of two",
+            value: 12
+        }
+    );
 }
 
 #[test]

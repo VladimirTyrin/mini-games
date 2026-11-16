@@ -26,9 +26,7 @@ pub use game::TicTacToe;
 pub use io::{Command, WorldEvent};
 pub use model::{Mark, Point};
 pub use rules::{GameEnd, WinningLine};
-pub use settings::{
-    FirstPlayerMode, MAX_FIELD_SIZE, MIN_FIELD_SIZE, MIN_WIN_COUNT, PLAYERS, Settings,
-};
+pub use settings::{FieldSize, FirstPlayerMode, PLAYERS, RawSettings, Settings};
 pub use view::View;
 
 #[cfg(test)]

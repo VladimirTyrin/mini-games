@@ -28,7 +28,7 @@ pub use game::Puzzle2048;
 pub use io::{Command, WorldEvent};
 pub use model::{Cell, Direction, Score, SpawnValue, Tile, TileId, TileValue};
 pub use rules::Phase;
-pub use settings::{Settings, Target};
+pub use settings::{BoardSize, RawSettings, Settings, Target};
 pub use view::{MergeSource, TileOrigin, View};
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use mg_core::SetupError;
+use mg_core::{SettingsError, SetupError};
 use mg_protocol::WireError;
 
 use crate::seats_error::SeatsError;
@@ -9,6 +9,8 @@ pub enum CreateError {
     Wire(#[from] WireError),
     #[error(transparent)]
     Seats(#[from] SeatsError),
+    #[error(transparent)]
+    Settings(#[from] SettingsError),
     #[error(transparent)]
     Setup(#[from] SetupError),
     #[error("{0} has no built-in bots")]

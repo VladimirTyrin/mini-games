@@ -1,15 +1,21 @@
-use mg_core::{CommandError, CoreRng, Game, PlayerSpec, Slot, Viewer};
+use mg_core::{CommandError, CoreRng, Game, GameSettings, PlayerSpec, Slot, Viewer};
 
-use crate::{Cell, Command, Direction, Puzzle2048, Settings, SpawnValue, View, WorldEvent};
+use crate::{
+    Cell, Command, Direction, Puzzle2048, RawSettings, Settings, SpawnValue, View, WorldEvent,
+};
 
 pub(super) const PLAYER: Slot = Slot::new(0);
 
-pub(super) fn settings(width: u32, height: u32, target: u32) -> Settings {
-    Settings {
+pub(super) fn raw_settings(width: u32, height: u32, target: u32) -> RawSettings {
+    RawSettings {
         width,
         height,
         target,
     }
+}
+
+pub(super) fn settings(width: u32, height: u32, target: u32) -> Settings {
+    Settings::parse(raw_settings(width, height, target)).unwrap()
 }
 
 /// A running game with these row-major values (0 = empty), target 2048, no spawn due.

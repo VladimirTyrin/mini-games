@@ -1,10 +1,12 @@
 use mg_core::{CommandError, CoreRng, Game};
 
 use super::support::{arrange, field_settings, humans, new_game, point, put_food};
-use crate::{DeadSnakeBehavior, Direction, Point, Settings, Snake, WallCollisionMode, WorldEvent};
+use crate::{
+    DeadSnakeBehavior, Direction, Point, RawSettings, Snake, WallCollisionMode, WorldEvent,
+};
 
 fn game(max_food_count: u32, food_spawn_permille: u32) -> Snake {
-    let settings = Settings {
+    let settings = RawSettings {
         max_food_count,
         food_spawn_permille,
         ..field_settings(

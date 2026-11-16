@@ -26,7 +26,7 @@ pub use outcome_codec::outcome_to_wire;
 pub use replay_file_error::ReplayFileError;
 pub use replay_format::{REPLAY_FORMAT_VERSION, decode_replay_file};
 pub use wire_error::WireError;
-pub use wire_game::{WireBots, WireGame};
+pub use wire_game::{RawSettingsOf, WireBots, WireGame};
 
 /// Generated protobuf types of package `minigames.v2`.
 #[allow(clippy::all, missing_debug_implementations, unreachable_pub)]

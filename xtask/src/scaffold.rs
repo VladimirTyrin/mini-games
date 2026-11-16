@@ -30,6 +30,10 @@ fn templates(names: &GameNames) -> Vec<Template> {
             include_str!("../templates/game/src/settings/mod.rs.tmpl"),
         ),
         template(
+            format!("{game}/src/settings/raw_settings.rs"),
+            include_str!("../templates/game/src/settings/raw_settings.rs.tmpl"),
+        ),
+        template(
             format!("{game}/src/settings/settings.rs"),
             include_str!("../templates/game/src/settings/settings.rs.tmpl"),
         ),

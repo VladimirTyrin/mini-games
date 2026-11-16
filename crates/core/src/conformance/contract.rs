@@ -9,7 +9,8 @@ pub trait Conformance: Game {
     /// Cover edge sizes, every mode and bot seats.
     fn sample_setups() -> Vec<Setup<Self>>;
 
-    /// Must all be rejected by `Game::new`: out-of-range values, huge sizes, wrong seat counts.
+    /// Must all be rejected, by `GameSettings::parse` (out-of-range values, huge sizes, broken
+    /// rules between fields) or by `Game::new` (wrong seat counts).
     fn invalid_setups() -> Vec<Setup<Self>>;
 
     /// May be illegal; bias towards plausible moves so simulated games actually progress.

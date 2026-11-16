@@ -1,15 +1,16 @@
-use mg_core::{Game, PlayerSpec, Slot, Viewer};
+use mg_core::{Game, GameSettings, PlayerSpec, Slot, Viewer};
 
 use crate::{
-    BoxId, CargoBox, Cell, Column, Command, Crane, CraneId, CraneState, PatternId, Settings,
-    StackAttack, View, WorkerView,
+    BoxId, CargoBox, Cell, Column, Command, Crane, CraneId, CraneState, PatternId, RawSettings,
+    Settings, StackAttack, View, WorkerView,
 };
 
 pub(super) fn new_game(field_width: u32, field_height: u32, seats: usize) -> StackAttack {
-    let settings = Settings {
+    let settings = Settings::parse(RawSettings {
         field_width,
         field_height,
-    };
+    })
+    .unwrap();
     StackAttack::new(&settings, &vec![PlayerSpec::HUMAN; seats]).unwrap()
 }
 

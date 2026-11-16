@@ -45,6 +45,11 @@ the catch-up path.
 Determinism rules live in `AGENTS.md`; `mg_core::conformance` enforces them per game, and
 every game pins a `scripted_hash`.
 
+Settings are parsed once at the boundary: the wire gives a game's `RawSettings`,
+`GameSettings::parse` turns them into `Settings` whose ranges are `Capped<MIN, MAX>` types, and
+`Game::new`, the `Authority` and every `Match` only ever see parsed settings. The bounds the UI
+shows come from the same types.
+
 ## Server (`crates/server`)
 
 Actors, no shared locks:
@@ -75,7 +80,7 @@ secret), never by display name, which may repeat.
   core; plugins only render and turn input into commands.
 - `components/form/` — the setup rows every settings form is built from (`StepperField`,
   `SegmentedField`, `ChipsField` presets, `MoreOptions`). `SettingsEditor` asks the WASM core
-  for the numeric bounds (`settingRanges`, from each game's `Settings::ranges`) and for the
+  for the numeric bounds (`settingRanges`, from each game's `GameSettings::ranges`) and for the
   verdict (`settingsProblem`: field + message), so a stepper stops at the real limit and an
   error appears under the row it belongs to.
 

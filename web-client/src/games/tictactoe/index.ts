@@ -5,6 +5,17 @@ import { narrowScreenSettings } from "./board-presets";
 import Board from "./TicTacToeBoard.vue";
 import SettingsForm from "./TicTacToeSettings.vue";
 
+function firstMoveLabel(mode: TicTacToeFirstPlayerMode): string {
+  switch (mode) {
+    case TicTacToeFirstPlayerMode.HOST:
+      return "host starts";
+    case TicTacToeFirstPlayerMode.GUEST:
+      return "guest starts";
+    default:
+      return "random start";
+  }
+}
+
 export const tictactoePlugin: GamePlugin = {
   id: "tictactoe",
   settingsCase: "tictactoe",
@@ -19,7 +30,7 @@ export const tictactoePlugin: GamePlugin = {
     return [
       `${value.fieldWidth}×${value.fieldHeight}`,
       `${value.winCount} in a row`,
-      value.firstPlayer === TicTacToeFirstPlayerMode.HOST ? "host starts" : "random start",
+      firstMoveLabel(value.firstPlayer),
     ];
   },
   botLabel(kind) {

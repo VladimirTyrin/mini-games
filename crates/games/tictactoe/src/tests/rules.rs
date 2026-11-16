@@ -1,11 +1,12 @@
 use mg_core::{
-    Authority, Awaiting, CommandError, Game, Input, OutcomeKind, PlayerSpec, SetupError, Status,
-    Viewer,
+    Authority, Awaiting, CommandError, Game, GameSettings, Input, OutOfRange, OutcomeKind,
+    PlayerSpec, SettingProblem, SettingsError, SetupError, Status, Viewer,
 };
 
-use super::{GUEST, HOST, new_game, place, settings};
+use super::{GUEST, HOST, new_game, place, raw_settings, settings};
 use crate::{
-    Command, FirstPlayerMode, GameEnd, Mark, Point, Settings, TicTacToe, WinningLine, WorldEvent,
+    Command, FirstPlayerMode, GameEnd, Mark, Point, RawSettings, Settings, TicTacToe, WinningLine,
+    WorldEvent,
 };
 
 const HUMANS: [PlayerSpec; 2] = [PlayerSpec::HUMAN, PlayerSpec::HUMAN];
@@ -28,8 +29,8 @@ fn winning_line(game: &TicTacToe) -> Option<WinningLine> {
 #[test]
 fn defaults_match_the_web_client() {
     assert_eq!(
-        Settings::default(),
-        Settings {
+        RawSettings::default(),
+        RawSettings {
             field_width: 15,
             field_height: 15,
             win_count: 5,
@@ -42,29 +43,42 @@ fn defaults_match_the_web_client() {
 #[test]
 fn settings_out_of_range_are_rejected() {
     let rejected = [
-        settings(2, 15, 3),
-        settings(21, 15, 5),
-        settings(15, 2, 3),
-        settings(15, 21, 5),
-        settings(0, 0, 0),
-        settings(u32::MAX, u32::MAX, 5),
-        settings(15, 15, 2),
-        settings(15, 15, 16),
-        settings(4, 7, 5),
-        settings(15, 15, u32::MAX),
+        (raw_settings(2, 15, 3), "field_width"),
+        (raw_settings(21, 15, 5), "field_width"),
+        (raw_settings(15, 2, 3), "field_height"),
+        (raw_settings(15, 21, 5), "field_height"),
+        (raw_settings(0, 0, 0), "field_width"),
+        (raw_settings(u32::MAX, u32::MAX, 5), "field_width"),
+        (raw_settings(15, 15, 2), "win_count"),
+        (raw_settings(15, 15, 16), "win_count"),
+        (raw_settings(4, 7, 5), "win_count"),
+        (raw_settings(15, 15, u32::MAX), "win_count"),
     ];
-    for settings in rejected {
-        assert!(
-            matches!(
-                TicTacToe::new(&settings, &HUMANS),
-                Err(SetupError::InvalidSetting { .. })
-            ),
-            "{settings:?}"
+    for (raw, field) in rejected {
+        assert_eq!(
+            Settings::parse(raw).map_err(|error| error.field),
+            Err(field),
+            "{raw:?}"
         );
     }
     for edge in [settings(3, 3, 3), settings(20, 20, 20), settings(3, 20, 3)] {
         assert!(TicTacToe::new(&edge, &HUMANS).is_ok(), "{edge:?}");
     }
+}
+
+#[test]
+fn the_win_length_is_bounded_by_the_shorter_side() {
+    assert_eq!(
+        Settings::parse(raw_settings(4, 7, 5)),
+        Err(SettingsError {
+            field: "win_count",
+            problem: SettingProblem::OutOfRange(OutOfRange {
+                value: 5,
+                min: 3,
+                max: 4
+            }),
+        })
+    );
 }
 
 #[test]
@@ -318,6 +332,51 @@ fn first_player_event_is_rejected_when_not_expected() {
     assert_eq!(random_mode.state_hash(), before);
     random_mode.apply_world(&event).unwrap();
     assert!(random_mode.apply_world(&event).is_err());
+}
+
+#[test]
+fn guest_mode_gives_the_other_seat_x_and_the_first_move_without_randomness() {
+    let guest_mode = Settings::parse(RawSettings {
+        first_player: FirstPlayerMode::Guest,
+        ..raw_settings(15, 15, 5)
+    })
+    .unwrap();
+    for seed in 0..20 {
+        let mut authority =
+            Authority::<TicTacToe>::new(&guest_mode, &HUMANS, seed, vec![]).unwrap();
+        assert!(authority.seal_frame().inputs.is_empty());
+        let view = authority.game().view(Viewer::Spectator);
+        assert_eq!(view.x_player, Some(GUEST));
+        assert_eq!(view.o_player, Some(HOST));
+        assert_eq!(authority.game().awaiting(), Awaiting::Turn(GUEST));
+        assert_eq!(
+            authority.submit(HOST, Command::Place(Point::new(7, 7))),
+            Err(CommandError::NotYourTurn)
+        );
+        authority
+            .submit(GUEST, Command::Place(Point::new(7, 7)))
+            .unwrap();
+        authority.seal_frame();
+        assert_eq!(authority.game().awaiting(), Awaiting::Turn(HOST));
+    }
+    let mut game = TicTacToe::new(&guest_mode, &HUMANS).unwrap();
+    let event = WorldEvent::FirstPlayerChosen { x_player: HOST };
+    assert!(
+        game.apply_world(&event).is_err(),
+        "no world event to wait for"
+    );
+}
+
+#[test]
+fn guest_and_host_modes_hash_differently() {
+    let host = TicTacToe::new(&settings(3, 3, 3), &HUMANS).unwrap();
+    let guest_settings = Settings::parse(RawSettings {
+        first_player: FirstPlayerMode::Guest,
+        ..raw_settings(3, 3, 3)
+    })
+    .unwrap();
+    let guest = TicTacToe::new(&guest_settings, &HUMANS).unwrap();
+    assert_ne!(host.state_hash(), guest.state_hash());
 }
 
 /// T8: legacy reported a plain win when a player left.

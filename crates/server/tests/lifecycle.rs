@@ -267,12 +267,12 @@ async fn the_last_non_voter_leaving_tries_the_next_match_and_reports_failure() {
 /// Wall deaths on a small field: a snake match ends within a few ticks.
 fn short_snake() -> proto::GameSettings {
     use mg_protocol::WireGame;
-    mg_snake::Snake::settings_to_wire(&mg_snake::Settings {
+    mg_snake::Snake::settings_to_wire(&mg_snake::RawSettings {
         field_width: 10,
         field_height: 10,
         wall_collision_mode: mg_snake::WallCollisionMode::Death,
         tick_interval_ms: 50,
-        ..mg_snake::Settings::default()
+        ..mg_snake::RawSettings::default()
     })
 }
 
@@ -341,11 +341,11 @@ async fn real_time_bots_play_every_tick() {
     let mut host = server.guest("Host").await.client;
     let settings = {
         use mg_protocol::WireGame;
-        mg_snake::Snake::settings_to_wire(&mg_snake::Settings {
+        mg_snake::Snake::settings_to_wire(&mg_snake::RawSettings {
             field_width: 40,
             field_height: 40,
             tick_interval_ms: 50,
-            ..mg_snake::Settings::default()
+            ..mg_snake::RawSettings::default()
         })
     };
     create_lobby(&mut host, settings, 2).await;

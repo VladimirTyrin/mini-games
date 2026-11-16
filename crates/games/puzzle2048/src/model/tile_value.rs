@@ -16,7 +16,7 @@ impl TileValue {
     }
 
     /// Cannot saturate in play: the game ends once a tile reaches the target, which is at most
-    /// `Settings::MAX_TARGET`.
+    /// the largest [`crate::Target`].
     pub(crate) fn doubled(self) -> TileValue {
         TileValue(self.0.saturating_mul(2))
     }

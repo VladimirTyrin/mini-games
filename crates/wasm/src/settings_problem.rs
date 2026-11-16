@@ -1,4 +1,3 @@
-use mg_core::SetupError;
 use mg_registry::CreateError;
 use wasm_bindgen::prelude::*;
 
@@ -23,9 +22,9 @@ impl SettingsProblem {
 impl From<CreateError> for SettingsProblem {
     fn from(error: CreateError) -> Self {
         match error {
-            CreateError::Setup(SetupError::InvalidSetting { field, reason }) => Self {
-                field: Some(field.to_owned()),
-                message: reason,
+            CreateError::Settings(error) => Self {
+                field: Some(error.field.to_owned()),
+                message: error.problem.to_string(),
             },
             other => Self::general(other.to_string()),
         }

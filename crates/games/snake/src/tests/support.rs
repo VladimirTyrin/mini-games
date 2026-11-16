@@ -1,8 +1,9 @@
-use mg_core::{Game, PlayerSpec, Slot, Viewer};
+use mg_core::{Game, GameSettings, PlayerSpec, Slot, Viewer};
 
 use crate::model::CellContent;
 use crate::{
-    DeadSnakeBehavior, Direction, Point, Settings, Snake, SnakeView, WallCollisionMode, WorldEvent,
+    DeadSnakeBehavior, Direction, Point, RawSettings, Settings, Snake, SnakeView,
+    WallCollisionMode, WorldEvent,
 };
 
 pub(super) fn point(x: u16, y: u16) -> Point {
@@ -14,18 +15,18 @@ pub(super) fn field_settings(
     height: u32,
     wall_collision_mode: WallCollisionMode,
     dead_snake_behavior: DeadSnakeBehavior,
-) -> Settings {
-    Settings {
+) -> RawSettings {
+    RawSettings {
         field_width: width,
         field_height: height,
         wall_collision_mode,
         dead_snake_behavior,
-        ..Settings::default()
+        ..RawSettings::default()
     }
 }
 
-pub(super) fn new_game(settings: Settings, players: &[PlayerSpec]) -> Snake {
-    Snake::new(&settings, players).unwrap()
+pub(super) fn new_game(settings: RawSettings, players: &[PlayerSpec]) -> Snake {
+    Snake::new(&Settings::parse(settings).unwrap(), players).unwrap()
 }
 
 pub(super) fn humans(count: usize) -> Vec<PlayerSpec> {

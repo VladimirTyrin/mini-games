@@ -1,23 +1,23 @@
 use mg_core::conformance::{self, Conformance, Setup};
 use mg_core::{CoreRng, Game, PlayerSpec, Slot, Viewer};
 
-use super::support::settings;
-use crate::{Command, Direction, Phase, Puzzle2048, Settings, TileId, TileOrigin, TileValue};
+use super::support::{raw_settings, settings};
+use crate::{Command, Direction, Phase, Puzzle2048, RawSettings, TileId, TileOrigin, TileValue};
 
-fn human(settings: Settings) -> Setup<Puzzle2048> {
+fn human(settings: RawSettings) -> Setup<Puzzle2048> {
     Setup::new(settings, vec![PlayerSpec::HUMAN])
 }
 
 impl Conformance for Puzzle2048 {
     fn sample_setups() -> Vec<Setup<Self>> {
         [
-            settings(2, 2, 8),
-            settings(4, 4, 2048),
-            settings(10, 10, 65_536),
-            settings(3, 5, 16),
-            settings(5, 3, 32),
-            settings(2, 10, 64),
-            settings(3, 3, 128),
+            raw_settings(2, 2, 8),
+            raw_settings(4, 4, 2048),
+            raw_settings(10, 10, 65_536),
+            raw_settings(3, 5, 16),
+            raw_settings(5, 3, 32),
+            raw_settings(2, 10, 64),
+            raw_settings(3, 3, 128),
         ]
         .into_iter()
         .map(human)
@@ -27,18 +27,18 @@ impl Conformance for Puzzle2048 {
     fn invalid_setups() -> Vec<Setup<Self>> {
         let mut setups = Vec::new();
         for size in [0, 1, 11, u32::MAX] {
-            setups.push(human(settings(size, 4, 2048)));
-            setups.push(human(settings(4, size, 2048)));
+            setups.push(human(raw_settings(size, 4, 2048)));
+            setups.push(human(raw_settings(4, size, 2048)));
         }
         for target in [0, 2, 4, 6, 12, 2047, 131_072, 1 << 31, u32::MAX] {
-            setups.push(human(settings(4, 4, target)));
+            setups.push(human(raw_settings(4, 4, target)));
         }
-        setups.push(Setup::new(Settings::default(), Vec::new()));
+        setups.push(Setup::new(RawSettings::default(), Vec::new()));
         setups.push(Setup::new(
-            Settings::default(),
+            RawSettings::default(),
             vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
         ));
-        setups.push(Setup::new(Settings::default(), vec![PlayerSpec::BOT]));
+        setups.push(Setup::new(RawSettings::default(), vec![PlayerSpec::BOT]));
         setups
     }
 
@@ -117,7 +117,7 @@ fn passes_conformance() {
 
 #[test]
 fn scripted_hash_is_pinned() {
-    let hash = conformance::scripted_hash(&human(Settings::default()), 2048);
+    let hash = conformance::scripted_hash(&human(RawSettings::default()), 2048);
     assert_eq!(hash, GOLDEN_HASH, "got {hash:#018x}");
 }
 

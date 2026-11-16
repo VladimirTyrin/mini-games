@@ -1,6 +1,5 @@
+mod raw_settings;
 mod settings;
 
-pub use settings::{
-    MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_SEATS, MIN_FIELD_HEIGHT, MIN_FIELD_WIDTH, MIN_SEATS,
-    Settings,
-};
+pub use raw_settings::RawSettings;
+pub use settings::{FieldHeight, FieldWidth, MAX_SEATS, MIN_SEATS, Settings};

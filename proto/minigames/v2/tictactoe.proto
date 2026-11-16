@@ -15,6 +15,8 @@ enum TicTacToeFirstPlayerMode {
   TIC_TAC_TOE_FIRST_PLAYER_MODE_RANDOM = 1;
   // The lobby host (slot 0) plays X.
   TIC_TAC_TOE_FIRST_PLAYER_MODE_HOST = 2;
+  // The other seat (slot 1) plays X.
+  TIC_TAC_TOE_FIRST_PLAYER_MODE_GUEST = 3;
 }
 
 // Unvalidated: the game rejects sides outside 3..=20 and a win_count outside

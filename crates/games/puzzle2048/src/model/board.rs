@@ -1,8 +1,8 @@
-use mg_core::{SettingRange, SetupError, StateHasher};
+use mg_core::StateHasher;
 
 use crate::model::{Cell, Direction, Score, Tile, TileId, TileValue};
 use crate::rules::SlideOutcome;
-use crate::settings::Settings;
+use crate::settings::BoardSize;
 use crate::view::{MergeSource, TileOrigin};
 
 #[derive(Clone, Debug)]
@@ -14,20 +14,13 @@ pub(crate) struct Board {
 }
 
 impl Board {
-    /// Validates the size before allocating.
-    pub(crate) fn empty(width: u32, height: u32) -> Result<Self, SetupError> {
-        let width = Self::checked_size(Settings::WIDTH, width)?;
-        let height = Self::checked_size(Settings::HEIGHT, height)?;
-        Ok(Self {
+    pub(crate) fn empty(width: BoardSize, height: BoardSize) -> Self {
+        let (width, height) = (width.to_u8(), height.to_u8());
+        Self {
             width,
             height,
             slots: vec![None; usize::from(width) * usize::from(height)],
-        })
-    }
-
-    fn checked_size(range: SettingRange, value: u32) -> Result<u8, SetupError> {
-        range.check(value)?;
-        u8::try_from(value).map_err(|error| SetupError::setting(range.field, error.to_string()))
+        }
     }
 
     pub(crate) fn width(&self) -> u8 {

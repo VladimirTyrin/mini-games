@@ -3,16 +3,16 @@ use mg_core::{CoreRng, PlayerSpec, Slot};
 
 use crate::rules::{MULTI_LINE_BONUS, POINTS_PER_LINE};
 use crate::{
-    Column, Command, CraneState, Direction, MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_QUEUED_COMMANDS,
-    MIN_FIELD_HEIGHT, MIN_FIELD_WIDTH, Settings, StackAttack,
+    Column, Command, CraneState, Direction, FieldHeight, FieldWidth, MAX_QUEUED_COMMANDS,
+    RawSettings, StackAttack,
 };
 
 fn humans(seats: usize) -> Vec<PlayerSpec> {
     vec![PlayerSpec::HUMAN; seats]
 }
 
-fn sized(field_width: u32, field_height: u32) -> Settings {
-    Settings {
+fn sized(field_width: u32, field_height: u32) -> RawSettings {
+    RawSettings {
         field_width,
         field_height,
     }
@@ -21,30 +21,30 @@ fn sized(field_width: u32, field_height: u32) -> Settings {
 impl Conformance for StackAttack {
     fn sample_setups() -> Vec<Setup<Self>> {
         let mut setups: Vec<Setup<Self>> = (1..=4)
-            .map(|seats| Setup::new(Settings::default(), humans(seats)))
+            .map(|seats| Setup::new(RawSettings::default(), humans(seats)))
             .collect();
         setups.push(Setup::new(
-            sized(MIN_FIELD_WIDTH, MIN_FIELD_HEIGHT),
+            sized(FieldWidth::MIN, FieldHeight::MIN),
             humans(4),
         ));
         setups.push(Setup::new(
-            sized(MAX_FIELD_WIDTH, MAX_FIELD_HEIGHT),
+            sized(FieldWidth::MAX, FieldHeight::MAX),
             humans(1),
         ));
         setups
     }
 
     fn invalid_setups() -> Vec<Setup<Self>> {
-        let default = Settings::default();
+        let default = RawSettings::default();
         vec![
             Setup::new(default, humans(0)),
             Setup::new(default, humans(5)),
             Setup::new(default, vec![PlayerSpec::BOT]),
             Setup::new(default, vec![PlayerSpec::HUMAN, PlayerSpec::BOT]),
-            Setup::new(sized(MIN_FIELD_WIDTH - 1, 10), humans(1)),
-            Setup::new(sized(MAX_FIELD_WIDTH + 1, 10), humans(1)),
-            Setup::new(sized(15, MIN_FIELD_HEIGHT - 1), humans(1)),
-            Setup::new(sized(15, MAX_FIELD_HEIGHT + 1), humans(1)),
+            Setup::new(sized(FieldWidth::MIN - 1, 10), humans(1)),
+            Setup::new(sized(FieldWidth::MAX + 1, 10), humans(1)),
+            Setup::new(sized(15, FieldHeight::MIN - 1), humans(1)),
+            Setup::new(sized(15, FieldHeight::MAX + 1), humans(1)),
             Setup::new(sized(0, 0), humans(1)),
             Setup::new(sized(u32::MAX, u32::MAX), humans(1)),
         ]
@@ -136,7 +136,7 @@ fn passes_conformance() {
 
 #[test]
 fn scripted_match_hash_is_pinned() {
-    let setup = Setup::<StackAttack>::new(Settings::default(), humans(2));
+    let setup = Setup::<StackAttack>::new(RawSettings::default(), humans(2));
     assert_eq!(
         conformance::scripted_hash(&setup, 42),
         0x74D5_FE84_B620_B19C

@@ -1,44 +1,54 @@
-use mg_core::{SettingRange, SetupError};
+use mg_core::{Capped, GameSettings, SettingRange, SettingsError};
 
-pub const MIN_FIELD_WIDTH: u32 = 6;
-pub const MAX_FIELD_WIDTH: u32 = 32;
-/// Leaves room for a worker (2 cells), a jump and the ceiling row.
-pub const MIN_FIELD_HEIGHT: u32 = 6;
-pub const MAX_FIELD_HEIGHT: u32 = 24;
+use crate::settings::RawSettings;
+
+pub type FieldWidth = Capped<6, 32>;
+/// At least 6 rows leave room for a worker (2 cells), a jump and the ceiling row.
+pub type FieldHeight = Capped<6, 24>;
+
 pub const MIN_SEATS: u8 = 1;
 pub const MAX_SEATS: u8 = 4;
 
 /// The legacy lobby had no settings (fixed 15x10 field); the size is configurable now and the
-/// default keeps the legacy field.
+/// default keeps the legacy field. Valid by construction (see [`GameSettings::parse`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Settings {
-    pub field_width: u32,
-    pub field_height: u32,
+    pub field_width: FieldWidth,
+    pub field_height: FieldHeight,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            field_width: 15,
-            field_height: 10,
+            field_width: FieldWidth::constant::<15>(),
+            field_height: FieldHeight::constant::<10>(),
         }
     }
 }
 
-impl Settings {
-    pub const FIELD_WIDTH: SettingRange =
-        SettingRange::new("field_width", MIN_FIELD_WIDTH, MAX_FIELD_WIDTH);
-    pub const FIELD_HEIGHT: SettingRange =
-        SettingRange::new("field_height", MIN_FIELD_HEIGHT, MAX_FIELD_HEIGHT);
+impl GameSettings for Settings {
+    type Raw = RawSettings;
 
-    pub fn validate(&self) -> Result<(), SetupError> {
-        Self::FIELD_WIDTH.check(self.field_width)?;
-        Self::FIELD_HEIGHT.check(self.field_height)
+    fn parse(raw: RawSettings) -> Result<Self, SettingsError> {
+        Ok(Self {
+            field_width: FieldWidth::new(raw.field_width)
+                .map_err(SettingsError::at("field_width"))?,
+            field_height: FieldHeight::new(raw.field_height)
+                .map_err(SettingsError::at("field_height"))?,
+        })
     }
 
-    /// Bounds of every numeric setting; the only list the UI reads (see
-    /// [`mg_core::Game::setting_ranges`]).
-    pub fn ranges(&self) -> Vec<SettingRange> {
-        vec![Self::FIELD_WIDTH, Self::FIELD_HEIGHT]
+    fn to_raw(&self) -> RawSettings {
+        RawSettings {
+            field_width: self.field_width.get(),
+            field_height: self.field_height.get(),
+        }
+    }
+
+    fn ranges(_raw: &RawSettings) -> Vec<SettingRange> {
+        vec![
+            FieldWidth::range("field_width"),
+            FieldHeight::range("field_height"),
+        ]
     }
 }

@@ -4,8 +4,8 @@ use mg_core::{BotSeat, CoreRng, HasBots, PlayerKind, PlayerSpec, Slot};
 use super::support::field_settings;
 use crate::model::{CellContent, Grid, SeatState};
 use crate::{
-    BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, INPUT_BUFFER, START_LENGTH,
-    Settings, Snake, WallCollisionMode,
+    BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, INPUT_BUFFER, RawSettings,
+    START_LENGTH, Snake, WallCollisionMode,
 };
 
 use DeadSnakeBehavior::{Disappear, StayOnField};
@@ -14,8 +14,8 @@ use WallCollisionMode::{Death, WrapAround};
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
 const BOT: PlayerSpec = PlayerSpec::BOT;
 
-fn with_food(settings: Settings, max_food_count: u32, food_spawn_permille: u32) -> Settings {
-    Settings {
+fn with_food(settings: RawSettings, max_food_count: u32, food_spawn_permille: u32) -> RawSettings {
+    RawSettings {
         max_food_count,
         food_spawn_permille,
         ..settings
@@ -38,7 +38,7 @@ fn alternating(humans: usize, bots: usize) -> Vec<PlayerSpec> {
 impl Conformance for Snake {
     fn sample_setups() -> Vec<Setup<Self>> {
         vec![
-            Setup::new(Settings::default(), vec![HUMAN]),
+            Setup::new(RawSettings::default(), vec![HUMAN]),
             Setup::new(field_settings(10, 10, Death, Disappear), vec![HUMAN]),
             Setup::new(
                 with_food(field_settings(100, 100, WrapAround, StayOnField), 50, 1000),
@@ -71,7 +71,7 @@ impl Conformance for Snake {
                 vec![BOT, BOT, BOT],
             ),
             Setup::new(
-                Settings {
+                RawSettings {
                     tick_interval_ms: 50,
                     ..field_settings(10, 10, WrapAround, Disappear)
                 },
@@ -81,32 +81,32 @@ impl Conformance for Snake {
     }
 
     fn invalid_setups() -> Vec<Setup<Self>> {
-        let valid = Settings::default();
+        let valid = RawSettings::default();
         let mut setups = Vec::new();
         for value in [0, 9, 101, u32::MAX] {
-            setups.push(Settings {
+            setups.push(RawSettings {
                 field_width: value,
                 ..valid
             });
-            setups.push(Settings {
+            setups.push(RawSettings {
                 field_height: value,
                 ..valid
             });
         }
         for value in [0, 51, u32::MAX] {
-            setups.push(Settings {
+            setups.push(RawSettings {
                 max_food_count: value,
                 ..valid
             });
         }
         for value in [0, 1001, u32::MAX] {
-            setups.push(Settings {
+            setups.push(RawSettings {
                 food_spawn_permille: value,
                 ..valid
             });
         }
         for value in [0, 49, 5001, u32::MAX] {
-            setups.push(Settings {
+            setups.push(RawSettings {
                 tick_interval_ms: value,
                 ..valid
             });

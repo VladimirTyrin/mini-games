@@ -1,6 +1,6 @@
 use mg_core::{Game, PlayerSpec, Slot, Viewer};
 use mg_stack_attack::{
-    Column, Command, Direction, PatternId, Settings, Side, StackAttack, WorldEvent,
+    Column, Command, Direction, PatternId, RawSettings, Settings, Side, StackAttack, WorldEvent,
 };
 
 use crate::proto;
@@ -37,7 +37,7 @@ fn move_command(direction: i32) -> proto::GameCommand {
 
 #[test]
 fn settings_round_trip() {
-    let settings = Settings {
+    let settings = RawSettings {
         field_width: 20,
         field_height: 12,
     };

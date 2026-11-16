@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -201,7 +201,6 @@ impl Game for NumbersMatch {
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        settings.validate()?;
         SetupError::check_player_count(
             players.len(),
             Self::INFO.min_players,
@@ -216,7 +215,7 @@ impl Game for NumbersMatch {
             settings: *settings,
             board: Board::default(),
             phase: Phase::Dealing,
-            refills_left: settings.refills,
+            refills_left: settings.refills.get(),
             hints_left: match settings.hint_mode {
                 HintMode::Limited => HintsLeft::Count(LIMITED_INITIAL_HINTS),
                 HintMode::Unlimited => HintsLeft::Unlimited,
@@ -226,10 +225,6 @@ impl Game for NumbersMatch {
             last_action: None,
             stats: Stats::default(),
         })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
     }
 
     fn clock(&self) -> Clock {
@@ -327,7 +322,7 @@ impl Game for NumbersMatch {
             HintMode::Unlimited => 1,
             HintMode::Disabled => 2,
         });
-        hasher.u32(self.settings.refills);
+        hasher.u32(self.settings.refills.get());
         // Batches only colour the cells; leaving them out keeps the hash about the rules.
         hasher.length(self.board.cells().len());
         for cell in self.board.cells() {

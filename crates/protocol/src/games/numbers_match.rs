@@ -1,6 +1,6 @@
 use mg_numbers_match::{
     Batch, COLUMNS, Cell, CellIndex, CellPair, CellValue, Command, Hint, HintMode, HintsLeft,
-    LastAction, LossReason, NumbersMatch, Phase, Settings, Stats, View, WorldEvent,
+    LastAction, LossReason, NumbersMatch, Phase, RawSettings, Stats, View, WorldEvent,
 };
 
 use crate::proto;
@@ -12,19 +12,18 @@ use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
 
 impl WireGame for NumbersMatch {
-    /// The refill range is a game rule, checked by `Game::new`.
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         let settings = match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
             proto::game_settings::Game::NumbersMatch(settings) => settings,
             _ => return Err(WireError::WrongGame),
         };
-        Ok(Settings {
+        Ok(RawSettings {
             hint_mode: hint_mode_from_wire(settings.hint_mode)?,
             refills: settings.refills,
         })
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         proto::GameSettings {
             game: Some(proto::game_settings::Game::NumbersMatch(
                 proto::NumbersMatchSettings {

@@ -1,79 +1,86 @@
-use mg_core::{SettingRange, SetupError};
+use mg_core::{Capped, GameSettings, SettingRange, SettingsError};
 
-use crate::settings::{DeadSnakeBehavior, WallCollisionMode};
+use crate::settings::{DeadSnakeBehavior, RawSettings, WallCollisionMode};
 
-pub const MIN_FIELD_SIZE: u32 = 10;
-pub const MAX_FIELD_SIZE: u32 = 100;
-pub const MIN_TICK_MS: u32 = 50;
-pub const MAX_TICK_MS: u32 = 5000;
-pub const MIN_FOOD: u32 = 1;
-pub const MAX_FOOD: u32 = 50;
-pub const MIN_FOOD_PERMILLE: u32 = 1;
-/// 1000 per mille: food spawns every tick while below the cap.
-pub const MAX_FOOD_PERMILLE: u32 = 1000;
+pub type FieldSize = Capped<10, 100>;
+pub type FoodCount = Capped<1, 50>;
+/// Chance per tick, in 1/1000, that one food item spawns while below the food cap; 1000 spawns
+/// every tick.
+pub type FoodSpawnPermille = Capped<1, 1000>;
+pub type TickIntervalMs = Capped<50, 5000>;
+
 pub const MIN_SEATS: u8 = 1;
 pub const MAX_SEATS: u8 = 10;
 
 // Start positions put every seat in its own column (see `start_body`).
-const _: () = assert!(MIN_FIELD_SIZE >= MAX_SEATS as u32);
+const _: () = assert!(FieldSize::MIN >= MAX_SEATS as u32);
 
-/// Raw lobby settings; [`mg_core::Game::new`] validates every field against the limits above.
+/// Lobby settings, valid by construction (see [`GameSettings::parse`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Settings {
-    pub field_width: u32,
-    pub field_height: u32,
+    pub field_width: FieldSize,
+    pub field_height: FieldSize,
     pub wall_collision_mode: WallCollisionMode,
     pub dead_snake_behavior: DeadSnakeBehavior,
-    pub max_food_count: u32,
-    /// Chance per tick, in 1/1000, that one food item spawns while below `max_food_count`.
-    pub food_spawn_permille: u32,
-    pub tick_interval_ms: u32,
+    pub max_food_count: FoodCount,
+    pub food_spawn_permille: FoodSpawnPermille,
+    pub tick_interval_ms: TickIntervalMs,
 }
 
 impl Default for Settings {
     /// Mirrors the web client's `getDefaultSnakeSettings`.
     fn default() -> Self {
         Self {
-            field_width: 15,
-            field_height: 15,
+            field_width: FieldSize::constant::<15>(),
+            field_height: FieldSize::constant::<15>(),
             wall_collision_mode: WallCollisionMode::WrapAround,
             dead_snake_behavior: DeadSnakeBehavior::Disappear,
-            max_food_count: 1,
-            food_spawn_permille: 1000,
-            tick_interval_ms: 200,
+            max_food_count: FoodCount::constant::<1>(),
+            food_spawn_permille: FoodSpawnPermille::constant::<1000>(),
+            tick_interval_ms: TickIntervalMs::constant::<200>(),
         }
     }
 }
 
-impl Settings {
-    pub const FIELD_WIDTH: SettingRange =
-        SettingRange::new("field_width", MIN_FIELD_SIZE, MAX_FIELD_SIZE);
-    pub const FIELD_HEIGHT: SettingRange =
-        SettingRange::new("field_height", MIN_FIELD_SIZE, MAX_FIELD_SIZE);
-    pub const MAX_FOOD_COUNT: SettingRange =
-        SettingRange::new("max_food_count", MIN_FOOD, MAX_FOOD);
-    pub const FOOD_SPAWN_PERMILLE: SettingRange =
-        SettingRange::new("food_spawn_permille", MIN_FOOD_PERMILLE, MAX_FOOD_PERMILLE);
-    pub const TICK_INTERVAL_MS: SettingRange =
-        SettingRange::new("tick_interval_ms", MIN_TICK_MS, MAX_TICK_MS);
+impl GameSettings for Settings {
+    type Raw = RawSettings;
 
-    pub fn validate(&self) -> Result<(), SetupError> {
-        Self::FIELD_WIDTH.check(self.field_width)?;
-        Self::FIELD_HEIGHT.check(self.field_height)?;
-        Self::MAX_FOOD_COUNT.check(self.max_food_count)?;
-        Self::FOOD_SPAWN_PERMILLE.check(self.food_spawn_permille)?;
-        Self::TICK_INTERVAL_MS.check(self.tick_interval_ms)
+    fn parse(raw: RawSettings) -> Result<Self, SettingsError> {
+        Ok(Self {
+            field_width: FieldSize::new(raw.field_width)
+                .map_err(SettingsError::at("field_width"))?,
+            field_height: FieldSize::new(raw.field_height)
+                .map_err(SettingsError::at("field_height"))?,
+            wall_collision_mode: raw.wall_collision_mode,
+            dead_snake_behavior: raw.dead_snake_behavior,
+            max_food_count: FoodCount::new(raw.max_food_count)
+                .map_err(SettingsError::at("max_food_count"))?,
+            food_spawn_permille: FoodSpawnPermille::new(raw.food_spawn_permille)
+                .map_err(SettingsError::at("food_spawn_permille"))?,
+            tick_interval_ms: TickIntervalMs::new(raw.tick_interval_ms)
+                .map_err(SettingsError::at("tick_interval_ms"))?,
+        })
     }
 
-    /// Bounds of every numeric setting; the only list the UI reads (see
-    /// [`mg_core::Game::setting_ranges`]).
-    pub fn ranges(&self) -> Vec<SettingRange> {
+    fn to_raw(&self) -> RawSettings {
+        RawSettings {
+            field_width: self.field_width.get(),
+            field_height: self.field_height.get(),
+            wall_collision_mode: self.wall_collision_mode,
+            dead_snake_behavior: self.dead_snake_behavior,
+            max_food_count: self.max_food_count.get(),
+            food_spawn_permille: self.food_spawn_permille.get(),
+            tick_interval_ms: self.tick_interval_ms.get(),
+        }
+    }
+
+    fn ranges(_raw: &RawSettings) -> Vec<SettingRange> {
         vec![
-            Self::FIELD_WIDTH,
-            Self::FIELD_HEIGHT,
-            Self::MAX_FOOD_COUNT,
-            Self::FOOD_SPAWN_PERMILLE,
-            Self::TICK_INTERVAL_MS,
+            FieldSize::range("field_width"),
+            FieldSize::range("field_height"),
+            FoodCount::range("max_food_count"),
+            FoodSpawnPermille::range("food_spawn_permille"),
+            TickIntervalMs::range("tick_interval_ms"),
         ]
     }
 }

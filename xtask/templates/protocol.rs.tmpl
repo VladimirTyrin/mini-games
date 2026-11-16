@@ -1,4 +1,4 @@
-use mg_{{snake_crate}}::{Command, Settings, View, WorldEvent, {{Pascal}}};
+use mg_{{snake_crate}}::{Command, RawSettings, View, WorldEvent, {{Pascal}}};
 
 use crate::proto::{
     game_command, game_settings, game_view, game_world_event, {{snake}}_command, {{snake}}_world_event,
@@ -6,14 +6,15 @@ use crate::proto::{
 use crate::{WireError, WireGame, proto, slot_from_wire, slot_to_wire};
 
 impl WireGame for {{Pascal}} {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    /// Shape only: the game's `Settings::parse` checks the values.
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
-            game_settings::Game::{{PascalField}}(settings) => Ok(Settings { target: settings.target }),
+            game_settings::Game::{{PascalField}}(settings) => Ok(RawSettings { target: settings.target }),
             _ => Err(WireError::WrongGame),
         }
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         proto::GameSettings {
             game: Some(game_settings::Game::{{PascalField}}(proto::{{Pascal}}Settings { target: settings.target })),
         }

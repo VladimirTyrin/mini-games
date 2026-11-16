@@ -1,4 +1,4 @@
-use mg_core::{PlayerSpec, SettingRange, SetupError};
+use mg_core::{PlayerSpec, SettingRange, SettingsError};
 use mg_protocol::proto;
 use mg_protocol::proto::game_settings::Game as WireSettings;
 use mg_registry::{CreateError, GameKind, create_mirror, default_settings, setting_ranges};
@@ -29,7 +29,7 @@ fn rejected_field(kind: GameKind, settings: &proto::GameSettings) -> Option<&'st
     let players = vec![PlayerSpec::HUMAN; usize::from(kind.info().min_players)];
     match create_mirror(settings, &players) {
         Ok(_) => None,
-        Err(CreateError::Setup(SetupError::InvalidSetting { field, .. })) => Some(field),
+        Err(CreateError::Settings(SettingsError { field, .. })) => Some(field),
         Err(other) => panic!("unexpected setup error: {other}"),
     }
 }

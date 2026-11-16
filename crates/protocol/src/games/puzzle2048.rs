@@ -1,5 +1,5 @@
 use mg_puzzle2048::{
-    Cell, Command, Direction, MergeSource, Phase, Puzzle2048, Settings, SpawnValue, Tile,
+    Cell, Command, Direction, MergeSource, Phase, Puzzle2048, RawSettings, SpawnValue, Tile,
     TileOrigin, View, WorldEvent,
 };
 
@@ -8,9 +8,9 @@ use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
 
 impl WireGame for Puzzle2048 {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
-            proto::game_settings::Game::Puzzle2048(settings) => Ok(Settings {
+            proto::game_settings::Game::Puzzle2048(settings) => Ok(RawSettings {
                 width: settings.width,
                 height: settings.height,
                 target: settings.target,
@@ -19,7 +19,7 @@ impl WireGame for Puzzle2048 {
         }
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         proto::GameSettings {
             game: Some(proto::game_settings::Game::Puzzle2048(
                 proto::Puzzle2048Settings {

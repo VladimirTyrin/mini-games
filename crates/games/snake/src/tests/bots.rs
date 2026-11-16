@@ -8,7 +8,7 @@ use WallCollisionMode::{Death, WrapAround};
 
 fn game(wall: WallCollisionMode, seats: usize) -> Snake {
     new_game(
-        crate::Settings {
+        crate::RawSettings {
             max_food_count: 2,
             ..field_settings(20, 20, wall, DeadSnakeBehavior::Disappear)
         },
@@ -101,7 +101,7 @@ fn boxed_in_bots_keep_their_direction() {
 #[test]
 fn bot_commands_are_always_accepted() {
     let mut game = new_game(
-        crate::Settings {
+        crate::RawSettings {
             max_food_count: 5,
             ..field_settings(16, 12, WrapAround, DeadSnakeBehavior::StayOnField)
         },

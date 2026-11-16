@@ -5,7 +5,7 @@
 use std::ptr;
 
 use mg_protocol::{WireGame, proto};
-use mg_tictactoe::{Command, FirstPlayerMode, Point, Settings, TicTacToe};
+use mg_tictactoe::{Command, FirstPlayerMode, Point, RawSettings, TicTacToe};
 use mini_games::*;
 use prost::Message;
 
@@ -38,7 +38,7 @@ fn empty_buffer() -> MgBuffer {
 }
 
 fn header(seats: Vec<proto::MatchSeat>) -> Vec<u8> {
-    let settings = TicTacToe::settings_to_wire(&Settings {
+    let settings = TicTacToe::settings_to_wire(&RawSettings {
         field_width: 3,
         field_height: 3,
         win_count: 3,

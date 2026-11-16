@@ -1,6 +1,6 @@
 use mg_stack_attack::{
     CargoBox, Cell, Column, Command, Crane, CraneState, Direction, EndReason, GameEvent, PatternId,
-    Settings, Side, StackAttack, View, WorkerState, WorkerStatus, WorkerView, WorldEvent,
+    RawSettings, Side, StackAttack, View, WorkerState, WorkerStatus, WorkerView, WorldEvent,
 };
 
 use crate::proto;
@@ -11,9 +11,9 @@ use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
 
 impl WireGame for StackAttack {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
-            game_settings::Game::StackAttack(settings) => Ok(Settings {
+            game_settings::Game::StackAttack(settings) => Ok(RawSettings {
                 field_width: settings.field_width,
                 field_height: settings.field_height,
             }),
@@ -21,7 +21,7 @@ impl WireGame for StackAttack {
         }
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         proto::GameSettings {
             game: Some(game_settings::Game::StackAttack(
                 proto::StackAttackSettings {

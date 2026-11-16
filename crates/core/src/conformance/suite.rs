@@ -6,6 +6,7 @@ use super::setup::Setup;
 use crate::authority::Authority;
 use crate::awaiting::Awaiting;
 use crate::compact_log::CompactLog;
+use crate::game_settings::GameSettings;
 use crate::matcher::Match;
 use crate::player_spec::PlayerSpec;
 use crate::rng::CoreRng;
@@ -32,7 +33,9 @@ pub fn run_all<G: Conformance>(seeds: u64) {
 
 pub fn rejects_invalid_setups<G: Conformance>() {
     for (index, setup) in G::invalid_setups().iter().enumerate() {
-        if G::new(&setup.settings, &setup.players).is_ok() {
+        let accepted = G::Settings::parse(setup.settings.clone())
+            .is_ok_and(|settings| G::new(&settings, &setup.players).is_ok());
+        if accepted {
             panic!(
                 "{}: invalid setup #{index} was accepted: {setup:?}",
                 G::INFO.id
@@ -53,10 +56,18 @@ pub fn scripted_hash<G: Conformance>(setup: &Setup<G>, seed: u64) -> u64 {
 /// Returns the final state hash.
 pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, String> {
     let players: &[PlayerSpec] = &setup.players;
-    let mut authority = Authority::<G>::new(&setup.settings, players, seed, G::bots_for(players))
+    let settings = G::Settings::parse(setup.settings.clone())
+        .map_err(|e| format!("sample settings rejected: {e}"))?;
+    if settings.to_raw() != setup.settings {
+        return Err(format!(
+            "settings do not round-trip: {:?} became {:?}",
+            setup.settings,
+            settings.to_raw()
+        ));
+    }
+    let mut authority = Authority::<G>::new(&settings, players, seed, G::bots_for(players))
         .map_err(|e| format!("sample setup rejected: {e}"))?;
-    let mut mirror =
-        Match::<G>::new(&setup.settings, players).map_err(|e| format!("mirror: {e}"))?;
+    let mut mirror = Match::<G>::new(&settings, players).map_err(|e| format!("mirror: {e}"))?;
     let mut fuzz = CoreRng::derive(seed, 0xF022);
     let humans: Vec<Slot> = Slot::all(players.len())
         .zip(players)
@@ -129,8 +140,7 @@ pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, Stri
         }
     }
 
-    let mut replay =
-        Match::<G>::new(&setup.settings, players).map_err(|e| format!("replay: {e}"))?;
+    let mut replay = Match::<G>::new(&settings, players).map_err(|e| format!("replay: {e}"))?;
     let log = CompactLog::new(
         authority.compact_log().to_vec(),
         authority.next_tick(),

@@ -1,20 +1,26 @@
-use mg_core::{Authority, Awaiting, BotSeat, Game, HasBots, Match, PlayerSpec, Slot, Viewer};
+use mg_core::{
+    Authority, Awaiting, BotSeat, Game, GameSettings, HasBots, Match, PlayerSpec, Slot, Viewer,
+};
 use mg_tictactoe::{
-    BotKind, Command, FirstPlayerMode, GameEnd, Mark, Point, Settings, TicTacToe, WinningLine,
-    WorldEvent,
+    BotKind, Command, FirstPlayerMode, GameEnd, Mark, Point, RawSettings, Settings, TicTacToe,
+    WinningLine, WorldEvent,
 };
 use prost::Message;
 
 use crate::proto::{self, TicTacToeEndReason, TicTacToeMark};
 use crate::{WireBots, WireError, WireGame, frame_from_wire, frame_to_wire};
 
-fn settings(first_player: FirstPlayerMode) -> Settings {
-    Settings {
+fn raw_settings(first_player: FirstPlayerMode) -> RawSettings {
+    RawSettings {
         field_width: 9,
         field_height: 7,
         win_count: 4,
         first_player,
     }
+}
+
+fn settings(first_player: FirstPlayerMode) -> Settings {
+    Settings::parse(raw_settings(first_player)).unwrap()
 }
 
 fn wire_settings(first_player: i32) -> proto::GameSettings {
@@ -51,8 +57,12 @@ fn tictactoe_view(view: &mg_tictactoe::View) -> proto::TicTacToeView {
 
 #[test]
 fn settings_round_trip() {
-    for first_player in [FirstPlayerMode::Random, FirstPlayerMode::Host] {
-        let original = settings(first_player);
+    for first_player in [
+        FirstPlayerMode::Random,
+        FirstPlayerMode::Host,
+        FirstPlayerMode::Guest,
+    ] {
+        let original = raw_settings(first_player);
         let wire = TicTacToe::settings_to_wire(&original);
         assert_eq!(TicTacToe::settings_from_wire(&wire), Ok(original));
     }
@@ -60,13 +70,16 @@ fn settings_round_trip() {
 
 #[test]
 fn out_of_range_sizes_reach_the_game_unchanged() {
-    let mut wire = TicTacToe::settings_to_wire(&Settings::default());
+    let mut wire = TicTacToe::settings_to_wire(&RawSettings::default());
     if let Some(proto::game_settings::Game::Tictactoe(settings)) = wire.game.as_mut() {
         settings.field_width = u32::MAX;
     }
     let settings = TicTacToe::settings_from_wire(&wire).unwrap();
     assert_eq!(settings.field_width, u32::MAX);
-    assert!(TicTacToe::new(&settings, &[PlayerSpec::HUMAN; 2]).is_err());
+    assert_eq!(
+        Settings::parse(settings).map_err(|error| error.field),
+        Err("field_width")
+    );
 }
 
 #[test]
@@ -295,8 +308,9 @@ fn view_reports_a_disconnect_and_an_unchosen_first_player() {
 /// Every sealed frame goes through the wire (binary protobuf, and protobuf JSON with the `json`
 /// feature) before a `Match` applies it, like on a real client.
 fn mirror_through_the_wire(first_player: FirstPlayerMode, players: [PlayerSpec; 2], seed: u64) {
-    let settings = settings(first_player);
-    let wire_settings = TicTacToe::settings_to_wire(&settings);
+    let raw = raw_settings(first_player);
+    let settings = Settings::parse(raw).unwrap();
+    let wire_settings = TicTacToe::settings_to_wire(&raw);
     let bots = Slot::all(2)
         .filter(|slot| !players[slot.index()].is_human())
         .map(|slot| BotSeat {
@@ -307,7 +321,7 @@ fn mirror_through_the_wire(first_player: FirstPlayerMode, players: [PlayerSpec; 
         .collect();
     let mut authority = Authority::<TicTacToe>::new(&settings, &players, seed, bots).unwrap();
     let mut mirror = Match::<TicTacToe>::new(
-        &TicTacToe::settings_from_wire(&wire_settings).unwrap(),
+        &Settings::parse(TicTacToe::settings_from_wire(&wire_settings).unwrap()).unwrap(),
         &players,
     )
     .unwrap();
@@ -370,7 +384,7 @@ fn matches_replay_identically_through_the_wire() {
 #[cfg(feature = "json")]
 #[test]
 fn json_uses_enum_names() {
-    let json = serde_json::to_value(TicTacToe::settings_to_wire(&Settings::default())).unwrap();
+    let json = serde_json::to_value(TicTacToe::settings_to_wire(&RawSettings::default())).unwrap();
     assert_eq!(
         json["tictactoe"]["firstPlayer"],
         "TIC_TAC_TOE_FIRST_PLAYER_MODE_RANDOM"

@@ -5,4 +5,6 @@ pub enum FirstPlayerMode {
     Random,
     /// The lobby host (slot 0) plays X and moves first.
     Host,
+    /// The other seat (slot 1) plays X and moves first.
+    Guest,
 }

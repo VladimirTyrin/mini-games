@@ -3,7 +3,7 @@ use mg_core::{CoreRng, PlayerSpec, Slot};
 
 use crate::{
     COLUMNS, Cell, CellIndex, CellPair, Command, Hint, HintMode, HintsLeft,
-    LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, MAX_REFILLS, NumbersMatch, Phase, Settings,
+    LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, NumbersMatch, Phase, RawSettings, Refills,
 };
 
 const HINT_MODES: [HintMode; 3] = [HintMode::Limited, HintMode::Unlimited, HintMode::Disabled];
@@ -13,24 +13,24 @@ impl Conformance for NumbersMatch {
         HINT_MODES
             .iter()
             .flat_map(|&hint_mode| {
-                (0..=MAX_REFILLS).map(move |refills| {
-                    Setup::new(Settings { hint_mode, refills }, vec![PlayerSpec::HUMAN])
+                (0..=Refills::MAX).map(move |refills| {
+                    Setup::new(RawSettings { hint_mode, refills }, vec![PlayerSpec::HUMAN])
                 })
             })
             .collect()
     }
 
     fn invalid_setups() -> Vec<Setup<Self>> {
-        let too_many_refills = |refills| Settings {
+        let too_many_refills = |refills| RawSettings {
             refills,
-            ..Settings::default()
+            ..RawSettings::default()
         };
         vec![
-            Setup::new(too_many_refills(MAX_REFILLS + 1), vec![PlayerSpec::HUMAN]),
+            Setup::new(too_many_refills(Refills::MAX + 1), vec![PlayerSpec::HUMAN]),
             Setup::new(too_many_refills(u32::MAX), vec![PlayerSpec::HUMAN]),
-            Setup::new(Settings::default(), vec![]),
-            Setup::new(Settings::default(), vec![PlayerSpec::HUMAN; 2]),
-            Setup::new(Settings::default(), vec![PlayerSpec::BOT]),
+            Setup::new(RawSettings::default(), vec![]),
+            Setup::new(RawSettings::default(), vec![PlayerSpec::HUMAN; 2]),
+            Setup::new(RawSettings::default(), vec![PlayerSpec::BOT]),
         ]
     }
 
@@ -80,7 +80,7 @@ impl Conformance for NumbersMatch {
             return Err("empty cell before a value".into());
         }
         let stats = self.stats();
-        if self.refills_left() + stats.refills_used != self.settings().refills {
+        if self.refills_left() + stats.refills_used != self.settings().refills.get() {
             return Err("refill counters out of sync".into());
         }
         let expected_hints = match self.settings().hint_mode {
@@ -118,7 +118,7 @@ fn passes_conformance() {
 
 #[test]
 fn scripted_hash_is_pinned() {
-    let setup = Setup::new(Settings::default(), vec![PlayerSpec::HUMAN]);
+    let setup = Setup::new(RawSettings::default(), vec![PlayerSpec::HUMAN]);
     assert_eq!(
         conformance::scripted_hash::<NumbersMatch>(&setup, 42),
         0x4C1B_E1E4_FB45_5D7E

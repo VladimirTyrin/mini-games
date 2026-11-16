@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -41,17 +41,13 @@ impl Game for {{Pascal}} {
         cooperative: false,
     };
 
+    /// The settings are already parsed; only what depends on the players is left to check.
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        Settings::TARGET.check(settings.target)?;
         SetupError::check_player_count(players.len(), Self::INFO.min_players, Self::INFO.max_players)?;
         if players.iter().any(|player| !player.is_human()) {
             return Err(SetupError::InvalidPlayers("this game has no bots".into()));
         }
-        Ok(Self { target: settings.target, total: 0, seats: Seats::all_in_play(players.len()), turn: None, winner: None })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
+        Ok(Self { target: settings.target.get(), total: 0, seats: Seats::all_in_play(players.len()), turn: None, winner: None })
     }
 
     fn clock(&self) -> Clock {

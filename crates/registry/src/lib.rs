@@ -42,8 +42,8 @@ pub use seat_spec::SeatSpec;
 pub use seats_error::SeatsError;
 pub use submit_error::SubmitError;
 
-use mg_core::PlayerSpec;
-use mg_protocol::{WireError, proto};
+use mg_core::{Game, GameSettings, PlayerSpec};
+use mg_protocol::{WireError, WireGame, proto};
 
 use games::games;
 
@@ -120,21 +120,23 @@ macro_rules! define_dispatch {
             }
         }
 
-        /// Bounds of the numeric settings as the game enforces them for `settings`.
+        /// Bounds of the numeric settings as the game enforces them for `settings`, which may be
+        /// invalid (a form being edited); only their shape must be right.
         pub fn setting_ranges(
             settings: &proto::GameSettings,
         ) -> Result<Vec<mg_core::SettingRange>, WireError> {
-            use mg_core::Game;
-            use mg_protocol::WireGame;
             match GameKind::of_settings(settings)? {
-                $(GameKind::$kind => Ok(<$game>::setting_ranges(&<$game>::settings_from_wire(settings)?)),)*
+                $(GameKind::$kind => Ok(<<$game as Game>::Settings as GameSettings>::ranges(
+                    &<$game>::settings_from_wire(settings)?,
+                )),)*
             }
         }
 
         pub fn default_settings(kind: GameKind) -> proto::GameSettings {
-            use mg_protocol::WireGame;
             match kind {
-                $(GameKind::$kind => <$game>::settings_to_wire(&Default::default()),)*
+                $(GameKind::$kind => <$game>::settings_to_wire(
+                    &<<$game as Game>::Settings>::default().to_raw(),
+                ),)*
             }
         }
     };
@@ -154,6 +156,14 @@ pub fn create_mirror_from_header(
     header: &proto::MatchHeader,
 ) -> Result<Box<dyn DynMirror>, CreateError> {
     create_mirror(settings_of(header)?, &players_from_header(header)?)
+}
+
+/// Wire settings to the game's parsed settings: shape errors as [`CreateError::Wire`], rule
+/// errors (ranges included) as [`CreateError::Settings`].
+pub fn parse_settings<G: WireGame>(
+    settings: &proto::GameSettings,
+) -> Result<G::Settings, CreateError> {
+    Ok(G::Settings::parse(G::settings_from_wire(settings)?)?)
 }
 
 fn settings_of(header: &proto::MatchHeader) -> Result<&proto::GameSettings, WireError> {

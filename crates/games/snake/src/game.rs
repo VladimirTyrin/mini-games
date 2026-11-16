@@ -1,12 +1,12 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerKind,
-    PlayerSpec, SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    PlayerSpec, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{CellContent, Direction, Field, Grid, Point, SeatState, StepCount};
 use crate::rules::{DeathReason, GameEnd, start_body};
-use crate::settings::{DeadSnakeBehavior, MAX_FOOD_PERMILLE, MAX_SEATS, MIN_SEATS, Settings};
+use crate::settings::{DeadSnakeBehavior, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, Settings};
 use crate::view::{SnakeView, View};
 
 /// Multiplayer real-time Snake; all heads move at once every tick.
@@ -97,15 +97,13 @@ impl Game for Snake {
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        settings.validate()?;
         SetupError::check_player_count(players.len(), MIN_SEATS, MAX_SEATS)?;
-        let width = u16::try_from(settings.field_width)
-            .map_err(|error| SetupError::setting("field_width", error.to_string()))?;
-        let height = u16::try_from(settings.field_height)
-            .map_err(|error| SetupError::setting("field_height", error.to_string()))?;
-        let max_food_count = u8::try_from(settings.max_food_count)
-            .map_err(|error| SetupError::setting("max_food_count", error.to_string()))?;
-        let field = Field::new(width, height, settings.wall_collision_mode);
+        let max_food_count = settings.max_food_count.to_u8();
+        let field = Field::new(
+            settings.field_width.to_u16(),
+            settings.field_height.to_u16(),
+            settings.wall_collision_mode,
+        );
 
         let mut grid = Grid::new(field);
         let mut seats = Vec::with_capacity(players.len());
@@ -128,18 +126,14 @@ impl Game for Snake {
             field,
             dead_snake_behavior: settings.dead_snake_behavior,
             max_food_count,
-            food_spawn_permille: settings.food_spawn_permille,
-            tick_interval_ms: settings.tick_interval_ms,
+            food_spawn_permille: settings.food_spawn_permille.get(),
+            tick_interval_ms: settings.tick_interval_ms.get(),
             seats,
             food: Vec::with_capacity(usize::from(max_food_count)),
             grid,
             steps: StepCount::ZERO,
             end: None,
         })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
     }
 
     fn clock(&self) -> Clock {
@@ -168,7 +162,7 @@ impl Game for Snake {
         if !self.is_running() || self.food.len() >= usize::from(self.max_food_count) {
             return Vec::new();
         }
-        if !rng.chance(self.food_spawn_permille, MAX_FOOD_PERMILLE) {
+        if !rng.chance(self.food_spawn_permille, FoodSpawnPermille::MAX) {
             return Vec::new();
         }
         rng.index(self.grid.empty_cell_count())

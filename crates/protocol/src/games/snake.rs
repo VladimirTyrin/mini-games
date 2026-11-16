@@ -1,7 +1,7 @@
 use mg_core::PlayerKind;
 use mg_snake::{
-    BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, GameEnd, Point, Settings, Snake,
-    SnakeView, View, WallCollisionMode, WorldEvent,
+    BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, GameEnd, Point, RawSettings,
+    Snake, SnakeView, View, WallCollisionMode, WorldEvent,
 };
 
 use crate::proto;
@@ -10,12 +10,12 @@ use crate::wire_error::WireError;
 use crate::wire_game::{WireBots, WireGame};
 
 impl WireGame for Snake {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         let settings = match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
             proto::game_settings::Game::Snake(settings) => settings,
             _ => return Err(WireError::WrongGame),
         };
-        Ok(Settings {
+        Ok(RawSettings {
             field_width: settings.field_width,
             field_height: settings.field_height,
             wall_collision_mode: wall_collision_mode_from_wire(settings.wall_collision_mode)?,
@@ -26,7 +26,7 @@ impl WireGame for Snake {
         })
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         proto::GameSettings {
             game: Some(proto::game_settings::Game::Snake(proto::SnakeSettings {
                 field_width: settings.field_width,

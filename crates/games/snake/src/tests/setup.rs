@@ -1,35 +1,47 @@
-use mg_core::{Awaiting, Clock, Game, PlayerSpec, SetupError, Status, Viewer};
+use mg_core::{
+    Awaiting, Clock, Game, GameSettings, OutOfRange, PlayerSpec, SettingProblem, SettingsError,
+    SetupError, Status, Viewer,
+};
 
 use super::support::{field_settings, humans, new_game, point};
 use crate::{
-    DeadSnakeBehavior, Direction, MAX_SEATS, START_LENGTH, Settings, Snake, WallCollisionMode,
+    DeadSnakeBehavior, Direction, MAX_SEATS, RawSettings, START_LENGTH, Settings, Snake,
+    WallCollisionMode,
 };
 
 #[test]
 fn defaults_match_the_web_client() {
-    let settings = Settings::default();
-    assert_eq!((settings.field_width, settings.field_height), (15, 15));
-    assert_eq!(settings.wall_collision_mode, WallCollisionMode::WrapAround);
-    assert_eq!(settings.dead_snake_behavior, DeadSnakeBehavior::Disappear);
-    assert_eq!(settings.max_food_count, 1);
-    assert_eq!(settings.food_spawn_permille, 1000);
-    assert_eq!(settings.tick_interval_ms, 200);
+    assert_eq!(
+        RawSettings::default(),
+        RawSettings {
+            field_width: 15,
+            field_height: 15,
+            wall_collision_mode: WallCollisionMode::WrapAround,
+            dead_snake_behavior: DeadSnakeBehavior::Disappear,
+            max_food_count: 1,
+            food_spawn_permille: 1000,
+            tick_interval_ms: 200,
+        }
+    );
 }
 
 #[test]
 fn out_of_range_settings_name_the_field() {
-    let settings = Settings {
+    let settings = RawSettings {
         food_spawn_permille: 1001,
-        ..Settings::default()
+        ..RawSettings::default()
     };
-    let error = Snake::new(&settings, &humans(1)).unwrap_err();
-    assert!(matches!(
-        error,
-        SetupError::InvalidSetting {
+    assert_eq!(
+        Settings::parse(settings),
+        Err(SettingsError {
             field: "food_spawn_permille",
-            ..
-        }
-    ));
+            problem: SettingProblem::OutOfRange(OutOfRange {
+                value: 1001,
+                min: 1,
+                max: 1000
+            }),
+        })
+    );
     let error = Snake::new(&Settings::default(), &humans(11)).unwrap_err();
     assert!(matches!(error, SetupError::PlayerCount { got: 11, .. }));
 }
@@ -89,7 +101,10 @@ fn ten_seats_on_the_narrowest_field_get_one_column_each() {
 
 #[test]
 fn fresh_game_is_realtime_and_waits_for_everyone() {
-    let game = new_game(Settings::default(), &[PlayerSpec::HUMAN, PlayerSpec::BOT]);
+    let game = new_game(
+        RawSettings::default(),
+        &[PlayerSpec::HUMAN, PlayerSpec::BOT],
+    );
     assert_eq!(game.clock(), Clock::Realtime { tick_ms: 200 });
     assert_eq!(game.awaiting(), Awaiting::Simultaneous);
     assert_eq!(game.status(), Status::InProgress);

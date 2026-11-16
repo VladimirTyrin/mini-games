@@ -1,5 +1,5 @@
 use mg_tictactoe::{
-    BotKind, Command, FirstPlayerMode, GameEnd, Mark, PLAYERS, Point, Settings, TicTacToe, View,
+    BotKind, Command, FirstPlayerMode, GameEnd, Mark, PLAYERS, Point, RawSettings, TicTacToe, View,
     WinningLine, WorldEvent,
 };
 
@@ -10,7 +10,7 @@ use crate::wire_error::WireError;
 use crate::wire_game::{WireBots, WireGame};
 
 impl WireGame for TicTacToe {
-    fn settings_from_wire(settings: &proto::GameSettings) -> Result<Settings, WireError> {
+    fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
         let settings = match settings.game.as_ref().ok_or(WireError::Missing("game"))? {
             proto::game_settings::Game::Tictactoe(settings) => settings,
             _ => return Err(WireError::WrongGame),
@@ -18,12 +18,13 @@ impl WireGame for TicTacToe {
         let first_player = match TicTacToeFirstPlayerMode::try_from(settings.first_player) {
             Ok(TicTacToeFirstPlayerMode::Random) => FirstPlayerMode::Random,
             Ok(TicTacToeFirstPlayerMode::Host) => FirstPlayerMode::Host,
+            Ok(TicTacToeFirstPlayerMode::Guest) => FirstPlayerMode::Guest,
             Ok(TicTacToeFirstPlayerMode::Unspecified) => {
                 return Err(WireError::Missing("first_player"));
             }
             Err(_) => return Err(WireError::UnknownEnumValue("first_player")),
         };
-        Ok(Settings {
+        Ok(RawSettings {
             field_width: settings.field_width,
             field_height: settings.field_height,
             win_count: settings.win_count,
@@ -31,10 +32,11 @@ impl WireGame for TicTacToe {
         })
     }
 
-    fn settings_to_wire(settings: &Settings) -> proto::GameSettings {
+    fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
         let first_player = match settings.first_player {
             FirstPlayerMode::Random => TicTacToeFirstPlayerMode::Random,
             FirstPlayerMode::Host => TicTacToeFirstPlayerMode::Host,
+            FirstPlayerMode::Guest => TicTacToeFirstPlayerMode::Guest,
         };
         proto::GameSettings {
             game: Some(proto::game_settings::Game::Tictactoe(

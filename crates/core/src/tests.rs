@@ -11,9 +11,40 @@ struct Race {
     winner: Option<Slot>,
 }
 
+type Target = Capped<1, 1000>;
+
 #[derive(Clone, Debug)]
 struct RaceSettings {
+    target: Target,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct RawRaceSettings {
     target: u32,
+}
+
+impl GameSettings for RaceSettings {
+    type Raw = RawRaceSettings;
+
+    fn parse(raw: RawRaceSettings) -> Result<Self, SettingsError> {
+        Ok(Self {
+            target: Target::new(raw.target).map_err(SettingsError::at("target"))?,
+        })
+    }
+
+    fn to_raw(&self) -> RawRaceSettings {
+        RawRaceSettings {
+            target: self.target.get(),
+        }
+    }
+
+    fn ranges(_raw: &RawRaceSettings) -> Vec<SettingRange> {
+        vec![Target::range("target")]
+    }
+}
+
+fn race(target: u32) -> RaceSettings {
+    RaceSettings::parse(RawRaceSettings { target }).unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -21,8 +52,6 @@ struct Add(u32);
 
 #[derive(Clone, Debug, PartialEq)]
 struct FirstPlayer(Slot);
-
-const RACE_TARGET: SettingRange = SettingRange::new("target", 1, 1000);
 
 fn opponent(slot: Slot) -> Slot {
     Slot::new(1 - slot.get())
@@ -43,18 +72,13 @@ impl Game for Race {
     };
 
     fn new(settings: &RaceSettings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        RACE_TARGET.check(settings.target)?;
         SetupError::check_player_count(players.len(), 2, 2)?;
         Ok(Self {
-            target: settings.target,
+            target: settings.target.get(),
             totals: vec![0; 2],
             turn: None,
             winner: None,
         })
-    }
-
-    fn setting_ranges(_settings: &RaceSettings) -> Vec<SettingRange> {
-        vec![RACE_TARGET]
     }
 
     fn clock(&self) -> Clock {
@@ -157,15 +181,15 @@ impl Conformance for Race {
     fn sample_setups() -> Vec<Setup<Race>> {
         vec![
             Setup::new(
-                RaceSettings { target: 10 },
+                RawRaceSettings { target: 10 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
             Setup::new(
-                RaceSettings { target: 50 },
+                RawRaceSettings { target: 50 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::BOT],
             ),
             Setup::new(
-                RaceSettings { target: 1000 },
+                RawRaceSettings { target: 1000 },
                 vec![PlayerSpec::BOT, PlayerSpec::BOT],
             ),
         ]
@@ -174,14 +198,14 @@ impl Conformance for Race {
     fn invalid_setups() -> Vec<Setup<Race>> {
         vec![
             Setup::new(
-                RaceSettings { target: 0 },
+                RawRaceSettings { target: 0 },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
             Setup::new(
-                RaceSettings { target: u32::MAX },
+                RawRaceSettings { target: u32::MAX },
                 vec![PlayerSpec::HUMAN, PlayerSpec::HUMAN],
             ),
-            Setup::new(RaceSettings { target: 10 }, vec![PlayerSpec::HUMAN]),
+            Setup::new(RawRaceSettings { target: 10 }, vec![PlayerSpec::HUMAN]),
         ]
     }
 
@@ -209,10 +233,7 @@ impl Conformance for Race {
 }
 
 fn two_humans() -> (RaceSettings, [PlayerSpec; 2]) {
-    (
-        RaceSettings { target: 10 },
-        [PlayerSpec::HUMAN, PlayerSpec::HUMAN],
-    )
+    (race(10), [PlayerSpec::HUMAN, PlayerSpec::HUMAN])
 }
 
 #[test]
@@ -251,7 +272,7 @@ fn frames_must_be_sequential() {
 
 #[test]
 fn bot_seat_without_bot_is_rejected() {
-    let settings = RaceSettings { target: 10 };
+    let settings = race(10);
     let error = Authority::<Race>::new(&settings, &[PlayerSpec::HUMAN, PlayerSpec::BOT], 1, vec![])
         .unwrap_err();
     assert!(matches!(error, SetupError::InvalidPlayers(_)));
@@ -259,7 +280,7 @@ fn bot_seat_without_bot_is_rejected() {
 
 #[test]
 fn humans_cannot_command_bot_seats_or_after_drop() {
-    let settings = RaceSettings { target: 10 };
+    let settings = race(10);
     let players = [PlayerSpec::HUMAN, PlayerSpec::BOT];
     let mut authority =
         Authority::<Race>::new(&settings, &players, 3, Race::bots_for(&players)).unwrap();

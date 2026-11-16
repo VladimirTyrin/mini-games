@@ -3,6 +3,8 @@ use std::borrow::Cow;
 use mg_core::{Clock, CompactLog, Match, PlayerSpec, Status, Tick, Viewer};
 use mg_protocol::{WireGame, frame_from_wire, proto};
 
+use crate::parse_settings;
+
 use crate::apply_error::ApplyError;
 use crate::create_error::CreateError;
 use crate::dyn_mirror::DynMirror;
@@ -60,7 +62,7 @@ pub(crate) fn mirror<G: WireGame>(
     settings: &proto::GameSettings,
     players: &[PlayerSpec],
 ) -> Result<Box<dyn DynMirror>, CreateError> {
-    let settings = G::settings_from_wire(settings)?;
+    let settings = parse_settings::<G>(settings)?;
     let game_match = Match::<G>::new(&settings, players)?;
     Ok(Box::new(MirrorAdapter { kind, game_match }))
 }

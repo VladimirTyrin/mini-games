@@ -7,10 +7,10 @@ use super::stone::Stone;
 use super::window_counts::WindowCounts;
 use crate::game::TicTacToe;
 use crate::model::{LineDirection, Mark, Point};
-use crate::settings::{Dimensions, MAX_FIELD_SIZE, WinLength};
+use crate::settings::{Dimensions, FieldSize, WinLength};
 
 /// Longest line segment a probe looks at: `2 * win_count - 1` cells.
-const MAX_SEGMENT: usize = 2 * MAX_FIELD_SIZE as usize - 1;
+const MAX_SEGMENT: usize = 2 * FieldSize::MAX as usize - 1;
 /// Window weight grows 8× per stone; capped so the sum over every window of a 20×20 board stays
 /// far below `Score::HEURISTIC_LIMIT` (legacy `1 << (count * 2)` overflowed i32, T5).
 const MAX_WEIGHT_SHIFT: usize = 39;

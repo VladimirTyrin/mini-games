@@ -1,6 +1,6 @@
-use mg_core::{CoreRng, Game, PlayerSpec, Viewer};
+use mg_core::{CoreRng, Game, GameSettings, PlayerSpec, Viewer};
 use mg_puzzle2048::{
-    Cell, Command, Direction, Puzzle2048, Settings, SpawnValue, TileOrigin, WorldEvent,
+    Cell, Command, Direction, Puzzle2048, RawSettings, Settings, SpawnValue, TileOrigin, WorldEvent,
 };
 use prost::Message;
 
@@ -41,14 +41,14 @@ impl<M: Clone> JsonTransport for M {}
 #[test]
 fn settings_round_trip_unvalidated() {
     let samples = [
-        Settings::default(),
-        Settings {
+        RawSettings::default(),
+        RawSettings {
             width: 3,
             height: 7,
             target: 64,
         },
         // Rule validation belongs to the game: the wire keeps even invalid values intact.
-        Settings {
+        RawSettings {
             width: 0,
             height: u32::MAX,
             target: 3,
@@ -323,11 +323,12 @@ fn authority_frames_replay_through_json() {
     for (seed, settings) in [
         (
             1,
-            Settings {
+            Settings::parse(RawSettings {
                 width: 3,
                 height: 3,
                 target: 64,
-            },
+            })
+            .unwrap(),
         ),
         (2, Settings::default()),
     ] {

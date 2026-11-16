@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SettingRange, SetupError, Slot, StateHasher, Status, Viewer,
+    SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, MAX_QUEUED_COMMANDS, WorldEvent};
@@ -79,17 +79,14 @@ impl Game for StackAttack {
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {
-        settings.validate()?;
         SetupError::check_player_count(players.len(), MIN_SEATS, MAX_SEATS)?;
         if !players.iter().all(|p| p.is_human()) {
             return Err(SetupError::InvalidPlayers(
                 "Stack Attack has no bots".to_string(),
             ));
         }
-        let width = i32::try_from(settings.field_width)
-            .map_err(|error| SetupError::setting("field_width", error.to_string()))?;
-        let height = i32::try_from(settings.field_height)
-            .map_err(|error| SetupError::setting("field_height", error.to_string()))?;
+        let width = i32::from(settings.field_width.to_u8());
+        let height = i32::from(settings.field_height.to_u8());
         let workers = (0..players.len())
             .map(|seat| Worker::new(Cell::new(spawn_column(seat, players.len(), width), 0)))
             .collect();
@@ -109,10 +106,6 @@ impl Game for StackAttack {
             pending_events: Vec::new(),
             last_frame_events: Vec::new(),
         })
-    }
-
-    fn setting_ranges(settings: &Settings) -> Vec<SettingRange> {
-        settings.ranges()
     }
 
     fn clock(&self) -> Clock {

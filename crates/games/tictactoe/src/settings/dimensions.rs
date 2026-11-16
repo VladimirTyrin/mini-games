@@ -1,22 +1,20 @@
-use mg_core::{SettingRange, SetupError};
-
 use crate::model::{LineDirection, LineSpan, Point};
-use crate::settings::Settings;
+use crate::settings::FieldSize;
 
-/// Validated board size: both sides in `MIN_FIELD_SIZE..=MAX_FIELD_SIZE`, so they fit a `u8`
-/// and every coordinate and cell index converts losslessly.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Board size; both sides are a [`FieldSize`], so they fit a `u8` and every coordinate and cell
+/// index converts losslessly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct Dimensions {
     width: u8,
     height: u8,
 }
 
 impl Dimensions {
-    pub(crate) fn new(field_width: u32, field_height: u32) -> Result<Self, SetupError> {
-        Ok(Self {
-            width: side(Settings::FIELD_WIDTH, field_width)?,
-            height: side(Settings::FIELD_HEIGHT, field_height)?,
-        })
+    pub(crate) const fn new(width: FieldSize, height: FieldSize) -> Self {
+        Self {
+            width: width.to_u8(),
+            height: height.to_u8(),
+        }
     }
 
     pub(crate) fn width(self) -> u32 {
@@ -73,9 +71,4 @@ impl Dimensions {
     pub(crate) fn points(self) -> impl Iterator<Item = Point> {
         (0..self.height()).flat_map(move |y| (0..self.width()).map(move |x| Point::new(x, y)))
     }
-}
-
-fn side(range: SettingRange, value: u32) -> Result<u8, SetupError> {
-    range.check(value)?;
-    u8::try_from(value).map_err(|error| SetupError::setting(range.field, error.to_string()))
 }

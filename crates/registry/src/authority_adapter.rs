@@ -1,6 +1,8 @@
 use mg_core::{Authority, Awaiting, BotSeat, Clock, HasBots, PlayerSpec, Slot, Status, Tick};
 use mg_protocol::{WireBots, WireGame, frame_to_wire, proto};
 
+use crate::parse_settings;
+
 use crate::create_error::CreateError;
 use crate::dyn_authority::DynAuthority;
 use crate::game_kind::GameKind;
@@ -91,7 +93,7 @@ pub(crate) fn with_bots<G: WireBots>(
     seats: &[SeatSpec],
     seed: u64,
 ) -> Result<Box<dyn DynAuthority>, CreateError> {
-    let settings = G::settings_from_wire(settings)?;
+    let settings = parse_settings::<G>(settings)?;
     let mut bots = Vec::new();
     for (slot, seat) in Slot::all(seats.len()).zip(seats) {
         if let SeatSpec::Bot(wire_kind) = seat {
@@ -116,7 +118,7 @@ pub(crate) fn without_bots<G: WireGame>(
     if seats.iter().any(|seat| matches!(seat, SeatSpec::Bot(_))) {
         return Err(CreateError::NoBots(G::INFO.name));
     }
-    let settings = G::settings_from_wire(settings)?;
+    let settings = parse_settings::<G>(settings)?;
     let authority = Authority::<G>::new(&settings, &player_specs(seats), seed, Vec::new())?;
     Ok(AuthorityAdapter::boxed(kind, authority))
 }

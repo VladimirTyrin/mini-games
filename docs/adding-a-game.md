@@ -35,7 +35,7 @@ Every game crate has the same role-based layout, so you know where to look in an
 |---|---|
 | `lib.rs` | module declarations and the crate's public re-exports, nothing else |
 | `game.rs` | the game struct, `impl Game` and, with bots, `impl HasBots` |
-| `settings/` | `Settings`, its option enums and validated limit types |
+| `settings/` | `Settings` (parsed), `RawSettings` (unchecked), option enums, limit types |
 | `model/` | domain values and state pieces: points, boards, cells, ids, scores |
 | `rules/` | pure rule logic and its outcomes: moves, win/end detection, end reasons, phase, rule constants |
 | `io/` | what enters the game: `Command`, `WorldEvent` |
@@ -49,10 +49,23 @@ via `lib.rs`, other crates) uses; one type per file. A type the rules consult be
 
 Replace the sample rules. Keep the shape:
 
-- **Settings** — a plain struct with `Default` (what the UI offers first) and limit consts.
-  `Game::new` validates everything, *before* allocating anything sized by a setting. Numeric
-  limits are `SettingRange` consts used by the validation itself; `Settings::ranges()` lists
-  them and `Game::setting_ranges` returns that list, which is how the UI learns the bounds.
+- **Settings** — parse, don't validate. Two types:
+  - `RawSettings`: plain `u32`s and enums, field for field the wire message; what clients,
+    replay files and forms carry. Unchecked.
+  - `Settings`: implements `mg_core::GameSettings`; valid by construction. A numeric range is
+    a type, `pub type FieldSize = Capped<3, 20>;`, used for the field. A rule a range cannot
+    express gets its own type with a fallible constructor (2048's `Target`: a power of two);
+    a rule between fields keeps the fields private (TicTacToe's win length fits the board).
+  - `GameSettings::parse(raw) -> Result<Settings, SettingsError>` is the only way in: one
+    `Capped::new(raw.x).map_err(SettingsError::at("x"))?` per field (the wire field name, which
+    the form shows the error under), then the rules between fields. No `validate()` anywhere.
+  - `GameSettings::ranges(&raw)` publishes the bounds to the UI from the same types
+    (`FieldSize::range("field_width")`); a bound may follow another field, and `raw` may be
+    invalid while a form is edited.
+  - `Default` for `Settings` uses `Capped::constant::<15>()` (an out-of-range default fails the
+    build); `RawSettings::default()` is `Settings::default().to_raw()`.
+  - `Game::new(&Settings, players)` gets parsed settings and only checks what depends on the
+    players. It may rely on the types: `FieldSize::to_u8()` is lossless, checked at compile time.
 - **Command** — what a seat can do. `apply_command` validates and applies atomically; a
   rejected command must not change state.
 - **WorldEvent** — every random outcome (dealt cards, spawned food, who starts). Produce them
@@ -79,8 +92,9 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 ## 3. Tests
 
 - `tests/conformance.rs` implements `Conformance`: rich `sample_setups` (edge sizes, every mode,
-  bot seats), `invalid_setups` (0, max+1, `u32::MAX`, wrong seat counts), `arbitrary_command`
-  biased towards legal moves, `check_invariants`.
+  bot seats), `invalid_setups` (0, max+1, `u32::MAX`, broken rules between fields, wrong seat
+  counts), `arbitrary_command` biased towards legal moves, `check_invariants`. Setups hold
+  `RawSettings`; the suite parses them like any boundary and checks that they round-trip.
 - Pin the golden hash: run `scripted_hash` once and `assert_eq!` the value. It must only change
   when you change a rule on purpose.
 - One test per rule, testing behaviour through `Authority`/`Game`, not private helpers.
@@ -91,8 +105,9 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 
 - Prefix every message and enum with the game name (one shared package); enum zero values are
   `<GAME>_<ENUM>_UNSPECIFIED`. `cd web-client && npx buf lint ../proto` must pass.
-- `*_from_wire` validates ranges and enum values and returns `WireError`; it never clamps or
-  panics. Leave game-rule validation to the game.
+- `*_from_wire` checks the shape (right game, required fields, known enum values) and returns
+  `WireError`; it never clamps or panics. Settings come out as `RawSettings`: ranges and other
+  game rules are the game's (`GameSettings::parse`, called by `mg_registry::parse_settings`).
 - The view is what the board renders: include stable ids for anything that moves, and what
   happened last (for animations) so the UI never re-implements rules.
 - Add round-trip tests and one end-to-end test (authority → wire → JSON → wire → `Match`, equal

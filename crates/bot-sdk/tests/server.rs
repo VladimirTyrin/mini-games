@@ -9,7 +9,7 @@ use mg_bot_sdk::{
 use mg_core::Slot;
 use mg_protocol::{WireGame, proto};
 use mg_server::{Config, serve};
-use mg_tictactoe::{Command, FirstPlayerMode, Point, Settings, TicTacToe};
+use mg_tictactoe::{Command, FirstPlayerMode, Point, RawSettings, TicTacToe};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
@@ -65,7 +65,7 @@ fn url(address: SocketAddr) -> String {
 }
 
 fn small_tictactoe() -> proto::GameSettings {
-    TicTacToe::settings_to_wire(&Settings {
+    TicTacToe::settings_to_wire(&RawSettings {
         field_width: 3,
         field_height: 3,
         win_count: 3,

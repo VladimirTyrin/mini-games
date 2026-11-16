@@ -1,18 +1,18 @@
-use mg_core::{SettingRange, SetupError};
+use mg_core::{Capped, GameSettings, SettingRange, SettingsError};
 
-use crate::settings::HintMode;
+use crate::settings::{HintMode, RawSettings};
 
-pub const DEFAULT_REFILLS: u32 = 5;
-/// Each refill can double the board, so this also caps it at `INITIAL_CELLS * 2^MAX_REFILLS`
-/// cells.
-pub const MAX_REFILLS: u32 = 10;
+/// Each refill can double the board, so the bound also caps it at `INITIAL_CELLS * 2^10` cells.
+pub type Refills = Capped<0, 10>;
+
 pub const LIMITED_INITIAL_HINTS: u32 = 3;
 pub const LIMITED_HINTS_PER_REFILL: u32 = 1;
 
+/// Valid by construction (see [`GameSettings::parse`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Settings {
     pub hint_mode: HintMode,
-    pub refills: u32,
+    pub refills: Refills,
 }
 
 impl Default for Settings {
@@ -20,21 +20,29 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             hint_mode: HintMode::Limited,
-            refills: DEFAULT_REFILLS,
+            refills: Refills::constant::<5>(),
         }
     }
 }
 
-impl Settings {
-    pub const REFILLS: SettingRange = SettingRange::new("refills", 0, MAX_REFILLS);
+impl GameSettings for Settings {
+    type Raw = RawSettings;
 
-    pub fn validate(&self) -> Result<(), SetupError> {
-        Self::REFILLS.check(self.refills)
+    fn parse(raw: RawSettings) -> Result<Self, SettingsError> {
+        Ok(Self {
+            hint_mode: raw.hint_mode,
+            refills: Refills::new(raw.refills).map_err(SettingsError::at("refills"))?,
+        })
     }
 
-    /// Bounds of every numeric setting; the only list the UI reads (see
-    /// [`mg_core::Game::setting_ranges`]).
-    pub fn ranges(&self) -> Vec<SettingRange> {
-        vec![Self::REFILLS]
+    fn to_raw(&self) -> RawSettings {
+        RawSettings {
+            hint_mode: self.hint_mode,
+            refills: self.refills.get(),
+        }
+    }
+
+    fn ranges(_raw: &RawSettings) -> Vec<SettingRange> {
+        vec![Refills::range("refills")]
     }
 }

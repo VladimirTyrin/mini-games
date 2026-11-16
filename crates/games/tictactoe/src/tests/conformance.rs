@@ -3,7 +3,7 @@ use std::cell::Cell;
 use mg_core::conformance::{self, Conformance, Setup};
 use mg_core::{BotSeat, CoreRng, Game, HasBots, PlayerSpec, Slot, Viewer};
 
-use crate::{BotKind, Command, FirstPlayerMode, GameEnd, Mark, Point, Settings, TicTacToe};
+use crate::{BotKind, Command, FirstPlayerMode, GameEnd, Mark, Point, RawSettings, TicTacToe};
 
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
 const BOT: PlayerSpec = PlayerSpec::BOT;
@@ -28,7 +28,7 @@ fn setup(
     players: [PlayerSpec; 2],
 ) -> Setup<TicTacToe> {
     Setup::new(
-        Settings {
+        RawSettings {
             field_width: size.0,
             field_height: size.1,
             win_count,
@@ -40,9 +40,11 @@ fn setup(
 
 impl Conformance for TicTacToe {
     fn sample_setups() -> Vec<Setup<Self>> {
-        use FirstPlayerMode::{Host, Random};
+        use FirstPlayerMode::{Guest, Host, Random};
         vec![
             setup((3, 3), 3, Host, [HUMAN, HUMAN]),
+            setup((3, 3), 3, Guest, [HUMAN, HUMAN]),
+            setup((9, 9), 4, Guest, [HUMAN, BOT]),
             setup((3, 3), 3, Random, [HUMAN, HUMAN]),
             setup((15, 15), 5, Random, [HUMAN, HUMAN]),
             setup((20, 20), 5, Host, [HUMAN, HUMAN]),
@@ -77,7 +79,7 @@ impl Conformance for TicTacToe {
         }
         setups.push(setup((4, 7), 5, Host, [HUMAN, HUMAN]));
         for players in [vec![HUMAN], vec![BOT], vec![HUMAN; 3], vec![], vec![BOT; 3]] {
-            setups.push(Setup::new(Settings::default(), players));
+            setups.push(Setup::new(RawSettings::default(), players));
         }
         setups
     }

@@ -26,9 +26,8 @@ pub use io::{Command, INPUT_BUFFER, WorldEvent};
 pub use model::{Direction, Point, Score, StepCount};
 pub use rules::{DeathReason, GameEnd, START_LENGTH};
 pub use settings::{
-    DeadSnakeBehavior, MAX_FIELD_SIZE, MAX_FOOD, MAX_FOOD_PERMILLE, MAX_SEATS, MAX_TICK_MS,
-    MIN_FIELD_SIZE, MIN_FOOD, MIN_FOOD_PERMILLE, MIN_SEATS, MIN_TICK_MS, Settings,
-    WallCollisionMode,
+    DeadSnakeBehavior, FieldSize, FoodCount, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, RawSettings,
+    Settings, TickIntervalMs, WallCollisionMode,
 };
 pub use view::{SnakeView, View};
 

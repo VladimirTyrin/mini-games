@@ -28,10 +28,7 @@ pub use model::{
     Score, Side, TickCount, WorkerState, WorkerStatus,
 };
 pub use rules::EndReason;
-pub use settings::{
-    MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_SEATS, MIN_FIELD_HEIGHT, MIN_FIELD_WIDTH, MIN_SEATS,
-    Settings,
-};
+pub use settings::{FieldHeight, FieldWidth, MAX_SEATS, MIN_SEATS, RawSettings, Settings};
 pub use view::{GameEvent, View, WorkerView};
 
 #[cfg(test)]
