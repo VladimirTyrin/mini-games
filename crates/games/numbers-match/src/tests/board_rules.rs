@@ -2,7 +2,7 @@
 
 use super::support::{at, board, digit_at, pair, value};
 use crate::Cell;
-use crate::model::{Board, RowIndex};
+use crate::model::{Batch, Board, RowIndex};
 
 #[test]
 fn test_board_from_values_creates_correct_layout() {
@@ -116,7 +116,7 @@ fn test_refill_copies_active_cells() {
         3, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 4, 0, 0, 0, 0, 0, 0, 0,
     ]);
-    let (_, added) = board.refill();
+    let (_, added) = board.refill(Batch::refill(1));
     assert_eq!(added, vec![value(1), value(2), value(3), value(4)]);
 }
 
@@ -128,7 +128,7 @@ fn test_refill_example_from_task() {
         3, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 4, 0, 0, 0, 0, 0, 0, 0,
     ]);
-    let (start, _) = board.refill();
+    let (start, _) = board.refill(Batch::refill(1));
     assert_eq!(start, at(2, 2));
     assert_eq!(digit_at(&board, 2, 2), 1);
     assert_eq!(digit_at(&board, 2, 3), 2);
@@ -142,7 +142,7 @@ fn test_refill_writes_after_removed_cells() {
     board.remove_pair(pair(at(0, 1), at(0, 3)));
     board.remove_pair(pair(at(0, 5), at(0, 7)));
 
-    board.refill();
+    board.refill(Batch::refill(1));
 
     for column in [1, 3, 5, 7] {
         assert!(matches!(
@@ -237,4 +237,25 @@ fn finder_sees_anti_diagonals_across_removed_cells() {
     cells[at(2, 8).as_usize()] = Cell::Active(value(2));
     let board = Board::from_cells(cells);
     assert_eq!(board.find_pair(), Some(pair(at(0, 4), at(2, 2))));
+}
+
+#[test]
+fn refilled_cells_carry_their_batch_through_row_deletion() {
+    let mut board = board(&[1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    board.refill(Batch::refill(1));
+    board.refill(Batch::refill(2));
+    assert_eq!(board.batches()[0], Batch::DEALT);
+    assert_eq!(board.batches()[at(1, 0).as_usize()], Batch::refill(1));
+    assert_eq!(board.batches()[at(2, 0).as_usize()], Batch::refill(2));
+
+    // Clear the whole first row so it is deleted; the refills move up with their batches.
+    for column in [0, 2, 4, 6] {
+        board.remove_pair(pair(at(0, column), at(0, column + 1)));
+    }
+    board.remove_pair(pair(at(0, 8), at(1, 8)));
+    board.delete_inactive_rows();
+
+    assert_eq!(board.batches().len(), board.cells().len());
+    assert_eq!(board.batches()[0], Batch::refill(1));
+    assert_eq!(board.batches()[at(1, 0).as_usize()], Batch::refill(2));
 }

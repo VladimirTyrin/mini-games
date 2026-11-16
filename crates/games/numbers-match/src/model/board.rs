@@ -1,27 +1,34 @@
 use crate::COLUMNS;
-use crate::model::{Cell, CellIndex, CellPair, CellValue, RowIndex};
+use crate::model::{Batch, Cell, CellIndex, CellPair, CellValue, RowIndex};
 
-/// `cells.len()` is always a multiple of [`COLUMNS`].
+/// `cells.len()` is always a multiple of [`COLUMNS`], and `batches` runs parallel to `cells`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Board {
     cells: Vec<Cell>,
+    batches: Vec<Batch>,
 }
 
 impl Board {
     pub(crate) fn dealt(values: &[CellValue]) -> Self {
         let mut cells: Vec<Cell> = values.iter().copied().map(Cell::Active).collect();
         pad_to_whole_rows(&mut cells);
-        Self { cells }
+        let batches = vec![Batch::DEALT; cells.len()];
+        Self { cells, batches }
     }
 
     #[cfg(test)]
     pub(crate) fn from_cells(mut cells: Vec<Cell>) -> Self {
         pad_to_whole_rows(&mut cells);
-        Self { cells }
+        let batches = vec![Batch::DEALT; cells.len()];
+        Self { cells, batches }
     }
 
     pub(crate) fn cells(&self) -> &[Cell] {
         &self.cells
+    }
+
+    pub(crate) fn batches(&self) -> &[Batch] {
+        &self.batches
     }
 
     pub(crate) fn rows(&self) -> usize {
@@ -100,22 +107,30 @@ impl Board {
     pub(crate) fn delete_inactive_rows(&mut self) -> Vec<RowIndex> {
         let mut deleted = Vec::new();
         let mut kept = Vec::with_capacity(self.cells.len());
-        for (row, cells) in self.cells.chunks(COLUMNS).enumerate() {
+        let mut kept_batches = Vec::with_capacity(self.batches.len());
+        for (row, (cells, batches)) in self
+            .cells
+            .chunks(COLUMNS)
+            .zip(self.batches.chunks(COLUMNS))
+            .enumerate()
+        {
             if cells.iter().any(|cell| cell.is_active()) {
                 kept.extend_from_slice(cells);
+                kept_batches.extend_from_slice(batches);
             } else {
                 deleted.push(RowIndex::from_usize(row));
             }
         }
         if !deleted.is_empty() {
             self.cells = kept;
+            self.batches = kept_batches;
         }
         deleted
     }
 
     /// Appends a copy of every active value after the last non-empty cell. Returns where the
     /// copy starts and the copied values.
-    pub(crate) fn refill(&mut self) -> (CellIndex, Vec<CellValue>) {
+    pub(crate) fn refill(&mut self, batch: Batch) -> (CellIndex, Vec<CellValue>) {
         let values: Vec<CellValue> = self
             .cells
             .iter()
@@ -131,6 +146,9 @@ impl Board {
             self.cells.truncate(start);
             self.cells.extend(values.iter().copied().map(Cell::Active));
             pad_to_whole_rows(&mut self.cells);
+            self.batches.truncate(start);
+            self.batches.resize(start + values.len(), batch);
+            self.batches.resize(self.cells.len(), Batch::DEALT);
         }
         (CellIndex::from_usize(start), values)
     }

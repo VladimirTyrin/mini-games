@@ -1,6 +1,6 @@
 use mg_numbers_match::{
-    COLUMNS, Cell, CellIndex, CellPair, CellValue, Command, Hint, HintMode, HintsLeft, LastAction,
-    LossReason, NumbersMatch, Phase, Settings, Stats, View, WorldEvent,
+    Batch, COLUMNS, Cell, CellIndex, CellPair, CellValue, Command, Hint, HintMode, HintsLeft,
+    LastAction, LossReason, NumbersMatch, Phase, Settings, Stats, View, WorldEvent,
 };
 
 use crate::proto;
@@ -116,7 +116,12 @@ impl WireGame for NumbersMatch {
         proto::GameView {
             game: Some(proto::game_view::Game::NumbersMatch(
                 proto::NumbersMatchView {
-                    cells: view.cells.iter().map(|&cell| cell_to_wire(cell)).collect(),
+                    cells: view
+                        .cells
+                        .iter()
+                        .zip(&view.batches)
+                        .map(|(&cell, &batch)| cell_to_wire(cell, batch))
+                        .collect(),
                     rows: view.rows,
                     columns: COLUMNS as u32,
                     phase: phase.into(),
@@ -180,7 +185,7 @@ fn pair_to_wire(pair: CellPair) -> proto::NumbersMatchCellPair {
     }
 }
 
-fn cell_to_wire(cell: Cell) -> proto::NumbersMatchCell {
+fn cell_to_wire(cell: Cell, batch: Batch) -> proto::NumbersMatchCell {
     let (value, state) = match cell {
         Cell::Empty => (0, WireCellState::Empty),
         Cell::Active(value) => (value.get(), WireCellState::Active),
@@ -189,6 +194,7 @@ fn cell_to_wire(cell: Cell) -> proto::NumbersMatchCell {
     proto::NumbersMatchCell {
         value: u32::from(value),
         state: state.into(),
+        batch: u32::from(batch.get()),
     }
 }
 

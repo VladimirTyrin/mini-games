@@ -1,4 +1,4 @@
-use crate::model::{Cell, Hint, HintsLeft};
+use crate::model::{Batch, Cell, Hint, HintsLeft};
 use crate::rules::Phase;
 use crate::settings::HintMode;
 use crate::view::{LastAction, Stats};
@@ -7,6 +7,8 @@ use crate::view::{LastAction, Stats};
 pub struct View {
     /// Reading order; `cells.len() == rows * COLUMNS`.
     pub cells: Vec<Cell>,
+    /// Parallel to `cells`.
+    pub batches: Vec<Batch>,
     pub rows: u32,
     pub phase: Phase,
     pub hint_mode: HintMode,

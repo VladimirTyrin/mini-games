@@ -4,7 +4,7 @@ use mg_core::{
 };
 
 use crate::io::{Command, WorldEvent};
-use crate::model::{Board, Cell, CellPair, CellValue, Hint, HintsLeft};
+use crate::model::{Batch, Board, Cell, CellPair, CellValue, Hint, HintsLeft};
 use crate::rules::{LossReason, Phase};
 use crate::settings::{HintMode, LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, Settings};
 use crate::view::{LastAction, Stats, View};
@@ -91,9 +91,9 @@ impl NumbersMatch {
         if self.refills_left == 0 {
             return Err(CommandError::Illegal("no refills left"));
         }
-        let (start, values) = self.board.refill();
         self.refills_left -= 1;
         self.stats.refills_used = self.stats.refills_used.saturating_add(1);
+        let (start, values) = self.board.refill(Batch::refill(self.stats.refills_used));
         if self.settings.hint_mode == HintMode::Limited
             && let HintsLeft::Count(count) = &mut self.hints_left
         {
@@ -305,6 +305,7 @@ impl Game for NumbersMatch {
         // `Game::View` is owned, so the board is copied once per render.
         View {
             cells: self.board.cells().to_vec(),
+            batches: self.board.batches().to_vec(),
             rows: u32::try_from(self.board.rows()).unwrap_or(u32::MAX),
             phase: self.phase,
             hint_mode: self.settings.hint_mode,
@@ -323,6 +324,7 @@ impl Game for NumbersMatch {
             HintMode::Disabled => 2,
         });
         hasher.u32(self.settings.refills);
+        // Batches only colour the cells; leaving them out keeps the hash about the rules.
         hasher.length(self.board.cells().len());
         for cell in self.board.cells() {
             hasher.u8(match *cell {

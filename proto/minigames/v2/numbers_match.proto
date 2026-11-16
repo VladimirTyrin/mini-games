@@ -58,6 +58,8 @@ enum NumbersMatchCellState {
 message NumbersMatchCell {
   uint32 value = 1;
   NumbersMatchCellState state = 2;
+  // Which deal the cell came from: 0 for the opening deal, n for the n-th refill.
+  uint32 batch = 3;
 }
 
 enum NumbersMatchPhase {

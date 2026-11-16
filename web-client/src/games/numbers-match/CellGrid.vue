@@ -45,6 +45,13 @@ function cellClass(index: number, state: NumbersMatchCellState, motion: CellMoti
   };
 }
 
+// Each refill gets its own number colour, so new numbers are easy to tell from older ones.
+const BATCH_CLASSES = ["", "batch-1", "batch-2", "batch-3", "batch-4"] as const;
+function batchClass(batch: number): string {
+  if (batch === 0) return "";
+  return BATCH_CLASSES[((batch - 1) % (BATCH_CLASSES.length - 1)) + 1] ?? "";
+}
+
 function cellStyle(motion: CellMotion | undefined): Record<string, string> {
   return {
     "--rows-shifted-up": String(motion?.rowsShiftedUp ?? 0),
@@ -83,7 +90,7 @@ watch(frameKey, async () => {
       v-for="(cell, index) in view.cells"
       :key="cellKey(index)"
       class="cell"
-      :class="cellClass(index, cell.state, motions[index])"
+      :class="[cellClass(index, cell.state, motions[index]), batchClass(cell.batch)]"
       :style="cellStyle(motions[index])"
       :data-index="index"
       :disabled="!interactive || cell.state !== NumbersMatchCellState.ACTIVE"
@@ -121,6 +128,22 @@ watch(frameKey, async () => {
 .active {
   background: var(--color-panel-raised);
   color: #f3f4f6;
+}
+
+.active.batch-1 {
+  color: #7dd3fc;
+}
+
+.active.batch-2 {
+  color: #c4b5fd;
+}
+
+.active.batch-3 {
+  color: #fcd34d;
+}
+
+.active.batch-4 {
+  color: #f9a8d4;
 }
 
 .removed {

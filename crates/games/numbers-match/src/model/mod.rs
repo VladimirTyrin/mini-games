@@ -1,3 +1,4 @@
+mod batch;
 mod board;
 mod cell;
 mod cell_index;
@@ -7,6 +8,7 @@ mod hint;
 mod hints_left;
 mod row_index;
 
+pub use batch::Batch;
 pub(crate) use board::Board;
 pub use cell::Cell;
 pub use cell_index::CellIndex;
