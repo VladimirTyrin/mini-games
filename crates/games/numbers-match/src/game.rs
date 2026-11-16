@@ -75,8 +75,8 @@ impl NumbersMatch {
     }
 
     fn remove_pair(&mut self, pair: CellPair) -> Result<(), CommandError> {
-        if !self.board.can_remove_pair(pair) {
-            return Err(CommandError::Illegal("these cells cannot be removed"));
+        if let Some(refusal) = self.board.pair_refusal(pair) {
+            return Err(CommandError::Illegal(refusal));
         }
         self.board.remove_pair(pair);
         let deleted_rows = self.board.delete_inactive_rows();

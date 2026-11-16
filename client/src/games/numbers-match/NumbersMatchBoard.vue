@@ -51,11 +51,19 @@ const hintedIndices = computed(() => {
 const suggestsRefill = computed(() => view.value?.hint?.hint.case === "suggestRefill");
 const hintsEnabled = computed(() => view.value?.hintMode !== NumbersMatchHintMode.DISABLED);
 const hintsLeftText = computed(() => String(view.value?.hintsLeft ?? "∞"));
-// What the core would refuse anyway: the controls say so up front instead of a refusal afterwards.
-const canRefill = computed(() => canPlay.value && (view.value?.refillsLeft ?? 0) > 0);
-const canHint = computed(
-  () => canPlay.value && hintsEnabled.value && view.value?.hintsLeft !== 0 && view.value?.hint === undefined,
-);
+type Command = MessageInitShape<typeof NumbersMatchCommandSchema>;
+const REFILL: Command = { command: { case: "refill", value: {} } };
+const HINT: Command = { command: { case: "requestHint", value: {} } };
+
+/** The rules' answer for the state on screen, in a sentence; `null` when they accept. */
+function refusalOf(command: Command): string | null {
+  const refusal = props.controller.refusal({ game: { case: "numbersMatch", value: command } });
+  return refusal === null ? null : refusal.charAt(0).toUpperCase() + refusal.slice(1);
+}
+
+// Asked of the rules, so the buttons are off exactly when the game would refuse.
+const canRefill = computed(() => refusalOf(REFILL) === null);
+const canHint = computed(() => hintsEnabled.value && refusalOf(HINT) === null);
 const activeCellCount = computed(
   () => view.value?.cells.filter((cell) => cell.state === NumbersMatchCellState.ACTIVE).length ?? 0,
 );
@@ -85,31 +93,18 @@ watch(view, (current) => {
   rejection.value = null;
 });
 
-/** Why the core refused the pair. The value rule is simple to tell; otherwise it is distance. */
-function rejectionReason(first: number, second: number): string {
-  const cells = view.value?.cells ?? [];
-  const a = cells[first]?.value ?? 0;
-  const b = cells[second]?.value ?? 0;
-  return a === b || a + b === 10
-    ? "Too far apart: pairs must touch, or have only crossed-out cells between them"
-    : "Not a pair: equal numbers or a sum of 10";
-}
-
-function showRejection(first: number, second: number): void {
+function showRejection(first: number, second: number, reason: string): void {
   clearTimeout(rejectionTimer);
   rejection.value = {
     cells: new Set([first, second]),
-    reason: rejectionReason(first, second),
+    reason,
     serial: ++rejectionSerial,
   };
   rejectionTimer = setTimeout(() => (rejection.value = null), REJECTION_SHOWN_MS);
 }
 
 /** `onRejected` replaces the error toast when the core refuses the command. */
-async function send(
-  command: MessageInitShape<typeof NumbersMatchCommandSchema>,
-  onRejected?: () => void,
-): Promise<void> {
+async function send(command: Command, onRejected?: () => void): Promise<void> {
   if (!canPlay.value || sending.value) return;
   sending.value = true;
   try {
@@ -130,19 +125,29 @@ function select(index: number): void {
     return;
   }
   selectedIndex.value = null;
+  const removal: Command = {
+    command: { case: "removePair", value: { firstIndex: first, secondIndex: index } },
+  };
   // Like the original game: a cell that does not pair with the selection becomes the selection.
-  void send({ command: { case: "removePair", value: { firstIndex: first, secondIndex: index } } }, () => {
-    showRejection(first, index);
+  const refuse = (reason: string) => {
+    showRejection(first, index, reason);
     selectedIndex.value = index;
-  });
+  };
+  const refusal = refusalOf(removal);
+  if (refusal !== null) {
+    refuse(refusal);
+    return;
+  }
+  // The authority may still refuse (the screen can be a frame behind): ask again for the reason.
+  void send(removal, () => refuse(refusalOf(removal) ?? "That pair cannot be removed"));
 }
 
 function refill(): void {
-  if (canRefill.value) void send({ command: { case: "refill", value: {} } });
+  if (canRefill.value) void send(REFILL);
 }
 
 function requestHint(): void {
-  if (canHint.value) void send({ command: { case: "requestHint", value: {} } });
+  if (canHint.value) void send(HINT);
 }
 
 useGameKeys((key) => {

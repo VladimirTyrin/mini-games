@@ -199,7 +199,16 @@ fn submit_arbitrary<G: Conformance>(
 ) -> Result<bool, String> {
     let command = G::arbitrary_command(authority.game(), slot, fuzz);
     let before = authority.game().state_hash();
-    match authority.submit(slot, command.clone()) {
+    // Clients offer actions by asking first: the answer must be the one applying it gives.
+    // (The authority refuses dropped and bot seats itself, so only acceptance is compared.)
+    let checked = authority.game().check_command(slot, &command);
+    let submitted = authority.submit(slot, command.clone());
+    if checked.is_ok() != submitted.is_ok() {
+        return Err(format!(
+            "check_command said {checked:?} for {command:?}, applying it said {submitted:?}"
+        ));
+    }
+    match submitted {
         Ok(()) => Ok(true),
         Err(_) if authority.game().state_hash() != before => {
             Err(format!("rejected command {command:?} changed the state"))

@@ -47,18 +47,28 @@ impl Board {
     /// on a straight line (horizontal, vertical, diagonal) or every cell between them in reading
     /// order inactive.
     pub(crate) fn can_remove_pair(&self, pair: CellPair) -> bool {
+        self.pair_refusal(pair).is_none()
+    }
+
+    /// Why `pair` cannot be removed, in words for the player; `None` when it can.
+    pub(crate) fn pair_refusal(&self, pair: CellPair) -> Option<&'static str> {
         let (first, second) = (pair.first.as_usize(), pair.second.as_usize());
         if first == second {
-            return false;
+            return Some("pick two different cells");
         }
         let (Some(first_value), Some(second_value)) =
             (self.active_value(first), self.active_value(second))
         else {
-            return false;
+            return Some("that cell is already crossed out");
         };
-        first_value.pairs_with(second_value)
-            && (self.clear_line_between(first, second)
-                || self.clear_reading_path_between(first, second))
+        if !first_value.pairs_with(second_value) {
+            return Some("not a pair: equal numbers or a sum of 10");
+        }
+        let reachable = self.clear_line_between(first, second)
+            || self.clear_reading_path_between(first, second);
+        (!reachable).then_some(
+            "too far apart: pairs must touch, or have only crossed-out cells between them",
+        )
     }
 
     fn clear_reading_path_between(&self, first: usize, second: usize) -> bool {

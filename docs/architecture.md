@@ -77,7 +77,13 @@ secret), never by display name, which may repeat.
   (mirror, views for rendering, desync recovery). The match screen does not know which source
   it plays.
 - `games/<id>/` — one plugin per game: settings form + board. Rules and limits come from the
-  core; plugins only render and turn input into commands.
+  core; plugins only render and turn input into commands. A board that wants to know whether
+  an action is allowed, or what it leads to, asks the rules instead of repeating them:
+  `controller.refusal(command)` (why the game would refuse it, in the rules' words, or `null`)
+  and `controller.preview(command)` (refused / the game goes on / how it ends). Both run
+  `Game::check_command` / `Game::preview_command` on the state on screen, which try the command
+  on a copy; the conformance suite checks that the answer always matches applying it. The
+  authority still decides, since the screen may be a frame behind.
 - `components/form/` — the setup rows every settings form is built from (`StepperField`,
   `SegmentedField`, `ChipsField` presets, `MoreOptions`). `SettingsEditor` asks the WASM core
   for the numeric bounds (`settingRanges`, from each game's `GameSettings::ranges`) and for the

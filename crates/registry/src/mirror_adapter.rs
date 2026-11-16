@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use mg_core::{Clock, CompactLog, Match, PlayerSpec, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, Match, PlayerSpec, Slot, Status, Tick, Viewer};
 use mg_protocol::{WireGame, frame_from_wire, proto};
 
 use crate::parse_settings;
@@ -9,6 +9,7 @@ use crate::apply_error::ApplyError;
 use crate::create_error::CreateError;
 use crate::dyn_mirror::DynMirror;
 use crate::game_kind::GameKind;
+use crate::submit_error::SubmitError;
 
 #[derive(Debug)]
 pub(crate) struct MirrorAdapter<G: WireGame> {
@@ -42,6 +43,24 @@ impl<G: WireGame> DynMirror for MirrorAdapter<G> {
 
     fn view(&self, viewer: Viewer) -> proto::GameView {
         G::view_to_wire(&self.game_match.game().view(viewer))
+    }
+
+    fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError> {
+        let command = G::command_from_wire(command)?;
+        Ok(self.game_match.game().check_command(slot, &command)?)
+    }
+
+    fn status_after(
+        &self,
+        slot: Slot,
+        command: &proto::GameCommand,
+    ) -> Result<Status, SubmitError> {
+        let command = G::command_from_wire(command)?;
+        Ok(self
+            .game_match
+            .game()
+            .preview_command(slot, &command)?
+            .status())
     }
 
     fn status(&self) -> Status {

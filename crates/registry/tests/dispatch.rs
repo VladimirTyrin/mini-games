@@ -103,3 +103,27 @@ fn submitted_commands_are_decoded_and_validated() {
     }));
     assert!(authority.submit(Slot::new(0), &foreign).is_err());
 }
+
+#[test]
+fn a_mirror_answers_what_a_command_would_do_without_doing_it() {
+    let settings = default_settings::<TicTacToe>();
+    let seats = [SeatSpec::Human, SeatSpec::Human];
+    let mut authority = create_authority(&settings, &seats, 3).unwrap();
+    let mut mirror = create_mirror(&settings, &[PlayerSpec::HUMAN, PlayerSpec::HUMAN]).unwrap();
+    mirror.apply_frame(&authority.seal_frame()).unwrap();
+    let Some(proto::game_view::Game::Tictactoe(board)) = mirror.view(Viewer::Spectator).game else {
+        panic!("not a tic-tac-toe view");
+    };
+    let mover = Slot::new(u8::try_from(board.current_slot.unwrap()).unwrap());
+    let waiting = Slot::new(1 - mover.get());
+    let corner = TicTacToe::command_to_wire(&mg_tictactoe::Command::Place(mg_tictactoe::Point {
+        x: 0,
+        y: 0,
+    }));
+    let hash = mirror.state_hash();
+
+    assert!(mirror.check_command(mover, &corner).is_ok());
+    assert!(mirror.check_command(waiting, &corner).is_err());
+    assert!(!mirror.status_after(mover, &corner).unwrap().is_finished());
+    assert_eq!(mirror.state_hash(), hash, "asking changed the mirror");
+}

@@ -4,6 +4,8 @@ import { BinaryReader } from "@bufbuild/protobuf/wire";
 import {
   type BotKind,
   BotKindSchema,
+  type GameCommand,
+  GameCommandSchema,
   type GameSettings,
   GameSettingsSchema,
   type GameView,
@@ -22,6 +24,12 @@ import {
 
 import init, * as wasm from "./pkg/mg_wasm";
 import wasmUrl from "./pkg/mg_wasm_bg.wasm?url";
+
+/** What a command would lead to, asked of the rules before sending it. */
+export type CommandPreview =
+  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "continues" }
+  | { readonly kind: "ends"; readonly result: MatchResult };
 
 export interface GameInfo {
   id: string;
@@ -145,6 +153,22 @@ export class Mirror {
 
   stateHash(): string {
     return this.inner.stateHash();
+  }
+
+  /** Why the rules would refuse `command` from `slot` now, for the player; `null` if they accept it. */
+  refusalOf(slot: number, command: GameCommand): string | null {
+    return this.inner.refusalOf(slot, toBinary(GameCommandSchema, command)) ?? null;
+  }
+
+  /** What `command` from `slot` would lead to: refused, the game goes on, or how it ends. */
+  preview(slot: number, command: GameCommand): CommandPreview {
+    const encoded = toBinary(GameCommandSchema, command);
+    const reason = this.inner.refusalOf(slot, encoded);
+    if (reason !== undefined) return { kind: "refused", reason };
+    const result = this.inner.resultAfter(slot, encoded);
+    return result.length === 0
+      ? { kind: "continues" }
+      : { kind: "ends", result: fromBinary(MatchResultSchema, result) };
   }
 
   free(): void {

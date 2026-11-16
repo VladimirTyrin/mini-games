@@ -1,6 +1,8 @@
-use mg_core::{Clock, CompactLog, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
-use mg_registry::{ApplyError, CreateError, DynMirror, GameKind, create_mirror_from_header};
+use mg_registry::{
+    ApplyError, CreateError, DynMirror, GameKind, SubmitError, create_mirror_from_header,
+};
 
 /// The registry's mirror for any game, for strategies that only need views.
 #[derive(Debug)]
@@ -35,6 +37,18 @@ impl DynMirror for RegistryMirror {
 
     fn view(&self, viewer: Viewer) -> proto::GameView {
         self.0.view(viewer)
+    }
+
+    fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError> {
+        self.0.check_command(slot, command)
+    }
+
+    fn status_after(
+        &self,
+        slot: Slot,
+        command: &proto::GameCommand,
+    ) -> Result<Status, SubmitError> {
+        self.0.status_after(slot, command)
     }
 
     fn status(&self) -> Status {

@@ -1,6 +1,8 @@
 use mg_core::{Clock, CompactLog, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
-use mg_registry::{DynMirror, LoadedReplay, create_mirror_from_header, load_replay_file};
+use mg_registry::{
+    DynMirror, LoadedReplay, SubmitError, create_mirror_from_header, load_replay_file,
+};
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
@@ -92,6 +94,32 @@ impl MatchMirror {
         let viewer = u8::try_from(viewer_slot)
             .map_or(Viewer::Spectator, |slot| Viewer::Player(Slot::new(slot)));
         self.mirror.view(viewer).encode_to_vec()
+    }
+
+    /// Why `slot` may not send `command` (encoded `GameCommand`) now, in words for the player;
+    /// `undefined` when the game would accept it. The page asks this before offering an action
+    /// instead of repeating the rule.
+    #[wasm_bindgen(js_name = refusalOf)]
+    pub fn refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<String>, JsError> {
+        let command = proto::GameCommand::decode(command)?;
+        match self.mirror.check_command(Slot::new(slot), &command) {
+            Ok(()) => Ok(None),
+            Err(SubmitError::Rejected(refusal)) => Ok(Some(refusal.explanation().to_owned())),
+            Err(SubmitError::Wire(error)) => Err(error.into()),
+        }
+    }
+
+    /// Encoded `MatchResult` when `command` from `slot` would end the match, empty when the match
+    /// would go on; an error when the game refuses the command.
+    #[wasm_bindgen(js_name = resultAfter)]
+    pub fn result_after(&self, slot: u8, command: &[u8]) -> Result<Vec<u8>, JsError> {
+        let command = proto::GameCommand::decode(command)?;
+        match self.mirror.status_after(Slot::new(slot), &command) {
+            Ok(Status::Finished(outcome)) => Ok(match_result(outcome).encode_to_vec()),
+            Ok(Status::InProgress) => Ok(Vec::new()),
+            Err(SubmitError::Rejected(refusal)) => Err(JsError::new(refusal.explanation())),
+            Err(SubmitError::Wire(error)) => Err(error.into()),
+        }
     }
 
     /// Ticks are u64 in Rust; f64 keeps them exact far beyond any real match length.

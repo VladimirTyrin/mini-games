@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 
-use mg_core::{Clock, CompactLog, Match, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, Match, Slot, Status, Tick, Viewer};
 use mg_protocol::{WireError, WireGame, frame_from_wire, proto};
 use mg_registry::{
-    ApplyError, CreateError, DynMirror, GameKind, parse_settings, players_from_header,
+    ApplyError, CreateError, DynMirror, GameKind, SubmitError, parse_settings, players_from_header,
 };
 
 /// A mirror that keeps the concrete game type, so strategies can read the full game state (the
@@ -62,6 +62,20 @@ impl<G: WireGame> DynMirror for TypedMirror<G> {
 
     fn view(&self, viewer: Viewer) -> proto::GameView {
         G::view_to_wire(&self.game().view(viewer))
+    }
+
+    fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError> {
+        let command = G::command_from_wire(command)?;
+        Ok(self.game().check_command(slot, &command)?)
+    }
+
+    fn status_after(
+        &self,
+        slot: Slot,
+        command: &proto::GameCommand,
+    ) -> Result<Status, SubmitError> {
+        let command = G::command_from_wire(command)?;
+        Ok(self.game().preview_command(slot, &command)?.status())
     }
 
     fn status(&self) -> Status {

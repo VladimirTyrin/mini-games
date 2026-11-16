@@ -22,7 +22,9 @@ use crate::viewer::Viewer;
 ///   travels as `WorldEvent`s, so clients never need the seed;
 /// * a rejected command or world event leaves the state untouched;
 /// * [`Game::hash_state`] covers every gameplay-relevant field in a fixed order.
-pub trait Game: Sized + Send + Debug + 'static {
+///
+/// `Clone`: [`Game::check_command`] and [`Game::preview_command`] try a command on a copy.
+pub trait Game: Sized + Clone + Send + Debug + 'static {
     type Settings: GameSettings;
     type Command: Clone + Debug + PartialEq + Send + Sync + 'static;
     type WorldEvent: Clone + Debug + PartialEq + Send + Sync + 'static;
@@ -38,6 +40,22 @@ pub trait Game: Sized + Send + Debug + 'static {
 
     /// Validates and applies atomically.
     fn apply_command(&mut self, slot: Slot, command: &Self::Command) -> Result<(), CommandError>;
+
+    /// What [`Game::apply_command`] would answer, without changing anything: a client asks before
+    /// offering an action, so it never copies a rule. A refused command leaves no trace, so trying
+    /// it on a copy gives exactly that answer; a game may override this with a cheaper check.
+    fn check_command(&self, slot: Slot, command: &Self::Command) -> Result<(), CommandError> {
+        self.clone().apply_command(slot, command)
+    }
+
+    /// The state right after `command`, to show what an action leads to (whether giving up ends
+    /// the game, and who wins then). Real-time games apply queued commands on the next step, so
+    /// this shows the queue, not the step.
+    fn preview_command(&self, slot: Slot, command: &Self::Command) -> Result<Self, CommandError> {
+        let mut next = self.clone();
+        next.apply_command(slot, command)?;
+        Ok(next)
+    }
 
     /// Called by the authority once per frame, after the frame's commands. May return nothing.
     fn roll_world(&self, rng: &mut CoreRng) -> Vec<Self::WorldEvent>;

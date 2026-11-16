@@ -1,8 +1,10 @@
 import { shallowRef, type ShallowRef } from "vue";
 
-import type { GameView } from "@/proto/minigames/v2/game_pb";
+import { create } from "@bufbuild/protobuf";
+
+import { GameCommandSchema, type GameView } from "@/proto/minigames/v2/game_pb";
 import type { MatchCatchUp, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
-import { Mirror } from "@/wasm/core";
+import { type CommandPreview, Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, MatchSource } from "./match-source";
 import { PlaybackClock } from "./playback-clock";
@@ -95,6 +97,26 @@ export class MatchController {
 
   submit(command: GameCommandInit): Promise<void> {
     return this.source.submit(command);
+  }
+
+  /**
+   * Why the rules would refuse this player's `command` on the state on screen; `null` when they
+   * accept it. Reads `current`, so a computed that asks follows the match. The authority still
+   * decides: the screen may be a frame behind.
+   */
+  refusal(command: GameCommandInit): string | null {
+    void this.current.value;
+    const slot = this.source.mySlot;
+    if (slot === null) return "you are watching";
+    return this.mirror.refusalOf(slot, create(GameCommandSchema, command));
+  }
+
+  /** What this player's `command` would lead to on the state on screen; see `refusal`. */
+  preview(command: GameCommandInit): CommandPreview {
+    void this.current.value;
+    const slot = this.source.mySlot;
+    if (slot === null) return { kind: "refused", reason: "you are watching" };
+    return this.mirror.preview(slot, create(GameCommandSchema, command));
   }
 
   dispose(): void {

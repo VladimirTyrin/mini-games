@@ -6,6 +6,7 @@ import BotIcon from "@/components/BotIcon.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
+import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import type { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
 import { WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 import { prefersReducedMotion } from "@/render/reduced-motion";
@@ -148,18 +149,19 @@ const gaveUp = computed(() => {
   return isGroup && slot !== null && playing !== undefined && !playing.includes(slot);
 });
 const confirmingGiveUp = ref(false);
-const canGiveUp = computed(() => props.controller.mySlot !== null && isPlaying.value && !gaveUp.value);
-/** What giving up leads to; it mirrors the rules for a seat leaving a group. */
+const GIVE_UP = { game: { case: "wordHunt", value: { command: { case: "giveUp", value: {} } } } } as const;
+const canGiveUp = computed(() => props.controller.refusal(GIVE_UP) === null && !gaveUp.value);
+/** What giving up leads to, asked of the rules: who would win, or whether the others play on. */
 const giveUpMessage = computed(() => {
-  if (!isGroup) return "The game ends as a loss and the word is shown.";
-  const mySlot = props.controller.mySlot;
-  const others = (view.value?.playingSlots ?? []).filter((slot) => slot !== mySlot);
-  const [lastOther] = others;
-  if (others.length === 1 && lastOther !== undefined) {
-    return `The game ends and ${seatName(lastOther)} wins. The word is shown.`;
+  const preview = props.controller.preview(GIVE_UP);
+  if (preview.kind === "continues") {
+    return "You drop out and the others play on. The word is shown when the game ends.";
   }
-  if (others.every(isBotSeat)) return "The game ends: only bots would be left. The word is shown.";
-  return "You drop out and the others play on. The word is shown when the game ends.";
+  if (preview.kind === "refused" || !isGroup) return "The game ends as a loss and the word is shown.";
+  const [winner] = preview.result.winnerSlots;
+  return preview.result.kind === OutcomeKind.WINNER && winner !== undefined
+    ? `The game ends and ${seatName(winner)} wins. The word is shown.`
+    : "The game ends without a winner. The word is shown.";
 });
 
 async function giveUp(): Promise<void> {

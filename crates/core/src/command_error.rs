@@ -12,14 +12,25 @@ pub enum CommandError {
     Busy,
 }
 
+impl CommandError {
+    /// Why, in words a player reads (an illegal move's own reason, without the "illegal move"
+    /// prefix [`fmt::Display`] adds for logs).
+    pub fn explanation(&self) -> &'static str {
+        match self {
+            Self::GameOver => "the game is over",
+            Self::NotYourTurn => "not your turn",
+            Self::NotPlaying => "you are not playing",
+            Self::Illegal(why) => why,
+            Self::Busy => "too many inputs this tick",
+        }
+    }
+}
+
 impl fmt::Display for CommandError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GameOver => f.write_str("the game is over"),
-            Self::NotYourTurn => f.write_str("not your turn"),
-            Self::NotPlaying => f.write_str("you are not playing"),
             Self::Illegal(why) => write!(f, "illegal move: {why}"),
-            Self::Busy => f.write_str("too many inputs this tick"),
+            other => f.write_str(other.explanation()),
         }
     }
 }

@@ -1,8 +1,9 @@
-use mg_core::{Clock, CompactLog, CompactLogError, HashPolicy, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, CompactLogError, HashPolicy, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
 
 use crate::apply_error::ApplyError;
 use crate::game_kind::GameKind;
+use crate::submit_error::SubmitError;
 
 /// [`mg_core::Match`] with the game type erased; the receiving side of lockstep.
 pub trait DynMirror: Send + std::fmt::Debug {
@@ -17,6 +18,11 @@ pub trait DynMirror: Send + std::fmt::Debug {
         stop: Tick,
     ) -> Result<(), ApplyError>;
     fn view(&self, viewer: Viewer) -> proto::GameView;
+    /// What the game would answer to `command` from `slot` now; see [`mg_core::Game::check_command`].
+    fn check_command(&self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError>;
+    /// The status right after `command`; see [`mg_core::Game::preview_command`].
+    fn status_after(&self, slot: Slot, command: &proto::GameCommand)
+    -> Result<Status, SubmitError>;
     fn status(&self) -> Status;
     fn next_tick(&self) -> Tick;
     fn state_hash(&self) -> u64;
