@@ -11,6 +11,7 @@ import type { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
 import { WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 import { prefersReducedMotion } from "@/render/reduced-motion";
 import { seatLabels } from "@/util/players";
+import { asSentence } from "@/util/sentence";
 
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
@@ -107,10 +108,9 @@ function refuse(text: string): void {
 }
 onBeforeUnmount(() => clearTimeout(messageTimer));
 
-/** The core's refusal ("illegal move: hard mode: …") as a sentence for the player. */
+/** The server's refusal ("illegal move: hard mode: …") as a sentence for the player. */
 function refusalText(error: unknown): string {
-  const text = (error instanceof Error ? error.message : String(error)).replace(/^illegal move: /, "");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return asSentence((error instanceof Error ? error.message : String(error)).replace(/^illegal move: /, ""));
 }
 
 /** The last letter sends the guess: there is no Enter to press. */
@@ -130,11 +130,15 @@ async function enter(): Promise<void> {
   if (guess.length < wordLength.value) return refuse("Not enough letters");
   const known = words.value?.get(wordLength.value);
   if (known && !known.has(guess)) return refuse("Not in the word list");
+  const command = {
+    game: { case: "wordHunt", value: { command: { case: "guess", value: { word: guess } } } },
+  } as const;
+  // The rules answer at once (hard mode, a word already tried), offline and without a round trip.
+  const refusal = props.controller.refusal(command);
+  if (refusal !== null) return refuse(asSentence(refusal));
   submitting.value = true;
   try {
-    await props.controller.submit({
-      game: { case: "wordHunt", value: { command: { case: "guess", value: { word: guess } } } },
-    });
+    await props.controller.submit(command);
   } catch (error) {
     refuse(refusalText(error));
   } finally {

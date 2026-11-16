@@ -13,6 +13,7 @@ import {
   NumbersMatchPhase,
 } from "@/proto/minigames/v2/numbers_match_pb";
 import { useToastStore } from "@/stores/toasts";
+import { asSentence } from "@/util/sentence";
 
 import ActionButton from "./ActionButton.vue";
 import CellGrid from "./CellGrid.vue";
@@ -58,7 +59,7 @@ const HINT: Command = { command: { case: "requestHint", value: {} } };
 /** The rules' answer for the state on screen, in a sentence; `null` when they accept. */
 function refusalOf(command: Command): string | null {
   const refusal = props.controller.refusal({ game: { case: "numbersMatch", value: command } });
-  return refusal === null ? null : refusal.charAt(0).toUpperCase() + refusal.slice(1);
+  return refusal === null ? null : asSentence(refusal);
 }
 
 // Asked of the rules, so the buttons are off exactly when the game would refuse.
