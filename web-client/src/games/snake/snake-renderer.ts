@@ -27,9 +27,12 @@ export interface BoardLayout {
   readonly originY: number;
 }
 
-const GROUND_LIGHT = "#8fe88f";
-const GROUND_DARK = "#84dc84";
-const BORDER_COLOR = "#1f5130";
+// Dark grass in the app's palette: bright seat colours and the red apple stand out on it.
+const GROUND_LIGHT = "#1d3527";
+const GROUND_DARK = "#192e22";
+const BORDER_COLOR = "#3f8a5a";
+/** The ring that points out the viewer's snake fades out over the first seconds of a match. */
+const YOU_RING_MS = 3_000;
 const FOOD_COLOR = "#ef4444";
 const YOU_RING_COLOR = "rgb(255 255 255 / 0.85)";
 
@@ -167,7 +170,8 @@ function drawPlacement(frame: Frame, placement: SpritePlacement, color: RgbColor
   if (placement.clipTo) {
     context.save();
     context.beginPath();
-    context.rect(placement.clipTo.x * cellSize, placement.clipTo.y * cellSize, cellSize, cellSize);
+    for (const area of placement.clipTo)
+      context.rect(area.x * cellSize, area.y * cellSize, area.width * cellSize, area.height * cellSize);
     context.clip();
   }
   for (const copy of wrappedCopies(placement.at, frame.field))
@@ -192,7 +196,11 @@ function drawSprite(frame: Frame, sprite: SnakeSpriteName, color: RgbColor, at: 
 }
 
 function drawYouRing(frame: Frame, head: CellPosition): void {
-  const { context, cellSize } = frame;
+  const { context, cellSize, scene } = frame;
+  const elapsedMs = (Number(scene.view.tick) - 1 + scene.progress) * scene.view.tickIntervalMs;
+  const visibility = 1 - elapsedMs / YOU_RING_MS;
+  if (visibility <= 0) return;
+  context.globalAlpha *= Math.min(1, visibility);
   context.strokeStyle = YOU_RING_COLOR;
   context.lineWidth = Math.max(1.5, cellSize * 0.08);
   for (const copy of wrappedCopies(head, frame.field)) {
