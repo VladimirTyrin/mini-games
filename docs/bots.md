@@ -96,7 +96,8 @@ MG_BOT_KEYS="alpha:$hash" cargo run -p mg-server
 
 The bot appears online under `name`; a second sign-in with the same key takes the session over
 (the first connection gets `ERROR_CODE_SIGNED_IN_ELSEWHERE`). Removing a key from
-`MG_BOT_KEYS` also revokes the session tokens issued for it.
+`MG_BOT_KEYS`, or giving the name a new key, also revokes the session tokens issued for the old
+one (a token names the key it was issued for).
 
 ## C ABI (`mg-ffi`)
 

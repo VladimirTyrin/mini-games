@@ -63,6 +63,19 @@ async fn bot_session_token_stops_working_once_the_key_is_removed() {
 }
 
 #[tokio::test]
+async fn a_connection_signed_out_must_sign_in_again_in_time() {
+    let server = TestServer::start_with(|config| {
+        config.timing.hello_timeout = Duration::from_millis(100);
+    })
+    .await;
+    let mut alice = server.guest("Alice").await.client;
+
+    expect_ok(alice.request(Request::SignOut(proto::SignOut {})).await);
+
+    assert!(alice.closed().await);
+}
+
+#[tokio::test]
 async fn a_connection_that_never_says_hello_is_closed() {
     let server = TestServer::start_with(|config| {
         config.timing.hello_timeout = Duration::from_millis(100);

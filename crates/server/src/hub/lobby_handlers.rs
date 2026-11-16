@@ -216,6 +216,7 @@ impl Hub {
                     "the lobby is full",
                 );
             }
+            lobby.forget_play_again_votes();
             lobby.seats.push(LobbySeat::Human {
                 session: session.clone(),
                 ready: false,
@@ -404,6 +405,7 @@ impl Hub {
         lobby.settings = settings;
         lobby.max_seats = max_seats;
         lobby.reset_ready();
+        lobby.forget_play_again_votes();
         self.ack(session, request_id);
         self.after_lobby_change(&lobby_id);
     }
@@ -450,6 +452,7 @@ impl Hub {
             display_name: format!("Bot {number}"),
             avatar_url: String::new(),
         };
+        lobby.forget_play_again_votes();
         lobby.seats.push(LobbySeat::Bot {
             kind: bot_kind,
             identity,
@@ -562,8 +565,17 @@ impl Hub {
         }
         lobby.seats.remove(index);
         lobby.observers.push(session.clone());
+        if let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase {
+            play_again_votes.remove(session);
+        }
+        let all_voted = lobby.everyone_voted_to_play_again();
         self.ack(session, request_id);
-        self.after_lobby_change(&lobby_id);
+        // The one who stepped aside may have been the last the others were waiting for.
+        if all_voted {
+            self.play_again(&lobby_id);
+        } else {
+            self.after_lobby_change(&lobby_id);
+        }
     }
 
     pub(super) fn switch_to_player(&mut self, session: &SessionId, request_id: u32) {
@@ -598,6 +610,7 @@ impl Hub {
             return self.reject(session, request_id, ErrorCode::LobbyFull, "no free seat");
         }
         lobby.observers.retain(|o| o != session);
+        lobby.forget_play_again_votes();
         lobby.seats.push(LobbySeat::Human {
             session: session.clone(),
             ready: false,
@@ -746,10 +759,17 @@ impl Hub {
                 }
             }
             proto::ChatScope::Lobby => {
-                let Some(lobby) = self
-                    .current_lobby(session)
-                    .and_then(|id| self.lobbies.get(&id))
-                else {
+                let Some(lobby_id) = self.current_lobby(session) else {
+                    return self.reject(
+                        session,
+                        request_id,
+                        ErrorCode::NotInLobby,
+                        "you are not in a lobby",
+                    );
+                };
+                // A lobby people talk in is in use, even if nobody changes its setup.
+                self.touch(&lobby_id);
+                let Some(lobby) = self.lobbies.get(&lobby_id) else {
                     return self.reject(
                         session,
                         request_id,

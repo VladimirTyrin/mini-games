@@ -254,6 +254,8 @@ impl Connection {
                         session,
                         connection: self.id,
                     });
+                    // Anonymous again: sign in anew in time, as after connecting.
+                    self.hello_deadline = Some(now + self.context.timing.hello_timeout);
                 }
                 self.outbound
                     .send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
@@ -365,10 +367,11 @@ impl Connection {
                 })
             }
             Credentials::BotClient(bot) => {
-                let name = self.context.bot_keys.authenticate(&bot.key)?.clone();
+                let entry = self.context.bot_keys.authenticate(&bot.key)?;
+                let name = entry.name().clone();
                 let token = self.context.session_tokens.issue(
                     SessionKind::BotClient,
-                    name.as_str(),
+                    entry.key_id(),
                     &name,
                     None,
                     now,
@@ -390,7 +393,11 @@ impl Connection {
                         avatar: claims.avatar,
                     },
                     SessionKind::BotClient => {
-                        if !self.context.bot_keys.is_configured(&claims.display_name) {
+                        if !self
+                            .context
+                            .bot_keys
+                            .is_configured(&claims.display_name, &claims.subject)
+                        {
                             return Err(AuthError::BotRevoked.into());
                         }
                         Authenticated::BotClient {

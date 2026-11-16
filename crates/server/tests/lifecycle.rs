@@ -599,3 +599,57 @@ async fn dropping_a_seat_during_a_pause_does_not_advance_a_real_time_match() {
         "the paused match moved on"
     );
 }
+
+fn play_again_votes(message: &proto::ServerMessage) -> Option<usize> {
+    post_match(message).map(|state| state.play_again_votes.len())
+}
+
+#[tokio::test]
+async fn changing_the_settings_after_a_match_asks_for_new_play_again_votes() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    play_tictactoe_to_the_end(&mut host, &mut guest).await;
+    host.expect(post_match).await;
+    expect_ok(
+        host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+            .await,
+    );
+    assert_eq!(host.expect(play_again_votes).await, 1);
+
+    expect_ok(
+        host.request(Request::UpdateLobbySettings(proto::UpdateLobbySettings {
+            settings: Some(tictactoe_settings(5, 4)),
+            max_seats: 2,
+        }))
+        .await,
+    );
+
+    assert_eq!(host.expect(play_again_votes).await, 0);
+}
+
+#[tokio::test]
+async fn a_voter_stepping_aside_lets_the_others_play_again() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    let lobby = create_lobby(&mut host, short_snake(), 2).await;
+    join_ready(&mut guest, &lobby.lobby_id).await;
+    let first = start(&mut host).await;
+    host.expect(match_ended).await;
+    host.expect(post_match).await;
+    expect_ok(
+        host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+            .await,
+    );
+
+    expect_ok(
+        guest
+            .request(Request::SwitchToObserver(proto::SwitchToObserver {}))
+            .await,
+    );
+
+    let next = host.expect(match_started).await;
+    assert_ne!(next.match_id, first.match_id);
+    assert_eq!(next.seats.len(), 1);
+}

@@ -5,10 +5,24 @@ use super::auth_error::AuthError;
 use super::display_name::DisplayName;
 use crate::config::ConfigError;
 
+/// One configured bot: its name and the hash of its key.
 #[derive(Debug)]
-struct BotKeyEntry {
+pub(crate) struct BotKeyEntry {
     name: DisplayName,
     key_sha256: [u8; 32],
+    key_id: String,
+}
+
+impl BotKeyEntry {
+    pub(crate) fn name(&self) -> &DisplayName {
+        &self.name
+    }
+
+    /// Names this key in the session tokens issued for it, so a new key for the same name
+    /// revokes them. A hash of the configured hash: the token never carries the hash itself.
+    pub(crate) fn key_id(&self) -> &str {
+        &self.key_id
+    }
 }
 
 /// Network-bot keys from configuration. Only SHA-256 hashes are configured, so the config file
@@ -37,23 +51,34 @@ impl BotKeys {
             let name = DisplayName::parse(name).map_err(|_| invalid("invalid bot name"))?;
             let key_sha256 = parse_sha256_hex(hash_hex)
                 .ok_or_else(|| invalid("hash must be 64 hex characters"))?;
-            entries.push(BotKeyEntry { name, key_sha256 });
+            let key_id = Sha256::digest(key_sha256)
+                .iter()
+                .take(16)
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+            entries.push(BotKeyEntry {
+                name,
+                key_sha256,
+                key_id,
+            });
         }
         Ok(Self { entries })
     }
 
-    pub(crate) fn authenticate(&self, key: &str) -> Result<&DisplayName, AuthError> {
+    pub(crate) fn authenticate(&self, key: &str) -> Result<&BotKeyEntry, AuthError> {
         let digest: [u8; 32] = Sha256::digest(key.as_bytes()).into();
         self.entries
             .iter()
             .find(|entry| bool::from(entry.key_sha256.ct_eq(&digest)))
-            .map(|entry| &entry.name)
             .ok_or(AuthError::UnknownBotKey)
     }
 
-    /// Session tokens outlive configuration changes; a bot whose key was removed is refused.
-    pub(crate) fn is_configured(&self, name: &DisplayName) -> bool {
-        self.entries.iter().any(|entry| &entry.name == name)
+    /// Session tokens outlive configuration changes: a token is good only while the key it was
+    /// issued for is still configured for that name (removed or replaced keys revoke it).
+    pub(crate) fn is_configured(&self, name: &DisplayName, key_id: &str) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| &entry.name == name && entry.key_id == key_id)
     }
 }
 
@@ -81,10 +106,28 @@ mod tests {
             "alpha:2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b",
         )
         .unwrap();
-        assert_eq!(keys.authenticate("secret").unwrap().as_str(), "alpha");
+        let alpha = keys.authenticate("secret").unwrap();
+        assert_eq!(alpha.name().as_str(), "alpha");
         assert!(keys.authenticate("wrong").is_err());
-        assert!(keys.is_configured(&DisplayName::parse("alpha").unwrap()));
-        assert!(!keys.is_configured(&DisplayName::parse("beta").unwrap()));
+        assert!(keys.is_configured(alpha.name(), alpha.key_id()));
+        assert!(!keys.is_configured(&DisplayName::parse("beta").unwrap(), alpha.key_id()));
+    }
+
+    #[test]
+    fn a_new_key_for_the_same_name_revokes_the_old_one() {
+        // sha256("secret"), then sha256("other").
+        let old = BotKeys::parse(
+            "alpha:2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b",
+        )
+        .unwrap();
+        let rotated = BotKeys::parse(
+            "alpha:d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa",
+        )
+        .unwrap();
+        let issued = old.authenticate("secret").unwrap();
+        assert!(!rotated.is_configured(issued.name(), issued.key_id()));
+        let current = rotated.authenticate("other").unwrap();
+        assert!(rotated.is_configured(current.name(), current.key_id()));
     }
 
     #[test]

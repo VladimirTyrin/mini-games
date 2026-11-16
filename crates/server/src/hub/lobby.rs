@@ -65,6 +65,13 @@ impl Lobby {
         }
     }
 
+    /// The next match would not be the one voted for (other settings or players): vote again.
+    pub(super) fn forget_play_again_votes(&mut self) {
+        if let LobbyPhase::PostMatch { play_again_votes } = &mut self.phase {
+            play_again_votes.clear();
+        }
+    }
+
     /// Every seated human voted to play again (and at least one is seated).
     pub(super) fn everyone_voted_to_play_again(&self) -> bool {
         let LobbyPhase::PostMatch { play_again_votes } = &self.phase else {
