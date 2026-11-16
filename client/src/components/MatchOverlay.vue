@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { prefersTouch } from "@/input/prefers-touch";
+import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
 import type { SeatPause } from "@/match/seat-pause";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
@@ -34,6 +36,15 @@ onBeforeUnmount(() => {
   clearInterval(timer);
   if (revealTimer !== null) clearTimeout(revealTimer);
 });
+
+// Enter or Space starts the next match once the result is up (keys held from the game's last
+// moment do not count: repeats are ignored).
+useGameKeys((key) => {
+  if (!ended.value || resultFolded.value || (key !== "Enter" && key !== " ")) return false;
+  emit("again");
+  return true;
+});
+const showsKeyHint = !prefersTouch();
 
 const pauses = computed(() => props.controller.pauses.value);
 const aborted = computed(() => props.controller.aborted.value);
@@ -122,6 +133,9 @@ async function voteDrop(slot: number): Promise<void> {
       <div class="flex flex-wrap gap-2">
         <button class="h-11 flex-1 rounded-xl bg-emerald-600 px-4 font-semibold" @click="emit('again')">
           Play again
+          <kbd v-if="showsKeyHint" class="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-xs font-normal"
+            >Enter</kbd
+          >
         </button>
         <button v-if="!aborted" class="h-11 rounded-xl bg-panel-raised px-4" @click="emit('replay')">
           Save replay

@@ -147,6 +147,12 @@ function tileClass(row: TileRow, column: number): string {
   return row.letters[column] ? "border-2 border-gray-400 text-gray-100" : "border-2 border-white/10";
 }
 
+/** After a miss the answer gets its own row of tiles under the guesses. */
+const missedAnswer = computed(() => {
+  const current = view.value;
+  return current?.answer && current.phase !== WordHuntPhase.SOLVED ? [...current.answer] : null;
+});
+
 /** The newest guess reveals tile by tile. */
 const revealRow = computed(() => (prefersReducedMotion() ? -1 : guesses.value.length - 1));
 
@@ -213,6 +219,20 @@ const gridSize = computed(() => ({ "--letters": wordLength.value, "--rows": maxG
             :style="rowIndex === revealRow ? { animationDelay: `${(column - 1) * 90}ms` } : undefined"
           >
             {{ row.letters[column - 1] ?? "" }}
+          </div>
+        </div>
+        <div v-if="missedAnswer" class="mt-3 flex flex-col items-center gap-1.5">
+          <p class="text-xs font-semibold uppercase tracking-widest text-gray-400">The word was</p>
+          <div class="flex gap-1.5">
+            <div
+              v-for="(letter, index) in missedAnswer"
+              :key="index"
+              class="flex size-(--tile) items-center justify-center rounded-lg bg-emerald-600 text-[calc(var(--tile)*0.5)] font-bold uppercase text-white shadow-lg shadow-emerald-900/50"
+              :class="prefersReducedMotion() ? '' : 'wh-reveal'"
+              :style="{ animationDelay: `${600 + index * 90}ms` }"
+            >
+              {{ letter }}
+            </div>
           </div>
         </div>
         <p
