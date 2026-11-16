@@ -49,8 +49,13 @@ Zero warnings: clippy and rustc warnings fail CI.
   subtleties, optimizations, the reason behind a surprising decision. Never restate what the code
   or the name already says; no boilerplate doc comments on obvious items.
 - **Domain types over primitives** where they carry meaning (`Slot`, `Tick`, `Point`, `TileId`,
-  `Direction`...). Primitives only at boundaries. Convert unchecked input into a validated type
-  and expose operations that rely on its invariants only through that type.
+  `Direction`...). Primitives only at boundaries.
+- **Parse, don't validate.** Unchecked input becomes a typed value through a fallible
+  constructor (`Settings::parse(raw) -> Result<Settings, SettingsError>`, `Capped::<1, 100>::new`)
+  at the boundary; there is no separate `validate()` that callers may forget, and a value of the
+  type is valid by construction. Ranges are types (`Capped<MIN, MAX>`), not checks scattered over
+  the code, and the UI reads limits from the same constants. Operations that rely on an
+  invariant take the parsed type, never the raw one.
 - **Descriptive names** — names are free: `has_pending_inputs`, not `has_pending`; no `cmd`, `h`,
   `idx` in APIs.
 - One type (struct/enum/trait) per file where practical; `mod.rs` only declares and re-exports.
