@@ -85,7 +85,10 @@ message MatchPause {
 
 message MatchPaused {
   string match_id = 1;
+  // The seat this push is about (just disconnected, or still away after another came back).
   MatchPause pause = 2;
+  // Every seat the match waits for now; replaces the previous list.
+  repeated MatchPause pauses = 3;
 }
 
 message MatchResumed {

@@ -80,6 +80,8 @@ client → RequestReplay(match_id)            → ReplayData(bytes)
 - A seated player whose connection is gone when the match starts pauses it right away.
 - A seat that was dropped (left, voted out, budget spent) is out for good: it may still watch,
   its commands get `COMMAND_REJECTED`, and its disconnects no longer pause the match.
+- `Paused.pauses` lists every seat the match waits for and replaces the previous list (when one
+  of two absent seats returns, the others are re-announced). `Resumed` clears it.
 - `CatchUp.pauses` lists every seat the match waits for (`pause` repeats the first one for
   older clients); `resume_countdown_ms` is non-zero while the resume countdown runs.
 - `Ended` without `result` means the server aborted the match (internal error): there is no

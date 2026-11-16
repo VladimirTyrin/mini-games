@@ -310,11 +310,9 @@ impl MatchActor {
         for slot in &absent {
             self.budgets.disconnect(*slot, now);
         }
-        if !absent.is_empty() {
+        if let Some(first) = absent.first() {
             self.state = RunState::Paused;
-            for slot in absent {
-                self.broadcast_pause(slot, now);
-            }
+            self.broadcast_pause(*first, now);
         }
     }
 
@@ -406,11 +404,8 @@ impl MatchActor {
     }
 
     fn after_reconnect(&mut self) {
-        if self.budgets.any_disconnected() {
-            let now = Instant::now();
-            for slot in self.budgets.disconnected().collect::<Vec<_>>() {
-                self.broadcast_pause(slot, now);
-            }
+        if let Some(still_away) = self.budgets.disconnected().next() {
+            self.broadcast_pause(still_away, Instant::now());
             return;
         }
         if self.state == RunState::Paused {
@@ -478,12 +473,21 @@ impl MatchActor {
         }
     }
 
-    fn broadcast_pause(&self, slot: Slot, now: Instant) {
-        let pause = self.pause_info(slot, now);
+    /// `changed` is the seat this push is about; `pauses` always lists every seat still away,
+    /// so a client replaces its list instead of guessing which seats came back.
+    fn broadcast_pause(&self, changed: Slot, now: Instant) {
         self.broadcast(&codec::push(Message::Paused(proto::MatchPaused {
             match_id: self.match_id.to_string(),
-            pause: Some(pause),
+            pause: Some(self.pause_info(changed, now)),
+            pauses: self.current_pauses(now),
         })));
+    }
+
+    fn current_pauses(&self, now: Instant) -> Vec<proto::MatchPause> {
+        self.budgets
+            .disconnected()
+            .map(|slot| self.pause_info(slot, now))
+            .collect()
     }
 
     fn pause_info(&self, slot: Slot, now: Instant) -> proto::MatchPause {
@@ -509,11 +513,7 @@ impl MatchActor {
             return cached.encoded.clone();
         }
         let now = Instant::now();
-        let pauses: Vec<proto::MatchPause> = self
-            .budgets
-            .disconnected()
-            .map(|slot| self.pause_info(slot, now))
-            .collect();
+        let pauses = self.current_pauses(now);
         let resume_countdown_ms = match self.state {
             RunState::Countdown { until } => millis(until.saturating_duration_since(now)),
             RunState::Running | RunState::Paused => 0,

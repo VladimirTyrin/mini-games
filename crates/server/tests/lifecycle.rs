@@ -75,6 +75,41 @@ async fn a_voted_out_seat_cannot_pause_the_match_again_or_play() {
     expect_ok(host.request(turn_left(&match_id)).await);
 }
 
+fn paused_seats(message: &proto::ServerMessage) -> Option<Vec<u32>> {
+    match &message.message {
+        Some(Reply::Paused(paused)) => Some(paused.pauses.iter().map(|p| p.slot).collect()),
+        _ => None,
+    }
+}
+
+#[tokio::test]
+async fn a_pause_lists_only_the_seats_still_away_after_one_returns() {
+    let server = TestServer::start_with(|config| config.timing = quick_timing()).await;
+    let mut host = server.guest("Host").await.client;
+    let first = server.guest("First").await;
+    let first_resume = first.welcome.resume_token.clone();
+    let mut first = first.client;
+    let mut second = server.guest("Second").await.client;
+    let lobby = create_lobby(&mut host, snake_settings(), 3).await;
+    join_ready(&mut first, &lobby.lobby_id).await;
+    join_ready(&mut second, &lobby.lobby_id).await;
+    start(&mut host).await;
+
+    drop(first);
+    assert_eq!(host.expect(paused_seats).await, vec![1]);
+    drop(second);
+    assert_eq!(host.expect(paused_seats).await, vec![1, 2]);
+
+    let mut back = server.client().await;
+    assert!(
+        back.hello_guest("First", &first_resume)
+            .await
+            .unwrap()
+            .resumed
+    );
+    assert_eq!(host.expect(paused_seats).await, vec![2]);
+}
+
 #[tokio::test]
 async fn an_exhausted_disconnect_budget_drops_the_seat() {
     let server = TestServer::start_with(|config| {

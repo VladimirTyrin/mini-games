@@ -39,10 +39,6 @@ impl DisconnectBudgets {
         self.reconnect(slot, now);
     }
 
-    pub(super) fn any_disconnected(&self) -> bool {
-        !self.disconnected_since.is_empty()
-    }
-
     pub(super) fn is_disconnected(&self, slot: Slot) -> bool {
         self.disconnected_since.contains_key(&slot)
     }
