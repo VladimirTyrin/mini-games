@@ -30,8 +30,9 @@ function send(): void {
   text.value = "";
 }
 
+// The newest message, not the count: once the history is full the count stays the same.
 watch(
-  () => props.messages.length,
+  () => props.messages.at(-1),
   async () => {
     await nextTick();
     list.value?.scrollTo({ top: list.value.scrollHeight });

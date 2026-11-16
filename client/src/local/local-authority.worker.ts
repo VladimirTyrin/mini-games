@@ -97,6 +97,11 @@ async function handle(message: ToWorker): Promise<void> {
   }
 }
 
+// One message at a time, in order: a command sent while "start" still loads the WASM waits for
+// it instead of finding no match and being dropped.
+let handled: Promise<void> = Promise.resolve();
 self.onmessage = (event: MessageEvent<ToWorker>) => {
-  handle(event.data).catch((error: unknown) => post({ type: "failed", message: String(error) }));
+  handled = handled
+    .then(() => handle(event.data))
+    .catch((error: unknown) => post({ type: "failed", message: errorMessage(error) }));
 };

@@ -65,7 +65,9 @@ watch(controller, (current) => {
 // A backgrounded tab or app must not let bots play on alone.
 function onVisibility(): void {
   const source = controller.value?.source;
-  if (source instanceof LocalMatchSource) source.setPaused(document.hidden);
+  // The online countdown's length; turn-based games just wait for the next move.
+  const countdownMs = (controller.value?.gameTickMs ?? 0) > 0 ? 3_000 : 0;
+  if (source instanceof LocalMatchSource) source.setPaused(document.hidden, countdownMs);
 }
 document.addEventListener("visibilitychange", onVisibility);
 onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisibility));

@@ -40,7 +40,7 @@ async function checkForUpdates(): Promise<void> {
       toasts.show("Up to date", "success");
       break;
     case "web-bundle-ready":
-      toasts.show("Update downloaded — restart the app to apply", "success");
+      toasts.show("Update downloaded — it starts once you leave the match or lobby", "success");
       break;
     case "apk-available":
       toasts.show("A new app version is available — tap Download", "success");
@@ -70,9 +70,11 @@ function saveServer(): void {
 }
 
 function resetServer(): void {
+  const previous = prefs.serverUrl;
   prefs.resetServerUrl();
   serverInput.value = prefs.serverUrl;
-  connection.disconnect();
+  // Already the default: keep the session instead of signing in again.
+  if (prefs.serverUrl !== previous) connection.disconnect();
 }
 </script>
 

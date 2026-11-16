@@ -27,6 +27,7 @@ export class LocalMatchSource implements MatchSource {
   private nextRequestId = 1;
   private readonly pending = new Map<number, Pending>();
   private started = false;
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     readonly header: MatchHeader,
@@ -89,12 +90,31 @@ export class LocalMatchSource implements MatchSource {
     return Promise.resolve();
   }
 
-  /** Background tabs / backgrounded app: freeze the game instead of letting bots play on. */
-  setPaused(paused: boolean): void {
-    this.send({ type: paused ? "pause" : "resume" });
+  /**
+   * Background tabs / backgrounded app: freeze the game instead of letting bots play on. A
+   * real-time game resumes after `countdownMs`, as an online match does, not under your feet.
+   */
+  setPaused(paused: boolean, countdownMs = 0): void {
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = null;
+    if (paused) {
+      this.send({ type: "pause" });
+      this.events.emit("paused", []);
+      return;
+    }
+    if (countdownMs <= 0) {
+      this.send({ type: "resume" });
+      return;
+    }
+    this.events.emit("resumed", { countdownMs });
+    this.resumeTimer = setTimeout(() => {
+      this.resumeTimer = null;
+      this.send({ type: "resume" });
+    }, countdownMs);
   }
 
   leave(): void {
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.send({ type: "stop" });
     for (const pending of this.pending.values()) pending.reject(new Error("match closed"));
     this.pending.clear();
@@ -133,7 +153,11 @@ export class LocalMatchSource implements MatchSource {
         this.events.emit("ended", null);
         break;
       case "failed":
+        // The board would stay empty or frozen: end the match as aborted, which says so.
         console.error("local authority failed:", message.message);
+        for (const pending of this.pending.values()) pending.reject(new Error(message.message));
+        this.pending.clear();
+        this.events.emit("ended", null);
         break;
     }
   }
