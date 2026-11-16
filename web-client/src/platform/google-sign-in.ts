@@ -1,3 +1,5 @@
+import { isNativeApp } from "./native-app";
+
 interface GoogleIdentityServices {
   accounts: {
     id: {
@@ -54,6 +56,39 @@ export async function renderGoogleButton(
 }
 
 export function googleSignInSupportedHere(): boolean {
+  if (isNativeApp) return true;
   const { protocol, hostname } = window.location;
   return protocol === "https:" || hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+/** Cancelled by the user: not an error worth showing. */
+export class GoogleSignInCancelled extends Error {}
+
+let nativeInitializedFor: string | null = null;
+
+/**
+ * Android: the system account picker (Credential Manager). The ID token's audience is the Web
+ * client ID, so the server verifies it exactly like a web sign-in; Google matches the app by
+ * package name and signing certificate against the Android OAuth clients.
+ */
+export async function signInWithGoogleNatively(webClientId: string): Promise<string> {
+  if (!isNativeApp) throw new Error("native Google sign-in exists only in the app");
+  const { SocialLogin } = await import("@capgo/capacitor-social-login");
+  if (nativeInitializedFor !== webClientId) {
+    // No access token needed: skipping Google's extra authorization step avoids a known hang on
+    // the stock Capacitor activity.
+    await SocialLogin.initialize({ google: { webClientId, skipAuthOnlyAuthorizationAfterSignIn: true } });
+    nativeInitializedFor = webClientId;
+  }
+  try {
+    const response = await SocialLogin.login({ provider: "google", options: {} });
+    const result = response.result;
+    if (result.responseType !== "online" || !result.idToken) throw new Error("Google returned no ID token");
+    return result.idToken;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "USER_CANCELLED") {
+      throw new GoogleSignInCancelled("cancelled", { cause: error });
+    }
+    throw error;
+  }
 }

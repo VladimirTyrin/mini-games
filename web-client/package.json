@@ -15,10 +15,17 @@
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "android:sync": "node build/android.mjs sync",
+    "android:apk": "node build/android.mjs apk release",
+    "android:apk:debug": "node build/android.mjs apk debug"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.17.0",
+    "@capacitor/android": "8.6.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.2",
+    "@capgo/capacitor-social-login": "8.7.11",
     "pinia": "4.1.0",
     "vue": "3.5.45",
     "vue-router": "5.5.1"
@@ -26,6 +33,7 @@
   "devDependencies": {
     "@bufbuild/buf": "1.75.0",
     "@bufbuild/protoc-gen-es": "2.17.0",
+    "@capacitor/cli": "8.6.2",
     "@tailwindcss/vite": "4.3.5",
     "@vitejs/plugin-vue": "6.0.11",
     "@vue/test-utils": "2.6.0",

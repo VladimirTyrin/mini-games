@@ -15,7 +15,11 @@ export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? "./",
   plugins: [vue(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  define: { __APP_VERSION__: JSON.stringify(workspaceVersion()) },
+  define: {
+    __APP_VERSION__: JSON.stringify(workspaceVersion()),
+    // A literal, so the web build tree-shakes the Capacitor plugins away entirely.
+    __NATIVE_APP__: JSON.stringify(process.env.VITE_PLATFORM === "android"),
+  },
   build: { target: "es2022", assetsInlineLimit: 0 },
   worker: { format: "es" },
   server: {

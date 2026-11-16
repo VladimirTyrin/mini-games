@@ -1,0 +1,107 @@
+apply plugin: 'com.android.application'
+
+// The app version is the workspace version (Cargo.toml), like the server and the web build.
+def workspaceVersion = {
+    def cargo = rootProject.file('../../Cargo.toml').text
+    def matcher = cargo =~ /(?s)\[workspace\.package\][^\[]*?version\s*=\s*"(\d+)\.(\d+)\.(\d+)"/
+    if (!matcher.find()) throw new GradleException('workspace version not found in Cargo.toml')
+    return [matcher.group(1) as int, matcher.group(2) as int, matcher.group(3) as int]
+}()
+
+// Signing: CI passes MG_ANDROID_* environment variables; locally the gitignored ../../.keys
+// folder holds <variant>-signing.properties next to the keystores. Debug and release keys are
+// shared so the Google sign-in Android clients (package + SHA-1) match every build.
+def signingFor = { String variant ->
+    def prefix = "MG_ANDROID_${variant.toUpperCase()}_"
+    if (System.getenv(prefix + 'STORE_FILE')) {
+        return [
+            storeFile    : file(System.getenv(prefix + 'STORE_FILE')),
+            storePassword: System.getenv(prefix + 'STORE_PASSWORD'),
+            keyAlias     : System.getenv(prefix + 'KEY_ALIAS'),
+            keyPassword  : System.getenv(prefix + 'KEY_PASSWORD'),
+        ]
+    }
+    def keys = rootProject.file('../../.keys')
+    def properties = new File(keys, "${variant}-signing.properties")
+    if (!properties.exists()) return null
+    def loaded = new Properties()
+    properties.withInputStream { loaded.load(it) }
+    return [
+        storeFile    : new File(keys, loaded.getProperty('storeFile')),
+        storePassword: loaded.getProperty('storePassword'),
+        keyAlias     : loaded.getProperty('keyAlias'),
+        keyPassword  : loaded.getProperty('keyPassword'),
+    ]
+}
+
+android {
+    namespace = "xyz.braintvsminigames.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "xyz.braintvsminigames.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode workspaceVersion[0] * 10000 + workspaceVersion[1] * 100 + workspaceVersion[2]
+        versionName workspaceVersion.join('.')
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        ['debug', 'release'].each { variant ->
+            def signing = signingFor(variant)
+            if (signing != null) {
+                maybeCreate(variant).with {
+                    storeFile signing.storeFile
+                    storePassword signing.storePassword
+                    keyAlias signing.keyAlias
+                    keyPassword signing.keyPassword
+                }
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.findByName('debug')
+        }
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Unsigned when no release key is available; the release workflow requires one.
+            signingConfig signingConfigs.findByName('release')
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

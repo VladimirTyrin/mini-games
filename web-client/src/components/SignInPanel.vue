@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 
-import { googleSignInSupportedHere, renderGoogleButton } from "@/platform/google-sign-in";
+import {
+  GoogleSignInCancelled,
+  googleSignInSupportedHere,
+  renderGoogleButton,
+  signInWithGoogleNatively,
+} from "@/platform/google-sign-in";
+import { isNativeApp } from "@/platform/native-app";
 import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 
@@ -16,7 +22,7 @@ const googleClientId = computed(() => info.value?.googleClientId ?? "");
 const busy = computed(() => connection.state === "connecting" || connection.state === "reconnecting");
 
 async function mountGoogle(): Promise<void> {
-  if (!googleClientId.value || !googleButton.value) return;
+  if (isNativeApp || !googleClientId.value || !googleButton.value) return;
   if (!googleSignInSupportedHere()) {
     googleError.value = "Google sign-in needs the https site (or the Android app).";
     return;
@@ -26,6 +32,16 @@ async function mountGoogle(): Promise<void> {
       connection.signInWithGoogle(idToken),
     );
   } catch (error) {
+    googleError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function signInNatively(): Promise<void> {
+  googleError.value = null;
+  try {
+    connection.signInWithGoogle(await signInWithGoogleNatively(googleClientId.value));
+  } catch (error) {
+    if (error instanceof GoogleSignInCancelled) return;
     googleError.value = error instanceof Error ? error.message : String(error);
   }
 }
@@ -56,7 +72,15 @@ watch([googleClientId, googleButton], () => void mountGoogle());
         </button>
       </form>
       <div v-if="googleClientId" class="space-y-1">
-        <div ref="googleButton" />
+        <button
+          v-if="isNativeApp"
+          class="w-full rounded-full bg-white px-4 py-2 font-semibold text-gray-900"
+          :disabled="busy"
+          @click="signInNatively"
+        >
+          Sign in with Google
+        </button>
+        <div v-else ref="googleButton" />
         <p v-if="googleError" class="text-xs text-gray-400">{{ googleError }}</p>
       </div>
     </template>

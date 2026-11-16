@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 declare const __APP_VERSION__: string;
+declare const __NATIVE_APP__: boolean;
 
 interface ImportMetaEnv {
   readonly VITE_SERVER_URL?: string;

@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 
+import { useBackHandler } from "@/platform/back-navigation";
 import { useConnectionStore } from "@/stores/connection";
 
 const props = defineProps<{ title: string; back?: string | (() => void) }>();
@@ -26,6 +27,8 @@ function goBack(): void {
   if (typeof props.back === "function") props.back();
   else if (props.back) void router.push(props.back);
 }
+
+if (props.back) useBackHandler(goBack);
 </script>
 
 <template>
