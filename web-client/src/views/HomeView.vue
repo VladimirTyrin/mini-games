@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import GameIcon from "@/components/GameIcon.vue";
-import { isNativeApp } from "@/platform/native-app";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -20,7 +19,10 @@ async function openReplay(event: Event): Promise<void> {
   (event.target as HTMLInputElement).value = "";
 }
 // Android does not know the .mgreplay extension and would hide every file behind that filter.
-const replayFileTypes = isNativeApp ? undefined : ".mgreplay";
+const replayFileTypes = __NATIVE_APP__ ? undefined : ".mgreplay";
+
+/** For the template, which cannot see the build-time constant. */
+const isNativeApp = __NATIVE_APP__;
 </script>
 
 <template>

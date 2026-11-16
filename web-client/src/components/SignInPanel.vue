@@ -8,7 +8,6 @@ import {
   renderGoogleButton,
   signInWithGoogleNatively,
 } from "@/platform/google-sign-in";
-import { isNativeApp } from "@/platform/native-app";
 
 import GoogleSignInButton from "./GoogleSignInButton.vue";
 import { useConnectionStore } from "@/stores/connection";
@@ -27,7 +26,7 @@ const googleClientId = computed(() => info.value?.googleClientId ?? "");
 const busy = computed(() => connection.state === "connecting" || connection.state === "reconnecting");
 
 async function mountGoogle(): Promise<void> {
-  if (isNativeApp || !googleClientId.value || !googleButton.value) return;
+  if (__NATIVE_APP__ || !googleClientId.value || !googleButton.value) return;
   if (!googleSignInSupportedHere()) {
     googleError.value = "Google sign-in needs the https site (or the Android app).";
     return;
@@ -54,6 +53,9 @@ async function signInNatively(): Promise<void> {
 
 onMounted(() => void connection.loadServerInfo());
 watch([googleClientId, googleButton], () => void mountGoogle());
+
+/** For the template, which cannot see the build-time constant. */
+const isNativeApp = __NATIVE_APP__;
 </script>
 
 <template>

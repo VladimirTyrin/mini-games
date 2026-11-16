@@ -1,5 +1,3 @@
-import { isNativeApp } from "./native-app";
-
 interface GoogleIdentityServices {
   accounts: {
     id: {
@@ -58,7 +56,7 @@ export async function renderGoogleButton(
 }
 
 export function googleSignInSupportedHere(): boolean {
-  if (isNativeApp) return true;
+  if (__NATIVE_APP__) return true;
   const { protocol, hostname } = window.location;
   return protocol === "https:" || hostname === "localhost" || hostname === "127.0.0.1";
 }
@@ -74,7 +72,7 @@ let nativeInitializedFor: string | null = null;
  * package name and signing certificate against the Android OAuth clients.
  */
 export async function signInWithGoogleNatively(webClientId: string): Promise<string> {
-  if (!isNativeApp) throw new Error("native Google sign-in exists only in the app");
+  if (!__NATIVE_APP__) throw new Error("native Google sign-in exists only in the app");
   const { SocialLogin } = await import("@capgo/capacitor-social-login");
   if (nativeInitializedFor !== webClientId) {
     // No access token needed: skipping Google's extra authorization step avoids a known hang on

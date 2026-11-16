@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from "vue-router";
 
 // The browser downloads replays to its own folder; only the app keeps a list of them. The
-// `__NATIVE_APP__` literal rather than `isNativeApp`: the bundler does not fold the imported
+// `__NATIVE_APP__` literal (see env.d.ts): the bundler does not fold the imported
 // constant here, and the web build would keep the screen and the Capacitor Filesystem plugin.
 const appOnlyRoutes: RouteRecordRaw[] = __NATIVE_APP__
   ? [{ path: "/replays", name: "replays", component: () => import("./views/SavedReplaysView.vue") }]

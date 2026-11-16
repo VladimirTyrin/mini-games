@@ -119,7 +119,8 @@ function easeOutBack(progress: number): number {
 }
 
 function drawApple({ context, scene, cellSize }: Frame, cell: GridCell, scale: number): void {
-  const size = cellSize * scale;
+  // The pop-in easing starts a hair below zero; a negative size would make arc() throw.
+  const size = cellSize * Math.max(0, scale);
   const x = (cell.x + 0.5) * cellSize - size / 2;
   const y = (cell.y + 0.5) * cellSize - size / 2;
   if (scene.sprites) {

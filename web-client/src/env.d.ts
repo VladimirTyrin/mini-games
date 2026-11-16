@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 
 declare const __APP_VERSION__: string;
+/**
+ * True only in the Android build (`VITE_PLATFORM=android`, see vite.config.ts). Gate native code
+ * with this literal directly: the bundler drops `if (!__NATIVE_APP__)` branches, but not
+ * branches on a constant re-exported from another module.
+ */
 declare const __NATIVE_APP__: boolean;
 declare const __APP_BUILD__: number;
 

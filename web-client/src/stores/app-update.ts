@@ -2,7 +2,6 @@ import { defineStore } from "pinia";
 import { shallowRef } from "vue";
 
 import { type AvailableUpdate, downloadUpdate, findUpdate } from "@/platform/app-update";
-import { isNativeApp } from "@/platform/native-app";
 
 import { usePrefsStore } from "./prefs";
 
@@ -12,7 +11,7 @@ export const useAppUpdateStore = defineStore("app-update", () => {
   const available = shallowRef<AvailableUpdate | null>(null);
 
   async function check(): Promise<void> {
-    if (!isNativeApp) return;
+    if (!__NATIVE_APP__) return;
     try {
       available.value = await findUpdate(prefs.serverUrl, __APP_BUILD__);
     } catch {

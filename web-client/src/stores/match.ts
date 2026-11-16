@@ -96,7 +96,7 @@ export const useMatchStore = defineStore("match", () => {
         return;
       }
       const fileName = replayFileNameForMatch(source.header, gameTitle);
-      // The literal, not `isNativeApp`, so the web build drops the app's file storage (see router.ts).
+      // The literal (see env.d.ts), so the web build drops the app's file storage.
       if (__NATIVE_APP__) {
         await saveReplayFile(bytes, fileName);
         toasts.show("Replay saved — find it under Saved replays on the home screen", "success", {

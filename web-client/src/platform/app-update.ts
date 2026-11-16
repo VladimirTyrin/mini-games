@@ -1,5 +1,3 @@
-import { isNativeApp } from "./native-app";
-
 /** A newer APK published next to the game server (`/downloads/android.json`). */
 export interface AvailableUpdate {
   readonly versionName: string;
@@ -51,7 +49,7 @@ export async function findUpdate(
 
 /** Hands the APK to the system browser, which downloads it and offers to install. */
 export async function downloadUpdate(update: AvailableUpdate): Promise<void> {
-  if (!isNativeApp) return;
+  if (!__NATIVE_APP__) return;
   const { Browser } = await import("@capacitor/browser");
   await Browser.open({ url: update.downloadUrl });
 }

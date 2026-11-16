@@ -58,7 +58,9 @@ async function leave(): Promise<void> {
   const kind = controller.value?.source.kind;
   match.close();
   if (kind === "online") await lobby.leave();
-  void router.push(kind === "online" ? "/online" : "/");
+  // In the app a replay is usually opened from the saved-replays list, so leave back to it.
+  const home = __NATIVE_APP__ && kind === "replay" ? "/replays" : "/";
+  void router.push(kind === "online" ? "/online" : home);
 }
 
 function again(): void {
