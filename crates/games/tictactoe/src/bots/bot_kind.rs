@@ -2,7 +2,7 @@ use mg_core::{Bot, HasBots};
 
 use super::minimax_bot::MinimaxBot;
 use super::random_bot::RandomBot;
-use crate::tictactoe::TicTacToe;
+use crate::game::TicTacToe;
 
 pub const RANDOM_BOT_BUDGET: u64 = 1;
 /// Cells the minimax search may visit per move (probes, candidate scans, move updates). A cell

@@ -2,8 +2,8 @@ use mg_core::{Bot, Budget, CoreRng, Slot};
 
 use super::neighbourhood::Neighbourhood;
 use super::search_board::SearchBoard;
-use crate::command::Command;
-use crate::tictactoe::TicTacToe;
+use crate::game::TicTacToe;
+use crate::io::Command;
 
 /// Uniform over empty cells within two cells (Chebyshev) of any mark; the centre on an empty
 /// board.

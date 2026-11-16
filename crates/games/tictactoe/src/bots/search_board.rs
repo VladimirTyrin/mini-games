@@ -5,13 +5,9 @@ use super::run::Run;
 use super::side::Side;
 use super::stone::Stone;
 use super::window_counts::WindowCounts;
-use crate::dimensions::Dimensions;
-use crate::line_direction::LineDirection;
-use crate::mark::Mark;
-use crate::point::Point;
-use crate::settings::MAX_FIELD_SIZE;
-use crate::tictactoe::TicTacToe;
-use crate::win_length::WinLength;
+use crate::game::TicTacToe;
+use crate::model::{LineDirection, Mark, Point};
+use crate::settings::{Dimensions, MAX_FIELD_SIZE, WinLength};
 
 /// Longest line segment a probe looks at: `2 * win_count - 1` cells.
 const MAX_SEGMENT: usize = 2 * MAX_FIELD_SIZE as usize - 1;

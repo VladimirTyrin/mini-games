@@ -3,39 +3,26 @@ use mg_core::{
     SetupError, Slot, StateHasher, Status, Viewer,
 };
 
-use crate::{Command, Settings, View, WorldEvent};
+use crate::io::{Command, WorldEvent};
+use crate::model::Seats;
+use crate::rules::add_to_total;
+use crate::settings::Settings;
+use crate::view::View;
 
-const MAX_ADD: u32 = 3;
 const MAX_SEATS: u8 = 4;
 
 #[derive(Clone, Debug)]
 pub struct {{Pascal}} {
     target: u32,
     total: u32,
-    in_play: Vec<bool>,
+    seats: Seats,
     turn: Option<Slot>,
     winner: Option<Slot>,
 }
 
 impl {{Pascal}} {
-    fn seats_in_play(&self) -> impl Iterator<Item = Slot> + '_ {
-        Slot::all(self.in_play.len()).filter(|slot| self.is_in_play(*slot))
-    }
-
-    fn is_in_play(&self, slot: Slot) -> bool {
-        self.in_play.get(slot.index()).copied().unwrap_or(false)
-    }
-
     fn is_over(&self) -> bool {
-        self.winner.is_some() || self.seats_in_play().next().is_none()
-    }
-
-    /// Next seat in play after `slot`, wrapping around.
-    fn next_after(&self, slot: Slot) -> Option<Slot> {
-        let seats = self.in_play.len();
-        (1..=seats)
-            .filter_map(|offset| Slot::try_from((slot.index() + offset) % seats).ok())
-            .find(|candidate| self.is_in_play(*candidate))
+        self.winner.is_some() || self.seats.in_play().next().is_none()
     }
 }
 
@@ -60,7 +47,7 @@ impl Game for {{Pascal}} {
         if players.iter().any(|player| !player.is_human()) {
             return Err(SetupError::InvalidPlayers("this game has no bots".into()));
         }
-        Ok(Self { target: settings.target, total: 0, in_play: vec![true; players.len()], turn: None, winner: None })
+        Ok(Self { target: settings.target, total: 0, seats: Seats::all_in_play(players.len()), turn: None, winner: None })
     }
 
     fn clock(&self) -> Clock {
@@ -75,15 +62,12 @@ impl Game for {{Pascal}} {
             return Err(CommandError::NotYourTurn);
         }
         let Command::Add(amount) = *command;
-        if !(1..=MAX_ADD).contains(&amount) {
-            return Err(CommandError::Illegal("add 1, 2 or 3"));
-        }
-        self.total = (self.total + amount).min(self.target);
+        self.total = add_to_total(self.total, amount, self.target)?;
         if self.total == self.target {
             self.winner = Some(slot);
             self.turn = None;
         } else {
-            self.turn = self.next_after(slot);
+            self.turn = self.seats.next_after(slot);
         }
         Ok(())
     }
@@ -92,13 +76,13 @@ impl Game for {{Pascal}} {
         if self.turn.is_some() || self.is_over() {
             return Vec::new();
         }
-        let seats: Vec<Slot> = self.seats_in_play().collect();
+        let seats: Vec<Slot> = self.seats.in_play().collect();
         rng.pick(&seats).map(|slot| WorldEvent::FirstPlayerChosen(*slot)).into_iter().collect()
     }
 
     fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
         let WorldEvent::FirstPlayerChosen(slot) = *event;
-        if self.turn.is_some() || self.total > 0 || !self.is_in_play(slot) {
+        if self.turn.is_some() || self.total > 0 || !self.seats.is_in_play(slot) {
             return Err(CommandError::Illegal("the first player is already chosen"));
         }
         self.turn = Some(slot);
@@ -106,10 +90,12 @@ impl Game for {{Pascal}} {
     }
 
     fn drop_player(&mut self, slot: Slot) {
-        let Some(in_play) = self.in_play.get_mut(slot.index()) else { return };
-        *in_play = false;
+        if slot.index() >= self.seats.count() {
+            return;
+        }
+        self.seats.remove(slot);
         if self.turn == Some(slot) {
-            self.turn = self.next_after(slot).filter(|next| *next != slot);
+            self.turn = self.seats.next_after(slot).filter(|next| *next != slot);
         }
         if self.is_over() {
             self.turn = None;
@@ -127,10 +113,10 @@ impl Game for {{Pascal}} {
         if !self.is_over() {
             return Status::InProgress;
         }
-        let scores = Slot::all(self.in_play.len())
+        let scores = Slot::all(self.seats.count())
             .map(|slot| i64::from(self.winner == Some(slot)))
             .collect();
-        let (kind, winners) = match (self.winner, self.in_play.len()) {
+        let (kind, winners) = match (self.winner, self.seats.count()) {
             (Some(_), 1) => (OutcomeKind::Victory, Vec::new()),
             (Some(winner), _) => (OutcomeKind::Winner, vec![winner]),
             (None, _) => (OutcomeKind::Defeat, Vec::new()),
@@ -154,10 +140,7 @@ impl Game for {{Pascal}} {
     fn hash_state(&self, hasher: &mut StateHasher) {
         hasher.u32(self.target);
         hasher.u32(self.total);
-        hasher.length(self.in_play.len());
-        for in_play in &self.in_play {
-            hasher.bool(*in_play);
-        }
+        self.seats.hash(hasher);
         hasher.u8(self.turn.map_or(u8::MAX, Slot::get));
         hasher.u8(self.winner.map_or(u8::MAX, Slot::get));
     }

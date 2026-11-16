@@ -22,24 +22,52 @@ fn templates(names: &GameNames) -> Vec<Template> {
             include_str!("../templates/game/src/lib.rs.tmpl"),
         ),
         template(
-            format!("{game}/src/command.rs"),
-            include_str!("../templates/game/src/command.rs.tmpl"),
-        ),
-        template(
-            format!("{game}/src/settings.rs"),
-            include_str!("../templates/game/src/settings.rs.tmpl"),
-        ),
-        template(
-            format!("{game}/src/view.rs"),
-            include_str!("../templates/game/src/view.rs.tmpl"),
-        ),
-        template(
-            format!("{game}/src/world_event.rs"),
-            include_str!("../templates/game/src/world_event.rs.tmpl"),
-        ),
-        template(
-            format!("{game}/src/{}.rs", names.snake),
+            format!("{game}/src/game.rs"),
             include_str!("../templates/game/src/game.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/settings/mod.rs"),
+            include_str!("../templates/game/src/settings/mod.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/settings/settings.rs"),
+            include_str!("../templates/game/src/settings/settings.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/model/mod.rs"),
+            include_str!("../templates/game/src/model/mod.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/model/seats.rs"),
+            include_str!("../templates/game/src/model/seats.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/rules/mod.rs"),
+            include_str!("../templates/game/src/rules/mod.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/rules/addition.rs"),
+            include_str!("../templates/game/src/rules/addition.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/io/mod.rs"),
+            include_str!("../templates/game/src/io/mod.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/io/command.rs"),
+            include_str!("../templates/game/src/io/command.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/io/world_event.rs"),
+            include_str!("../templates/game/src/io/world_event.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/view/mod.rs"),
+            include_str!("../templates/game/src/view/mod.rs.tmpl"),
+        ),
+        template(
+            format!("{game}/src/view/view.rs"),
+            include_str!("../templates/game/src/view/view.rs.tmpl"),
         ),
         template(
             format!("{game}/src/tests/mod.rs"),

@@ -2,8 +2,7 @@
 
 use super::support::{at, board, digit_at, pair, value};
 use crate::Cell;
-use crate::board::Board;
-use crate::row_index::RowIndex;
+use crate::model::{Board, RowIndex};
 
 #[test]
 fn test_board_from_values_creates_correct_layout() {

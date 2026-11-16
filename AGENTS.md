@@ -12,6 +12,8 @@ Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.
 - `crates/core` (`mg-core`) — `Game`/`Bot` traits, `Authority` (seals lockstep frames), `Match`
   (applies them), pinned RNG, state hashing, conformance suite.
 - `crates/games/*` — one crate per game: rules + bots, pure Rust, depends only on `mg-core`.
+  Same skeleton in every game: `game.rs`, `settings/`, `model/`, `rules/`, `io/`, `view/`,
+  `bots/`, `tests/` (see `docs/adding-a-game.md`).
 - `proto/` — wire contract (protobuf; JSON mapping on the WebSocket, binary in replay files).
 - `web-client/` — Vue 3 + Pinia + Tailwind; `web-client/android` — Capacitor app.
 - `server/` — legacy v1 server, excluded from the workspace, kept only as porting reference.

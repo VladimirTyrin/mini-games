@@ -1,6 +1,6 @@
 use mg_core::{Game, PlayerSpec, Slot, Viewer};
 
-use crate::cell_content::CellContent;
+use crate::model::CellContent;
 use crate::{
     DeadSnakeBehavior, Direction, Point, Settings, Snake, SnakeView, WallCollisionMode, WorldEvent,
 };

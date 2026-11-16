@@ -13,35 +13,23 @@
     )
 )]
 
-mod board;
 mod bots;
-mod command;
-mod dimensions;
-mod first_player_mode;
-mod game_end;
-mod line_direction;
-mod line_span;
-mod mark;
-mod point;
+mod game;
+mod io;
+mod model;
 mod rules;
 mod settings;
-mod tictactoe;
 mod view;
-mod win_length;
-mod winning_line;
-mod world_event;
 
 pub use bots::{BotKind, MINIMAX_BOT_BUDGET, MinimaxBot, RANDOM_BOT_BUDGET, RandomBot};
-pub use command::Command;
-pub use first_player_mode::FirstPlayerMode;
-pub use game_end::GameEnd;
-pub use mark::Mark;
-pub use point::Point;
-pub use settings::{MAX_FIELD_SIZE, MIN_FIELD_SIZE, MIN_WIN_COUNT, PLAYERS, Settings};
-pub use tictactoe::TicTacToe;
+pub use game::TicTacToe;
+pub use io::{Command, WorldEvent};
+pub use model::{Mark, Point};
+pub use rules::{GameEnd, WinningLine};
+pub use settings::{
+    FirstPlayerMode, MAX_FIELD_SIZE, MIN_FIELD_SIZE, MIN_WIN_COUNT, PLAYERS, Settings,
+};
 pub use view::View;
-pub use winning_line::WinningLine;
-pub use world_event::WorldEvent;
 
 #[cfg(test)]
 mod tests;

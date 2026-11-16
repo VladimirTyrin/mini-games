@@ -29,6 +29,24 @@ cd web-client && npm run dev    # Home → Connect Four, plays locally with no s
 
 ## 2. Rules (`crates/games/<game>`)
 
+Every game crate has the same role-based layout, so you know where to look in any of them:
+
+| Path | What lives there |
+|---|---|
+| `lib.rs` | module declarations and the crate's public re-exports, nothing else |
+| `game.rs` | the game struct, `impl Game` and, with bots, `impl HasBots` |
+| `settings/` | `Settings`, its option enums and validated limit types |
+| `model/` | domain values and state pieces: points, boards, cells, ids, scores |
+| `rules/` | pure rule logic and its outcomes: moves, win/end detection, end reasons, phase, rule constants |
+| `io/` | what enters the game: `Command`, `WorldEvent` |
+| `view/` | `View` and types that exist only to be shown (animation hints, last action, end-of-game stats) |
+| `bots/` | bot kinds and bot implementations (games with bots only) |
+| `tests/` | unit and conformance tests |
+
+Each directory's `mod.rs` only declares its files and re-exports what the rest of the crate (or,
+via `lib.rs`, other crates) uses; one type per file. A type the rules consult belongs to
+`model/` even when the view also shows it.
+
 Replace the sample rules. Keep the shape:
 
 - **Settings** — a plain struct with `Default` (what the UI offers first) and limit consts.

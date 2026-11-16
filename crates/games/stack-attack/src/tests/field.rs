@@ -1,5 +1,5 @@
 use super::support::pattern;
-use crate::field::Field;
+use crate::model::Field;
 use crate::{BoxId, CargoBox, Cell, Row};
 
 fn cargo(id: BoxId, x: i32, y: i32) -> CargoBox {

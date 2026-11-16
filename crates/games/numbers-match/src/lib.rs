@@ -18,47 +18,22 @@
 //! (deterministic, no randomness). Clearing the board wins; no pair and no refills left loses.
 //! Cells are addressed by [`CellIndex`] (reading order).
 
-mod board;
-mod cell;
-mod cell_index;
-mod cell_pair;
-mod cell_value;
-mod command;
-mod hint;
-mod hint_mode;
-mod hints_left;
-mod last_action;
-mod loss_reason;
-mod numbers_match;
-mod phase;
-mod row_index;
+mod game;
+mod io;
+mod model;
+mod rules;
 mod settings;
-mod stats;
 mod view;
-mod world_event;
 
-pub use cell::Cell;
-pub use cell_index::CellIndex;
-pub use cell_pair::CellPair;
-pub use cell_value::CellValue;
-pub use command::Command;
-pub use hint::Hint;
-pub use hint_mode::HintMode;
-pub use hints_left::HintsLeft;
-pub use last_action::LastAction;
-pub use loss_reason::LossReason;
-pub use numbers_match::NumbersMatch;
-pub use phase::Phase;
-pub use row_index::RowIndex;
+pub use game::NumbersMatch;
+pub use io::{Command, WorldEvent};
+pub use model::{Cell, CellIndex, CellPair, CellValue, Hint, HintsLeft, RowIndex};
+pub use rules::{COLUMNS, INITIAL_CELLS, LossReason, Phase};
 pub use settings::{
-    DEFAULT_REFILLS, LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, MAX_REFILLS, Settings,
+    DEFAULT_REFILLS, HintMode, LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, MAX_REFILLS,
+    Settings,
 };
-pub use stats::Stats;
-pub use view::View;
-pub use world_event::WorldEvent;
-
-pub const COLUMNS: usize = 9;
-pub const INITIAL_CELLS: usize = 42;
+pub use view::{LastAction, Stats, View};
 
 #[cfg(test)]
 mod tests;

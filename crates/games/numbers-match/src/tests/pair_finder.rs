@@ -3,7 +3,7 @@
 use mg_core::CoreRng;
 
 use super::support::value;
-use crate::board::Board;
+use crate::model::Board;
 use crate::{COLUMNS, Cell};
 
 /// `active_per_16`/16 of the cells active, the rest removed; up to 8 empty tail cells.

@@ -1,0 +1,46 @@
+use mg_core::{Slot, StateHasher};
+
+/// Which seats are still in play.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Seats {
+    in_play: Vec<bool>,
+}
+
+impl Seats {
+    pub(crate) fn all_in_play(count: usize) -> Self {
+        Self { in_play: vec![true; count] }
+    }
+
+    pub(crate) fn count(&self) -> usize {
+        self.in_play.len()
+    }
+
+    pub(crate) fn in_play(&self) -> impl Iterator<Item = Slot> + '_ {
+        Slot::all(self.in_play.len()).filter(|slot| self.is_in_play(*slot))
+    }
+
+    pub(crate) fn is_in_play(&self, slot: Slot) -> bool {
+        self.in_play.get(slot.index()).copied().unwrap_or(false)
+    }
+
+    /// Next seat in play after `slot`, wrapping around.
+    pub(crate) fn next_after(&self, slot: Slot) -> Option<Slot> {
+        let seats = self.in_play.len();
+        (1..=seats)
+            .filter_map(|offset| Slot::try_from((slot.index() + offset) % seats).ok())
+            .find(|candidate| self.is_in_play(*candidate))
+    }
+
+    pub(crate) fn remove(&mut self, slot: Slot) {
+        if let Some(in_play) = self.in_play.get_mut(slot.index()) {
+            *in_play = false;
+        }
+    }
+
+    pub(crate) fn hash(&self, hasher: &mut StateHasher) {
+        hasher.length(self.in_play.len());
+        for in_play in &self.in_play {
+            hasher.bool(*in_play);
+        }
+    }
+}

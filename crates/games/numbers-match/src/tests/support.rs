@@ -1,6 +1,6 @@
 use mg_core::{CoreRng, Game, PlayerSpec};
 
-use crate::board::Board;
+use crate::model::Board;
 use crate::{COLUMNS, Cell, CellIndex, CellPair, CellValue, HintMode, NumbersMatch, Settings};
 
 pub(super) fn value(digit: u8) -> CellValue {

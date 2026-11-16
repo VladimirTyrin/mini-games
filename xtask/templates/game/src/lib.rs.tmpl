@@ -13,17 +13,17 @@
     )
 )]
 
-mod command;
+mod game;
+mod io;
+mod model;
+mod rules;
 mod settings;
 mod view;
-mod world_event;
-mod {{snake}};
 
-pub use command::Command;
+pub use game::{{Pascal}};
+pub use io::{Command, WorldEvent};
 pub use settings::Settings;
 pub use view::View;
-pub use world_event::WorldEvent;
-pub use {{snake}}::{{Pascal}};
 
 #[cfg(test)]
 mod tests;

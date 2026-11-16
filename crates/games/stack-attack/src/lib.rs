@@ -14,62 +14,25 @@
     )
 )]
 
-mod box_id;
-mod cargo_box;
-mod cell;
-mod column;
-mod command;
-mod crane;
-mod crane_id;
-mod crane_state;
-mod direction;
-mod end_reason;
-mod field;
-mod game_event;
-mod level;
-mod pattern_id;
-mod row;
+mod game;
+mod io;
+mod model;
 pub mod rules;
-mod score;
 mod settings;
-mod side;
-mod simulation;
-mod stack_attack;
-mod tick_count;
 mod view;
-mod worker;
-mod worker_state;
-mod worker_status;
-mod worker_view;
-mod world_event;
 
-pub use box_id::BoxId;
-pub use cargo_box::CargoBox;
-pub use cell::Cell;
-pub use column::Column;
-pub use command::{Command, MAX_QUEUED_COMMANDS};
-pub use crane::Crane;
-pub use crane_id::CraneId;
-pub use crane_state::CraneState;
-pub use direction::Direction;
-pub use end_reason::EndReason;
-pub use game_event::GameEvent;
-pub use level::Level;
-pub use pattern_id::PatternId;
-pub use row::Row;
-pub use score::Score;
+pub use game::StackAttack;
+pub use io::{Command, MAX_QUEUED_COMMANDS, WorldEvent};
+pub use model::{
+    BoxId, CargoBox, Cell, Column, Crane, CraneId, CraneState, Direction, Level, PatternId, Row,
+    Score, Side, TickCount, WorkerState, WorkerStatus,
+};
+pub use rules::EndReason;
 pub use settings::{
     MAX_FIELD_HEIGHT, MAX_FIELD_WIDTH, MAX_SEATS, MIN_FIELD_HEIGHT, MIN_FIELD_WIDTH, MIN_SEATS,
     Settings,
 };
-pub use side::Side;
-pub use stack_attack::StackAttack;
-pub use tick_count::TickCount;
-pub use view::View;
-pub use worker_state::WorkerState;
-pub use worker_status::WorkerStatus;
-pub use worker_view::WorkerView;
-pub use world_event::WorldEvent;
+pub use view::{GameEvent, View, WorkerView};
 
 #[cfg(test)]
 mod tests;

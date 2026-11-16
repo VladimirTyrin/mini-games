@@ -4,8 +4,8 @@ use super::neighbourhood::Neighbourhood;
 use super::search::Search;
 use super::search_board::SearchBoard;
 use super::tactics::tactical_move;
-use crate::command::Command;
-use crate::tictactoe::TicTacToe;
+use crate::game::TicTacToe;
+use crate::io::Command;
 
 /// Legacy rules first ([`tactical_move`]), then an iterative-deepening alpha-beta search bounded
 /// by the budget. Fully deterministic: it never uses the rng.

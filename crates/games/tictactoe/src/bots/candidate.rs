@@ -1,5 +1,5 @@
 use super::probe::Probe;
-use crate::point::Point;
+use crate::model::Point;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Candidate {

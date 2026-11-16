@@ -2,9 +2,7 @@ use mg_core::conformance::{self, Conformance, Setup};
 use mg_core::{BotSeat, CoreRng, HasBots, PlayerKind, PlayerSpec, Slot};
 
 use super::support::field_settings;
-use crate::cell_content::CellContent;
-use crate::grid::Grid;
-use crate::seat_state::SeatState;
+use crate::model::{CellContent, Grid, SeatState};
 use crate::{
     BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, INPUT_BUFFER, START_LENGTH,
     Settings, Snake, WallCollisionMode,

@@ -1,0 +1,3 @@
+# Game crates keep their main type in a same-named file of a private role module
+# (`view/view.rs`, `settings/settings.rs`).
+allow-private-module-inception = true
