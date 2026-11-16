@@ -1185,6 +1185,7 @@ dependencies = [
  "mg-snake",
  "mg-stack-attack",
  "mg-tictactoe",
+ "serde_json",
  "thiserror",
 ]
 

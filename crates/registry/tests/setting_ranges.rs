@@ -1,28 +1,32 @@
 use mg_core::{PlayerSpec, SettingRange, SettingsError};
 use mg_protocol::proto;
-use mg_protocol::proto::game_settings::Game as WireSettings;
 use mg_registry::{CreateError, GameKind, create_mirror, default_settings, setting_ranges};
 
-/// Writes `value` into the wire field the game reports as `field`.
+/// Writes `value` into the wire field the game reports as `field`. Goes through protobuf JSON,
+/// which addresses fields by name, so every game (a scaffolded one too) is covered without a
+/// per-game list; an unknown name fails to deserialize.
 fn set_field(settings: &mut proto::GameSettings, field: &str, value: u32) {
-    let slot = match (settings.game.as_mut().unwrap(), field) {
-        (WireSettings::Snake(snake), "field_width") => &mut snake.field_width,
-        (WireSettings::Snake(snake), "field_height") => &mut snake.field_height,
-        (WireSettings::Snake(snake), "max_food_count") => &mut snake.max_food_count,
-        (WireSettings::Snake(snake), "food_spawn_permille") => &mut snake.food_spawn_permille,
-        (WireSettings::Snake(snake), "tick_interval_ms") => &mut snake.tick_interval_ms,
-        (WireSettings::Tictactoe(tictactoe), "field_width") => &mut tictactoe.field_width,
-        (WireSettings::Tictactoe(tictactoe), "field_height") => &mut tictactoe.field_height,
-        (WireSettings::Tictactoe(tictactoe), "win_count") => &mut tictactoe.win_count,
-        (WireSettings::StackAttack(stack), "field_width") => &mut stack.field_width,
-        (WireSettings::StackAttack(stack), "field_height") => &mut stack.field_height,
-        (WireSettings::Puzzle2048(puzzle), "width") => &mut puzzle.width,
-        (WireSettings::Puzzle2048(puzzle), "height") => &mut puzzle.height,
-        (WireSettings::Puzzle2048(puzzle), "target") => &mut puzzle.target,
-        (WireSettings::NumbersMatch(numbers), "refills") => &mut numbers.refills,
-        (game, field) => panic!("no wire field `{field}` in {game:?}"),
-    };
-    *slot = value;
+    let mut json = serde_json::to_value(*settings).unwrap();
+    let game = json.as_object_mut().unwrap().values_mut().next().unwrap();
+    game.as_object_mut()
+        .unwrap()
+        .insert(json_name(field), value.into());
+    *settings = serde_json::from_value(json)
+        .unwrap_or_else(|error| panic!("no wire field `{field}`: {error}"));
+}
+
+/// Protobuf JSON's lowerCamelCase name of a proto field.
+fn json_name(field: &str) -> String {
+    let mut parts = field.split('_');
+    let mut name = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            name.extend(first.to_uppercase());
+            name.push_str(chars.as_str());
+        }
+    }
+    name
 }
 
 fn rejected_field(kind: GameKind, settings: &proto::GameSettings) -> Option<&'static str> {

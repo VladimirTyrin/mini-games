@@ -22,3 +22,7 @@ mg-puzzle2048.workspace = true
 mg-numbers-match.workspace = true
 # xtask:game-deps
 thiserror = "2"
+
+[dev-dependencies]
+mg-protocol = { workspace = true, features = ["json"] }
+serde_json = "1"
