@@ -21,7 +21,7 @@ fn input_to_wire<G: WireGame>(input: &Input<G::Command, G::WorldEvent>) -> proto
             })
         }
         Input::World(event) => proto::frame_input::Input::World(G::world_event_to_wire(event)),
-        Input::Dropped { slot } => proto::frame_input::Input::DroppedSlot(u32::from(slot.get())),
+        Input::Dropped { slot } => proto::frame_input::Input::DroppedSlot(slot_to_wire(*slot)),
     };
     proto::FrameInput { input: Some(input) }
 }
@@ -65,4 +65,8 @@ pub fn slot_from_wire(slot: u32) -> Result<Slot, WireError> {
     u8::try_from(slot)
         .map(Slot::new)
         .map_err(|_| WireError::OutOfRange("slot"))
+}
+
+pub fn slot_to_wire(slot: Slot) -> u32 {
+    u32::from(slot.get())
 }
