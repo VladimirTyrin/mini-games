@@ -7,7 +7,7 @@ import {
   StackAttackViewSchema,
 } from "@/proto/minigames/v2/stack_attack_pb";
 
-import { StackAttackTransition } from "./stack-attack-transition";
+import { StackAttackTransition, fallFromRest } from "./stack-attack-transition";
 
 const HEIGHT = 8;
 
@@ -37,5 +37,19 @@ describe("StackAttackTransition", () => {
     const box = after.boxes[0];
     if (!box) throw new Error("no box");
     expect(new StackAttackTransition(after, before, 0).boxStartOf(box)).toEqual({ x: 4, y: HEIGHT });
+  });
+
+  it("lets a released box leave the hook from rest and reach full falling speed by the next cell", () => {
+    const before = view(4, StackAttackCraneState.MOVING, false);
+    const after = view(4, StackAttackCraneState.DROPPING, true);
+    const transition = new StackAttackTransition(after, before, 0);
+
+    // Slower than a constant fall early in the tick, at the cell by its end.
+    expect(HEIGHT - (transition.boxRowAt(7, 0.25) ?? 0)).toBeLessThan(0.25);
+    expect(transition.boxRowAt(7, 1)).toBe(HEIGHT - 1);
+    // One cell per tick at the end: the slope matches the constant fall that follows.
+    const step = 1e-4;
+    expect((fallFromRest(1) - fallFromRest(1 - step)) / step).toBeCloseTo(1, 3);
+    expect(fallFromRest(step) / step).toBeCloseTo(0, 3);
   });
 });

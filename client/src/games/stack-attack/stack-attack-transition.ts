@@ -29,6 +29,8 @@ export class StackAttackTransition {
   /** Where each box present in `view` starts this tick (absent: it does not move). */
   private readonly boxStarts = new Map<number, GridPoint>();
   private readonly boxesById = new Map<number, StackAttackBox>();
+  /** Boxes released by a crane this tick: they start falling from rest. */
+  private readonly releasedBoxIds = new Set<number>();
 
   constructor(
     readonly view: StackAttackView,
@@ -52,6 +54,7 @@ export class StackAttackTransition {
         const { boxId, craneId, x } = event.value;
         const crane = this.cranes.kept.find((pair) => pair.after.id === craneId);
         this.boxStarts.set(boxId, { x: crane?.before.x ?? x, y: view.fieldHeight });
+        this.releasedBoxIds.add(boxId);
       } else if (event.case === "linesCleared") clearedRows.push(...event.value.rows);
       else if (event.case === "boxBroken") brokenBoxIds.add(event.value.boxId);
       else if (event.case === "workerCrushed" && view.endReason === StackAttackEndReason.WORKERS_CRUSHED) {
@@ -73,6 +76,14 @@ export class StackAttackTransition {
     const box = this.boxesById.get(boxId);
     if (!box?.cell) return null;
     const start = this.boxStarts.get(boxId) ?? box.cell;
-    return lerp(start.y, box.cell.y, progress);
+    return lerp(start.y, box.cell.y, this.releasedBoxIds.has(boxId) ? fallFromRest(progress) : progress);
   }
+}
+
+/**
+ * The first cell of a fall: from rest, speeding up to the one cell per tick it then keeps, so the
+ * crate does not snap off the hook at full speed (`2t² − t³`: slope 0 at the start, 1 at the end).
+ */
+export function fallFromRest(progress: number): number {
+  return progress * progress * (2 - progress);
 }
