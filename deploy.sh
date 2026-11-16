@@ -123,8 +123,7 @@ ENV_FILE=/etc/${SERVICE_NAME}.env
 if [[ ! -f "$ENV_FILE" ]]; then
     umask 077
     {
-        echo "MG_SESSION_SECRET=$(od -An -tx1 -N32 /dev/urandom | tr -d ' 
-')"
+        echo "MG_SESSION_SECRET=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
         echo "MG_ALLOW_GUESTS=true"
         echo "MG_BOT_KEYS="
     } > "$ENV_FILE"
