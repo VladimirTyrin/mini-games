@@ -107,6 +107,15 @@ code, and the plugin downloads over https only.
 Settings shows which parts run: "Version 2.0.0 (web 512, app 498)" means web bundle 512 in the
 shell of build 498.
 
+**Trying it on an emulator.** Bundles download over https only, so a local test needs a
+throwaway shell: set `httpsOnly: false` in the `CapacitorUpdater` config and drop the https
+condition in `planUpdate`, build it with `MG_BUILD_NUMBER=<installed build>` (`adb install -r`
+accepts the same versionCode), build again with a higher `MG_BUILD_NUMBER`, and serve that
+build's `web-<build>.zip` and `web.json` under `/downloads/` with CORS from the host; the
+emulator reaches it as `ws://10.0.2.2:<port>/ws` in Settings. `adb logcat -s CapgoUpdater`
+shows the download, the switch on background and `notifyAppReady`. Finish by installing a real
+APK with a higher build: the new versionCode drops the test bundle.
+
 **Forcing an APK.** Change anything native (a file under `android/`, `capacitor.config.ts`, a
 Capacitor or Capgo plugin version): the fingerprint changes, and apps with the old shell are
 offered the APK instead of the bundle.
