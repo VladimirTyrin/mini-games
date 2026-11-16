@@ -48,6 +48,13 @@ export class MatchController {
   private mirror: Mirror;
   private clock: PlaybackClock;
   private resyncing = false;
+  /**
+   * Views whose turn on screen has not come yet (see `PlaybackClock`). Showing a frame the moment
+   * it arrives cut the motion on screen short whenever frames came in a burst (a late one, then
+   * one on time): the drawing jumped to the start of the next move and then stood still.
+   */
+  private readonly upcoming: ViewSnapshot[] = [];
+  private showTimer: ReturnType<typeof setTimeout> | null = null;
   private resyncsSinceVerifiedFrame = 0;
   private readonly unsubscribe: (() => void)[] = [];
 
@@ -79,7 +86,7 @@ export class MatchController {
         const now = performance.now();
         this.resultRevealAt.value = this.aborted.value
           ? now
-          : resultRevealAt(this.current.value?.at ?? null, this.tickMs, now);
+          : resultRevealAt(this.latestAt(), this.tickMs, now);
         this.ended.value = true;
       }),
     );
@@ -121,6 +128,7 @@ export class MatchController {
 
   dispose(): void {
     for (const unsubscribe of this.unsubscribe) unsubscribe();
+    this.dropUpcoming();
     this.mirror.free();
   }
 
@@ -169,6 +177,7 @@ export class MatchController {
     const pauses = catchUp.pauses.length > 0 ? catchUp.pauses : catchUp.pause ? [catchUp.pause] : [];
     this.pauses.value = seatPauses(pauses, now);
     this.resumeAt.value = catchUp.resumeCountdownMs > 0 ? now + catchUp.resumeCountdownMs : null;
+    this.dropUpcoming();
     this.previous.value = null;
     this.clock.reset();
     // Seeking a replay back from its end: the match is running again on screen.
@@ -180,8 +189,48 @@ export class MatchController {
     this.publish();
   }
 
+  /** Queues the mirror's view to be shown from `at` (now, unless the schedule says later). */
   private publish(at = performance.now()): void {
+    const snapshot = { view: this.mirror.view(this.source.mySlot), at };
+    if (this.upcoming.length === 0 && at <= performance.now()) {
+      this.show(snapshot);
+      return;
+    }
+    this.upcoming.push(snapshot);
+    this.scheduleNext();
+  }
+
+  private show(snapshot: ViewSnapshot): void {
     this.previous.value = this.current.value;
-    this.current.value = { view: this.mirror.view(this.source.mySlot), at };
+    this.current.value = snapshot;
+  }
+
+  private scheduleNext(): void {
+    const next = this.upcoming[0];
+    if (!next || this.showTimer !== null) return;
+    this.showTimer = setTimeout(
+      () => {
+        this.showTimer = null;
+        const now = performance.now();
+        // A late timer shows what is due; each view still starts its own transition.
+        while (this.upcoming[0] && this.upcoming[0].at <= now) {
+          const due = this.upcoming.shift();
+          if (due) this.show(due);
+        }
+        this.scheduleNext();
+      },
+      Math.max(0, next.at - performance.now()),
+    );
+  }
+
+  private dropUpcoming(): void {
+    if (this.showTimer !== null) clearTimeout(this.showTimer);
+    this.showTimer = null;
+    this.upcoming.length = 0;
+  }
+
+  /** When the newest view (shown or waiting) starts. */
+  private latestAt(): number | null {
+    return this.upcoming.at(-1)?.at ?? this.current.value?.at ?? null;
   }
 }

@@ -1,5 +1,5 @@
 import { create } from "@bufbuild/protobuf";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MatchCatchUpSchema, MatchHeaderSchema, TickFrameSchema } from "@/proto/minigames/v2/match_pb";
 import { Emitter } from "@/net/emitter";
@@ -27,7 +27,8 @@ vi.mock("@/wasm/core", () => ({
       this.nextTick = Number(catchUp.nextTick);
     }
     view(): unknown {
-      return {};
+      // Which state the view shows, for tests about when it is shown.
+      return { shownTick: this.nextTick };
     }
     result(): null {
       return null;
@@ -121,5 +122,31 @@ describe("MatchController", () => {
 
     expect(controller.incompatible.value).toBe(false);
     expect(source.catchUpRequests).toBe(5);
+  });
+
+  describe("on screen", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    const shownTick = (controller: MatchController) =>
+      (controller.current.value?.view as unknown as { shownTick: number } | undefined)?.shownTick;
+
+    it("shows a frame that came early in a burst at its own time, after the move before it", () => {
+      const source = new FakeSource();
+      const controller = new MatchController(source);
+      source.frame(0);
+      // Frame 1 is late (timers, network); frame 2 comes right behind it.
+      vi.advanceTimersByTime(250);
+      source.frame(1);
+      vi.advanceTimersByTime(5);
+      source.frame(2);
+
+      // The move to frame 1 plays out first instead of being cut short.
+      expect(shownTick(controller)).toBe(2);
+      vi.advanceTimersByTime(90);
+      expect(shownTick(controller)).toBe(2);
+      vi.advanceTimersByTime(10);
+      expect(shownTick(controller)).toBe(3);
+    });
   });
 });
