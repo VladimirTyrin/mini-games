@@ -72,4 +72,38 @@ describe("Session", () => {
     expect(states.at(-1)).toBe("replaced");
     expect(FakeSocket.opened).toHaveLength(1);
   });
+
+  it("drops a connection that stops answering pings and reconnects", async () => {
+    const { socket, states } = await signedInSession();
+
+    // The ping goes out after 15 s; the server never answers it.
+    await vi.advanceTimersByTimeAsync(15_000 + 10_000);
+
+    expect(socket.readyState).toBe(3);
+    expect(states.at(-1)).toBe("reconnecting");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(FakeSocket.opened).toHaveLength(2);
+  });
+
+  it("retries a sign-in the server did not answer, without reporting a refusal", async () => {
+    const session = new Session("ws://test/ws", { kind: "session", token: "kept" });
+    const refusals: unknown[] = [];
+    session.events.on("refused", (error) => refusals.push(error));
+    session.connect();
+    FakeSocket.opened[0]?.accept();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(refusals).toEqual([]);
+    expect(session.state).toBe("reconnecting");
+    await vi.advanceTimersByTimeAsync(30_000);
+    const retry = FakeSocket.opened[1];
+    if (!retry) throw new Error("no retry");
+    retry.accept();
+    const hello = retry.lastSent().message;
+    expect(hello.case === "hello" && hello.value.credentials).toEqual({
+      case: "session",
+      value: expect.objectContaining({ token: "kept" }),
+    });
+  });
 });

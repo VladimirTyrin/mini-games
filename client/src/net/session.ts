@@ -168,6 +168,11 @@ export class Session {
       }
     } catch (error) {
       if (!(error instanceof RequestError) || socket !== this.socket) return;
+      // No answer is not a refusal: keep the credentials and try again.
+      if (error.failure !== "refused") {
+        this.abandon(socket);
+        return;
+      }
       if (error.code === ErrorCode.PROTOCOL_UNSUPPORTED) {
         this.wanted = false;
         this.setState("outdated");
@@ -225,9 +230,27 @@ export class Session {
   }
 
   private startPing(): void {
+    const socket = this.socket;
+    if (!socket) return;
     this.pingTimer = setInterval(() => {
-      this.request({ case: "ping", value: { clientTimeMs: BigInt(Date.now()) } }).catch(() => undefined);
+      this.request({ case: "ping", value: { clientTimeMs: BigInt(Date.now()) } }).catch((error) => {
+        if (error instanceof RequestError && error.failure === "timed-out") this.abandon(socket);
+      });
     }, PING_EVERY_MS);
+  }
+
+  /**
+   * A socket that stopped answering (network switched, phone asleep) may take minutes to report
+   * its close, so it is dropped now and the usual reconnect starts at once.
+   */
+  private abandon(socket: WebSocket): void {
+    if (socket !== this.socket) return;
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onclose = null;
+    socket.onerror = null;
+    socket.close();
+    this.onClose(socket);
   }
 
   private clearTimers(): void {
