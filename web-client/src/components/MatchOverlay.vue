@@ -68,39 +68,74 @@ const headline = computed(() => {
 const labels = computed(() => seatLabels(props.controller.source.header));
 const seatName = (slot: number) => labels.value[slot] ?? `Player ${slot + 1}`;
 
+const resultFolded = ref(false);
+watch(
+  () => props.controller,
+  () => (resultFolded.value = false),
+);
+
 async function voteDrop(slot: number): Promise<void> {
   await props.controller.source.voteDrop(slot).catch(() => undefined);
 }
 </script>
 
 <template>
+  <!-- The result docks at the bottom without dimming the board, so the final position stays
+       visible; it can be folded away entirely. -->
+  <div v-if="ended" class="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3">
+    <button
+      v-if="resultFolded"
+      class="pointer-events-auto rounded-full bg-panel/95 px-4 py-2 text-sm font-semibold shadow-lg ring-1 ring-white/10"
+      @click="resultFolded = false"
+    >
+      {{ headline }} · show result ▴
+    </button>
+    <div
+      v-else
+      class="pointer-events-auto w-full max-w-md space-y-3 rounded-2xl bg-panel/95 p-4 shadow-xl ring-1 ring-white/10 backdrop-blur"
+    >
+      <div class="flex items-start gap-3">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-xl font-bold">{{ headline }}</h2>
+          <p v-if="endReason && !aborted" class="text-sm text-gray-300">{{ endReason }}</p>
+          <p v-if="aborted" class="text-sm text-gray-300">
+            The server stopped this match. No replay is kept.
+          </p>
+        </div>
+        <button
+          class="-m-1 rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-white/10"
+          aria-label="Hide the result to see the board"
+          @click="resultFolded = true"
+        >
+          Hide ▾
+        </button>
+      </div>
+      <ul v-if="result" class="space-y-1 text-sm">
+        <li v-for="(score, slot) in result.scores" :key="slot" class="flex justify-between">
+          <span>
+            {{ seatName(slot) }}
+            <span v-if="slot === mySlot" class="text-xs text-sky-300">(you)</span>
+          </span>
+          <span class="font-mono">{{ score }}</span>
+        </li>
+      </ul>
+      <div class="flex flex-wrap gap-2">
+        <button class="h-11 flex-1 rounded-xl bg-emerald-600 px-4 font-semibold" @click="emit('again')">
+          Play again
+        </button>
+        <button v-if="!aborted" class="h-11 rounded-xl bg-panel-raised px-4" @click="emit('replay')">
+          Save replay
+        </button>
+        <button class="h-11 rounded-xl bg-panel-raised px-4" @click="emit('leave')">Leave</button>
+      </div>
+    </div>
+  </div>
   <div
-    v-if="pauses.length > 0 || countdown || ended"
+    v-else-if="pauses.length > 0 || countdown"
     class="absolute inset-0 z-20 flex items-center justify-center bg-black/60 p-4"
   >
     <div class="w-full max-w-sm space-y-3 rounded-xl bg-panel p-5 text-center shadow-xl">
-      <template v-if="ended">
-        <h2 class="text-2xl font-bold">{{ headline }}</h2>
-        <p v-if="endReason && !aborted" class="text-sm text-gray-300">{{ endReason }}</p>
-        <p v-if="aborted" class="text-sm text-gray-300">The server stopped this match. No replay is kept.</p>
-        <ul v-if="result" class="space-y-1 text-sm">
-          <li v-for="(score, slot) in result.scores" :key="slot" class="flex justify-between">
-            <span>
-              {{ seatName(slot) }}
-              <span v-if="slot === mySlot" class="text-xs text-sky-300">(you)</span>
-            </span>
-            <span class="font-mono">{{ score }}</span>
-          </li>
-        </ul>
-        <div class="flex flex-wrap justify-center gap-2 pt-2">
-          <button class="rounded bg-emerald-600 px-4 py-2" @click="emit('again')">Play again</button>
-          <button v-if="!aborted" class="rounded bg-panel-raised px-4 py-2" @click="emit('replay')">
-            Save replay
-          </button>
-          <button class="rounded bg-panel-raised px-4 py-2" @click="emit('leave')">Leave</button>
-        </div>
-      </template>
-      <template v-else-if="pauses.length > 0">
+      <template v-if="pauses.length > 0">
         <h2 class="text-xl font-semibold">Paused</h2>
         <div v-for="pause in pauses" :key="pause.slot" class="space-y-2">
           <p class="text-sm text-gray-300">
