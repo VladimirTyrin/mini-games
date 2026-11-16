@@ -2,16 +2,19 @@
 import { ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
+import UpdateBanner from "@/components/UpdateBanner.vue";
 import { normalizeServerUrl } from "@/platform/server-url";
+import { useAppUpdateStore } from "@/stores/app-update";
 import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 import { useToastStore } from "@/stores/toasts";
 
 const prefs = usePrefsStore();
 const connection = useConnectionStore();
+const appUpdate = useAppUpdateStore();
 const toasts = useToastStore();
 const serverInput = ref(prefs.serverUrl);
-const version = __APP_VERSION__;
+const version = __NATIVE_APP__ ? `${__APP_VERSION__} (${__APP_BUILD__})` : __APP_VERSION__;
 
 function saveServer(): void {
   const url = normalizeServerUrl(serverInput.value);
@@ -27,6 +30,7 @@ function saveServer(): void {
   serverInput.value = url;
   toasts.show("Server saved", "success");
   void connection.loadServerInfo();
+  void appUpdate.check();
 }
 
 function resetServer(): void {
@@ -62,6 +66,7 @@ function resetServer(): void {
         Sign out
       </button>
     </section>
+    <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
   </main>
 </template>

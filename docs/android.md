@@ -16,7 +16,9 @@ npm run android:apk:debug    # debug APK
 npm run android:sync         # web bundle + cap sync only (then open android/ in Android Studio)
 ```
 
-The APK lands in `android/app/build/outputs/apk/<variant>/`. `build/android.mjs` builds the web
+The APK lands in `android/app/build/outputs/apk/<variant>/`; a release build is also copied to
+`android/dist/mini-games.apk` with `android/dist/android.json` (build number = commit count,
+`versionCode = major * 1 000 000 + build`, so every later build installs over an earlier one). `build/android.mjs` builds the web
 bundle with `VITE_PLATFORM=android`: only that flavour contains the Capacitor plugins, the web
 build drops them at build time. The default server is `wss://braintvsminigames.xyz/ws`; override it with
 `MG_ANDROID_SERVER_URL`. Users can change it in Settings (plain `ws://` to an IP is allowed;
@@ -39,6 +41,14 @@ sign-in. Google lets the app request it only if an **Android** OAuth client in t
 Cloud project lists package `xyz.braintvsminigames.app` and the SHA-1 of the signing key — one
 client per key (release and debug). Print a key's SHA-1 with
 `keytool -list -v -keystore .keys/mini-games-release.jks`.
+
+## Updates
+
+`./deploy.sh --apk web-client/android/dist/mini-games.apk` publishes the APK at
+`/downloads/mini-games.apk` and its `android.json`. On start (and after the server address
+changes) the app reads `android.json` from its server and, when the build is newer, offers
+"Update available → Download" on the home and settings screens; the system browser downloads
+the APK and Android offers to install it.
 
 ## Releases
 

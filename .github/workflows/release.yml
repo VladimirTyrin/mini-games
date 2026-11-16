@@ -37,6 +37,9 @@ jobs:
         working-directory: web-client
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The build number is the commit count, which needs the full history.
+          fetch-depth: 0
       - uses: ./.github/actions/setup-web
       - uses: actions/setup-java@v6
         with:
@@ -58,7 +61,7 @@ jobs:
           MG_ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
           MG_ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
           MG_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-      - run: cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/mini-games-${{ needs.version.outputs.version }}.apk"
+      - run: cp android/dist/mini-games.apk "$RUNNER_TEMP/mini-games-${{ needs.version.outputs.version }}.apk"
       - uses: actions/upload-artifact@v7
         with:
           name: android

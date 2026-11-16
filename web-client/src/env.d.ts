@@ -2,6 +2,7 @@
 
 declare const __APP_VERSION__: string;
 declare const __NATIVE_APP__: boolean;
+declare const __APP_BUILD__: number;
 
 interface ImportMetaEnv {
   readonly VITE_SERVER_URL?: string;

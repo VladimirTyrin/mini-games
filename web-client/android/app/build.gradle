@@ -41,8 +41,10 @@ android {
         applicationId "xyz.braintvsminigames.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode workspaceVersion[0] * 10000 + workspaceVersion[1] * 100 + workspaceVersion[2]
-        versionName workspaceVersion.join('.')
+        // build/android.mjs passes the build number (commit count); versionCode must only grow.
+        def buildNumber = (System.getenv('MG_BUILD_NUMBER') ?: '0') as int
+        versionCode workspaceVersion[0] * 1000000 + buildNumber
+        versionName "${workspaceVersion.join('.')} (${buildNumber})"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 
 import SignedInElsewhere from "@/components/SignedInElsewhere.vue";
 import ToastList from "@/components/ToastList.vue";
+import { useAppUpdateStore } from "@/stores/app-update";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
@@ -12,6 +13,7 @@ const router = useRouter();
 const connection = useConnectionStore();
 const lobby = useLobbyStore();
 const match = useMatchStore();
+const appUpdate = useAppUpdateStore();
 
 // The only place that navigates on state changes: a running match wins, then the lobby.
 watch(
@@ -30,7 +32,10 @@ watch(
   },
 );
 
-onMounted(() => connection.resumeStoredSession());
+onMounted(() => {
+  connection.resumeStoredSession();
+  void appUpdate.check();
+});
 </script>
 
 <template>

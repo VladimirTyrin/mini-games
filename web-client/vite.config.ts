@@ -19,6 +19,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(workspaceVersion()),
     // A literal, so the web build tree-shakes the Capacitor plugins away entirely.
     __NATIVE_APP__: JSON.stringify(process.env.VITE_PLATFORM === "android"),
+    // Android builds compare it with the server's android.json to offer updates.
+    __APP_BUILD__: JSON.stringify(Number(process.env.MG_BUILD_NUMBER ?? 0)),
   },
   build: { target: "es2022", assetsInlineLimit: 0 },
   worker: { format: "es" },

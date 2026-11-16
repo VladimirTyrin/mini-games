@@ -9,7 +9,8 @@
 #   --mode M        http | tls (default tls)
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
-#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk
+#   --apk FILE      also publish an Android APK as /downloads/mini-games.apk (with the
+#                   android.json next to it, if any, for the app's update check)
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
 set -euo pipefail
@@ -99,6 +100,12 @@ scp -q "$BUILD_BINARY" "${HOST}:${REMOTE_DIR}/${BINARY_NAME}.new"
 if [[ -n "$APK" ]]; then
     scp -q "$APK" "${HOST}:${REMOTE_DIR}/downloads/mini-games.apk.new"
     ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/mini-games.apk.new && mv ${REMOTE_DIR}/downloads/mini-games.apk.new ${REMOTE_DIR}/downloads/mini-games.apk"
+    # Published after the APK, so the app never offers a build that is not there yet.
+    APK_INFO="$(dirname "$APK")/android.json"
+    if [[ -f "$APK_INFO" ]]; then
+        scp -q "$APK_INFO" "${HOST}:${REMOTE_DIR}/downloads/android.json.new"
+        ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/android.json.new && mv ${REMOTE_DIR}/downloads/android.json.new ${REMOTE_DIR}/downloads/android.json"
+    fi
 fi
 scp -q "${SCRIPT_DIR}/deploy/${SERVICE_NAME}.service" "${HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
 scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${SCRIPT_DIR}/deploy/nginx-ws.conf" "${STAGE}"/site-*.conf "${HOST}:/tmp/"
