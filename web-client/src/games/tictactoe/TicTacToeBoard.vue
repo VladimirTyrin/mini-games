@@ -99,9 +99,9 @@ async function place(index: number): Promise<void> {
       <button
         v-for="(mark, index) in view.cells"
         :key="index"
-        class="flex aspect-square items-center justify-center bg-panel disabled:cursor-default disabled:opacity-100"
+        class="flex aspect-square items-center justify-center disabled:cursor-default disabled:opacity-100"
         :class="[
-          winningCells.has(index) ? 'bg-emerald-800' : '',
+          winningCells.has(index) ? 'bg-emerald-700' : 'bg-panel',
           mark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300',
           view.lastMove && view.lastMove.y * view.fieldWidth + view.lastMove.x === index
             ? 'ring-1 ring-amber-300 ring-inset'

@@ -177,6 +177,7 @@ useGameKeys((key) => {
     </div>
     <div class="flex items-center justify-center gap-8 pt-2 pb-1">
       <ActionButton
+        caption="Refill"
         label="Refill (R)"
         icon="➕"
         :count="String(view.refillsLeft)"
@@ -186,6 +187,7 @@ useGameKeys((key) => {
       />
       <ActionButton
         v-if="hintsEnabled"
+        caption="Hint"
         label="Hint (H)"
         icon="💡"
         :count="hintsLeftText"
