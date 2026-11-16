@@ -63,6 +63,14 @@ const replayFileTypes = isNativeApp ? undefined : ".mgreplay";
         🎞 Open a replay
         <span class="block text-sm font-normal text-gray-400">.mgreplay file</span>
       </button>
+      <button
+        v-if="isNativeApp"
+        class="rounded-xl bg-panel p-4 text-left font-semibold hover:bg-panel-raised"
+        @click="router.push('/replays')"
+      >
+        📂 Saved replays
+        <span class="block text-sm font-normal text-gray-400">Watch, share or delete</span>
+      </button>
       <input ref="fileInput" type="file" :accept="replayFileTypes" class="hidden" @change="openReplay" />
     </section>
     <p class="text-center text-xs text-gray-500">

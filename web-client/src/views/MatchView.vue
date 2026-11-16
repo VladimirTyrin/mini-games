@@ -98,7 +98,7 @@ function again(): void {
         :controller="controller"
         :end-reason="endReason"
         @leave="leave"
-        @replay="match.downloadReplay()"
+        @replay="match.saveReplay(plugin.title)"
         @again="again"
       />
     </div>

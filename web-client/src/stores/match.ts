@@ -10,7 +10,9 @@ import { MatchController } from "@/match/match-controller";
 import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
-import { saveBytes } from "@/platform/download";
+import { downloadInBrowser } from "@/platform/download";
+import { saveReplayFile } from "@/platform/saved-replays";
+import { replayFileNameForMatch } from "@/replays/replay-file-name";
 
 import { useConnectionStore } from "./connection";
 import { useToastStore } from "./toasts";
@@ -83,7 +85,8 @@ export const useMatchStore = defineStore("match", () => {
     replay.value = null;
   }
 
-  async function downloadReplay(): Promise<void> {
+  /** `gameTitle` names the file ("Snake 2026-11-16 14-05-33 3f9a1c.mgreplay"). */
+  async function saveReplay(gameTitle: string): Promise<void> {
     const source = controller.value?.source;
     if (!source) return;
     try {
@@ -92,9 +95,18 @@ export const useMatchStore = defineStore("match", () => {
         toasts.error("This match has no replay");
         return;
       }
-      const fileName = `mini-games-${source.header.matchId}.mgreplay`;
-      const outcome = await saveBytes(bytes, fileName);
-      if (outcome === "downloaded") toasts.show(`Replay saved to your downloads as ${fileName}`, "success");
+      const fileName = replayFileNameForMatch(source.header, gameTitle);
+      // The literal, not `isNativeApp`, so the web build drops the app's file storage (see router.ts).
+      if (__NATIVE_APP__) {
+        await saveReplayFile(bytes, fileName);
+        toasts.show("Replay saved — find it under Saved replays on the home screen", "success", {
+          label: "Show",
+          to: "/replays",
+        });
+      } else {
+        downloadInBrowser(bytes, fileName);
+        toasts.show(`Replay saved to your downloads as ${fileName}`, "success");
+      }
     } catch (error) {
       toasts.failure(error);
     }
@@ -124,5 +136,5 @@ export const useMatchStore = defineStore("match", () => {
     { immediate: true },
   );
 
-  return { controller, replay, startLocal, startOnline, startReplay, close, downloadReplay };
+  return { controller, replay, startLocal, startOnline, startReplay, close, saveReplay };
 });

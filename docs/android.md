@@ -24,6 +24,20 @@ build drops them at build time. The default server is `wss://braintvsminigames.x
 `MG_ANDROID_SERVER_URL`. Users can change it in Settings (plain `ws://` to an IP is allowed;
 nginx serves `/ws` on port 80 too).
 
+## Replays
+
+"Save replay" at the end of a match writes the file into the app's own folder
+`Android/data/xyz.braintvsminigames.app/files/replays/` (Capacitor `Directory.External`: no
+storage permission, reachable over USB, removed with the app). The name says what it is:
+`<game> <local date> <time> <match id start>.mgreplay`, e.g.
+`Snake 2026-11-16 14-05-33 3f9a1c.mgreplay`; saving the same match again overwrites it. The
+browser build downloads the same file name instead.
+
+Home → "Saved replays" (`/replays`, app only) lists the folder newest first, from the directory
+listing alone (game and time from the file name, else the file's modification time), so files
+copied in or deleted outside the app show up correctly. Tap to watch; Share opens the system
+share sheet; Delete asks first.
+
 ## Signing
 
 Release and debug keystores live in the gitignored `.keys/` folder at the repository root, each
