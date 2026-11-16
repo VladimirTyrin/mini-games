@@ -36,6 +36,19 @@ Every deploy puts exactly one build on the host. The build number is the commit 
    from the public address (`https://<domain>`, or `http://<host>` in `--mode http`) and fails
    with a list of what differs.
 
+## Secrets on the host
+
+The server reads `/etc/mini-games-server.env`.
+
+`deploy.sh` creates `MG_SESSION_SECRET` and `MG_VAPID_PRIVATE_KEY` there once and keeps them:
+- replacing the session secret signs everyone out;
+- replacing the VAPID key makes browsers subscribe to push again.
+
+It also writes `MG_GOOGLE_CLIENT_ID` and `MG_VAPID_SUBJECT` on every deploy.
+
+`MG_FCM_SERVICE_ACCOUNT` is copied from the Firebase key in `.keys/` when that key is there.
+Without it, the host keeps its own. See [push-notifications.md](push-notifications.md).
+
 ## How clients pick up a deploy
 
 - Browser and installed web app (PWA, including the iOS home screen): the service worker

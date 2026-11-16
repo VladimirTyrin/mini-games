@@ -2,6 +2,7 @@
 import { ref } from "vue";
 
 import { storage } from "@/platform/storage";
+import { isAppleMobile, isInstalledWebApp } from "@/platform/web-app-install";
 
 const DISMISSED_KEY = "mini-games.get-the-app.dismissed";
 const APK_URL = "https://braintvsminigames.xyz/downloads/mini-games.apk";
@@ -13,13 +14,7 @@ function offerFor(): Offer {
   if (__NATIVE_APP__ || storage.get(DISMISSED_KEY) !== null) return null;
   const userAgent = navigator.userAgent;
   if (/android/i.test(userAgent)) return "android-app";
-  // iPadOS reports a Mac; touch support tells them apart.
-  const isAppleMobile =
-    /iphone|ipad|ipod/i.test(userAgent) || (/macintosh/i.test(userAgent) && navigator.maxTouchPoints > 1);
-  const installed =
-    matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true;
-  return isAppleMobile && !installed ? "ios-home-screen" : null;
+  return isAppleMobile() && !isInstalledWebApp() ? "ios-home-screen" : null;
 }
 
 const offer = ref<Offer>(offerFor());

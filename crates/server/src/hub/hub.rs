@@ -358,7 +358,8 @@ impl Hub {
             ClientPayload::ServerInfo(_)
             | ClientPayload::Hello(_)
             | ClientPayload::SignOut(_)
-            | ClientPayload::Ping(_) => {}
+            | ClientPayload::Ping(_)
+            | ClientPayload::RequestTestPush(_) => {}
         }
     }
 

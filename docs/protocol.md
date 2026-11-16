@@ -127,6 +127,19 @@ within the replay, `UNSPECIFIED` is refused. Members who join or resume during `
 `SharedReplay`, then the last `SET_SPEED` and the last `PLAY` / `PAUSE` / `SEEK`. `STOP` returns
 the lobby to `OPEN`.
 
+## Push notifications
+
+`RequestTestPush { target, delay_seconds }` (signed in; at most 60 s delay; one per 10 s per
+connection) is answered with `Ack`. After the delay, the server sends a test notification to
+`target`:
+- an FCM token (the Android app);
+- a Web Push subscription. The endpoint must belong to a browser push service, and `p256dh` and
+  `auth` are base64url.
+
+`ERROR_CODE_PUSH_UNAVAILABLE` means this server has no credentials for that kind of target.
+`ServerInfo.web_push_public_key` is the key browsers subscribe with; it is empty when Web Push
+is off. See [push-notifications.md](push-notifications.md).
+
 ## Compatibility
 
 `protocol_version` changes only on incompatible changes. Adding optional fields or messages

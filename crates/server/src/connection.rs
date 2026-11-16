@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::ws::{Message as WsMessage, WebSocket};
 use futures_util::{Sink, SinkExt, StreamExt};
@@ -10,13 +11,15 @@ use tokio::time::Instant;
 
 use crate::auth::{AuthError, DisplayName, SessionKind};
 use crate::authenticated::Authenticated;
-use crate::clock::sleep_until_opt;
+use crate::clock::{sleep_until_opt, unix_millis};
 use crate::codec;
 use crate::context::{PROTOCOL_VERSION, ServerContext};
+use crate::error_chain::error_chain;
 use crate::hub::{HubCommand, SignIn};
 use crate::ids::{ConnectionId, ResumeToken, SessionId};
 use crate::limits::Limits;
 use crate::outbound::{Outbound, OutboundReceiver};
+use crate::push::{PushTarget, TestPushDelay, test_notification};
 use crate::token_bucket::TokenBucket;
 
 use proto::ErrorCode;
@@ -65,6 +68,7 @@ struct Connection {
     chat: TokenBucket,
     /// Frames above `MAX_MESSAGE_BYTES` (shared replays), checked before decoding them.
     large_messages: TokenBucket,
+    test_pushes: TokenBucket,
     /// Set after a fatal error (e.g. unsupported protocol): stop reading.
     finished: bool,
 }
@@ -93,6 +97,7 @@ pub(crate) async fn run(context: Arc<ServerContext>, socket: WebSocket) {
         messages: TokenBucket::new(Limits::MESSAGE_BURST, Limits::MESSAGE_REFILL, now),
         chat: TokenBucket::new(Limits::CHAT_BURST, Limits::CHAT_REFILL, now),
         large_messages: TokenBucket::new(1, Limits::LARGE_MESSAGE_COOLDOWN, now),
+        test_pushes: TokenBucket::new(1, Limits::TEST_PUSH_COOLDOWN, now),
         finished: false,
     };
     tracing::debug!(connection = %id, "connected");
@@ -264,6 +269,9 @@ impl Connection {
                 let Some(session) = self.session.clone() else {
                     return self.reject(request_id, ErrorCode::NotSignedIn, "sign in first");
                 };
+                if let ClientPayload::RequestTestPush(request) = payload {
+                    return self.request_test_push(request_id, request, now);
+                }
                 if matches!(payload, ClientPayload::SendChat(_)) && !self.chat.try_take(now) {
                     return self.reject(
                         request_id,
@@ -279,6 +287,55 @@ impl Connection {
                 });
             }
         }
+    }
+
+    fn request_test_push(
+        &mut self,
+        request_id: u32,
+        request: proto::RequestTestPush,
+        now: Instant,
+    ) {
+        let target = match PushTarget::parse(request.target) {
+            Ok(target) => target,
+            Err(error) => {
+                return self.reject(request_id, ErrorCode::InvalidRequest, &error.to_string());
+            }
+        };
+        let Ok(delay) = TestPushDelay::new(request.delay_seconds) else {
+            return self.reject(
+                request_id,
+                ErrorCode::InvalidRequest,
+                &format!("delay must be at most {} seconds", TestPushDelay::MAX),
+            );
+        };
+        if !self.context.push.can_reach(&target) {
+            return self.reject(
+                request_id,
+                ErrorCode::PushUnavailable,
+                "this server cannot send notifications to this device",
+            );
+        }
+        if !self.test_pushes.try_take(now) {
+            return self.reject(request_id, ErrorCode::RateLimited, "one test at a time");
+        }
+        self.outbound
+            .send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
+        let context = self.context.clone();
+        let connection = self.id;
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(u64::from(delay.get()))).await;
+            let notification = test_notification(unix_millis());
+            let sent =
+                tokio::task::spawn_blocking(move || context.push.send(&target, &notification))
+                    .await;
+            match sent {
+                Ok(Ok(())) => tracing::info!(%connection, "test push sent"),
+                Ok(Err(error)) => {
+                    tracing::warn!(%connection, error = %error_chain(&error), "test push failed")
+                }
+                Err(error) => tracing::warn!(%connection, %error, "test push task failed"),
+            }
+        });
     }
 
     async fn hello(&mut self, request_id: u32, hello: proto::Hello) {

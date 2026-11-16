@@ -142,6 +142,17 @@ if [[ "$MODE" == "tls" ]]; then
         "${SCRIPT_DIR}/deploy/nginx-tls.conf.template" > "${STAGE}/site-tls.conf"
 fi
 
+# The Firebase service account (push to the Android app) goes to the host when .keys has it;
+# without it the host keeps the one it has. A new key can be made in the Firebase console at any
+# time (Project settings, Service accounts).
+shopt -s nullglob
+FCM_ACCOUNTS=("${SCRIPT_DIR}"/.keys/*-firebase-adminsdk-*.json)
+shopt -u nullglob
+(( ${#FCM_ACCOUNTS[@]} <= 1 )) || die "more than one Firebase service account key in .keys: keep one"
+if (( ${#FCM_ACCOUNTS[@]} == 1 )); then
+    (umask 077; echo "MG_FCM_SERVICE_ACCOUNT=$(base64 -w0 < "${FCM_ACCOUNTS[0]}")" > "${STAGE}/push.env")
+fi
+
 if [[ "$DRY_RUN" == true ]]; then
     echo "==> Dry run: rendered configs in ${STAGE}"
     cat "${STAGE}"/site-*.conf
@@ -177,6 +188,9 @@ if [[ -n "$APK" ]]; then
 fi
 scp -q "${SCRIPT_DIR}/deploy/${SERVICE_NAME}.service" "${HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
 scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${SCRIPT_DIR}/deploy/nginx-ws.conf" "${STAGE}"/site-*.conf "${HOST}:/tmp/"
+if [[ -f "${STAGE}/push.env" ]]; then
+    ssh "$HOST" "umask 077 && cat > /tmp/mini-games-push.env" < "${STAGE}/push.env"
+fi
 
 echo "==> Configuring host (${MODE})"
 ssh "$HOST" MODE="$MODE" DOMAIN="$DOMAIN" EMAIL="$EMAIL" REMOTE_DIR="$REMOTE_DIR" \
@@ -206,6 +220,21 @@ fi
 # The client ID is public and follows the repository.
 sed -i '/^MG_GOOGLE_CLIENT_ID=/d' "$ENV_FILE"
 echo "MG_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" >> "$ENV_FILE"
+# The Web Push key is made once and kept like the session secret: browsers subscribed with its
+# public half, and a new key makes them subscribe again. 32 random bytes are a valid P-256 key
+# unless above the group order (chance about 2^-32; the server would refuse to start).
+if ! grep -q '^MG_VAPID_PRIVATE_KEY=' "$ENV_FILE"; then
+    echo "MG_VAPID_PRIVATE_KEY=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')" >> "$ENV_FILE"
+fi
+sed -i '/^MG_VAPID_SUBJECT=/d' "$ENV_FILE"
+if [[ "$MODE" == "tls" ]]; then
+    echo "MG_VAPID_SUBJECT=https://${DOMAIN}" >> "$ENV_FILE"
+fi
+if [[ -f /tmp/mini-games-push.env ]]; then
+    sed -i '/^MG_FCM_SERVICE_ACCOUNT=/d' "$ENV_FILE"
+    cat /tmp/mini-games-push.env >> "$ENV_FILE"
+    rm -f /tmp/mini-games-push.env
+fi
 chmod 600 "$ENV_FILE"
 
 # Swap in the new build.

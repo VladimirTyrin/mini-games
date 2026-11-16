@@ -5,6 +5,7 @@ package minigames.v2;
 import "minigames/v2/auth.proto";
 import "minigames/v2/lobby.proto";
 import "minigames/v2/match.proto";
+import "minigames/v2/push.proto";
 import "minigames/v2/replay.proto";
 
 // WebSocket text frames carrying the canonical protobuf JSON mapping of these two messages.
@@ -41,6 +42,8 @@ message ClientMessage {
     RequestReplay request_replay = 50;
     ShareReplay share_replay = 51;
     ReplayControl replay_control = 52;
+
+    RequestTestPush request_test_push = 60;
   }
 }
 
@@ -113,6 +116,8 @@ enum ErrorCode {
   ERROR_CODE_MATCH_NOT_FOUND = 40;
   ERROR_CODE_COMMAND_REJECTED = 41;
   ERROR_CODE_INVALID_REPLAY = 50;
+  // This server has no credentials for that kind of push target.
+  ERROR_CODE_PUSH_UNAVAILABLE = 60;
 }
 
 message ErrorResponse {

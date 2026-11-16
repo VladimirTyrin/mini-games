@@ -66,8 +66,9 @@ export const useConnectionStore = defineStore("connection", () => {
     const resumeKey = resumeKeyFor(prefs.serverUrl);
     const created = new Session(prefs.serverUrl, credentials, resumeStorage.get(resumeKey) ?? "");
     created.events.on("state", (next) => (state.value = next));
-    created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken }) => {
+    created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken, serverInfo: info }) => {
       identity.value = who;
+      if (info) serverInfo.value = info;
       resumeStorage.set(resumeKey, resumeToken);
       // A Google sign-in returns a long-lived session token; later reconnects use it instead
       // of the short-lived Google ID token.

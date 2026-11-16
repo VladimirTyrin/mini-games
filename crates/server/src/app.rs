@@ -19,6 +19,7 @@ use crate::connection_limiter::{ConnectionLimiter, ConnectionRefused};
 use crate::context::{ServerContext, server_version};
 use crate::hub::{Hub, HubCommand, HubHandle};
 use crate::limits::Limits;
+use crate::push::PushSender;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ServeError {
@@ -63,6 +64,12 @@ fn build_context(
         session_tokens: SessionTokens::new(secret, config.session_days.saturating_mul(24 * 3600)),
         bot_keys: BotKeys::parse(&config.bot_keys)?,
         hub,
+        push: PushSender::configure(
+            &config.fcm_service_account,
+            &config.vapid_private_key,
+            &config.vapid_subject,
+        )
+        .map_err(ConfigError::Push)?,
         timing: config.timing,
         shutting_down,
     })

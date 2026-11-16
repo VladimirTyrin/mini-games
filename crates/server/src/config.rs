@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use crate::hex::decode_hex;
+use crate::push::PushConfigError;
 use crate::timing::Timing;
 
 #[derive(Clone, Debug, clap::Parser)]
@@ -41,6 +43,28 @@ pub struct Config {
     #[arg(long, env = "MG_MAX_CONNECTIONS_PER_IP", default_value_t = 32)]
     pub max_connections_per_ip: usize,
 
+    /// Firebase service account key file, base64: sends pushes to the Android app. Empty: off.
+    #[arg(
+        long,
+        env = "MG_FCM_SERVICE_ACCOUNT",
+        default_value = "",
+        hide_env_values = true
+    )]
+    pub fcm_service_account: String,
+
+    /// Hex P-256 private key (64 characters) signing Web Push messages. Empty: off.
+    #[arg(
+        long,
+        env = "MG_VAPID_PRIVATE_KEY",
+        default_value = "",
+        hide_env_values = true
+    )]
+    pub vapid_private_key: String,
+
+    /// Contact for push services about this sender: `https://<site>` or `mailto:<address>`.
+    #[arg(long, env = "MG_VAPID_SUBJECT", default_value = "")]
+    pub vapid_subject: String,
+
     #[arg(skip)]
     pub timing: Timing,
 }
@@ -51,6 +75,8 @@ pub enum ConfigError {
     SessionSecret,
     #[error("MG_BOT_KEYS entry `{entry}`: {reason}")]
     BotKey { entry: String, reason: &'static str },
+    #[error("push notifications: {0}")]
+    Push(#[source] PushConfigError),
 }
 
 impl Config {
@@ -63,20 +89,9 @@ impl Config {
         else {
             return Ok(None);
         };
-        if hex.len() < 64 || hex.len() % 2 != 0 {
+        if hex.len() < 64 {
             return Err(ConfigError::SessionSecret);
         }
-        hex.as_bytes()
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|pair| {
-                std::str::from_utf8(pair)
-                    .ok()
-                    .and_then(|text| u8::from_str_radix(text, 16).ok())
-            })
-            .collect::<Option<Vec<u8>>>()
-            .map(Some)
-            .ok_or(ConfigError::SessionSecret)
+        decode_hex(hex).map(Some).ok_or(ConfigError::SessionSecret)
     }
 }

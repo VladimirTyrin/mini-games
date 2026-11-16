@@ -1,5 +1,6 @@
 import { create, fromJsonString, type MessageInitShape, toJsonString } from "@bufbuild/protobuf";
 
+import type { ServerInfo } from "@/proto/minigames/v2/auth_pb";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import {
   ClientMessageSchema,
@@ -42,7 +43,13 @@ type PushEvents = { [P in ServerPayload as P["case"]]: P["value"] };
 
 interface SessionEvents extends PushEvents {
   state: ConnectionState;
-  signedIn: { identity: Identity; resumed: boolean; sessionToken: string; resumeToken: string };
+  signedIn: {
+    identity: Identity;
+    resumed: boolean;
+    sessionToken: string;
+    resumeToken: string;
+    serverInfo: ServerInfo | null;
+  };
   refused: RequestError;
 }
 
@@ -164,6 +171,7 @@ export class Session {
           resumed: welcome.resumed,
           sessionToken: welcome.sessionToken,
           resumeToken: welcome.resumeToken,
+          serverInfo: welcome.serverInfo ?? null,
         });
       }
     } catch (error) {

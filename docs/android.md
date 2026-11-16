@@ -56,6 +56,14 @@ Cloud project lists package `xyz.braintvsminigames.app` and the SHA-1 of the sig
 client per key (release and debug). Print a key's SHA-1 with
 `keytool -list -v -keystore .keys/mini-games-release.jks`.
 
+## Push notifications
+
+FCM comes through `@capacitor/push-notifications`.
+- `android/app/google-services.json` (Firebase project `mini-games-2630d`, in git) turns on the
+  Google services Gradle plugin.
+- The app creates the high-importance channel `invites` before registering.
+- See [push-notifications.md](push-notifications.md).
+
 ## Updates
 
 The app has two parts: the native shell (the `android/` project, the Capacitor plugins and

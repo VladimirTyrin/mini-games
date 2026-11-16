@@ -14,6 +14,8 @@ async function boot(): Promise<void> {
   const pinia = createPinia();
   createApp(App).use(pinia).use(router).mount("#app");
   await setUpNativeApp();
+  const { useNotificationsStore } = await import("./stores/notifications");
+  await useNotificationsStore(pinia).listen(router);
   if (!__NATIVE_APP__) {
     // Offline support; new versions are applied outside matches (see web-updates.ts).
     const [{ registerSW }, { startWebUpdates }, { useMatchStore }] = await Promise.all([

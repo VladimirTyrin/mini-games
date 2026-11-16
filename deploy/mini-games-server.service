@@ -6,7 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/mini-games-server
-# MG_SESSION_SECRET, MG_GOOGLE_CLIENT_ID, MG_ALLOW_GUESTS, MG_BOT_KEYS (created by deploy.sh).
+# MG_SESSION_SECRET, MG_GOOGLE_CLIENT_ID, MG_ALLOW_GUESTS, MG_BOT_KEYS, MG_VAPID_*,
+# MG_FCM_SERVICE_ACCOUNT (written by deploy.sh).
 EnvironmentFile=/etc/mini-games-server.env
 Environment=MG_LISTEN=127.0.0.1:5000
 # mimalloc asks for transparent huge pages for its arena: each touched 2 MiB page becomes

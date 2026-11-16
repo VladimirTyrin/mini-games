@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+// Where a device receives push notifications.
+message PushTarget {
+  oneof target {
+    // Firebase Cloud Messaging registration token (the Android app).
+    string fcm_token = 1;
+    // A browser's PushSubscription (installed PWA on iOS, Chrome, Firefox...).
+    WebPushSubscription web_push = 2;
+  }
+}
+
+// PushSubscription.toJSON(): the endpoint and its keys, base64url.
+message WebPushSubscription {
+  string endpoint = 1;
+  string p256dh = 2;
+  string auth = 3;
+}
+
+// Asks for a test notification to `target` after `delay_seconds` (0..=60), so the app can be
+// closed first. Answered with Ack once accepted; whether it arrived is only seen on the device.
+message RequestTestPush {
+  PushTarget target = 1;
+  uint32 delay_seconds = 2;
+}

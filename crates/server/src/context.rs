@@ -3,6 +3,7 @@ use tokio::sync::{Semaphore, watch};
 
 use crate::auth::{BotKeys, GoogleVerifier, PlayerIdKey, SessionTokens};
 use crate::hub::HubHandle;
+use crate::push::PushSender;
 use crate::timing::Timing;
 
 pub(crate) const PROTOCOL_VERSION: u32 = 2;
@@ -27,6 +28,7 @@ pub(crate) struct ServerContext {
     pub player_ids: PlayerIdKey,
     pub bot_keys: BotKeys,
     pub hub: HubHandle,
+    pub push: PushSender,
     pub timing: Timing,
     /// Turns `true` when the server stops; connections that never signed in close at once
     /// (signed-in ones are told by the hub).
@@ -45,6 +47,11 @@ impl ServerContext {
                 .as_ref()
                 .map(|g| g.client_id().to_owned())
                 .unwrap_or_default(),
+            web_push_public_key: self
+                .push
+                .web_push_public_key()
+                .unwrap_or_default()
+                .to_owned(),
         }
     }
 }

@@ -35,6 +35,8 @@ impl Limits {
     pub(crate) const REPLAY_DOWNLOAD_COOLDOWN: Duration = Duration::from_secs(2);
     pub(crate) const CATCH_UP_COOLDOWN: Duration = Duration::from_secs(1);
     pub(crate) const LARGE_MESSAGE_COOLDOWN: Duration = Duration::from_secs(5);
+    /// Each test push is an outgoing request to a push service.
+    pub(crate) const TEST_PUSH_COOLDOWN: Duration = Duration::from_secs(10);
 
     /// Concurrent Google ID token verifications (each may block a pool thread on a key fetch).
     pub(crate) const GOOGLE_VERIFICATIONS: usize = 4;

@@ -4,6 +4,7 @@ import { onMounted, ref } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
+import TestNotifications from "@/components/TestNotifications.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { normalizeServerUrl } from "@/platform/server-url";
 import { nativeShellBuild } from "@/platform/web-bundle";
@@ -117,6 +118,7 @@ function resetServer(): void {
       <h2 class="px-1 font-semibold">Account</h2>
       <SignInPanel />
     </section>
+    <TestNotifications v-if="connection.isSignedIn" />
     <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
     <p v-if="isNativeApp" class="text-center text-xs text-gray-500">

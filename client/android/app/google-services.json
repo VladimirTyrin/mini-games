@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "480754257793",
+    "project_id": "mini-games-2630d",
+    "storage_bucket": "mini-games-2630d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:480754257793:android:a1a305eb8db1dbcd676280",
+        "android_client_info": {
+          "package_name": "xyz.braintvsminigames.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB9aOSJzoVQApZEElh7_FTNYc-S4m-dZKs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
