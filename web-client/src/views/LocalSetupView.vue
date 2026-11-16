@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GameIcon from "@/components/GameIcon.vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -40,7 +41,7 @@ function start(): void {
   <main v-if="plugin && info && settings" class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
     <section class="rounded-2xl bg-panel px-4 pt-4">
       <header class="flex items-start gap-3 border-b border-white/5 pb-3">
-        <span class="text-3xl leading-none" aria-hidden="true">{{ plugin.icon }}</span>
+        <GameIcon :plugin="plugin" class="size-12 text-3xl" />
         <div class="min-w-0">
           <h2 class="font-semibold leading-tight">{{ plugin.tagline }}</h2>
           <p class="mt-1 text-xs leading-snug text-gray-400">{{ controlsHintFor(plugin) }}</p>

@@ -4,6 +4,7 @@ import { TicTacToeBotKind, TicTacToeFirstPlayerMode } from "@/proto/minigames/v2
 import { narrowScreenSettings } from "./board-presets";
 import Board from "./TicTacToeBoard.vue";
 import SettingsForm from "./TicTacToeSettings.vue";
+import TicTacToeIcon from "./TicTacToeIcon.vue";
 
 function firstMoveLabel(mode: TicTacToeFirstPlayerMode): string {
   switch (mode) {
@@ -21,6 +22,7 @@ export const tictactoePlugin: GamePlugin = {
   settingsCase: "tictactoe",
   title: "Tic-Tac-Toe",
   icon: "❌",
+  Icon: TicTacToeIcon,
   tagline: "N in a row on a big board",
   SettingsForm,
   Board,

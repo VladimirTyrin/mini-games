@@ -21,7 +21,10 @@ export interface GamePlugin {
   id: string;
   settingsCase: SettingsCase;
   title: string;
+  /** Emoji shown where the game has no `Icon` (e.g. a freshly scaffolded game). */
   icon: string;
+  /** The game's picture in lists and headers (square SVG). */
+  Icon?: Component;
   tagline: string;
   SettingsForm: Component;
   Board: Component;

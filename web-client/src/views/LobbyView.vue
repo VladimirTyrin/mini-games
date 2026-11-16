@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GameIcon from "@/components/GameIcon.vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
@@ -98,7 +99,7 @@ async function leave(): Promise<void> {
     <div class="space-y-4">
       <section class="rounded-2xl bg-panel p-4">
         <div class="mb-2 flex items-center gap-2">
-          <span class="text-2xl">{{ plugin.icon }}</span>
+          <GameIcon :plugin="plugin" class="size-9 text-2xl" />
           <span class="font-semibold">{{ plugin.title }}</span>
           <button
             v-if="canEditSettings && !draft"

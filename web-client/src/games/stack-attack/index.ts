@@ -3,12 +3,14 @@ import type { GamePlugin } from "../game-plugin";
 import Board from "./StackAttackBoard.vue";
 import SettingsForm from "./StackAttackSettings.vue";
 import { describeStackAttackEnd } from "./end-reason";
+import StackAttackIcon from "./StackAttackIcon.vue";
 
 export const stackAttackPlugin: GamePlugin = {
   id: "stack_attack",
   settingsCase: "stackAttack",
   title: "Stack Attack",
   icon: "📦",
+  Icon: StackAttackIcon,
   tagline: "Co-op: survive the falling crates",
   SettingsForm,
   Board,

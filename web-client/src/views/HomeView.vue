@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GameIcon from "@/components/GameIcon.vue";
 import { isNativeApp } from "@/platform/native-app";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
@@ -39,7 +40,7 @@ const replayFileTypes = isNativeApp ? undefined : ".mgreplay";
           class="flex items-center gap-4 rounded-xl bg-panel p-4 text-left hover:bg-panel-raised"
           @click="router.push({ name: 'play', params: { gameId: plugin.id } })"
         >
-          <span class="text-3xl">{{ plugin.icon }}</span>
+          <GameIcon :plugin="plugin" class="size-12 text-3xl" />
           <span>
             <span class="block font-semibold">{{ plugin.title }}</span>
             <span class="block text-sm text-gray-400">{{ plugin.tagline }}</span>

@@ -3,12 +3,14 @@ import type { GamePlugin } from "../game-plugin";
 import { hintModeLabel } from "./hint-mode-options";
 import Board from "./NumbersMatchBoard.vue";
 import SettingsForm from "./NumbersMatchSettings.vue";
+import NumbersMatchIcon from "./NumbersMatchIcon.vue";
 
 export const numbersMatchPlugin: GamePlugin = {
   id: "numbers_match",
   settingsCase: "numbersMatch",
   title: "Numbers Match",
   icon: "🔟",
+  Icon: NumbersMatchIcon,
   tagline: "Pair equal numbers or tens",
   SettingsForm,
   Board,

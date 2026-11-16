@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GameIcon from "@/components/GameIcon.vue";
 import { computed, onMounted, ref, watch } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
@@ -93,7 +94,7 @@ const phaseLabel: Record<number, string> = {
             "
             @click="gameId = candidate.id"
           >
-            {{ candidate.icon }} {{ candidate.title }}
+            <GameIcon :plugin="candidate" class="size-6 text-base" /> {{ candidate.title }}
           </button>
         </div>
         <div class="border-b border-white/5 pb-3">
@@ -128,7 +129,11 @@ const phaseLabel: Record<number, string> = {
           :key="summary.lobbyId"
           class="flex items-center gap-3 rounded-xl bg-panel p-3"
         >
-          <span class="text-2xl">{{ pluginBySettings(summary.settings?.game.case)?.icon }}</span>
+          <GameIcon
+            v-if="pluginBySettings(summary.settings?.game.case)"
+            :plugin="pluginBySettings(summary.settings?.game.case)!"
+            class="size-9 text-2xl"
+          />
           <span class="min-w-0 flex-1">
             <span class="block truncate font-semibold">{{ summary.name }}</span>
             <span v-if="summary.host" class="flex items-center gap-1 text-xs text-gray-300">

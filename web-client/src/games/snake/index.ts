@@ -3,12 +3,14 @@ import { SnakeBotKind, SnakeDeadSnakeBehavior, SnakeWallCollisionMode } from "@/
 
 import Board from "./SnakeBoard.vue";
 import SettingsForm from "./SnakeSettings.vue";
+import SnakeIcon from "./SnakeIcon.vue";
 
 export const snakePlugin: GamePlugin = {
   id: "snake",
   settingsCase: "snake",
   title: "Snake",
   icon: "🐍",
+  Icon: SnakeIcon,
   tagline: "Classic snake, up to 10 players",
   SettingsForm,
   Board,
