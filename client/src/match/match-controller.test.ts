@@ -50,6 +50,9 @@ class FakeSource implements MatchSource {
   submit(): Promise<void> {
     return Promise.resolve();
   }
+  submitSecret(): Promise<void> {
+    return Promise.resolve();
+  }
   requestCatchUp(): void {
     this.catchUpRequests += 1;
   }

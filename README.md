@@ -2,7 +2,8 @@
 
 Small games to play with friends or against bots: **Snake**, **Tic-Tac-Toe** (N in a row),
 **Stack Attack** (co-op crates), **2048**, **Numbers Match**, **Word Hunt** (guess a Russian
-or English word; word of the day or unlimited) and **Checkers** (Russian draughts).
+or English word; word of the day or unlimited), **Checkers** (Russian draughts) and **Sea
+Battle** (place a fleet unseen, then sink the other one).
 
 ## Play
 

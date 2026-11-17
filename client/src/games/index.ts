@@ -6,6 +6,7 @@ import { stackAttackPlugin } from "./stack-attack";
 import { tictactoePlugin } from "./tictactoe";
 import { wordHuntPlugin } from "./word-hunt";
 import { checkersPlugin } from "./checkers";
+import { seaBattlePlugin } from "./sea-battle";
 // xtask:imports
 
 /** Every game the UI knows. Order is the order on the home screen. */
@@ -17,6 +18,7 @@ export const gamePlugins: readonly GamePlugin[] = [
   numbersMatchPlugin,
   wordHuntPlugin,
   checkersPlugin,
+  seaBattlePlugin,
   // xtask:plugins
 ];
 

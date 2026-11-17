@@ -95,6 +95,8 @@ REPLAY (shared replay)`.
 server → MatchStarted(MatchHeader)          header: settings, seats (slot, identity, bot kind), tick_ms
 server → Frame(TickFrame) …                 every tick / move; inputs + optional state_hash
 client → SubmitCommand(match_id, GameCommand) → Ack | Error(COMMAND_REJECTED)
+client → SubmitSecretCommand(match_id, GameSecretCommand) → Ack | Error(COMMAND_REJECTED)
+server → SeatSecret(match_id, GameSeatSecret)  to that seat only
 server → Paused(slot, budget_left_ms, drop_vote_in_ms) / Resumed(countdown_ms)
 client → VoteDropPlayer(slot)               allowed once drop_vote_in_ms elapsed
 client → ReportDesync / RequestCatchUp      → CatchUp(header, compact frames, next_tick, pauses,
@@ -119,6 +121,13 @@ client → RequestReplay(match_id)            → ReplayData(bytes)
 
 `FrameInput` is one of: a seat's `GameCommand`, a `GameWorldEvent` (randomness resolved by
 the authority) or `dropped_slot`. The seed never leaves the authority.
+
+Private commands (Sea Battle's fleet) are never put in a frame: the authority applies them to the
+game's secret, and the frame only says what everyone may learn of it (the fleet is placed). The
+seat that sent one gets `SeatSecret` back (its own fleet), and again after each of its catch-ups.
+`MatchHeader.secret_setup_ms` is the time people have for theirs from `started_at_unix_ms`. When
+it runs out the server sends the game's choice for them (a random fleet). It is 0 when nobody
+owes one.
 
 ## Shared replays
 

@@ -46,6 +46,29 @@ impl<G: WireGame> DynAuthority for AuthorityAdapter<G> {
         Ok(self.authority.submit(slot, command)?)
     }
 
+    fn submit_secret(
+        &mut self,
+        slot: Slot,
+        command: &proto::GameSecretCommand,
+    ) -> Result<(), SubmitError> {
+        let command = G::secret_command_from_wire(command)?;
+        Ok(self.authority.submit_secret(slot, &command)?)
+    }
+
+    fn submit_default_secret(&mut self, slot: Slot) -> bool {
+        self.authority.submit_default_secret(slot)
+    }
+
+    fn awaits_secret(&self, slot: Slot) -> bool {
+        self.authority.game().awaits_secret(slot)
+    }
+
+    fn seat_secret(&self, slot: Slot) -> Option<proto::GameSeatSecret> {
+        self.authority
+            .seat_secret(slot)
+            .map(|secret| G::seat_secret_to_wire(&secret))
+    }
+
     fn drop_player(&mut self, slot: Slot) {
         self.authority.drop_player(slot);
     }

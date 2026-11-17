@@ -1,4 +1,6 @@
-use mg_core::{Clock, CompactLog, CompactLogError, HashPolicy, Slot, Status, Tick, Viewer};
+use mg_core::{
+    Clock, CompactLog, CompactLogError, CoreRng, HashPolicy, Slot, Status, Tick, Viewer,
+};
 use mg_protocol::proto;
 
 use crate::apply_error::ApplyError;
@@ -23,6 +25,18 @@ pub trait DynMirror: Send + std::fmt::Debug {
     /// The status right after `command`; see [`mg_core::Game::preview_command`].
     fn status_after(&self, slot: Slot, command: &proto::GameCommand)
     -> Result<Status, SubmitError>;
+    /// See [`mg_core::Match::check_secret_command`].
+    fn check_secret_command(
+        &self,
+        slot: Slot,
+        command: &proto::GameSecretCommand,
+    ) -> Result<(), SubmitError>;
+    /// See [`mg_core::Match::default_secret_command`].
+    fn default_secret_command(
+        &self,
+        slot: Slot,
+        rng: &mut CoreRng,
+    ) -> Option<proto::GameSecretCommand>;
     fn status(&self) -> Status;
     fn next_tick(&self) -> Tick;
     fn state_hash(&self) -> u64;

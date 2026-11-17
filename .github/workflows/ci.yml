@@ -37,7 +37,7 @@ jobs:
       - name: Golden hashes on a 32-bit WASM target
         env:
           CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime
-        run: cargo test --target wasm32-wasip1 -p mg-core -p mg-snake -p mg-tictactoe -p mg-stack-attack -p mg-puzzle2048 -p mg-numbers-match
+        run: cargo test --target wasm32-wasip1 -p mg-core -p mg-snake -p mg-tictactoe -p mg-stack-attack -p mg-puzzle2048 -p mg-numbers-match -p mg-sea-battle
 
   web:
     runs-on: ubuntu-latest

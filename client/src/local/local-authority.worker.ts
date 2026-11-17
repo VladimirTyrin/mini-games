@@ -78,6 +78,25 @@ async function handle(message: ToWorker): Promise<void> {
       }
       break;
     }
+    case "submitSecret": {
+      if (!host) return;
+      try {
+        host.submitSecret(message.slot, message.command);
+        post({ type: "accepted", requestId: message.requestId });
+        const secret = host.seatSecret(message.slot);
+        if (secret.length > 0) post({ type: "seatSecret", secret }, [secret.buffer]);
+        // What the others may learn of it (the fleet is placed) goes out at once.
+        sealAndPost();
+        if (host.tickMs() === 0) driveBots();
+      } catch (error) {
+        post({
+          type: "rejected",
+          requestId: message.requestId,
+          message: errorMessage(error),
+        });
+      }
+      break;
+    }
     case "pause":
       paused = true;
       break;

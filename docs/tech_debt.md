@@ -18,6 +18,23 @@ match and the lobby.
 - The app shows a banner that counts down. `ServerUpdating` arrives again on every later
   sign-in, so a reconnect picks up the same deadline.
 
+## Network bots and private commands
+
+**Now.** The bot SDK and the C ABI have no private commands. A network bot seated in Sea Battle
+never places its fleet: the server places a random one when `secret_setup_ms` runs out, so the
+match starts after 90 s.
+
+**Wanted.** `SubmitSecretCommand` in the SDK, with a strategy hook for it (as `Bot::decide_secret`
+for built-in bots), and the same in the C ABI.
+
+## Placement countdown and device clocks
+
+**Now.** The app counts the time to place a fleet down from `MatchHeader.started_at_unix_ms`, so
+a device clock that is off shows the wrong time left (the server still decides).
+
+**Wanted.** The time left from the server, as invitations do with `expires_in_ms`, also in a
+catch-up.
+
 ## Pause in online real-time games
 
 **Now.** A local real-time match (against bots) can be paused; an online one pauses only when a

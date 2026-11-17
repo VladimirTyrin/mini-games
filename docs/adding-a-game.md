@@ -78,6 +78,13 @@ Replace the sample rules. Keep the shape:
   - `reveal(&self, &secret)` sends it as events once the game is over; `apply_world` must accept
     them on a finished game.
   - The game state, its hash and its view never hold the secret before the reveal. See Word Hunt.
+  - Seats that add to the secret themselves (a fleet to place) send a private command: give
+    the secret type a `GameSecret::Command`, apply it in `apply_secret_command` (validated
+    against the public state, so a client's mirror can check it with an empty secret), say
+    when it is due in `awaits_secret`, offer `default_secret_command` for a seat out of time, and
+    return the seat's own share in `seat_secret`. Wire it with `GameSecretCommand` /
+    `GameSeatSecret` and `WireGame::secret_command_*` / `seat_secret_to_wire`. Bots answer it in
+    `Bot::decide_secret`. See Sea Battle.
 - **Clock** — `TurnBased` (one frame per accepted move) or `Realtime { tick_ms }` (implement
   `step`). Real-time input that must wait for the next tick goes into a small per-seat queue
   inside the state (see Snake, Stack Attack).

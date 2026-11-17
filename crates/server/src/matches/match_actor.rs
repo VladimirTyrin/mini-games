@@ -73,6 +73,9 @@ pub(crate) struct MatchActor {
     /// Cancelled when the actor is gone, so a bot still thinking for an ended match stops at once
     /// instead of holding a core (which real-time bots of other matches wait for).
     bot_cancel: CancelOnDrop,
+    /// When people who have not sent their private command (a fleet) get one chosen for them.
+    /// Runs on through pauses: a seat that is away when it ends gets a random fleet like anyone.
+    secret_deadline: Option<Instant>,
 }
 
 type BotMoveSender = mpsc::UnboundedSender<Result<DynBotDecision, JoinError>>;
@@ -91,6 +94,7 @@ pub(crate) struct MatchSetup {
 impl MatchActor {
     pub(crate) fn new(setup: MatchSetup) -> Self {
         let clock = setup.authority.clock();
+        let secret_setup = Duration::from_millis(u64::from(setup.header.secret_setup_ms));
         Self {
             lobby: setup.lobby,
             match_id: setup.match_id,
@@ -115,6 +119,7 @@ impl MatchActor {
             bot_thinking: false,
             bot_moves: None,
             bot_cancel: CancelOnDrop::new(CancelToken::new()),
+            secret_deadline: (!secret_setup.is_zero()).then(|| Instant::now() + secret_setup),
         }
     }
 
@@ -215,6 +220,11 @@ impl MatchActor {
                 request_id,
                 command,
             } => self.submit(&session, request_id, &command).await,
+            MatchRequest::SubmitSecret {
+                session,
+                request_id,
+                command,
+            } => self.submit_secret(&session, request_id, &command),
             MatchRequest::VoteDrop {
                 session,
                 request_id,
@@ -264,6 +274,93 @@ impl MatchActor {
             Err(SubmitError::Rejected(error)) => {
                 reject(proto::ErrorCode::CommandRejected, &error.to_string());
             }
+        }
+    }
+
+    fn submit_secret(
+        &mut self,
+        session: &SessionId,
+        request_id: u32,
+        command: &proto::GameSecretCommand,
+    ) {
+        let Some(outbound) = self.outbound_of(session).cloned() else {
+            return;
+        };
+        let reject = |code: proto::ErrorCode, text: &str| {
+            outbound.send(&codec::error(request_id, code, text));
+        };
+        let Some(slot) = self.slot_of(session) else {
+            return reject(proto::ErrorCode::CommandRejected, "observers cannot play");
+        };
+        if self.dropped.contains(&slot) {
+            return reject(
+                proto::ErrorCode::CommandRejected,
+                "you were dropped from this match",
+            );
+        }
+        let Some(authority) = self.authority.as_mut() else {
+            return;
+        };
+        match authority.submit_secret(slot, command) {
+            Ok(()) => {
+                outbound.send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
+                self.send_seat_secret(slot);
+                // What the others may learn of it (that the fleet is placed) goes out now, also
+                // in a real-time game: it changes nothing a tick would move.
+                self.seal_and_broadcast();
+                if self.clock == Clock::TurnBased {
+                    self.drive_bots();
+                }
+            }
+            Err(SubmitError::Wire(error)) => {
+                reject(proto::ErrorCode::InvalidRequest, &error.to_string());
+            }
+            Err(SubmitError::Rejected(error)) => {
+                reject(proto::ErrorCode::CommandRejected, &error.to_string());
+            }
+        }
+    }
+
+    /// To the seat's own connection only: what it may see of the game's secret.
+    fn send_seat_secret(&self, slot: Slot) {
+        let Some(secret) = self.authority.as_ref().and_then(|a| a.seat_secret(slot)) else {
+            return;
+        };
+        let message = codec::push(Message::SeatSecret(proto::MatchSeatSecret {
+            match_id: self.match_id.to_string(),
+            secret: Some(secret),
+        }));
+        for participant in self.participants.iter().filter(|p| p.slot == Some(slot)) {
+            if let Some(outbound) = &participant.outbound {
+                outbound.send(&message);
+            }
+        }
+    }
+
+    /// The time for private commands is up: people who sent none get the game's choice.
+    fn settle_late_secrets(&mut self) {
+        let Some(authority) = self.authority.as_mut() else {
+            return;
+        };
+        let late: Vec<Slot> = self
+            .participants
+            .iter()
+            .filter_map(|p| p.slot)
+            .filter(|slot| !self.dropped.contains(slot) && authority.awaits_secret(*slot))
+            .collect();
+        let settled: Vec<Slot> = late
+            .into_iter()
+            .filter(|slot| authority.submit_default_secret(*slot))
+            .collect();
+        if settled.is_empty() {
+            return;
+        }
+        for slot in settled {
+            self.send_seat_secret(slot);
+        }
+        self.seal_and_broadcast();
+        if self.clock == Clock::TurnBased {
+            self.drive_bots();
         }
     }
 
@@ -384,6 +481,9 @@ impl MatchActor {
         participant.outbound = Some(outbound.clone());
         let slot = participant.slot;
         outbound.send_encoded(self.catch_up());
+        if let Some(slot) = slot {
+            self.send_seat_secret(slot);
+        }
         if let Some(slot) = slot
             && self.budgets.is_disconnected(slot)
         {
@@ -495,27 +595,33 @@ impl MatchActor {
     }
 
     fn next_deadline(&self) -> Option<Instant> {
-        match self.state {
+        let run_state = match self.state {
             RunState::Countdown { until } => Some(until),
             RunState::Paused => self.budgets.next_exhaustion(Instant::now()),
             RunState::Running => None,
-        }
+        };
+        run_state.into_iter().chain(self.secret_deadline).min()
     }
 
     async fn on_deadline(&mut self) {
+        let now = Instant::now();
+        if self.secret_deadline.is_some_and(|deadline| deadline <= now) {
+            self.secret_deadline = None;
+            self.settle_late_secrets();
+        }
         match self.state {
-            RunState::Countdown { .. } => {
+            RunState::Countdown { until } if until <= now => {
                 self.state = RunState::Running;
                 if self.clock == Clock::TurnBased {
                     self.drive_bots();
                 }
             }
             RunState::Paused => {
-                for slot in self.budgets.exhausted(Instant::now()) {
+                for slot in self.budgets.exhausted(now) {
                     self.drop_slot(slot).await;
                 }
             }
-            RunState::Running => {}
+            RunState::Countdown { .. } | RunState::Running => {}
         }
     }
 

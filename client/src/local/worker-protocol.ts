@@ -2,6 +2,7 @@
 export type ToWorker =
   | { type: "start"; header: Uint8Array; seedHigh: number; seedLow: number }
   | { type: "submit"; requestId: number; slot: number; command: Uint8Array }
+  | { type: "submitSecret"; requestId: number; slot: number; command: Uint8Array }
   | { type: "pause" }
   | { type: "resume" }
   | { type: "replay"; requestId: number }
@@ -10,6 +11,8 @@ export type ToWorker =
 export type FromWorker =
   | { type: "frame"; frame: Uint8Array }
   | { type: "accepted"; requestId: number }
+  /** Encoded `GameSeatSecret` of the player's seat. */
+  | { type: "seatSecret"; secret: Uint8Array }
   | { type: "rejected"; requestId: number; message: string }
   | { type: "replay"; requestId: number; replay: Uint8Array }
   | { type: "ended" }

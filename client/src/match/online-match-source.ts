@@ -2,14 +2,14 @@ import { create } from "@bufbuild/protobuf";
 
 import { ErrorCode } from "@/proto/minigames/v2/protocol_pb";
 
-import { GameCommandSchema } from "@/proto/minigames/v2/game_pb";
+import { GameCommandSchema, GameSecretCommandSchema } from "@/proto/minigames/v2/game_pb";
 import type { MatchHeader } from "@/proto/minigames/v2/match_pb";
 import { Emitter } from "@/net/emitter";
 import { RequestError } from "@/net/request-error";
 import type { Session } from "@/net/session";
 
 import { CommandRejectedError } from "./command-rejected-error";
-import type { GameCommandInit, MatchSource, MatchSourceEvents } from "./match-source";
+import type { GameCommandInit, GameSecretCommandInit, MatchSource, MatchSourceEvents } from "./match-source";
 
 /** The server allows one catch-up per second per session. */
 const CATCH_UP_RETRY_MS = 1_200;
@@ -60,6 +60,10 @@ export class OnlineMatchSource implements MatchSource {
         if (resumed.matchId === this.matchId)
           this.events.emit("resumed", { countdownMs: resumed.countdownMs });
       }),
+      session.on("seatSecret", (seatSecret) => {
+        if (seatSecret.matchId === this.matchId && seatSecret.secret)
+          this.events.emit("seatSecret", seatSecret.secret);
+      }),
       session.on("ended", (ended) => {
         if (ended.matchId !== this.matchId) return;
         this.hasEnded = true;
@@ -86,6 +90,20 @@ export class OnlineMatchSource implements MatchSource {
       await this.session.request({
         case: "submitCommand",
         value: { matchId: this.matchId, command: create(GameCommandSchema, command) },
+      });
+    } catch (error) {
+      if (error instanceof RequestError && error.code === ErrorCode.COMMAND_REJECTED) {
+        throw new CommandRejectedError(error.message, { cause: error });
+      }
+      throw error;
+    }
+  }
+
+  async submitSecret(command: GameSecretCommandInit): Promise<void> {
+    try {
+      await this.session.request({
+        case: "submitSecretCommand",
+        value: { matchId: this.matchId, command: create(GameSecretCommandSchema, command) },
       });
     } catch (error) {
       if (error instanceof RequestError && error.code === ErrorCode.COMMAND_REJECTED) {

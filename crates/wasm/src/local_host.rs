@@ -43,6 +43,24 @@ impl LocalHost {
         Ok(self.authority.submit(Slot::new(slot), &command)?)
     }
 
+    /// `command`: encoded `GameSecretCommand`, a private command (a fleet). The caller seals a
+    /// frame after it, as after a command.
+    #[wasm_bindgen(js_name = submitSecret)]
+    pub fn submit_secret(&mut self, slot: u8, command: &[u8]) -> Result<(), JsError> {
+        let command = proto::GameSecretCommand::decode(command)?;
+        Ok(self.authority.submit_secret(Slot::new(slot), &command)?)
+    }
+
+    /// Encoded `GameSeatSecret`: what `slot` may see of the game's secret (its own fleet);
+    /// empty when there is nothing.
+    #[wasm_bindgen(js_name = seatSecret)]
+    pub fn seat_secret(&self, slot: u8) -> Vec<u8> {
+        self.authority
+            .seat_secret(Slot::new(slot))
+            .map(|secret| secret.encode_to_vec())
+            .unwrap_or_default()
+    }
+
     #[wasm_bindgen(js_name = dropPlayer)]
     pub fn drop_player(&mut self, slot: u8) {
         self.authority.drop_player(Slot::new(slot));

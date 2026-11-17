@@ -1,5 +1,5 @@
 use mg_core::{Awaiting, Clock, Slot, Status, Tick};
-use mg_protocol::proto;
+use mg_protocol::{WireError, proto};
 
 use crate::dyn_bot_decision::DynBotDecision;
 use crate::dyn_bot_turn::DynBotTurn;
@@ -11,6 +11,29 @@ pub trait DynAuthority: Send + std::fmt::Debug {
     fn kind(&self) -> GameKind;
     fn clock(&self) -> Clock;
     fn submit(&mut self, slot: Slot, command: &proto::GameCommand) -> Result<(), SubmitError>;
+    // The secret methods default to a game that hides nothing; the registry's adapter forwards
+    // them to the game.
+
+    /// See [`mg_core::Authority::submit_secret`]: a private command, never relayed.
+    fn submit_secret(
+        &mut self,
+        _slot: Slot,
+        _command: &proto::GameSecretCommand,
+    ) -> Result<(), SubmitError> {
+        Err(SubmitError::Wire(WireError::WrongGame))
+    }
+    /// See [`mg_core::Authority::submit_default_secret`].
+    fn submit_default_secret(&mut self, _slot: Slot) -> bool {
+        false
+    }
+    /// Whether the game still awaits `slot`'s private command (see `mg_core::Game::awaits_secret`).
+    fn awaits_secret(&self, _slot: Slot) -> bool {
+        false
+    }
+    /// What `slot` may see of the game's secret, for that seat's connection only.
+    fn seat_secret(&self, _slot: Slot) -> Option<proto::GameSeatSecret> {
+        None
+    }
     fn drop_player(&mut self, slot: Slot);
     fn run_bots(&mut self);
     fn is_waiting_for_bot(&self) -> bool;

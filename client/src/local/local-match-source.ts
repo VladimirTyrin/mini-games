@@ -1,6 +1,10 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 
-import { GameCommandSchema } from "@/proto/minigames/v2/game_pb";
+import {
+  GameCommandSchema,
+  GameSeatSecretSchema,
+  GameSecretCommandSchema,
+} from "@/proto/minigames/v2/game_pb";
 import {
   MatchCatchUpSchema,
   type MatchHeader,
@@ -9,7 +13,12 @@ import {
 } from "@/proto/minigames/v2/match_pb";
 import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
 import { CommandRejectedError } from "@/match/command-rejected-error";
-import type { GameCommandInit, MatchSource, MatchSourceEvents } from "@/match/match-source";
+import type {
+  GameCommandInit,
+  GameSecretCommandInit,
+  MatchSource,
+  MatchSourceEvents,
+} from "@/match/match-source";
 import { Emitter } from "@/net/emitter";
 
 import type { FromWorker, ToWorker } from "./worker-protocol";
@@ -67,6 +76,16 @@ export class LocalMatchSource implements MatchSource {
     return new Promise<void>((resolve, reject) => {
       this.pending.set(requestId, { resolve: () => resolve(), reject });
       this.send({ type: "submit", requestId, slot: this.mySlot, command: bytes });
+    });
+  }
+
+  submitSecret(command: GameSecretCommandInit): Promise<void> {
+    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
+    const requestId = this.nextRequestId++;
+    const bytes = toBinary(GameSecretCommandSchema, create(GameSecretCommandSchema, command));
+    return new Promise<void>((resolve, reject) => {
+      this.pending.set(requestId, { resolve: () => resolve(), reject });
+      this.send({ type: "submitSecret", requestId, slot: this.mySlot, command: bytes });
     });
   }
 
@@ -150,6 +169,9 @@ export class LocalMatchSource implements MatchSource {
         break;
       case "accepted":
         this.settle(message.requestId, null);
+        break;
+      case "seatSecret":
+        this.events.emit("seatSecret", fromBinary(GameSeatSecretSchema, message.secret));
         break;
       case "rejected": {
         const pending = this.pending.get(message.requestId);

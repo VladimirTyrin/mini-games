@@ -11,6 +11,12 @@ pub(crate) enum MatchRequest {
         request_id: u32,
         command: proto::GameCommand,
     },
+    /// Never relayed: only the authority sees it.
+    SubmitSecret {
+        session: SessionId,
+        request_id: u32,
+        command: proto::GameSecretCommand,
+    },
     VoteDrop {
         session: SessionId,
         request_id: u32,

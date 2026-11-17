@@ -1,4 +1,4 @@
-use mg_core::{Clock, CompactLog, Slot, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, CoreRng, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
 use mg_registry::{
     DynMirror, LoadedReplay, SubmitError, create_mirror_from_header, load_replay_file,
@@ -111,6 +111,31 @@ impl MatchMirror {
 
     /// Encoded `MatchResult` when `command` from `slot` would end the match, empty when the match
     /// would go on; an error when the game refuses the command.
+    /// Why the rules would refuse the private command (encoded `GameSecretCommand`) from `slot`,
+    /// as far as the public state tells; `None` when they accept it.
+    #[wasm_bindgen(js_name = secretRefusalOf)]
+    pub fn secret_refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<String>, JsError> {
+        let command = proto::GameSecretCommand::decode(command)?;
+        Ok(
+            match self.mirror.check_secret_command(Slot::new(slot), &command) {
+                Ok(()) => None,
+                Err(SubmitError::Rejected(error)) => Some(error.to_string()),
+                Err(SubmitError::Wire(error)) => return Err(error.into()),
+            },
+        )
+    }
+
+    /// Encoded `GameSecretCommand` the game would choose for `slot` (a random fleet); empty when
+    /// it has none. The seed comes from the page as two 32-bit halves.
+    #[wasm_bindgen(js_name = defaultSecretCommand)]
+    pub fn default_secret_command(&self, slot: u8, seed_high: u32, seed_low: u32) -> Vec<u8> {
+        let mut rng = CoreRng::new((u64::from(seed_high) << 32) | u64::from(seed_low));
+        self.mirror
+            .default_secret_command(Slot::new(slot), &mut rng)
+            .map(|command| command.encode_to_vec())
+            .unwrap_or_default()
+    }
+
     #[wasm_bindgen(js_name = resultAfter)]
     pub fn result_after(&self, slot: u8, command: &[u8]) -> Result<Vec<u8>, JsError> {
         let command = proto::GameCommand::decode(command)?;

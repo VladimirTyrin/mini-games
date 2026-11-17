@@ -7,13 +7,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
-// js: 180. The largest share is the protobuf runtime with the message schemas (~70 KiB); the
+// js: 190. The largest share is the protobuf runtime with the message schemas (~70 KiB); the
 // setup forms, Stack Attack's animation and the PWA registration took it past 135, the sixth
 // game (Word Hunt: board, keyboard, stats) and the snake's body renderer past 145, reconnect and
 // version handling, the rules checks and the frame queue past 150, push notifications, friends
 // and game invitations (screens, schemas, the invitation banner) past 160, the seventh game
 // (Checkers: board, settings, schemas) past 170.
-const budgetsKiB = { js: 180, wasm: 250, css: 30 };
+const budgetsKiB = { js: 190, wasm: 250, css: 30 };
 const totals = { js: 0, wasm: 0, css: 0 };
 const assetName = /[\w.-]+\.(?:js|wasm|css)\b/g;
 

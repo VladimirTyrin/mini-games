@@ -49,10 +49,10 @@ fn published_ranges_are_the_ones_validation_enforces() {
     for &kind in GameKind::ALL {
         let defaults = default_settings(kind);
         let ranges = setting_ranges(&defaults).unwrap();
-        // Checkers has no numeric setting (only who plays white); every other game has some, and
-        // must publish them.
+        // Checkers has no numeric setting (only who plays white) and Sea Battle no setting at
+        // all; every other game has some, and must publish them.
         assert!(
-            !ranges.is_empty() || kind == GameKind::Checkers,
+            !ranges.is_empty() || matches!(kind, GameKind::Checkers | GameKind::SeaBattle),
             "{kind:?} publishes no ranges"
         );
         for range in ranges {

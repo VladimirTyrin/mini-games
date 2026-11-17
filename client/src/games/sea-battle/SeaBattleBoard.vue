@@ -1,0 +1,183 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+
+import { create, fromBinary } from "@bufbuild/protobuf";
+
+import type { MatchController } from "@/match/match-controller";
+import { MatchCatchUpSchema } from "@/proto/minigames/v2/match_pb";
+import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
+import { SeaBattlePhase, type SeaBattleRevealedFleet } from "@/proto/minigames/v2/sea_battle_pb";
+import { useToastStore } from "@/stores/toasts";
+import { seatLabels } from "@/util/players";
+import { Mirror } from "@/wasm/core";
+
+import FleetEditor from "./FleetEditor.vue";
+import SeaGrid from "./SeaGrid.vue";
+import { type CellPoint, type EditorShip, fromWire } from "./fleet-editor";
+
+const props = defineProps<{ controller: MatchController }>();
+const header = props.controller.source.header;
+const names = seatLabels(header);
+const toasts = useToastStore();
+const sending = ref(false);
+
+const view = computed(() => {
+  const game = props.controller.current.value?.view.game;
+  return game?.case === "seaBattle" ? game.value : null;
+});
+const mySlot = computed(() => props.controller.mySlot);
+/** The sea drawn below: the player's own, or the first seat's for someone watching. */
+const homeSlot = computed(() => mySlot.value ?? 0);
+/** The sea drawn above, the one fired at. */
+const targetSlot = computed(() => 1 - homeSlot.value);
+const myTurn = computed(
+  () => view.value?.turnSlot !== undefined && view.value.turnSlot === mySlot.value && !sending.value,
+);
+const needsFleet = computed(
+  () =>
+    view.value?.phase === SeaBattlePhase.PLACING &&
+    mySlot.value !== null &&
+    view.value.ready[mySlot.value] !== true,
+);
+
+const ownFleet = computed<EditorShip[] | null>(() => {
+  const secret = props.controller.seatSecret.value?.game;
+  return secret?.case === "seaBattle" ? secret.value.ships.map(fromWire) : null;
+});
+
+/** A replay shows both fleets from the start: they are revealed at the end of its log. */
+const replayFleets = ref<readonly SeaBattleRevealedFleet[]>([]);
+onMounted(async () => {
+  if (props.controller.source.kind !== "replay") return;
+  const bytes = await props.controller.source.replayFile();
+  if (!bytes) return;
+  const replay = fromBinary(ReplayFileSchema, bytes);
+  const mirror = Mirror.forHeader(header);
+  try {
+    mirror.applyCatchUp(
+      create(MatchCatchUpSchema, { header, frames: replay.frames, nextTick: replay.endTick }),
+    );
+    const final = mirror.view(null).game;
+    if (final.case === "seaBattle") replayFleets.value = final.value.revealed;
+  } catch (error) {
+    console.error("could not read the fleets of the replay", error);
+  } finally {
+    mirror.free();
+  }
+});
+
+function fleetOf(slot: number): EditorShip[] {
+  const revealed = view.value?.revealed[slot]?.ships ?? [];
+  if (revealed.length > 0) return revealed.map(fromWire);
+  if (slot === mySlot.value && ownFleet.value) return ownFleet.value;
+  return (replayFleets.value[slot]?.ships ?? []).map(fromWire);
+}
+
+/** The latest shot, on the sea it hit. */
+function lastShotOn(slot: number): CellPoint | null {
+  const last = view.value?.lastShot;
+  if (!last?.cell || last.bySlot === slot) return null;
+  return { x: last.cell.x, y: last.cell.y };
+}
+
+function seaLabel(slot: number): string {
+  if (mySlot.value === null) return names[slot] ?? `Seat ${slot + 1}`;
+  return slot === mySlot.value ? "Your fleet" : `${names[slot] ?? "Opponent"}'s sea`;
+}
+
+const afloat = computed(() => view.value?.waters[targetSlot.value]?.afloat ?? []);
+
+// The time to place a fleet online, from the header; the server places a random one after it.
+const now = ref(Date.now());
+const clock = setInterval(() => (now.value = Date.now()), 500);
+onBeforeUnmount(() => clearInterval(clock));
+const secondsLeft = computed(() => {
+  if (header.secretSetupMs === 0) return null;
+  const deadline = Number(header.startedAtUnixMs) + header.secretSetupMs;
+  return Math.max(0, Math.ceil((deadline - now.value) / 1000));
+});
+
+const status = computed(() => {
+  const current = view.value;
+  if (!current) return "";
+  const watching = mySlot.value === null;
+  switch (current.phase) {
+    case SeaBattlePhase.PLACING: {
+      if (!needsFleet.value)
+        return watching ? "Fleets are being placed…" : "Waiting for the opponent's fleet…";
+      const left = secondsLeft.value;
+      if (left === null) return "Place your fleet";
+      if (left === 0) return "Placing a random fleet…";
+      return `Place your fleet · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    }
+    case SeaBattlePhase.BATTLE: {
+      const turn = current.turnSlot;
+      if (turn === undefined) return "…";
+      if (watching) return `${names[turn] ?? "A player"} fires`;
+      return turn === mySlot.value ? "Your shot" : "Opponent's shot";
+    }
+    default: {
+      const winner = current.winnerSlot;
+      if (winner === undefined) return "Draw";
+      if (watching) return `${names[winner] ?? "A player"} wins`;
+      if (current.phase === SeaBattlePhase.FORFEITED && winner === mySlot.value)
+        return "Opponent left — you win";
+      return winner === mySlot.value ? "You win!" : "You lose";
+    }
+  }
+});
+
+async function fire(cell: CellPoint): Promise<void> {
+  if (!myTurn.value) return;
+  sending.value = true;
+  try {
+    await props.controller.submit({
+      game: { case: "seaBattle", value: { command: { case: "fire", value: { cell } } } },
+    });
+  } catch (error) {
+    toasts.failure(error);
+  } finally {
+    sending.value = false;
+  }
+}
+</script>
+
+<template>
+  <div v-if="view" class="flex w-full flex-col items-center gap-2">
+    <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">{{ status }}</p>
+    <FleetEditor v-if="needsFleet" :controller="controller" />
+    <div v-else class="flex w-full flex-col items-center gap-3 sm:flex-row sm:items-start sm:justify-center">
+      <section class="flex flex-col gap-1" :style="{ width: 'min(92vw, 44vh, 440px)' }">
+        <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->
+        <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-gray-300">
+          <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
+          <span class="flex shrink-0 gap-0.5" aria-label="Ships afloat">
+            <span
+              v-for="(length, index) in afloat"
+              :key="index"
+              class="h-2 rounded-sm bg-slate-300/70"
+              :style="{ width: `${length * 5}px` }"
+            />
+          </span>
+        </div>
+        <SeaGrid
+          :label="seaLabel(targetSlot)"
+          :marks="view.waters[targetSlot]?.marks ?? []"
+          :ships="fleetOf(targetSlot)"
+          :last-shot="lastShotOn(targetSlot)"
+          :can-fire="myTurn"
+          @fire="fire"
+        />
+      </section>
+      <section class="flex flex-col gap-1" :style="{ width: 'min(56vw, 24vh, 300px)' }">
+        <span class="text-sm text-gray-300 [overflow-wrap:anywhere]">{{ seaLabel(homeSlot) }}</span>
+        <SeaGrid
+          :label="seaLabel(homeSlot)"
+          :marks="view.waters[homeSlot]?.marks ?? []"
+          :ships="fleetOf(homeSlot)"
+          :last-shot="lastShotOn(homeSlot)"
+        />
+      </section>
+    </div>
+  </div>
+</template>

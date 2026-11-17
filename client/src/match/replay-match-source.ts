@@ -156,6 +156,10 @@ export class ReplayMatchSource implements MatchSource {
     return Promise.reject(new Error("replays are read-only"));
   }
 
+  submitSecret(): Promise<void> {
+    return Promise.reject(new Error("replays are read-only"));
+  }
+
   requestCatchUp(): void {
     this.seek(this.current);
   }

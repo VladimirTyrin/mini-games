@@ -12,6 +12,7 @@ macro_rules! games {
             NumbersMatch => mg_numbers_match::NumbersMatch, NumbersMatch, no_bots;
             WordHunt => mg_word_hunt::WordHunt, WordHunt, bots;
             Checkers => mg_checkers::Checkers, Checkers, bots;
+            SeaBattle => mg_sea_battle::SeaBattle, SeaBattle, bots;
             // xtask:games
         }
     };

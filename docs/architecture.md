@@ -44,12 +44,23 @@ Why: frames are tiny (usually empty), clients never learn the seed (bot competit
 fair), replays are just the frame log, and late joiners, observers and reconnects all reuse
 the catch-up path.
 
-**Secrets.** What no player may see until the end (Word Hunt's word) is the game's
-`Game::Secret`. The authority keeps it beside the game, outside the state that clients replay
-and hash. `roll_secret` is the only place that reads it, and it tells everyone only what the
-rules make public: a guess's marks, say, never the word. At the end `reveal` sends the secret
-itself, so replays are complete. Bots decide from the public game like everyone else, so they
-cannot peek either.
+**Secrets.** What no player may see until the end (Word Hunt's word, Sea Battle's fleets) is
+the game's `Game::Secret`. The authority keeps it beside the game, outside the state that
+clients replay and hash.
+- `roll_secret` is the only place that reads it. It tells everyone only what the rules make
+  public: a guess's marks or a shot's result, never the word or a fleet.
+- At the end `reveal` sends the secret itself, so replays are complete.
+- A seat may add to the secret with a **private command** (its fleet: `Authority::submit_secret`,
+  `SubmitSecretCommand` on the wire). It is never put in a frame. The seat gets back what it
+  may see of the secret (`Game::seat_secret`, pushed as `MatchSeatSecret` to that seat only,
+  again after each of its catch-ups).
+- While the game awaits a private command (`Game::awaits_secret`), bots send theirs when a frame
+  is sealed. The server gives people `MatchHeader.secret_setup_ms` and then submits the game's
+  default for them (`Game::default_secret_command`, a random fleet).
+- Clients ask their mirror whether a private command would be refused
+  (`Match::check_secret_command`, against an empty secret) and for the game's default, so the
+  page never re-implements the rules.
+- Bots decide from the public game like everyone else, so they cannot peek either.
 
 Determinism rules live in `AGENTS.md`; `mg_core::conformance` enforces them per game, and
 every game pins a `scripted_hash`.

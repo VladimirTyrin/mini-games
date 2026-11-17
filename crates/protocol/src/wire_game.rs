@@ -1,4 +1,4 @@
-use mg_core::{Game, GameSettings};
+use mg_core::{Game, GameSettings, SeatSecret, SecretCommand};
 
 use crate::proto;
 use crate::wire_error::WireError;
@@ -24,6 +24,21 @@ pub trait WireGame: Game {
     fn world_event_to_wire(event: &Self::WorldEvent) -> proto::GameWorldEvent;
 
     fn view_to_wire(view: &Self::View) -> proto::GameView;
+
+    /// Games that hide nothing take no private commands: every one is from another game.
+    fn secret_command_from_wire(
+        _command: &proto::GameSecretCommand,
+    ) -> Result<SecretCommand<Self>, WireError> {
+        Err(WireError::WrongGame)
+    }
+
+    fn secret_command_to_wire(_command: &SecretCommand<Self>) -> proto::GameSecretCommand {
+        proto::GameSecretCommand { game: None }
+    }
+
+    fn seat_secret_to_wire(_secret: &SeatSecret<Self>) -> proto::GameSeatSecret {
+        proto::GameSeatSecret { game: None }
+    }
 }
 
 /// Built-in bot kinds on the wire, for games that have bots.

@@ -22,6 +22,9 @@ pub struct Timing {
     pub housekeeping_every: Duration,
     /// An unanswered invitation into a lobby closes after this long.
     pub invite_lifetime: Duration,
+    /// Games where each seat first sends a private command (Sea Battle's fleet): how long people
+    /// have for it before the game chooses one for them.
+    pub secret_setup: Duration,
 }
 
 impl Default for Timing {
@@ -37,6 +40,7 @@ impl Default for Timing {
             idle_lobby_timeout: Duration::from_secs(60 * 60),
             housekeeping_every: Duration::from_secs(60),
             invite_lifetime: Duration::from_secs(90),
+            secret_setup: Duration::from_secs(90),
         }
     }
 }

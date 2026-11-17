@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use mg_core::{Clock, CompactLog, Match, PlayerSpec, Slot, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, CoreRng, Match, PlayerSpec, Slot, Status, Tick, Viewer};
 use mg_protocol::{WireGame, frame_from_wire, proto};
 
 use crate::parse_settings;
@@ -61,6 +61,25 @@ impl<G: WireGame> DynMirror for MirrorAdapter<G> {
             .game()
             .preview_command(slot, &command)?
             .status())
+    }
+
+    fn check_secret_command(
+        &self,
+        slot: Slot,
+        command: &proto::GameSecretCommand,
+    ) -> Result<(), SubmitError> {
+        let command = G::secret_command_from_wire(command)?;
+        Ok(self.game_match.check_secret_command(slot, &command)?)
+    }
+
+    fn default_secret_command(
+        &self,
+        slot: Slot,
+        rng: &mut CoreRng,
+    ) -> Option<proto::GameSecretCommand> {
+        self.game_match
+            .default_secret_command(slot, rng)
+            .map(|command| G::secret_command_to_wire(&command))
     }
 
     fn status(&self) -> Status {

@@ -7,6 +7,7 @@ use crate::command_error::CommandError;
 use crate::decided_bot_turn::DecidedBotTurn;
 use crate::frame::{Frame, GameFrame};
 use crate::game::Game;
+use crate::game_secret::{SeatSecret, SecretCommand};
 use crate::hash_policy::HashPolicy;
 use crate::input::{GameInput, Input};
 use crate::player_kind::PlayerKind;
@@ -27,6 +28,9 @@ pub struct Authority<G: Game> {
     /// See [`Game::Secret`]: never leaves the authority, bots included.
     secret: G::Secret,
     is_secret_revealed: bool,
+    /// A private command changed the secret since the last frame: the next one tells the others
+    /// what they may learn of it.
+    has_secret_changes: bool,
     players: Vec<PlayerSpec>,
     world_rng: CoreRng,
     bots: Vec<SeatedBot<G>>,
@@ -77,6 +81,7 @@ impl<G: Game> Authority<G> {
             game,
             secret: G::Secret::default(),
             is_secret_revealed: false,
+            has_secret_changes: false,
             players: players.to_vec(),
             world_rng: CoreRng::derive(seed, 0),
             bots,
@@ -129,7 +134,7 @@ impl<G: Game> Authority<G> {
     }
 
     pub fn has_pending_inputs(&self) -> bool {
-        !self.pending_inputs.is_empty()
+        !self.pending_inputs.is_empty() || self.has_secret_changes
     }
 
     pub fn is_waiting_for_bot(&self) -> bool {
@@ -158,6 +163,83 @@ impl<G: Game> Authority<G> {
         self.pending_inputs.push(Input::Command { slot, command });
         self.revision += 1;
         Ok(())
+    }
+
+    /// A seat's private command (see [`crate::Game::apply_secret_command`]): applied to the
+    /// secret, never put in a frame. The host seals a frame after it, as after a command.
+    pub fn submit_secret(
+        &mut self,
+        slot: Slot,
+        command: &SecretCommand<G>,
+    ) -> Result<(), CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        self.game
+            .apply_secret_command(&mut self.secret, slot, command)?;
+        self.has_secret_changes = true;
+        self.revision += 1;
+        Ok(())
+    }
+
+    /// For a seat whose time to send its private command ran out: the game chooses one. Returns
+    /// whether one was applied.
+    pub fn submit_default_secret(&mut self, slot: Slot) -> bool {
+        if seat_may_command(&self.game, &self.players, &self.dropped, slot).is_err()
+            || !self.game.awaits_secret(slot)
+        {
+            return false;
+        }
+        let Some(command) = self.game.default_secret_command(slot, &mut self.world_rng) else {
+            return false;
+        };
+        self.apply_secret_for(slot, &command)
+    }
+
+    /// What `slot` may see of the secret; only ever for that seat's own connection.
+    pub fn seat_secret(&self, slot: Slot) -> Option<SeatSecret<G>> {
+        self.game.seat_secret(&self.secret, slot)
+    }
+
+    fn apply_secret_for(&mut self, slot: Slot, command: &SecretCommand<G>) -> bool {
+        if self
+            .game
+            .apply_secret_command(&mut self.secret, slot, command)
+            .is_err()
+        {
+            return false;
+        }
+        self.has_secret_changes = true;
+        self.revision += 1;
+        true
+    }
+
+    /// Bots that owe a private command send it as the frame is sealed, so it is never a turn
+    /// to wait for. A bot whose command is refused gets the game's default one; with none, it
+    /// forfeits, so a broken bot can never stall the match.
+    fn settle_bot_secrets(&mut self) {
+        let slots: Vec<Slot> = self
+            .bots
+            .iter()
+            .map(|seat| seat.slot)
+            .filter(|slot| !self.is_dropped(*slot) && self.game.awaits_secret(*slot))
+            .collect();
+        for slot in slots {
+            let decided = self
+                .bots
+                .iter_mut()
+                .find(|seat| seat.slot == slot)
+                .and_then(|seat| seat.mind.as_mut())
+                .and_then(|mind| mind.bot.decide_secret(&self.game, slot, &mut mind.rng));
+            if let Some(command) = decided {
+                if self.apply_secret_for(slot, &command) {
+                    continue;
+                }
+                self.rejected_bot_commands += 1;
+            }
+            let fallback = self.game.default_secret_command(slot, &mut self.world_rng);
+            if !fallback.is_some_and(|command| self.apply_secret_for(slot, &command)) {
+                self.drop_player(slot);
+            }
+        }
     }
 
     /// What [`Self::submit`] would answer, without changing anything.
@@ -298,7 +380,11 @@ impl<G: Game> Authority<G> {
     }
 
     pub fn seal_frame(&mut self) -> GameFrame<G> {
+        if !self.game.status().is_finished() {
+            self.settle_bot_secrets();
+        }
         self.revision += 1;
+        self.has_secret_changes = false;
         let mut inputs = std::mem::take(&mut self.pending_inputs);
         if !self.game.status().is_finished() {
             let events = self.game.roll_secret(&mut self.secret, &mut self.world_rng);

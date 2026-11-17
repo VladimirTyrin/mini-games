@@ -1,6 +1,10 @@
 import type { MessageInitShape } from "@bufbuild/protobuf";
 
-import type { GameCommandSchema } from "@/proto/minigames/v2/game_pb";
+import type {
+  GameCommandSchema,
+  GameSeatSecret,
+  GameSecretCommandSchema,
+} from "@/proto/minigames/v2/game_pb";
 import type {
   MatchCatchUp,
   MatchHeader,
@@ -10,6 +14,7 @@ import type {
 } from "@/proto/minigames/v2/match_pb";
 
 export type GameCommandInit = MessageInitShape<typeof GameCommandSchema>;
+export type GameSecretCommandInit = MessageInitShape<typeof GameSecretCommandSchema>;
 
 export interface MatchSourceEvents {
   frame: TickFrame;
@@ -22,6 +27,8 @@ export interface MatchSourceEvents {
   ended: MatchResult | null;
   /** Replays only: frames now come this many times as fast as the game's own tick. */
   rate: number;
+  /** What this seat may see of the game's secret (its own fleet), whenever it changes. */
+  seatSecret: GameSeatSecret;
 }
 
 export type MatchSourceKind =
@@ -49,6 +56,11 @@ export interface MatchSource {
   start(): void;
   /** Rejects with `CommandRejectedError` when the authority refuses the command. */
   submit(command: GameCommandInit): Promise<void>;
+  /**
+   * A private command (a fleet): only the authority sees it. Rejects with
+   * `CommandRejectedError` when the authority refuses it.
+   */
+  submitSecret(command: GameSecretCommandInit): Promise<void>;
   requestCatchUp(): void;
   voteDrop(slot: number): Promise<void>;
   leave(): void;

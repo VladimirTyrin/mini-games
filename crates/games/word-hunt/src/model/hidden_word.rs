@@ -5,3 +5,8 @@ use crate::model::Word;
 pub struct HiddenWord {
     pub(crate) answer: Option<Word>,
 }
+
+impl mg_core::GameSecret for HiddenWord {
+    type Command = ();
+    type SeatView = ();
+}

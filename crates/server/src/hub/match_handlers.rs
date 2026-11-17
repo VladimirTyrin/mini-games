@@ -82,6 +82,10 @@ impl Hub {
                 },
             })
             .collect();
+        let people_owe_secrets = lobby.seats.iter().enumerate().any(|(slot, seat)| {
+            matches!(seat, LobbySeat::Human { .. })
+                && mg_core::Slot::try_from(slot).is_ok_and(|slot| authority.awaits_secret(slot))
+        });
         let header = proto::MatchHeader {
             match_id: match_id.to_string(),
             settings: Some(lobby.settings),
@@ -89,6 +93,11 @@ impl Hub {
             tick_ms,
             engine_version: server_version(),
             started_at_unix_ms: crate::clock::unix_millis(),
+            secret_setup_ms: if people_owe_secrets {
+                u32::try_from(self.timing.secret_setup.as_millis()).unwrap_or(u32::MAX)
+            } else {
+                0
+            },
         };
         let seated = lobby.seats.iter().enumerate().filter_map(|(slot, seat)| {
             let slot = mg_core::Slot::try_from(slot).ok()?;
@@ -174,6 +183,28 @@ impl Hub {
             );
         };
         let request = MatchRequest::Submit {
+            session: session.clone(),
+            request_id,
+            command,
+        };
+        self.forward_to_match(session, request_id, &submit.match_id, request);
+    }
+
+    pub(super) fn submit_secret_command(
+        &self,
+        session: &SessionId,
+        request_id: u32,
+        submit: proto::SubmitSecretCommand,
+    ) {
+        let Some(command) = submit.command else {
+            return self.reject(
+                session,
+                request_id,
+                ErrorCode::InvalidRequest,
+                "command is required",
+            );
+        };
+        let request = MatchRequest::SubmitSecret {
             session: session.clone(),
             request_id,
             command,

@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+// Classic rules only (a 10×10 sea, the classic fleet): nothing to choose.
+message SeaBattleSettings {}
+
+// 0..=9 each: x is the column (A–J), y the row (1–10, from the top).
+message SeaBattleCell {
+  uint32 x = 1;
+  uint32 y = 2;
+}
+
+enum SeaBattleOrientation {
+  SEA_BATTLE_ORIENTATION_UNSPECIFIED = 0;
+  // From the bow to the right.
+  SEA_BATTLE_ORIENTATION_HORIZONTAL = 1;
+  // From the bow down.
+  SEA_BATTLE_ORIENTATION_VERTICAL = 2;
+}
+
+message SeaBattleShip {
+  // The top or left end.
+  SeaBattleCell bow = 1;
+  // 1..=4.
+  uint32 length = 2;
+  SeaBattleOrientation orientation = 3;
+}
+
+message SeaBattleCommand {
+  oneof command {
+    SeaBattleFire fire = 1;
+    SeaBattleGiveUp give_up = 2;
+  }
+}
+
+message SeaBattleFire {
+  SeaBattleCell cell = 1;
+}
+
+message SeaBattleGiveUp {}
+
+// Sent to the authority alone (SubmitSecretCommand), never put in a frame.
+message SeaBattleSecretCommand {
+  oneof command {
+    SeaBattlePlaceFleet place_fleet = 1;
+  }
+}
+
+// One ship of 4, two of 3, three of 2, four of 1, none touching another.
+message SeaBattlePlaceFleet {
+  repeated SeaBattleShip ships = 1;
+}
+
+// To one seat only (MatchSeatSecret): its own fleet.
+message SeaBattleSeatSecret {
+  repeated SeaBattleShip ships = 1;
+}
+
+// The fleets are the authority's secret: a placed fleet is announced without where it is,
+// every shot is resolved by the authority, and the fleets are revealed once the game is over.
+message SeaBattleWorldEvent {
+  oneof event {
+    SeaBattleFleetPlaced fleet_placed = 1;
+    SeaBattleFirstShooterChosen first_shooter_chosen = 2;
+    SeaBattleShotResolved shot_resolved = 3;
+    SeaBattleFleetRevealed fleet_revealed = 4;
+  }
+}
+
+message SeaBattleFleetPlaced {
+  uint32 slot = 1;
+}
+
+message SeaBattleFirstShooterChosen {
+  uint32 slot = 1;
+}
+
+enum SeaBattleShotOutcome {
+  SEA_BATTLE_SHOT_OUTCOME_UNSPECIFIED = 0;
+  SEA_BATTLE_SHOT_OUTCOME_MISS = 1;
+  SEA_BATTLE_SHOT_OUTCOME_HIT = 2;
+  // The last afloat cell of a ship: `sunk` is the ship.
+  SEA_BATTLE_SHOT_OUTCOME_SUNK = 3;
+}
+
+// What the shot just fired found.
+message SeaBattleShotResolved {
+  SeaBattleShotOutcome outcome = 1;
+  // Set when the outcome is SUNK.
+  SeaBattleShip sunk = 2;
+}
+
+message SeaBattleFleetRevealed {
+  uint32 slot = 1;
+  repeated SeaBattleShip ships = 2;
+}
+
+enum SeaBattleBotKind {
+  SEA_BATTLE_BOT_KIND_UNSPECIFIED = 0;
+  SEA_BATTLE_BOT_KIND_EASY = 1;
+  SEA_BATTLE_BOT_KIND_MEDIUM = 2;
+  SEA_BATTLE_BOT_KIND_HARD = 3;
+}
+
+enum SeaBattlePhase {
+  SEA_BATTLE_PHASE_UNSPECIFIED = 0;
+  SEA_BATTLE_PHASE_PLACING = 1;
+  SEA_BATTLE_PHASE_BATTLE = 2;
+  SEA_BATTLE_PHASE_WON = 3;
+  SEA_BATTLE_PHASE_FORFEITED = 4;
+  SEA_BATTLE_PHASE_ABANDONED = 5;
+}
+
+enum SeaBattleCellMark {
+  SEA_BATTLE_CELL_MARK_UNSPECIFIED = 0;
+  SEA_BATTLE_CELL_MARK_UNKNOWN = 1;
+  SEA_BATTLE_CELL_MARK_MISS = 2;
+  SEA_BATTLE_CELL_MARK_HIT = 3;
+  SEA_BATTLE_CELL_MARK_SUNK = 4;
+  // Next to a sunk ship, so it must be water.
+  SEA_BATTLE_CELL_MARK_CLEARED = 5;
+}
+
+// One seat's sea as everyone sees it.
+message SeaBattleWaters {
+  // Row by row, 100 of them.
+  repeated SeaBattleCellMark marks = 1;
+  repeated SeaBattleShip sunk = 2;
+  // Lengths of the ships still afloat, longest first.
+  repeated uint32 afloat = 3;
+}
+
+message SeaBattleLastShot {
+  uint32 by_slot = 1;
+  SeaBattleCell cell = 2;
+  SeaBattleShotOutcome outcome = 3;
+}
+
+message SeaBattleRevealedFleet {
+  // Empty until the game is over.
+  repeated SeaBattleShip ships = 1;
+}
+
+// Render model; a seat's own fleet comes separately (SeaBattleSeatSecret).
+message SeaBattleView {
+  SeaBattlePhase phase = 1;
+  // By slot: whether the seat has placed its fleet.
+  repeated bool ready = 2;
+  // By slot: that seat's sea.
+  repeated SeaBattleWaters waters = 3;
+  // Who fires next; unset while placing and after the end.
+  optional uint32 turn_slot = 4;
+  optional uint32 winner_slot = 5;
+  SeaBattleLastShot last_shot = 6;
+  // By slot.
+  repeated SeaBattleRevealedFleet revealed = 7;
+}

@@ -4,6 +4,7 @@ use crate::awaiting::Awaiting;
 use crate::clock::Clock;
 use crate::command_error::CommandError;
 use crate::game_info::GameInfo;
+use crate::game_secret::{GameSecret, SeatSecret, SecretCommand};
 use crate::game_settings::GameSettings;
 use crate::hash::StateHasher;
 use crate::player_spec::PlayerSpec;
@@ -34,7 +35,7 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     type View: Debug;
     /// Held by the authority beside the game and never sent as it is. `()` for games that hide
     /// nothing.
-    type Secret: Default + Clone + Debug + Send + 'static;
+    type Secret: GameSecret;
 
     const INFO: GameInfo;
 
@@ -77,6 +78,40 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     /// for everyone (replays included). `apply_world` must accept them on a finished game.
     fn reveal(&self, _secret: &Self::Secret) -> Vec<Self::WorldEvent> {
         Vec::new()
+    }
+
+    /// Whether `slot` still owes its private command (a fleet to place). Bots are asked for it
+    /// when a frame is sealed; a host may give people a time limit and then
+    /// [`Game::default_secret_command`].
+    fn awaits_secret(&self, _slot: Slot) -> bool {
+        false
+    }
+
+    /// A seat's private command: it changes only the secret and is never put in a frame. What
+    /// the others may learn of it comes from [`Game::roll_secret`]. Validates and applies
+    /// atomically, like [`Game::apply_command`].
+    fn apply_secret_command(
+        &self,
+        _secret: &mut Self::Secret,
+        _slot: Slot,
+        _command: &SecretCommand<Self>,
+    ) -> Result<(), CommandError> {
+        Err(CommandError::Illegal("this game takes no private commands"))
+    }
+
+    /// The private command chosen for a seat that did not send one in time (a fleet placed at
+    /// random).
+    fn default_secret_command(
+        &self,
+        _slot: Slot,
+        _rng: &mut CoreRng,
+    ) -> Option<SecretCommand<Self>> {
+        None
+    }
+
+    /// What `slot` may see of the secret (its own fleet).
+    fn seat_secret(&self, _secret: &Self::Secret, _slot: Slot) -> Option<SeatSecret<Self>> {
+        None
     }
 
     fn apply_world(&mut self, event: &Self::WorldEvent) -> Result<(), CommandError>;

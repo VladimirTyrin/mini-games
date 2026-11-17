@@ -1,0 +1,23 @@
+mod cell;
+mod cell_mark;
+mod fleet;
+mod fleet_error;
+mod hidden_fleets;
+mod last_shot;
+mod orientation;
+mod phase;
+mod ship;
+mod shot_outcome;
+mod waters;
+
+pub use cell::Cell;
+pub use cell_mark::CellMark;
+pub use fleet::{FLEET_LENGTHS, Fleet};
+pub use fleet_error::FleetError;
+pub use hidden_fleets::HiddenFleets;
+pub use last_shot::LastShot;
+pub use orientation::Orientation;
+pub use phase::Phase;
+pub use ship::Ship;
+pub use shot_outcome::ShotOutcome;
+pub use waters::Waters;

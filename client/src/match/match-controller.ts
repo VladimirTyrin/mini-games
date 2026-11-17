@@ -2,11 +2,17 @@ import { shallowRef, type ShallowRef } from "vue";
 
 import { create } from "@bufbuild/protobuf";
 
-import { GameCommandSchema, type GameView } from "@/proto/minigames/v2/game_pb";
+import {
+  GameCommandSchema,
+  type GameSeatSecret,
+  type GameSecretCommand,
+  GameSecretCommandSchema,
+  type GameView,
+} from "@/proto/minigames/v2/game_pb";
 import type { MatchCatchUp, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
 import { type CommandPreview, Mirror } from "@/wasm/core";
 
-import type { GameCommandInit, MatchSource } from "./match-source";
+import type { GameCommandInit, GameSecretCommandInit, MatchSource } from "./match-source";
 import { PlaybackClock } from "./playback-clock";
 import { resultRevealAt } from "./result-reveal";
 import { type SeatPause, seatPauses } from "./seat-pause";
@@ -42,6 +48,8 @@ export class MatchController {
    * under a running tab, or the replay comes from another version. Resyncing cannot help.
    */
   readonly incompatible = shallowRef(false);
+  /** What this player's seat may see of the game's secret (its own fleet); `null` until sent. */
+  readonly seatSecret: ShallowRef<GameSeatSecret | null> = shallowRef(null);
   /** The game's own tick; 0 for turn-based games. */
   readonly gameTickMs: number;
   /** Replays may play faster or slower than the game; 1 everywhere else. */
@@ -77,6 +85,9 @@ export class MatchController {
         this.pauses.value = [];
         this.resumeAt.value = countdownMs > 0 ? performance.now() + countdownMs : null;
       }),
+      source.on("seatSecret", (secret) => {
+        this.seatSecret.value = secret;
+      }),
       source.on("rate", (rate) => {
         this.playbackRate = rate;
         // Animations run at the pace frames now arrive at; the old schedule no longer applies.
@@ -108,6 +119,10 @@ export class MatchController {
     return this.source.submit(command);
   }
 
+  submitSecret(command: GameSecretCommandInit): Promise<void> {
+    return this.source.submitSecret(command);
+  }
+
   /**
    * Why the rules would refuse this player's `command` on the state on screen; `null` when they
    * accept it. Reads `current`, so a computed that asks follows the match. The authority still
@@ -118,6 +133,20 @@ export class MatchController {
     const slot = this.source.mySlot;
     if (slot === null) return "you are watching";
     return this.mirror.refusalOf(slot, create(GameCommandSchema, command));
+  }
+
+  /** Why the rules would refuse this player's private `command` (see `refusal`). */
+  secretRefusal(command: GameSecretCommandInit): string | null {
+    void this.current.value;
+    const slot = this.source.mySlot;
+    if (slot === null) return "you are watching";
+    return this.mirror.secretRefusalOf(slot, create(GameSecretCommandSchema, command));
+  }
+
+  /** The private command the game would choose for this player (a random fleet). */
+  defaultSecretCommand(): GameSecretCommand | null {
+    const slot = this.source.mySlot;
+    return slot === null ? null : this.mirror.defaultSecretCommand(slot);
   }
 
   /** What this player's `command` would lead to on the state on screen; see `refusal`. */

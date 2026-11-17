@@ -9,6 +9,7 @@ import "minigames/v2/puzzle2048.proto";
 import "minigames/v2/numbers_match.proto";
 import "minigames/v2/word_hunt.proto";
 import "minigames/v2/checkers.proto";
+import "minigames/v2/sea_battle.proto";
 // xtask:imports
 
 // Envelopes dispatching to per-game messages. Adding a game adds one case to each oneof
@@ -23,6 +24,7 @@ message GameSettings {
     NumbersMatchSettings numbers_match = 5;
     WordHuntSettings word_hunt = 6;
     CheckersSettings checkers = 7;
+    SeaBattleSettings sea_battle = 8;
     // xtask:GameSettings
   }
 }
@@ -36,6 +38,7 @@ message GameCommand {
     NumbersMatchCommand numbers_match = 5;
     WordHuntCommand word_hunt = 6;
     CheckersCommand checkers = 7;
+    SeaBattleCommand sea_battle = 8;
     // xtask:GameCommand
   }
 }
@@ -49,6 +52,7 @@ message GameWorldEvent {
     NumbersMatchWorldEvent numbers_match = 5;
     WordHuntWorldEvent word_hunt = 6;
     CheckersWorldEvent checkers = 7;
+    SeaBattleWorldEvent sea_battle = 8;
     // xtask:GameWorldEvent
   }
 }
@@ -63,6 +67,7 @@ message GameView {
     NumbersMatchView numbers_match = 5;
     WordHuntView word_hunt = 6;
     CheckersView checkers = 7;
+    SeaBattleView sea_battle = 8;
     // xtask:GameView
   }
 }
@@ -73,5 +78,21 @@ message BotKind {
     TicTacToeBotKind tictactoe = 2;
     WordHuntBotKind word_hunt = 3;
     CheckersBotKind checkers = 4;
+    SeaBattleBotKind sea_battle = 5;
+  }
+}
+
+// A seat's private command, for games that hide something from the players (see
+// SubmitSecretCommand). Only those games have a case here.
+message GameSecretCommand {
+  oneof game {
+    SeaBattleSecretCommand sea_battle = 1;
+  }
+}
+
+// What one seat may see of the game's secret (see MatchSeatSecret).
+message GameSeatSecret {
+  oneof game {
+    SeaBattleSeatSecret sea_battle = 1;
   }
 }

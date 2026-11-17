@@ -1286,6 +1286,7 @@ dependencies = [
  "mg-core",
  "mg-numbers-match",
  "mg-puzzle2048",
+ "mg-sea-battle",
  "mg-snake",
  "mg-stack-attack",
  "mg-tictactoe",
@@ -1316,12 +1317,20 @@ dependencies = [
  "mg-numbers-match",
  "mg-protocol",
  "mg-puzzle2048",
+ "mg-sea-battle",
  "mg-snake",
  "mg-stack-attack",
  "mg-tictactoe",
  "mg-word-hunt",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "mg-sea-battle"
+version = "2.0.0"
+dependencies = [
+ "mg-core",
 ]
 
 [[package]]
@@ -1339,6 +1348,7 @@ dependencies = [
  "mg-core",
  "mg-protocol",
  "mg-registry",
+ "mg-sea-battle",
  "mg-snake",
  "mg-tictactoe",
  "mimalloc",

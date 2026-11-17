@@ -23,6 +23,7 @@ mg-puzzle2048.workspace = true
 mg-numbers-match.workspace = true
 mg-word-hunt.workspace = true
 mg-checkers.workspace = true
+mg-sea-battle.workspace = true
 # xtask:game-deps
 prost.workspace = true
 pbjson = { version = "0.9", optional = true }

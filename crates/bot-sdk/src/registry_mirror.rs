@@ -1,4 +1,4 @@
-use mg_core::{Clock, CompactLog, Slot, Status, Tick, Viewer};
+use mg_core::{Clock, CompactLog, CoreRng, Slot, Status, Tick, Viewer};
 use mg_protocol::proto;
 use mg_registry::{
     ApplyError, CreateError, DynMirror, GameKind, SubmitError, create_mirror_from_header,
@@ -49,6 +49,22 @@ impl DynMirror for RegistryMirror {
         command: &proto::GameCommand,
     ) -> Result<Status, SubmitError> {
         self.0.status_after(slot, command)
+    }
+
+    fn check_secret_command(
+        &self,
+        slot: Slot,
+        command: &proto::GameSecretCommand,
+    ) -> Result<(), SubmitError> {
+        self.0.check_secret_command(slot, command)
+    }
+
+    fn default_secret_command(
+        &self,
+        slot: Slot,
+        rng: &mut CoreRng,
+    ) -> Option<proto::GameSecretCommand> {
+        self.0.default_secret_command(slot, rng)
     }
 
     fn status(&self) -> Status {

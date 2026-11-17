@@ -54,5 +54,7 @@ fn header(config: &ArenaConfig, index: u32, authority: &dyn DynAuthority) -> pro
         tick_ms,
         engine_version: env!("CARGO_PKG_VERSION").to_owned(),
         started_at_unix_ms: 0,
+        // Bots send their private commands at once.
+        secret_setup_ms: 0,
     }
 }

@@ -411,6 +411,9 @@ impl Hub {
             ClientPayload::SubmitCommand(submit) => {
                 self.submit_command(session, request_id, submit)
             }
+            ClientPayload::SubmitSecretCommand(submit) => {
+                self.submit_secret_command(session, request_id, submit)
+            }
             ClientPayload::ReportDesync(desync) => {
                 if self.try_catch_up(session, request_id) {
                     tracing::warn!(%session, match_id = desync.match_id, tick = desync.tick, "client reported desync");

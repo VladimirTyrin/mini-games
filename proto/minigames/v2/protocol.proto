@@ -39,6 +39,7 @@ message ClientMessage {
     RequestCatchUp request_catch_up = 42;
     VoteDropPlayer vote_drop_player = 43;
     LeaveMatch leave_match = 44;
+    SubmitSecretCommand submit_secret_command = 45;
 
     RequestReplay request_replay = 50;
     ShareReplay share_replay = 51;
@@ -83,6 +84,7 @@ message ServerMessage {
     MatchPaused paused = 43;
     MatchResumed resumed = 44;
     MatchEnded ended = 45;
+    MatchSeatSecret seat_secret = 46;
 
     ReplayData replay_data = 50;
     SharedReplay shared_replay = 51;

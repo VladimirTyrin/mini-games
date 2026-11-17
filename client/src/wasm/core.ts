@@ -6,6 +6,8 @@ import {
   BotKindSchema,
   type GameCommand,
   GameCommandSchema,
+  type GameSecretCommand,
+  GameSecretCommandSchema,
   type GameSettings,
   GameSettingsSchema,
   type GameView,
@@ -158,6 +160,18 @@ export class Mirror {
   /** Why the rules would refuse `command` from `slot` now, for the player; `null` if they accept it. */
   refusalOf(slot: number, command: GameCommand): string | null {
     return this.inner.refusalOf(slot, toBinary(GameCommandSchema, command)) ?? null;
+  }
+
+  /** Why the rules would refuse the private `command` from `slot`; `null` if they accept it. */
+  secretRefusalOf(slot: number, command: GameSecretCommand): string | null {
+    return this.inner.secretRefusalOf(slot, toBinary(GameSecretCommandSchema, command)) ?? null;
+  }
+
+  /** The private command the game would choose for `slot` (a random fleet), if it has one. */
+  defaultSecretCommand(slot: number): GameSecretCommand | null {
+    const seed = crypto.getRandomValues(new Uint32Array(2));
+    const bytes = this.inner.defaultSecretCommand(slot, seed[0] ?? 0, seed[1] ?? 0);
+    return bytes.length === 0 ? null : fromBinary(GameSecretCommandSchema, bytes);
   }
 
   /** What `command` from `slot` would lead to: refused, the game goes on, or how it ends. */

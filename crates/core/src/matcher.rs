@@ -6,9 +6,11 @@ use crate::compact_log_entry::CompactLogEntry;
 use crate::frame::{Frame, GameFrame};
 use crate::frame_error::FrameError;
 use crate::game::Game;
+use crate::game_secret::SecretCommand;
 use crate::input::Input;
 use crate::logged_frame::LoggedFrame;
 use crate::player_spec::PlayerSpec;
+use crate::rng::CoreRng;
 use crate::seat_check::seat_may_command;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
@@ -59,6 +61,28 @@ impl<G: Game> Match<G> {
     pub fn preview_command(&self, slot: Slot, command: &G::Command) -> Result<G, CommandError> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.preview_command(slot, command)
+    }
+
+    /// What the authority would answer to a private command, as far as the public state tells:
+    /// the game checks it against an empty secret. A client asks before sending its fleet.
+    pub fn check_secret_command(
+        &self,
+        slot: Slot,
+        command: &SecretCommand<G>,
+    ) -> Result<(), CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        self.game
+            .apply_secret_command(&mut G::Secret::default(), slot, command)
+    }
+
+    /// The private command the game would choose for `slot` (a random fleet), for a client that
+    /// offers it as a start.
+    pub fn default_secret_command(
+        &self,
+        slot: Slot,
+        rng: &mut CoreRng,
+    ) -> Option<SecretCommand<G>> {
+        self.game.default_secret_command(slot, rng)
     }
 
     /// After an error the state may be partially updated; rebuild from the full log.
