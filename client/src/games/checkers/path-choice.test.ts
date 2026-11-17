@@ -14,9 +14,9 @@ describe("choosePath", () => {
     expect(choosePath(simple, [18], 27)).toEqual({ kind: "complete", selection: [18, 27] });
   });
 
-  it("switches to another piece and deselects the picked one", () => {
+  it("switches to another piece, and keeps the picked one on its own tap", () => {
     expect(choosePath(simple, [18], 20)).toEqual({ kind: "partial", selection: [20] });
-    expect(choosePath(simple, [18], 18)).toEqual({ kind: "partial", selection: [] });
+    expect(choosePath(simple, [18], 18)).toEqual({ kind: "partial", selection: [18] });
   });
 
   it("ignores squares nothing can reach", () => {
@@ -49,9 +49,9 @@ describe("choosePath", () => {
     expect(choosePath(captures, [0], 36)).toEqual({ kind: "ignore" });
   });
 
-  it("puts the piece back on a tap even where a capture could end on its square", () => {
+  it("keeps the piece picked on a tap even where a capture could end on its square", () => {
     const loop = [[0, 18, 36, 18, 0]];
-    expect(choosePath(loop, [0], 0)).toEqual({ kind: "partial", selection: [] });
+    expect(choosePath(loop, [0], 0)).toEqual({ kind: "partial", selection: [0] });
   });
 
   it("lands back on the starting square of a king's capture", () => {

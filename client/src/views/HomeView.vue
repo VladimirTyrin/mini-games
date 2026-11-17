@@ -7,6 +7,7 @@ import AppHeader from "@/components/AppHeader.vue";
 import GetTheAppBanner from "@/components/GetTheAppBanner.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { gamePlugins } from "@/games";
+import { ANDROID_APK_URL } from "@/platform/android-app";
 import { useMatchStore } from "@/stores/match";
 
 const router = useRouter();
@@ -81,6 +82,10 @@ const isNativeApp = __NATIVE_APP__;
     </section>
     <p class="text-center text-xs text-gray-500">
       <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
+      <template v-if="!isNativeApp">
+        ·
+        <a :href="ANDROID_APK_URL" class="underline hover:text-gray-300">Android app</a>
+      </template>
     </p>
   </main>
 </template>

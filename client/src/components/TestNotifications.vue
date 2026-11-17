@@ -51,11 +51,12 @@ const timings = computed(() => {
         lock the phone first.
       </p>
       <button
-        class="min-h-11 w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold disabled:opacity-50"
+        type="button"
+        class="rounded-lg border border-white/15 px-3 py-1.5 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5 disabled:opacity-50"
         :disabled="notifications.testStatus.kind === 'registering'"
         @click="notifications.sendTest()"
       >
-        Send a test notification
+        Send a test
       </button>
       <p v-if="notifications.testStatus.kind === 'registering'" class="text-sm text-gray-300">Setting up…</p>
       <p v-else-if="notifications.testStatus.kind === 'scheduled'" class="text-sm text-emerald-300">

@@ -37,9 +37,9 @@ export function choosePath(
   const candidates = paths.filter((path) => startsWith(path, selection));
   const step = selection.length;
 
-  // A tap on the picked piece puts it back, even where a capture could end on the square it left
-  // (that one is walked landing by landing).
-  if (step === 1 && selection[0] === square) return { kind: "partial", selection: [] };
+  // A tap on the picked piece keeps it picked: it may have been picked already (the only piece
+  // that can move), and the tap is the player picking it too. Another piece is picked by its tap.
+  if (step === 1 && selection[0] === square) return { kind: "partial", selection: [...selection] };
   if (step > 1 && selection.at(-1) === square && isWholePath(paths, selection)) {
     return { kind: "complete", selection: [...selection] };
   }

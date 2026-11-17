@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ANDROID_APK_URL } from "@/platform/android-app";
 import { onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
@@ -119,6 +120,17 @@ function resetServer(): void {
       <SignInPanel />
     </section>
     <TestNotifications v-if="connection.isSignedIn" />
+    <section v-if="!isNativeApp" class="flex items-center gap-3 rounded-xl bg-panel p-4">
+      <div class="min-w-0 flex-1">
+        <h2 class="font-semibold">Android app</h2>
+        <p class="text-xs text-gray-400">Plays offline and updates itself.</p>
+      </div>
+      <a
+        :href="ANDROID_APK_URL"
+        class="rounded-lg border border-white/15 px-3 py-1.5 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
+        >Download</a
+      >
+    </section>
     <UpdateBanner />
     <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
     <p v-if="isNativeApp" class="text-center text-xs text-gray-500">
