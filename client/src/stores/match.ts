@@ -150,7 +150,13 @@ export const useMatchStore = defineStore("match", () => {
       });
       // The server kept the seat no longer (away past its grace period): the match is gone.
       const offSignedIn = session.events.on("signedIn", ({ resumed }) => {
-        if (!resumed && controller.value?.source instanceof OnlineMatchSource) close();
+        if (resumed || !(controller.value?.source instanceof OnlineMatchSource)) return;
+        close();
+        toasts.show(
+          connection.lostToRestart()
+            ? "The server restarted for an update, and the match was stopped"
+            : "You were away too long, and the match went on without you",
+        );
       });
       detach = () => {
         offStarted();

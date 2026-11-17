@@ -36,6 +36,25 @@ Every deploy puts exactly one build on the host. The build number is the commit 
    from the public address (`https://<domain>`, or `http://<host>` in `--mode http`) and fails
    with a list of what differs.
 
+## Restarts and running matches
+
+Lobbies and matches live only in the server's memory, so a restart ends them. Before restarting,
+`deploy.sh` asks the server to drain: `POST /admin/drain` on `127.0.0.1:5000`. The endpoint takes
+requests from the host only; nginx does not forward it.
+
+While draining:
+- the server refuses new matches with `ERROR_CODE_SERVER_UPDATING`;
+- every player gets `ServerUpdating`, and the app pauses Start (an offline solo start still
+  works);
+- matches already running play on.
+
+The endpoint answers how many matches are still running. `deploy.sh` asks every 5 s and restarts
+once the answer is 0, or after `--drain-seconds` (600 by default). `--no-drain` restarts at
+once.
+
+A match or lobby that a restart still cuts off says so in the app ("The server restarted for an
+update…") instead of just closing.
+
 ## Database
 
 Friends, friend links and push addresses live in SQLite at

@@ -92,6 +92,8 @@ async function saveSettings(): Promise<void> {
 /** Nobody else is here: play locally instead (no ping, works offline). */
 const iVotedToPlayAgain = computed(() => state.value?.playAgainVotes.some((voter) => isMe(voter)) ?? false);
 const startsLocally = computed(() => humanSeats.value === 1 && (state.value?.observers.length ?? 0) === 0);
+/** The server refuses new matches while it waits to restart; a local one does not need it. */
+const startPausedForUpdate = computed(() => connection.serverUpdating && !startsLocally.value);
 
 async function start(): Promise<void> {
   const current = state.value;
@@ -306,14 +308,17 @@ function kick(): void {
             humanSeats
           }}
         </button>
-        <p v-if="canStart && startProblem" class="ml-auto text-sm text-rose-300">
+        <p v-if="canStart && startPausedForUpdate" class="ml-auto text-sm text-amber-300">
+          The server updates in a moment: start the match after it
+        </p>
+        <p v-else-if="canStart && startProblem" class="ml-auto text-sm text-rose-300">
           {{ startProblem.message }} — edit the settings to start
         </p>
         <button
           v-if="canStart"
           class="rounded bg-emerald-600 px-6 py-2 font-semibold disabled:opacity-50"
-          :class="startProblem ? '' : 'ml-auto'"
-          :disabled="!!startProblem"
+          :class="startProblem || startPausedForUpdate ? '' : 'ml-auto'"
+          :disabled="!!startProblem || startPausedForUpdate"
           @click="start"
         >
           {{ startsLocally ? "Start (offline)" : "Start" }}

@@ -61,6 +61,11 @@ pub(crate) enum HubCommand {
         accounts: Vec<AccountId>,
         reply: oneshot::Sender<BTreeMap<AccountId, proto::Presence>>,
     },
+    /// deploy.sh is about to restart the server: stop starting matches. Answers how many are
+    /// still running.
+    Drain {
+        reply: oneshot::Sender<usize>,
+    },
     FlushLobbyList,
     Housekeeping,
     Shutdown,

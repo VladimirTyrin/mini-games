@@ -42,6 +42,9 @@ pub(crate) struct Hub {
     lobby_list_flush_scheduled: bool,
     /// What browsers last received, so a flush without visible changes pushes nothing.
     last_pushed_lobby_list: Option<proto::LobbyList>,
+    /// Waiting to restart for an update (`HubCommand::Drain`): running matches play out, new
+    /// ones are refused.
+    pub(super) draining: bool,
 }
 
 impl Hub {
@@ -62,6 +65,7 @@ impl Hub {
             lobbies: BTreeMap::new(),
             lobby_list_flush_scheduled: false,
             last_pushed_lobby_list: None,
+            draining: false,
         }
     }
 
@@ -116,6 +120,11 @@ impl Hub {
                 HubCommand::PresenceOf { accounts, reply } => {
                     // The asker may be gone (shutting down); nothing to do then.
                     let _sent = reply.send(self.presence_of_accounts(accounts));
+                }
+                HubCommand::Drain { reply } => {
+                    self.drain();
+                    // deploy.sh may have given up asking; nothing to do then.
+                    let _unanswered = reply.send(self.running_matches());
                 }
                 HubCommand::FlushLobbyList => self.flush_lobby_list(),
                 HubCommand::Housekeeping => self.housekeeping(),
@@ -232,6 +241,12 @@ impl Hub {
             self.rejoin_lobby(&session_id, &lobby_id, outbound);
         }
         self.announce_sign_in(&session_id);
+        if self.draining {
+            self.send_to(
+                &session_id,
+                &codec::push(Message::ServerUpdating(proto::ServerUpdating {})),
+            );
+        }
     }
 
     /// A device of this Google account that lost its connection: a sign-in without its resume
@@ -599,6 +614,33 @@ impl Hub {
         for lobby_id in idle {
             self.close_lobby(&lobby_id, proto::LobbyClosedReason::Inactive);
         }
+    }
+
+    /// From now on new matches are refused; everyone is told once.
+    fn drain(&mut self) {
+        if self.draining {
+            return;
+        }
+        self.draining = true;
+        tracing::info!(
+            running_matches = self.running_matches(),
+            "waiting for matches to end before the restart"
+        );
+        let encoded = codec::encode(&codec::push(Message::ServerUpdating(
+            proto::ServerUpdating {},
+        )));
+        for session in self.sessions.values() {
+            if let Some(outbound) = session.outbound() {
+                outbound.send_encoded(encoded.clone());
+            }
+        }
+    }
+
+    fn running_matches(&self) -> usize {
+        self.lobbies
+            .values()
+            .filter(|lobby| lobby.phase.match_handle().is_some())
+            .count()
     }
 
     fn shutdown(&mut self) {

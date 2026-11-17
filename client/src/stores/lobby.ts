@@ -85,7 +85,11 @@ export const useLobbyStore = defineStore("lobby", () => {
             current.value = null;
             lobbyChat.value = [];
             // The first sign-in of a new session (another account, say) is no reconnect.
-            if (reconnecting) toasts.show("You were away too long and lost your place in the lobby");
+            if (connection.lostToRestart()) {
+              toasts.show("The server restarted for an update, and the lobby was closed");
+            } else if (reconnecting) {
+              toasts.show("You were away too long and lost your place in the lobby");
+            }
           }
           reconnecting = true;
           void refresh();

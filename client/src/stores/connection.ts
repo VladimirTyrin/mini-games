@@ -20,6 +20,9 @@ import { usePrefsStore } from "./prefs";
 import { useToastStore } from "./toasts";
 import { errorMessage } from "@/util/error-message";
 
+/** How long after "the server is restarting" a lost match or lobby is put down to the restart. */
+const LOST_TO_RESTART_MS = 2 * 60 * 1000;
+
 /** The online session: server info, sign-in state and the live `Session`. */
 export const useConnectionStore = defineStore("connection", () => {
   const prefs = usePrefsStore();
@@ -27,6 +30,13 @@ export const useConnectionStore = defineStore("connection", () => {
 
   const session = shallowRef<Session | null>(null);
   const state = ref<ConnectionState>("offline");
+  /** The server waits to restart for an update: matches running finish, new ones are refused. */
+  const serverUpdating = ref(false);
+  /**
+   * The last time the server said it was restarting: a lobby or match missing after the
+   * reconnect was lost to the restart, not to being away.
+   */
+  let restartedAt = 0;
   const identity = ref<Identity | null>(null);
   const serverInfo = ref<ServerInfo | null>(null);
   const serverError = ref<string | null>(null);
@@ -67,6 +77,7 @@ export const useConnectionStore = defineStore("connection", () => {
     const created = new Session(prefs.serverUrl, credentials, resumeStorage.get(resumeKey) ?? "");
     created.events.on("state", (next) => (state.value = next));
     created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken, serverInfo: info }) => {
+      serverUpdating.value = false;
       identity.value = who;
       if (info) serverInfo.value = info;
       resumeStorage.set(resumeKey, resumeToken);
@@ -87,7 +98,16 @@ export const useConnectionStore = defineStore("connection", () => {
       prefs.sessionToken = "";
       toasts.show("Your session has expired. Please sign in again.");
     });
-    created.events.on("shuttingDown", () => toasts.show("The server is restarting"));
+    created.events.on("shuttingDown", () => {
+      restartedAt = Date.now();
+      toasts.show("The server is restarting");
+    });
+    created.events.on("serverUpdating", () => {
+      if (!serverUpdating.value) {
+        toasts.show("The server updates soon: games in progress finish first, new ones start in a minute");
+      }
+      serverUpdating.value = true;
+    });
     session.value = created;
     created.connect();
   }
@@ -127,7 +147,14 @@ export const useConnectionStore = defineStore("connection", () => {
     return session.value;
   }
 
+  /** Whether what went missing on the last reconnect went with a server restart. */
+  function lostToRestart(): boolean {
+    return Date.now() - restartedAt < LOST_TO_RESTART_MS;
+  }
+
   return {
+    serverUpdating,
+    lostToRestart,
     session,
     state,
     identity,

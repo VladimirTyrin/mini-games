@@ -33,6 +33,9 @@ const MAX_REPLAY_SPEED_PERCENT: u32 = 400;
 
 impl Hub {
     pub(super) fn spawn_match(&mut self, lobby_id: &LobbyId) -> Result<(), SpawnError> {
+        if self.draining {
+            return Err(SpawnError::ServerUpdating);
+        }
         let Some(lobby) = self.lobbies.get_mut(lobby_id) else {
             return Err(SpawnError::LobbyNotFound);
         };

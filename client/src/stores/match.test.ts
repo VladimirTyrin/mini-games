@@ -12,6 +12,7 @@ import { LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "./connection";
 import { useLobbyStore } from "./lobby";
 import { useMatchStore } from "./match";
+import { useToastStore } from "./toasts";
 
 const me = { kind: IdentityKind.GUEST, id: "u_me", displayName: "Sam" };
 
@@ -118,6 +119,26 @@ describe("match store", () => {
       await welcomeOn(openedSocket(1), false);
 
       expect(match.controller).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says the match was stopped by a server restart instead of closing it silently", async () => {
+    vi.useFakeTimers();
+    try {
+      const socket = await inOnlineMatch();
+      const match = useMatchStore();
+
+      socket.push(create(ServerMessageSchema, { message: { case: "shuttingDown", value: {} } }));
+      socket.close();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await welcomeOn(openedSocket(1), false);
+
+      expect(match.controller).toBeNull();
+      expect(useToastStore().toasts.map((toast) => toast.text)).toContain(
+        "The server restarted for an update, and the match was stopped",
+      );
     } finally {
       vi.useRealTimers();
     }

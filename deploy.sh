@@ -21,6 +21,10 @@
 #                   publish an APK built from another commit than the one being deployed
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
+#   --drain-seconds N
+#                   before the restart, wait up to N seconds (default 600) for running matches
+#                   to end; new ones are refused meanwhile. Matches live only in memory.
+#   --no-drain      restart at once (same as --drain-seconds 0)
 #
 # Everything deployed carries one build number, the commit count of HEAD: the server reports it
 # at /version, the web bundle in /version.json, the APK files in android.json and web.json. The
@@ -44,6 +48,7 @@ DRY_RUN=false
 APK=""
 BUILD_APK=true
 ALLOW_VERSION_MISMATCH=false
+DRAIN_SECONDS=600
 
 die() { echo "error: $*" >&2; exit 1; }
 # The "build" number of a JSON document on stdin (android.json, web.json, version.json).
@@ -60,7 +65,9 @@ while [[ $# -gt 0 ]]; do
         --skip-build) SKIP_BUILD=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         --no-apk) BUILD_APK=false; shift ;;
-        -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+        --drain-seconds) DRAIN_SECONDS="$2"; shift 2 ;;
+        --no-drain) DRAIN_SECONDS=0; shift ;;
+        -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -73,6 +80,7 @@ SSH_OPTS=(-o IdentitiesOnly=yes -i "$SSH_KEY")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 scp() { command scp "${SSH_OPTS[@]}" "$@"; }
 [[ "$MODE" == "http" || "$MODE" == "tls" ]] || die "--mode must be http or tls"
+[[ "$DRAIN_SECONDS" =~ ^[0-9]+$ ]] || die "--drain-seconds takes a number of seconds"
 [[ -z "$APK" || -f "$APK" ]] || die "APK not found: $APK"
 if [[ "$MODE" == "tls" ]]; then
     [[ -n "$DOMAIN" ]] || die "--domain is required for --mode tls"
@@ -197,7 +205,8 @@ fi
 
 echo "==> Configuring host (${MODE})"
 ssh "$HOST" MODE="$MODE" DOMAIN="$DOMAIN" EMAIL="$EMAIL" REMOTE_DIR="$REMOTE_DIR" \
-    SERVICE_NAME="$SERVICE_NAME" BINARY_NAME="$BINARY_NAME" GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" bash -s <<'REMOTE'
+    SERVICE_NAME="$SERVICE_NAME" BINARY_NAME="$BINARY_NAME" GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+    DRAIN_SECONDS="$DRAIN_SECONDS" bash -s <<'REMOTE'
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
@@ -241,6 +250,25 @@ if [[ -f /tmp/mini-games-push.env ]]; then
     rm -f /tmp/mini-games-push.env
 fi
 chmod 600 "$ENV_FILE"
+
+# Matches live only in the server's memory: let the running ones end before the restart. The
+# server refuses new ones meanwhile and tells the players. An older server without the drain
+# endpoint (or none running) answers nothing, and the restart goes ahead.
+if (( DRAIN_SECONDS > 0 )); then
+    waited=0
+    while running="$(curl -fs -X POST http://127.0.0.1:5000/admin/drain 2>/dev/null)" \
+        && [[ "$running" =~ ^[0-9]+$ ]] && (( running > 0 )); do
+        if (( waited >= DRAIN_SECONDS )); then
+            echo "==> ${running} match(es) still running after ${DRAIN_SECONDS} s: restarting anyway"
+            break
+        fi
+        if (( waited % 30 == 0 )); then
+            echo "==> Waiting for ${running} running match(es) to end before the restart"
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+fi
 
 # Swap in the new build.
 chmod 755 "${REMOTE_DIR}/${BINARY_NAME}.new"

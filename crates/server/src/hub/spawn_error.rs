@@ -1,3 +1,4 @@
+use mg_protocol::proto;
 use mg_registry::CreateError;
 
 #[derive(Debug, thiserror::Error)]
@@ -8,4 +9,17 @@ pub(super) enum SpawnError {
     NotEnoughPlayers { game: &'static str, min_players: u8 },
     #[error("cannot create the match: {0}")]
     Create(#[source] CreateError),
+    #[error("the server restarts for an update in a moment: start the match again after it")]
+    ServerUpdating,
+}
+
+impl SpawnError {
+    pub(super) fn code(&self) -> proto::ErrorCode {
+        match self {
+            Self::ServerUpdating => proto::ErrorCode::ServerUpdating,
+            Self::LobbyNotFound | Self::NotEnoughPlayers { .. } | Self::Create(_) => {
+                proto::ErrorCode::InvalidSettings
+            }
+        }
+    }
 }

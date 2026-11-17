@@ -6,7 +6,7 @@ use axum::Router;
 use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, mpsc, watch};
 use tower_http::services::{ServeDir, ServeFile};
@@ -155,6 +155,7 @@ pub async fn serve(
         .route("/healthz", get(|| async { "ok" }))
         // Lets deploy.sh check which build is running without a WebSocket.
         .route("/version", get(|| async { server_version() }))
+        .route("/admin/drain", post(drain))
         .with_state(state);
     if let Some(dir) = &config.static_dir {
         let assets = Router::new()
@@ -215,6 +216,24 @@ fn client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
     match peer.ip() {
         ip if ip.is_loopback() => forwarded().unwrap_or(ip),
         ip => ip,
+    }
+}
+
+/// deploy.sh, before a restart: new matches stop, and the answer is how many still run. Only from
+/// the host itself; nginx forwards nothing here, and a request it relays carries `X-Real-IP`.
+async fn drain(
+    State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Response {
+    if !peer.ip().is_loopback() || headers.contains_key("x-real-ip") {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let (reply, answer) = tokio::sync::oneshot::channel();
+    state.context.hub.send(HubCommand::Drain { reply });
+    match answer.await {
+        Ok(running) => format!("{running}\n").into_response(),
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
 }
 

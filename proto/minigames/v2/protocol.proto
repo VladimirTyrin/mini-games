@@ -70,6 +70,7 @@ message ServerMessage {
     Ack ack = 13;
     ErrorResponse error = 14;
     ServerShuttingDown shutting_down = 15;
+    ServerUpdating server_updating = 16;
 
     LobbyList lobby_list = 20;
     LobbyState lobby_state = 21;
@@ -108,6 +109,11 @@ message Ack {}
 
 message ServerShuttingDown {}
 
+// Pushed to everyone (and to every later sign-in) once the server is waiting to restart for an
+// update: matches already running are played out, new ones are refused with
+// ERROR_CODE_SERVER_UPDATING until the new server is up.
+message ServerUpdating {}
+
 enum ErrorCode {
   ERROR_CODE_UNSPECIFIED = 0;
   ERROR_CODE_INTERNAL = 1;
@@ -125,6 +131,8 @@ enum ErrorCode {
   // connection (a duplicated tab), or a bot's key signed in again. The server closes it next.
   // Do not reconnect automatically: the two would keep taking over.
   ERROR_CODE_SIGNED_IN_ELSEWHERE = 9;
+  // A match cannot start while the server waits to restart for an update (see ServerUpdating).
+  ERROR_CODE_SERVER_UPDATING = 10;
   ERROR_CODE_LOBBY_NOT_FOUND = 20;
   ERROR_CODE_LOBBY_FULL = 21;
   ERROR_CODE_NOT_HOST = 22;

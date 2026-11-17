@@ -649,12 +649,7 @@ impl Hub {
         }
         match self.spawn_match(&lobby_id) {
             Ok(()) => self.ack(session, request_id),
-            Err(error) => self.reject(
-                session,
-                request_id,
-                ErrorCode::InvalidSettings,
-                &error.to_string(),
-            ),
+            Err(error) => self.reject(session, request_id, error.code(), &error.to_string()),
         }
     }
 
@@ -715,7 +710,7 @@ impl Hub {
         }
         let failure = codec::encode(&codec::error(
             0,
-            ErrorCode::InvalidSettings,
+            error.code(),
             format!("cannot start the next match: {error}"),
         ));
         if let Some(lobby) = self.lobbies.get(lobby_id) {

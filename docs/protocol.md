@@ -178,6 +178,13 @@ player id before the dot.
     invitation answers `ERROR_CODE_INVITE_CLOSED`.
   - Once an invitation closes, the friend's devices get `GameInviteClosed`.
 
+## Server updates
+
+Before restarting for an update, the server pushes `ServerUpdating` to every session, and again
+to every later sign-in. Matches already running play on; `StartMatch` and play-again answer
+`ERROR_CODE_SERVER_UPDATING` until the new server is up. `ServerShuttingDown` comes when it
+actually stops.
+
 ## Compatibility
 
 `protocol_version` changes only on incompatible changes. Adding optional fields or messages
