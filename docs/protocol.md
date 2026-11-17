@@ -125,6 +125,8 @@ the authority) or `dropped_slot`. The seed never leaves the authority.
 Private commands (Sea Battle's fleet) are never put in a frame: the authority applies them to the
 game's secret, and the frame only says what everyone may learn of it (the fleet is placed). The
 seat that sent one gets `SeatSecret` back (its own fleet), and again after each of its catch-ups.
+A private command is accepted while the match is paused for someone else (a fleet needs nobody
+else); the frame it brings goes out at once, though nobody can act until everyone is back.
 `MatchHeader.secret_setup_ms` is the time people have for theirs from `started_at_unix_ms`. When
 it runs out the server sends the game's choice for them (a random fleet). It is 0 when nobody
 owes one.

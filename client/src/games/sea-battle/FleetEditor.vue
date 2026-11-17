@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 import type { MatchController } from "@/match/match-controller";
 import { useToastStore } from "@/stores/toasts";
@@ -17,7 +17,11 @@ import {
   toWire,
 } from "./fleet-editor";
 
-const props = defineProps<{ controller: MatchController }>();
+const props = defineProps<{
+  controller: MatchController;
+  /** Online, the time left to place before the server places a random fleet; `null` without a limit. */
+  secondsLeft: number | null;
+}>();
 const toasts = useToastStore();
 
 /** The game's own random fleet: the rules, not the page, know what a fleet is. */
@@ -66,6 +70,17 @@ function shuffle(): void {
 function clear(): void {
   filled.value = new Set();
 }
+
+/** Seconds before the limit at which a complete fleet on screen is sent for the player. */
+const SEND_BEFORE_LIMIT_S = 2;
+
+// A fleet the player finished but did not send is theirs, not a random one.
+watch(
+  () => props.secondsLeft,
+  (left) => {
+    if (left !== null && left <= SEND_BEFORE_LIMIT_S && isComplete.value) void ready();
+  },
+);
 
 async function ready(): Promise<void> {
   if (!isComplete.value || sending.value) return;

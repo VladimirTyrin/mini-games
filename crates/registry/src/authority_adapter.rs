@@ -55,8 +55,8 @@ impl<G: WireGame> DynAuthority for AuthorityAdapter<G> {
         Ok(self.authority.submit_secret(slot, &command)?)
     }
 
-    fn submit_default_secret(&mut self, slot: Slot) -> bool {
-        self.authority.submit_default_secret(slot)
+    fn submit_default_secret(&mut self, slot: Slot) -> Result<(), SubmitError> {
+        Ok(self.authority.submit_default_secret(slot)?)
     }
 
     fn awaits_secret(&self, slot: Slot) -> bool {

@@ -19,9 +19,8 @@ impl Ship {
         if !(1..=Self::MAX_LENGTH).contains(&length) {
             return None;
         }
-        let (dx, dy) = orientation.step();
         let last = i8::try_from(length - 1).ok()?;
-        bow.offset(dx * last, dy * last)?;
+        orientation.advance(bow, last)?;
         Some(Self {
             bow,
             length,
@@ -42,11 +41,8 @@ impl Ship {
     }
 
     pub fn cells(self) -> impl Iterator<Item = Cell> {
-        let (dx, dy) = self.orientation.step();
-        (0..self.length).filter_map(move |step| {
-            let step = i8::try_from(step).ok()?;
-            self.bow.offset(dx * step, dy * step)
-        })
+        (0..self.length)
+            .filter_map(move |step| self.orientation.advance(self.bow, i8::try_from(step).ok()?))
     }
 
     pub fn covers(self, cell: Cell) -> bool {

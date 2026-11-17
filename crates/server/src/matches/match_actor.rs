@@ -354,7 +354,7 @@ impl MatchActor {
             .collect();
         let settled: Vec<Slot> = late
             .into_iter()
-            .filter(|slot| authority.submit_default_secret(*slot))
+            .filter(|slot| authority.submit_default_secret(*slot).is_ok())
             .collect();
         if settled.is_empty() {
             return;

@@ -157,7 +157,7 @@ async function fire(cell: CellPoint): Promise<void> {
 <template>
   <div v-if="view" class="flex w-full flex-col items-center gap-2">
     <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">{{ status }}</p>
-    <FleetEditor v-if="needsFleet" :controller="controller" />
+    <FleetEditor v-if="needsFleet" :controller="controller" :seconds-left="secondsLeft" />
     <div v-else class="flex w-full flex-col items-center gap-3 sm:flex-row sm:items-start sm:justify-center">
       <section class="flex flex-col gap-1" :style="{ width: 'min(92vw, 44vh, 440px)' }">
         <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->

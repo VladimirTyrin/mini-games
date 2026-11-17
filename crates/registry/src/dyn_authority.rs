@@ -23,8 +23,8 @@ pub trait DynAuthority: Send + std::fmt::Debug {
         Err(SubmitError::Wire(WireError::WrongGame))
     }
     /// See [`mg_core::Authority::submit_default_secret`].
-    fn submit_default_secret(&mut self, _slot: Slot) -> bool {
-        false
+    fn submit_default_secret(&mut self, _slot: Slot) -> Result<(), SubmitError> {
+        Err(SubmitError::Wire(WireError::WrongGame))
     }
     /// Whether the game still awaits `slot`'s private command (see `mg_core::Game::awaits_secret`).
     fn awaits_secret(&self, _slot: Slot) -> bool {

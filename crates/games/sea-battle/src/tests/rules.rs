@@ -148,11 +148,16 @@ fn a_fleet_is_placed_once_and_must_be_legal() {
     authority
         .submit_secret(FIRST, &place(classic_ships()))
         .unwrap();
-    assert!(
-        authority
-            .submit_secret(FIRST, &place(classic_ships()))
-            .is_err()
+    let placed = authority.seat_secret(FIRST);
+    let mut other = classic_ships();
+    other[9] = ship(9, 9, 1, Horizontal);
+    assert!(authority.submit_secret(FIRST, &place(other)).is_err());
+    assert_eq!(
+        authority.seat_secret(FIRST),
+        placed,
+        "a refused fleet changes nothing"
     );
+    assert_eq!(authority.seat_secret(SECOND), None);
 }
 
 #[test]
@@ -171,8 +176,11 @@ fn each_seat_sees_only_its_own_fleet() {
 #[test]
 fn a_seat_out_of_time_gets_a_random_fleet() {
     let mut authority = authority(&[PlayerSpec::HUMAN; 2], Vec::new());
-    assert!(authority.submit_default_secret(FIRST));
-    assert!(!authority.submit_default_secret(FIRST), "placed already");
+    authority.submit_default_secret(FIRST).unwrap();
+    assert!(
+        authority.submit_default_secret(FIRST).is_err(),
+        "placed already"
+    );
     authority.seal_frame();
     assert_eq!(
         authority.game().view(Viewer::Spectator).ready,

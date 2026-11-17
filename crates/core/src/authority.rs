@@ -180,17 +180,19 @@ impl<G: Game> Authority<G> {
         Ok(())
     }
 
-    /// For a seat whose time to send its private command ran out: the game chooses one. Returns
-    /// whether one was applied.
-    pub fn submit_default_secret(&mut self, slot: Slot) -> bool {
-        if seat_may_command(&self.game, &self.players, &self.dropped, slot).is_err()
-            || !self.game.awaits_secret(slot)
-        {
-            return false;
+    /// For a seat whose time to send its private command ran out: the game chooses one. Refused
+    /// when the seat owes none (it sent its own) or the game has no default.
+    pub fn submit_default_secret(&mut self, slot: Slot) -> Result<(), CommandError> {
+        seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
+        if !self.game.awaits_secret(slot) {
+            return Err(CommandError::Illegal("this seat owes no private command"));
         }
-        let Some(command) = self.game.default_secret_command(slot, &mut self.world_rng) else {
-            return false;
-        };
+        let command = self
+            .game
+            .default_secret_command(slot, &mut self.world_rng)
+            .ok_or(CommandError::Illegal(
+                "this game chooses no private command",
+            ))?;
         self.apply_secret_for(slot, &command)
     }
 
@@ -199,17 +201,16 @@ impl<G: Game> Authority<G> {
         self.game.seat_secret(&self.secret, slot)
     }
 
-    fn apply_secret_for(&mut self, slot: Slot, command: &SecretCommand<G>) -> bool {
-        if self
-            .game
-            .apply_secret_command(&mut self.secret, slot, command)
-            .is_err()
-        {
-            return false;
-        }
+    fn apply_secret_for(
+        &mut self,
+        slot: Slot,
+        command: &SecretCommand<G>,
+    ) -> Result<(), CommandError> {
+        self.game
+            .apply_secret_command(&mut self.secret, slot, command)?;
         self.has_secret_changes = true;
         self.revision += 1;
-        true
+        Ok(())
     }
 
     /// Bots that owe a private command send it as the frame is sealed, so it is never a turn
@@ -230,13 +231,13 @@ impl<G: Game> Authority<G> {
                 .and_then(|seat| seat.mind.as_mut())
                 .and_then(|mind| mind.bot.decide_secret(&self.game, slot, &mut mind.rng));
             if let Some(command) = decided {
-                if self.apply_secret_for(slot, &command) {
+                if self.apply_secret_for(slot, &command).is_ok() {
                     continue;
                 }
                 self.rejected_bot_commands += 1;
             }
             let fallback = self.game.default_secret_command(slot, &mut self.world_rng);
-            if !fallback.is_some_and(|command| self.apply_secret_for(slot, &command)) {
+            if !fallback.is_some_and(|command| self.apply_secret_for(slot, &command).is_ok()) {
                 self.drop_player(slot);
             }
         }

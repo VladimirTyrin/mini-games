@@ -180,7 +180,9 @@ fn settle_human_secrets<G: Conformance>(
             }
         }
         if authority.game().awaits_secret(slot) {
-            authority.submit_default_secret(slot);
+            authority
+                .submit_default_secret(slot)
+                .map_err(|error| format!("the game's own private command was refused: {error}"))?;
         }
     }
     Ok(())

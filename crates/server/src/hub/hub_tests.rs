@@ -678,10 +678,6 @@ async fn a_seat_away_when_time_runs_out_gets_a_random_fleet_and_sees_it_when_bac
         match_id,
         ..
     } = start_sea_battle(&hub).await;
-    assert!(matches!(
-        host.request(place_fleet(&match_id)).await,
-        Reply::Ack(_)
-    ));
     hub.send(HubCommand::Disconnected {
         session: player.session.clone(),
         connection: player.id,
@@ -691,6 +687,11 @@ async fn a_seat_away_when_time_runs_out_gets_a_random_fleet_and_sees_it_when_bac
         _ => None,
     })
     .await;
+    // A fleet needs nobody else: it is taken while the match waits for the other seat.
+    assert!(matches!(
+        host.request(place_fleet(&match_id)).await,
+        Reply::Ack(_)
+    ));
 
     tokio::time::advance(Duration::from_secs(91)).await;
     host.expect(|message| {

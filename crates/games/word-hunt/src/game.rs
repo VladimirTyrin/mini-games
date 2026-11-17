@@ -120,18 +120,21 @@ impl WordHunt {
         if self.phase != Phase::Guessing {
             return Err(CommandError::Illegal("no guess is being made"));
         }
-        let Some(pending) = &self.pending_guess else {
-            return Err(CommandError::Illegal("there is no guess to mark"));
+        let fits = match &self.pending_guess {
+            None => return Err(CommandError::Illegal("there is no guess to mark")),
+            Some(pending) => marks.len() == pending.word.letters().len(),
         };
-        if marks.len() != pending.word.letters().len() {
+        if !fits {
             return Err(CommandError::Illegal("the marks do not fit the guess"));
         }
+        let Some(pending) = self.pending_guess.take() else {
+            return Err(CommandError::Illegal("there is no guess to mark"));
+        };
         let scored = ScoredGuess {
-            word: pending.word.clone(),
+            word: pending.word,
             marks: marks.to_vec(),
             by: pending.by,
         };
-        self.pending_guess = None;
         let by = scored.by;
         let solved = scored.is_solved();
         self.guesses.push(scored);

@@ -47,8 +47,9 @@ the catch-up path.
 **Secrets.** What no player may see until the end (Word Hunt's word, Sea Battle's fleets) is
 the game's `Game::Secret`. The authority keeps it beside the game, outside the state that
 clients replay and hash.
-- `roll_secret` is the only place that reads it. It tells everyone only what the rules make
-  public: a guess's marks or a shot's result, never the word or a fleet.
+- Only the authority's calls into the game see it (`roll_secret`, `reveal`, private commands,
+  `seat_secret`). `roll_secret` tells everyone only what the rules make public: a guess's marks
+  or a shot's result, never the word or a fleet.
 - At the end `reveal` sends the secret itself, so replays are complete.
 - A seat may add to the secret with a **private command** (its fleet: `Authority::submit_secret`,
   `SubmitSecretCommand` on the wire). It is never put in a frame. The seat gets back what it

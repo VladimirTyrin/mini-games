@@ -39,6 +39,8 @@ client, bot or observer has the other fleet while the game runs.
   (`Game::default_secret_command` through the mirror). **Clear** empties the sea.
 - **Ready** stays off until the core accepts the fleet (`Match::check_secret_command`), so the page
   never decides what a fleet is.
+- Online, a complete fleet left on screen is sent for the player 2 s before the limit, so they get
+  the fleet they made rather than a random one.
 
 ## Bots
 

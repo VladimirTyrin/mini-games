@@ -1,3 +1,5 @@
+use crate::model::Cell;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Orientation {
     /// From the bow to the right.
@@ -7,10 +9,11 @@ pub enum Orientation {
 }
 
 impl Orientation {
-    pub(crate) const fn step(self) -> (i8, i8) {
+    /// The cell `steps` along this orientation from `from`, if still on the board.
+    pub(crate) fn advance(self, from: Cell, steps: i8) -> Option<Cell> {
         match self {
-            Orientation::Horizontal => (1, 0),
-            Orientation::Vertical => (0, 1),
+            Orientation::Horizontal => from.offset(steps, 0),
+            Orientation::Vertical => from.offset(0, steps),
         }
     }
 
