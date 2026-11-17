@@ -37,17 +37,19 @@ const isNativeApp = __NATIVE_APP__;
     <GetTheAppBanner />
     <section>
       <h2 class="mb-3 text-sm uppercase tracking-wide text-gray-400">Play now — works offline</h2>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <!-- Phones get two compact tiles per row (icon and title); wider screens have room for the
+           tagline. -->
+      <div class="grid grid-cols-2 gap-3">
         <button
           v-for="plugin in gamePlugins"
           :key="plugin.id"
-          class="flex items-center gap-4 rounded-xl bg-panel p-4 text-left hover:bg-panel-raised"
+          class="flex flex-col items-center gap-2 rounded-xl bg-panel p-3 text-center hover:bg-panel-raised sm:flex-row sm:gap-4 sm:p-4 sm:text-left"
           @click="router.push({ name: 'play', params: { gameId: plugin.id } })"
         >
-          <GameIcon :plugin="plugin" class="size-12 text-3xl" />
-          <span>
-            <span class="block font-semibold">{{ plugin.title }}</span>
-            <span class="block text-sm text-gray-400">{{ plugin.tagline }}</span>
+          <GameIcon :plugin="plugin" class="size-12 shrink-0 text-3xl" />
+          <span class="min-w-0">
+            <span class="block font-semibold leading-tight">{{ plugin.title }}</span>
+            <span class="hidden text-sm text-gray-400 sm:block">{{ plugin.tagline }}</span>
           </span>
         </button>
       </div>

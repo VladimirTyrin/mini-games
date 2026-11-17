@@ -1,6 +1,6 @@
 use mg_checkers::{
-    BotKind, Checkers, Command, DrawReason, GameEnd, LegalMove, Path, PlacedPiece, RawSettings,
-    Side, Square, View, WhitePlayer, WinReason, WorldEvent,
+    BotKind, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, Path,
+    PlacedPiece, RawSettings, Side, Square, View, WhitePlayer, WinReason, WorldEvent,
 };
 
 use crate::proto::{
@@ -123,6 +123,7 @@ impl WireGame for Checkers {
                 last_move: view.last_move.as_ref().map(legal_move_to_wire),
                 end: view.end.map(game_end_to_wire),
                 king_moves: u32::from(view.king_moves),
+                king_moves_for_draw: u32::from(KING_MOVES_FOR_DRAW),
             })),
         }
     }

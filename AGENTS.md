@@ -1,12 +1,12 @@
 # mini-games — guide for contributors and coding agents
 
-Small multiplayer games (Snake, TicTacToe, Stack Attack, 2048, Numbers Match, Word Hunt). One deterministic
+Small multiplayer games (Snake, TicTacToe, Stack Attack, 2048, Numbers Match, Word Hunt, Checkers). One deterministic
 Rust core runs the rules everywhere: on the server, in the browser (WASM), in the Android app
 (same WASM in a WebView), in network bots and in the local arena.
 
 Design and status: `docs/refactoring-plan.md`. Architecture: `docs/architecture.md`.
 Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.md`.
-Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`. Word Hunt rules and word lists: `docs/word-hunt.md`.
+Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`. Word Hunt rules and word lists: `docs/word-hunt.md`. Checkers rules and bots: `docs/checkers.md`.
 Push notifications (FCM, Web Push): `docs/push-notifications.md`.
 Known gaps left for later: `docs/tech_debt.md`.
 

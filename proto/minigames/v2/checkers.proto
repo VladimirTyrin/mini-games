@@ -103,8 +103,10 @@ message CheckersView {
   CheckersLegalMove last_move = 8;
   // Unset while the match runs.
   CheckersGameEnd end = 9;
-  // Moves in a row with only kings moving and nothing captured; 30 is a draw.
+  // Moves in a row with only kings moving and nothing captured.
   uint32 king_moves = 10;
+  // `king_moves` at which the game is drawn.
+  uint32 king_moves_for_draw = 11;
 }
 
 enum CheckersBotKind {
