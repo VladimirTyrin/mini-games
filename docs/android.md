@@ -64,6 +64,15 @@ FCM comes through `@capacitor/push-notifications`.
 - The app creates the high-importance channel `invites` before registering.
 - See [push-notifications.md](push-notifications.md).
 
+## Keeping the screen on
+
+While a match is running (not a replay, not paused by the player) the screen stays on, so it
+does not go dark while a player thinks over a move.
+- In a browser this uses the Screen Wake Lock API, taken again whenever the page comes back.
+- Android's WebView has no wake lock, so the app has its own `KeepAwake` plugin. It sets
+  `FLAG_KEEP_SCREEN_ON` and is registered in `MainActivity`.
+- A newer web bundle on an older shell without the plugin just lets the screen sleep.
+
 ## Updates
 
 The app has two parts: the native shell (the `android/` project, the Capacitor plugins and

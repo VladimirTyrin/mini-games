@@ -10,6 +10,7 @@ import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { LocalMatchSource } from "@/local/local-match-source";
+import { setKeepScreenOn } from "@/platform/keep-awake";
 import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
 import { useAppUpdateStore } from "@/stores/app-update";
 import { useLobbyStore } from "@/stores/lobby";
@@ -151,6 +152,11 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
 }
 window.addEventListener("beforeunload", onBeforeUnload);
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
+
+// Thinking over a move (or waiting for the opponent's) must not let the screen go dark.
+const keepsScreenOn = computed(() => isRunning() && !pausedByPlayer.value);
+watch(keepsScreenOn, (keepScreenOn) => void setKeepScreenOn(keepScreenOn), { immediate: true });
+onBeforeUnmount(() => void setKeepScreenOn(false));
 
 async function leave(): Promise<void> {
   confirmingLeave.value = false;
