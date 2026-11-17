@@ -74,3 +74,6 @@ Zero warnings: clippy and rustc warnings fail CI.
 - Tests check observable behaviour, not implementation shape. No sleeps or polling in tests; use
   events, controlled clocks or test hooks. A bug fix comes with a test reproducing the defect.
 - Update the docs when behaviour or configuration changes.
+- **Privacy policy** (`client/public/privacy.html`): a feature that collects, stores, shows to
+  others or sends out any player data (a new table or field, a new kind of notification, a new
+  third-party service) updates the policy and its "Last updated" date in the same change.

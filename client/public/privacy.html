@@ -43,11 +43,12 @@
     <main>
       <p><a href="./">← Mini Games</a></p>
       <h1>Privacy policy</h1>
-      <p class="muted">Last updated: 16 November 2026</p>
+      <p class="muted">Last updated: 17 November 2026</p>
 
       <p>
         Mini Games (braintvsminigames.xyz and the Android app "Mini Games") is a small hobby project for
-        playing simple games with friends and bots. It has no database, shows no ads and does not track you.
+        playing simple games with friends and bots. It shows no ads and does not track you. It keeps a small
+        database only for friends and notifications, described below.
       </p>
 
       <h2>Playing offline</h2>
@@ -59,7 +60,8 @@
       <h2>Playing online as a guest</h2>
       <p>
         You choose a display name. The server keeps it in memory only while you are connected and for a short
-        grace period afterwards so you can reconnect.
+        grace period afterwards so you can reconnect. Guests have no friends list and get no notifications, so
+        nothing about a guest is written to the database.
       </p>
 
       <h2>Signing in with Google</h2>
@@ -70,12 +72,33 @@
         <li>the URL of your profile picture, shown as your avatar.</li>
       </ul>
       <p>
-        We use them only to show who you are to the other players in lobbies, matches and chat, and to keep
-        you signed in. We do not store them in any database: the server keeps them in memory while you are
-        online and puts them into a signed session token that stays on your device (valid for 30 days). The
-        Google identifier is never shown to other players; they see an opaque player id derived from it. We do
-        not access your e-mail, contacts or any other Google data, and we do not share anything with third
-        parties.
+        We use them to show who you are to the other players in lobbies, matches and chat, to keep you signed
+        in, and for friends (below). The session is a signed token that stays on your device (valid for 30
+        days). The Google identifier is never shown to other players; they see an opaque player id derived
+        from it. We do not access your e-mail, contacts or any other Google data.
+      </p>
+
+      <h2>Friends</h2>
+      <p>
+        Once you have signed in with Google, the server's database keeps, for your account: the player id,
+        your name and picture URL as Google last gave them (so friends see them while you are offline), and
+        when you were last seen. It also keeps your friends, friend requests you sent or received, and the
+        friend links you created (until they expire, at most 7 days).
+      </p>
+      <p>
+        Your friends see your name, picture and whether you are offline, online or playing. Nobody else sees
+        your friends list.
+      </p>
+
+      <h2>Notifications</h2>
+      <p>
+        If you allow notifications, the server stores the address your device gives for them: a Firebase Cloud
+        Messaging token in the Android app, or a Web Push subscription in a browser. Notifications tell you
+        about game invitations, friend requests and new friends. They are delivered through Google (Firebase)
+        for the Android app, or through your browser's push service (for example Google, Mozilla or Apple) on
+        the web; Web Push messages are encrypted so that the push service cannot read them. A device's address
+        is removed when you sign out on it, or when the push service says it is no longer valid. The test
+        notification in Settings uses the address only to send that one notification and does not store it.
       </p>
 
       <h2>Matches and chat</h2>
@@ -91,10 +114,18 @@
         on the server and rotated; they are not shared.
       </p>
 
+      <h2>Sharing</h2>
+      <p>
+        We do not sell or share your data with anyone. Besides other players seeing what is described above,
+        data leaves the server only as notifications through the push services named above.
+      </p>
+
       <h2>Deleting your data</h2>
       <p>
-        Sign out in Settings to remove the session from your device. Because nothing is stored in a database,
-        there is nothing else to delete. You can also revoke access for "Mini Games" in your Google account at
+        Sign out in Settings to remove the session and the notification address from your device. Removing a
+        friend deletes that friendship. To have your account and everything kept for it deleted from the
+        database, open an issue (below) or ask in any way that reaches us, and we will delete it. You can also
+        revoke access for "Mini Games" in your Google account at
         <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
       </p>
 
