@@ -173,4 +173,15 @@ describe("friends store", () => {
     await vi.waitFor(() => expect(useLobbyStore().current?.seats).toHaveLength(1));
     expect(friends.sentInvites.size).toBe(0);
   });
+
+  it("registers the device for push when the app signed in before this store existed", async () => {
+    setActivePinia(createPinia());
+    const socket = await signedIn();
+
+    useFriendsStore();
+
+    await vi.waitFor(() =>
+      expect(sent(socket).some((message) => message.message.case === "registerPushTarget")).toBe(true),
+    );
+  });
 });

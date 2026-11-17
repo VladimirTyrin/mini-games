@@ -15,7 +15,9 @@ Every device of a Google account registers its address (`RegisterPushTarget`, se
 | The test in Settings ("Send a test notification", 20 s after the tap) | Settings, with how long each step took |
 
 An invitation answered on one device is replaced on the friend's other devices ("you joined on
-another device"). When an invitation expires or is cancelled, no second notification goes out:
+another device"). This happens only when the server knows which device answered, from the push
+address it registered after signing in; otherwise the others keep the stale invitation, which is
+better than a "joined on another device" on the device that just joined. When an invitation expires or is cancelled, no second notification goes out:
 it would land on every device that ignored the first one. Tapping the stale one says the
 invitation is closed. While the app is open, invitations also show as a banner in the app (an
 open browser tab shows both).

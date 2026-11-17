@@ -111,6 +111,9 @@ export const useFriendsStore = defineStore("friends", () => {
         }),
         session.events.on("signedIn", () => void signedIn()),
       );
+      // This store is made at start-up, after the app began signing in: the first sign-in may
+      // be over already, and its event gone.
+      if (connection.isSignedIn) void signedIn();
     },
     { immediate: true },
   );

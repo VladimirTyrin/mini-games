@@ -701,12 +701,16 @@ impl Social {
                 state: state as i32,
             }),
         );
-        if let Some(session) = answered_by {
-            let answering_device = self.session_targets.get(session).cloned();
+        // Only when the device that answered is known: a device that never said where it gets
+        // pushes may be the one just tapped, and "you joined on another device" there is wrong.
+        // A stale invitation left on another device is the lesser evil.
+        if let Some(answering_device) =
+            answered_by.and_then(|session| self.session_targets.get(session).cloned())
+        {
             self.notify(
                 &invite.to_account,
                 notifications::invitation_answered_elsewhere(invite, state, unix_millis()),
-                answering_device,
+                Some(answering_device),
             );
         }
     }
