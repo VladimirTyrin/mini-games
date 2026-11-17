@@ -63,13 +63,21 @@ function cellClass(cell: { index: number; x: number; y: number; mark: SeaBattleC
   }
 }
 
+/** Of a cell, in percent of the sea (padding is measured on its width): a hull is slimmer across
+ *  than along, so even a single-decker reads as a boat, not a dot. */
+const HULL_ACROSS_INSET = 1.8;
+const HULL_ALONG_INSET = 0.3;
+
 function shipStyle(ship: EditorShip): Record<string, string> {
   const unit = 100 / SIDE;
+  const across = `${HULL_ACROSS_INSET}%`;
+  const along = `${HULL_ALONG_INSET}%`;
   return {
     left: `${ship.x * unit}%`,
     top: `${ship.y * unit}%`,
     width: `${(ship.horizontal ? ship.length : 1) * unit}%`,
     height: `${(ship.horizontal ? 1 : ship.length) * unit}%`,
+    padding: ship.horizontal ? `${across} ${along}` : `${along} ${across}`,
   };
 }
 </script>
@@ -85,7 +93,7 @@ function shipStyle(ship: EditorShip): Record<string, string> {
       <div
         v-for="(ship, index) in [...ships, ...sunkShips]"
         :key="index"
-        class="absolute p-[0.5%]"
+        class="absolute"
         :style="shipStyle(ship)"
       >
         <div

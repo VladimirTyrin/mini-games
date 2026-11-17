@@ -15,7 +15,7 @@ defineProps<{
       :key="deck"
       class="first:rounded-l-full last:rounded-r-full"
       :class="[
-        size === 'medium' ? 'size-[11px]' : 'size-2.5',
+        size === 'medium' ? 'h-2 w-[11px]' : 'h-1.5 w-2.5',
         look === 'solid' ? 'bg-slate-300/85' : 'border border-slate-400/70',
       ]"
     />
