@@ -22,7 +22,7 @@
 #   --skip-build    reuse existing build outputs
 #   --dry-run       build and render configs locally, do not touch the host
 #   --drain-seconds N
-#                   before the restart, wait up to N seconds (default 600) for running matches
+#                   before the restart, wait up to N seconds (default 180) for running matches
 #                   to end; new ones are refused meanwhile. Matches live only in memory.
 #   --no-drain      restart at once (same as --drain-seconds 0)
 #
@@ -48,7 +48,7 @@ DRY_RUN=false
 APK=""
 BUILD_APK=true
 ALLOW_VERSION_MISMATCH=false
-DRAIN_SECONDS=600
+DRAIN_SECONDS=180
 
 die() { echo "error: $*" >&2; exit 1; }
 # The "build" number of a JSON document on stdin (android.json, web.json, version.json).

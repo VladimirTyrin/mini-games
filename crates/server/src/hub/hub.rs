@@ -636,10 +636,19 @@ impl Hub {
         }
     }
 
+    /// Matches worth waiting for: running, with someone still connected. One everybody left is
+    /// not worth holding a restart for.
     fn running_matches(&self) -> usize {
         self.lobbies
             .values()
             .filter(|lobby| lobby.phase.match_handle().is_some())
+            .filter(|lobby| {
+                lobby.seated_humans().any(|seated| {
+                    self.sessions
+                        .get(seated)
+                        .is_some_and(|session| session.connection.is_some())
+                })
+            })
             .count()
     }
 

@@ -48,9 +48,10 @@ While draining:
   works);
 - matches already running play on.
 
-The endpoint answers how many matches are still running. `deploy.sh` asks every 5 s and restarts
-once the answer is 0, or after `--drain-seconds` (600 by default). `--no-drain` restarts at
-once.
+The endpoint answers how many matches are still running with someone connected; a match every
+player left is not waited for. `deploy.sh` asks every 5 s and restarts once the answer is 0, or
+after `--drain-seconds` (180 by default). `--no-drain` restarts at once. New matches are refused
+for that long, so the wait stays short; a long turn-based game is cut off with a message.
 
 A match or lobby that a restart still cuts off says so in the app ("The server restarted for an
 update…") instead of just closing.

@@ -74,3 +74,41 @@ async fn drain_reports_zero_once_the_last_match_is_over() {
 
     assert_eq!(body(&drain(&server).await), "0");
 }
+
+#[tokio::test]
+async fn a_match_everyone_left_does_not_hold_the_restart() {
+    let server = TestServer::start().await;
+    let mut ada = server.guest("Ada").await.client;
+    let mut bob = server.guest("Bob").await.client;
+    start_two_player_tictactoe(&mut ada, &mut bob).await;
+    assert_eq!(body(&drain(&server).await), "1");
+
+    let mut watcher = server.guest("Cid").await.client;
+    let Reply::LobbyList(list) = watcher
+        .request(Request::ListLobbies(proto::ListLobbies {}))
+        .await
+    else {
+        panic!("expected the lobby list");
+    };
+    expect_ok(
+        watcher
+            .request(Request::JoinLobby(proto::JoinLobby {
+                lobby_id: list.lobbies[0].lobby_id.clone(),
+                as_observer: true,
+            }))
+            .await,
+    );
+
+    drop(ada);
+    drop(bob);
+    // The server has seen both go once the lobby shows them so.
+    watcher
+        .expect(|message| {
+            lobby_state(message)
+                .filter(|state| state.seats.iter().all(|seat| seat.connection_lost))
+                .map(|_| ())
+        })
+        .await;
+
+    assert_eq!(body(&drain(&server).await), "0");
+}
