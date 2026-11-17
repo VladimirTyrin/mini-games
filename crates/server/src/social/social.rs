@@ -118,7 +118,7 @@ impl Social {
                         }
                     }
                 }
-                SocialCommand::SignedIn(account) => {
+                SocialCommand::SignedIn { account, session } => {
                     let now = unix_millis();
                     let id = account.id.clone();
                     if let Err(refusal) = self
@@ -127,13 +127,14 @@ impl Social {
                     {
                         tracing::warn!(message = refusal.message, "account not remembered");
                     }
-                    // A device that was away while an invitation came in still gets to answer it.
+                    // A device that was away while an invitation came in still gets to answer
+                    // it; the account's other devices have it already.
                     for invite in self
                         .invites
                         .values()
                         .filter(|invite| invite.to_account == id)
                     {
-                        self.deliver(&id, Message::GameInvite(invite.to_wire(now)));
+                        self.deliver_to_session(&session, Message::GameInvite(invite.to_wire(now)));
                     }
                 }
                 SocialCommand::Presence { account, presence } => {

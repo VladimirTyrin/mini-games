@@ -48,7 +48,7 @@ const spacePlaysAgain =
 // game's last moment do not count: repeats are ignored).
 useGameKeys((key) => {
   const accepted = key === "Enter" || (key === " " && spacePlaysAgain);
-  if (!ended.value || resultFolded.value || !accepted) return false;
+  if (!ended.value || resultFolded.value || !accepted || !canPlayAgain.value) return false;
   emit("again");
   return true;
 });
@@ -58,7 +58,10 @@ const pauses = computed(() => props.controller.pauses.value);
 const aborted = computed(() => props.controller.aborted.value);
 const secondsUntil = (at: number) => Math.max(0, Math.ceil((at - now.value) / 1000));
 const canVoteDrop = (pause: SeatPause) =>
-  props.controller.mySlot !== null && props.controller.mySlot !== pause.slot && pause.dropVoteAt <= now.value;
+  props.controller.mySlot !== null &&
+  !props.controller.droppedSlots.value.has(props.controller.mySlot) &&
+  props.controller.mySlot !== pause.slot &&
+  pause.dropVoteAt <= now.value;
 const countdown = computed(() => {
   const at = props.controller.resumeAt.value;
   return at && at > now.value ? Math.ceil((at - now.value) / 1000) : null;
@@ -66,6 +69,11 @@ const countdown = computed(() => {
 const result = computed(() => props.controller.result.value);
 const ended = computed(() => props.controller.ended.value && revealed.value);
 const mySlot = computed(() => props.controller.mySlot);
+/**
+ * A replay can always be watched again. A match is played again only by its players (observers
+ * have no seat to vote with) and only after a real end: an aborted one left nothing to repeat.
+ */
+const canPlayAgain = computed(() => isReplay || (mySlot.value !== null && !aborted.value));
 
 const headline = computed(() => {
   const outcome = result.value;
@@ -141,6 +149,7 @@ async function voteDrop(slot: number): Promise<void> {
       <!-- No wrapping inside a button: on a narrow phone the row wraps instead. -->
       <div class="flex flex-wrap gap-2 whitespace-nowrap">
         <button
+          v-if="canPlayAgain"
           class="min-h-11 flex-1 rounded-xl bg-emerald-600 px-4 py-2 font-semibold"
           @click="emit('again')"
         >

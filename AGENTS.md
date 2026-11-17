@@ -8,6 +8,7 @@ Design and status: `docs/refactoring-plan.md`. Architecture: `docs/architecture.
 Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.md`.
 Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`. Word Hunt rules and word lists: `docs/word-hunt.md`.
 Push notifications (FCM, Web Push): `docs/push-notifications.md`.
+Known gaps left for later: `docs/tech_debt.md`.
 
 ## Layout
 

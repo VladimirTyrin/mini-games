@@ -106,4 +106,25 @@ describe("Session", () => {
       value: expect.objectContaining({ token: "kept" }),
     });
   });
+
+  it("tries again when the server cannot check a sign-in just now", async () => {
+    const session = new Session("ws://test/ws", { kind: "session", token: "kept" });
+    const refusals: unknown[] = [];
+    session.events.on("refused", (error) => refusals.push(error));
+    session.connect();
+    const first = FakeSocket.opened[0];
+    if (!first) throw new Error("no socket opened");
+    first.accept();
+
+    first.push(
+      create(ServerMessageSchema, {
+        requestId: first.lastRequestId(),
+        message: { case: "error", value: { code: ErrorCode.RATE_LIMITED, message: "retry later" } },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(refusals).toEqual([]);
+    expect(FakeSocket.opened.length).toBeGreaterThan(1);
+  });
 });

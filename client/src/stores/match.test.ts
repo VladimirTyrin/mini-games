@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MatchSource } from "@/match/match-source";
 import { FakeSocket } from "@/net/testing/fake-socket";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
-import { ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
+import { ErrorCode, ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
 
-import { LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
+import { LobbyClosedReason, LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
 
 import { useConnectionStore } from "./connection";
 import { useLobbyStore } from "./lobby";
@@ -61,7 +61,9 @@ vi.mock("@/match/match-controller", async () => {
   return {
     MatchController: class {
       readonly incompatible = shallowRef(false);
+      readonly ended = shallowRef(false);
       constructor(readonly source: unknown) {}
+      applyCatchUp(): void {}
       dispose(): void {}
     },
   };
@@ -139,6 +141,75 @@ describe("match store", () => {
       expect(useToastStore().toasts.map((toast) => toast.text)).toContain(
         "The server restarted for an update, and the match was stopped",
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends the online match on screen when the player is removed from its lobby", async () => {
+    const socket = await inOnlineMatch();
+    const match = useMatchStore();
+
+    socket.push(
+      create(ServerMessageSchema, {
+        message: { case: "lobbyClosed", value: { reason: LobbyClosedReason.KICKED } },
+      }),
+    );
+
+    expect(match.controller).toBeNull();
+  });
+
+  it("switches to the lobby's newer match when a catch-up for it arrives", async () => {
+    const socket = await inOnlineMatch();
+    const match = useMatchStore();
+    socket.push(create(ServerMessageSchema, { message: { case: "ended", value: { matchId: "m1" } } }));
+
+    socket.push(
+      create(ServerMessageSchema, {
+        message: {
+          case: "catchUp",
+          value: { header: { matchId: "m2", seats: [{ slot: 0, player: me }] }, frames: [] },
+        },
+      }),
+    );
+
+    expect(match.controller?.source.header.matchId).toBe("m2");
+  });
+
+  it("does not feed the next match's frames into a match that ended", async () => {
+    const socket = await inOnlineMatch();
+    const source = useMatchStore().controller?.source as MatchSource;
+    const ticks: bigint[] = [];
+    source.on("frame", (frame) => ticks.push(frame.tick));
+    socket.push(create(ServerMessageSchema, { message: { case: "ended", value: { matchId: "m1" } } }));
+
+    socket.push(create(ServerMessageSchema, { message: { case: "frame", value: { tick: 1n } } }));
+
+    expect(ticks).toEqual([]);
+  });
+
+  it("ends a match the server no longer has when the player comes back", async () => {
+    vi.useFakeTimers();
+    try {
+      const socket = await inOnlineMatch();
+      const source = useMatchStore().controller?.source as MatchSource;
+      const results: unknown[] = [];
+      source.on("ended", (result) => results.push(result));
+
+      socket.close();
+      await vi.advanceTimersByTimeAsync(5_000);
+      const back = openedSocket(1);
+      await welcomeOn(back, true);
+      expect(back.lastSent().message.case).toBe("requestCatchUp");
+      back.push(
+        create(ServerMessageSchema, {
+          requestId: back.lastRequestId(),
+          message: { case: "error", value: { code: ErrorCode.MATCH_NOT_FOUND, message: "no such match" } },
+        }),
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(results).toEqual([null]);
     } finally {
       vi.useRealTimers();
     }

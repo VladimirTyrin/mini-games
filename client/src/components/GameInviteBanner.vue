@@ -2,10 +2,24 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 
 import Avatar from "@/components/Avatar.vue";
+import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import { pluginById } from "@/games";
 import { useFriendsStore } from "@/stores/friends";
+import { useMatchStore } from "@/stores/match";
 
 const friends = useFriendsStore();
+const match = useMatchStore();
+/** Joining leaves the match being played: asked first. */
+const confirmingJoin = ref(false);
+
+function join(inviteId: string, lobbyId: string): void {
+  if (match.isInOnlineMatch && !confirmingJoin.value) {
+    confirmingJoin.value = true;
+    return;
+  }
+  confirmingJoin.value = false;
+  void friends.accept(inviteId, lobbyId);
+}
 const now = ref(Date.now());
 // The countdown only needs whole seconds.
 const ticker = setInterval(() => (now.value = Date.now()), 1000);
@@ -22,6 +36,15 @@ const gameTitle = computed(() => (invite.value ? (pluginById(invite.value.game)?
 </script>
 
 <template>
+  <ConfirmDialog
+    v-if="invite && confirmingJoin"
+    title="Leave this match?"
+    :message="`Joining ${invite.from?.displayName ?? 'your friend'} ends your part in the match you are playing.`"
+    confirm-label="Leave and join"
+    cancel-label="Keep playing"
+    @confirm="join(invite.inviteId, invite.lobbyId)"
+    @cancel="confirmingJoin = false"
+  />
   <div
     v-if="invite"
     class="fixed inset-x-0 top-0 z-40 flex justify-center p-3"
@@ -52,7 +75,7 @@ const gameTitle = computed(() => (invite.value ? (pluginById(invite.value.game)?
         </button>
         <button
           class="h-11 flex-1 rounded-xl bg-emerald-600 font-semibold"
-          @click="friends.accept(invite.inviteId, invite.lobbyId)"
+          @click="join(invite.inviteId, invite.lobbyId)"
         >
           Join
         </button>

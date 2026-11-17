@@ -174,7 +174,7 @@ impl MatchActor {
 
     async fn handle_control(&mut self, control: MatchControl) {
         match control {
-            MatchControl::Attach { session, outbound } => self.attach(&session, outbound),
+            MatchControl::Attach { session, outbound } => self.attach(&session, outbound).await,
             MatchControl::AddObserver { session, outbound } => {
                 if self.participants.iter().all(|p| p.session != session) {
                     self.participants.push(Participant {
@@ -183,7 +183,7 @@ impl MatchActor {
                         outbound: None,
                     });
                 }
-                self.attach(&session, outbound);
+                self.attach(&session, outbound).await;
             }
             MatchControl::Detach { session } => self.detach(&session),
             MatchControl::Leave { session } => self.leave(&session).await,
@@ -323,7 +323,7 @@ impl MatchActor {
         }
     }
 
-    fn attach(&mut self, session: &SessionId, outbound: Outbound) {
+    async fn attach(&mut self, session: &SessionId, outbound: Outbound) {
         let Some(participant) = self.participants.iter_mut().find(|p| &p.session == session) else {
             return;
         };
@@ -335,6 +335,11 @@ impl MatchActor {
         {
             self.budgets.reconnect(slot, Instant::now());
             self.after_reconnect();
+            // A turn-based game goes on at once when the last player is back (no countdown
+            // whose end would do it): a bot on turn must move now, or nobody can.
+            if self.clock == Clock::TurnBased {
+                self.drive_bots().await;
+            }
         }
     }
 

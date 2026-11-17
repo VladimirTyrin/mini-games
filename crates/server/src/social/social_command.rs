@@ -13,8 +13,12 @@ pub(crate) enum SocialCommand {
         message: ClientPayload,
         lobby: Option<InviteLobby>,
     },
-    /// A Google sign-in: remember the account's name and picture.
-    SignedIn(AccountRecord),
+    /// A Google sign-in: remember the account's name and picture, and show the device the
+    /// invitations still open for the account.
+    SignedIn {
+        account: AccountRecord,
+        session: SessionId,
+    },
     /// Sent by the hub whenever an account's presence may have changed (it may not have).
     Presence {
         account: AccountId,

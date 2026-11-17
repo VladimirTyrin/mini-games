@@ -208,7 +208,28 @@ impl Connection {
     async fn handle_text(&mut self, text: &str) {
         let now = Instant::now();
         if !self.messages.try_take(now) {
-            return self.reject(0, ErrorCode::RateLimited, "slow down");
+            // Only small frames are worth decoding here: enough for a ping or the id of a
+            // request, and a flood of them costs little.
+            let small = (text.len() <= Limits::RATE_LIMITED_PEEK_BYTES)
+                .then(|| codec::decode(text).ok())
+                .flatten();
+            match small {
+                Some(proto::ClientMessage {
+                    request_id,
+                    message: Some(ClientPayload::Ping(ping)),
+                }) => {
+                    let pong = proto::Pong {
+                        client_time_ms: ping.client_time_ms,
+                    };
+                    return self
+                        .outbound
+                        .send(&codec::reply(request_id, Message::Pong(pong)));
+                }
+                Some(message) => {
+                    return self.reject(message.request_id, ErrorCode::RateLimited, "slow down");
+                }
+                None => return self.reject(0, ErrorCode::RateLimited, "slow down"),
+            }
         }
         let large = text.len() > Limits::MAX_MESSAGE_BYTES;
         if large && self.session.is_none() {

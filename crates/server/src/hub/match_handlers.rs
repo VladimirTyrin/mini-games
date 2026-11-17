@@ -348,7 +348,15 @@ impl Hub {
             );
             return None;
         };
-        let lobby = self.lobbies.get(&lobby_id)?;
+        let Some(lobby) = self.lobbies.get(&lobby_id) else {
+            self.reject(
+                session,
+                request_id,
+                ErrorCode::NotInLobby,
+                "the lobby is gone",
+            );
+            return None;
+        };
         if &lobby.host != session {
             self.reject(
                 session,
@@ -393,8 +401,18 @@ impl Hub {
             }
         };
         // Things may have changed while the file was checked.
-        if self.may_share_replay(&session, request_id).as_ref() != Some(&lobby_id) {
-            return;
+        match self.may_share_replay(&session, request_id) {
+            Some(current) if current == lobby_id => {}
+            // Refused already.
+            None => return,
+            Some(_) => {
+                return self.reject(
+                    &session,
+                    request_id,
+                    ErrorCode::NotInLobby,
+                    "you moved to another lobby while the replay was checked",
+                );
+            }
         }
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;

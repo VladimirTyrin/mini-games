@@ -156,7 +156,7 @@ describe("lobby store", () => {
 
       expect(lobby.current).toBeNull();
       expect(useToastStore().toasts.map((toast) => toast.text)).toContain(
-        "You were away too long and lost your place in the lobby",
+        "You are no longer in the lobby you were in",
       );
     } finally {
       vi.useRealTimers();

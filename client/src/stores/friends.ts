@@ -20,6 +20,7 @@ import { storage } from "@/platform/storage";
 
 import { useConnectionStore } from "./connection";
 import { useLobbyStore } from "./lobby";
+import { useMatchStore } from "./match";
 import { useToastStore } from "./toasts";
 
 /** A friend is an account; a player in a lobby is one of its devices (`<account>.<device>`). */
@@ -279,6 +280,9 @@ export const useFriendsStore = defineStore("friends", () => {
       return;
     }
     if (lobby.current?.lobbyId === lobbyId) return;
+    // The match on screen goes with the lobby; left on screen it would freeze.
+    const match = useMatchStore();
+    if (match.isInOnlineMatch) match.close();
     if (lobby.current) await lobby.leave();
     await lobby.join(lobbyId, false).catch(() => undefined);
   }

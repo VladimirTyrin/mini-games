@@ -708,3 +708,35 @@ async fn removing_a_bot_after_a_match_asks_for_new_votes() {
 
     assert_eq!(host.expect(play_again_votes).await, 0);
 }
+
+#[tokio::test]
+async fn sharing_a_replay_is_answered_even_when_the_host_moved_on_meanwhile() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    let match_id = play_tictactoe_to_the_end(&mut host, &mut guest).await;
+    host.expect(post_match).await;
+    let Reply::ReplayData(replay) = host
+        .request(Request::RequestReplay(proto::RequestReplay { match_id }))
+        .await
+    else {
+        panic!("expected replay data");
+    };
+
+    // Sent back to back: the replay is still being checked while the host goes elsewhere.
+    let share = host
+        .send(Request::ShareReplay(proto::ShareReplay {
+            replay_file: replay.replay_file,
+            host_only_control: true,
+        }))
+        .await;
+    host.send(Request::LeaveLobby(proto::LeaveLobby {})).await;
+    host.send(Request::CreateLobby(proto::CreateLobby {
+        name: "elsewhere".into(),
+        settings: Some(tictactoe_settings(3, 3)),
+        max_seats: 2,
+    }))
+    .await;
+
+    expect_error(host.reply_to(share).await, proto::ErrorCode::NotInLobby);
+}

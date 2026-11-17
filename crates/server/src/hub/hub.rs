@@ -161,12 +161,18 @@ impl Hub {
                     .is_some_and(|s| s.who.is_same_player(&who))
             })
             .cloned();
+        let taken_from_away_device = resumable
+            .is_none()
+            .then(|| self.away_device_session(&who))
+            .flatten()
+            .filter(|_| who.exclusive_account().is_none());
         let existing = resumable
+            .clone()
             .or_else(|| {
                 who.exclusive_account()
                     .and_then(|key| self.accounts.get(key).cloned())
             })
-            .or_else(|| self.away_device_session(&who));
+            .or_else(|| taken_from_away_device.clone());
 
         let created = existing.is_none();
         let session_id = if let Some(id) = existing {
@@ -188,6 +194,14 @@ impl Hub {
                 // see them in the `LobbyState` that `rejoin_lobby` pushes below.
                 session.identity = who.to_identity(&id);
                 session.who = who;
+            }
+            if taken_from_away_device.as_ref() == Some(&id) {
+                // The device that was away still holds the old token: were it to resume with it
+                // later, it would take the session back from the device now playing.
+                self.resume_tokens.remove(&session.resume_token);
+                session.resume_token = ResumeToken::random();
+                self.resume_tokens
+                    .insert(session.resume_token.clone(), id.clone());
             }
             id
         } else {
@@ -275,7 +289,18 @@ impl Hub {
                 outbound,
             }),
             LobbyPhase::Replay(shared) => Self::send_shared_replay(shared, &outbound),
-            LobbyPhase::Open | LobbyPhase::PostMatch { .. } => {}
+            // The match ended while this session was away and its `Ended` went nowhere: a
+            // client still showing it must learn the result.
+            LobbyPhase::PostMatch { .. } => {
+                if let Some(last) = &lobby.last_match {
+                    outbound.send(&codec::push(Message::Ended(proto::MatchEnded {
+                        match_id: last.match_id.to_string(),
+                        result: Some(last.result.clone()),
+                        final_tick: 0,
+                    })));
+                }
+            }
+            LobbyPhase::Open => {}
         }
     }
 
@@ -301,6 +326,10 @@ impl Hub {
             self.broadcast_lobby_state(&lobby_id);
         }
         self.announce_presence(session_id);
+        self.arm_resume_grace(session_id, connection);
+    }
+
+    fn arm_resume_grace(&self, session_id: &SessionId, connection: ConnectionId) {
         let handle = self.handle.clone();
         let session = session_id.clone();
         let grace = self.timing.resume_grace;
@@ -319,9 +348,24 @@ impl Hub {
             .sessions
             .get(session_id)
             .is_some_and(|s| s.connection.is_none() && s.lost_connection == Some(connection));
-        if still_gone {
-            self.end_session(session_id);
+        if !still_gone {
+            return;
         }
+        let seated_in_running_match = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.lobby.as_ref())
+            .and_then(|lobby| self.lobbies.get(lobby))
+            .is_some_and(|lobby| {
+                lobby.phase.match_handle().is_some() && lobby.seat_index(session_id).is_some()
+            });
+        if seated_in_running_match {
+            // The match's disconnect budget (shown to everyone) decides about the seat; ending
+            // the session now would drop it earlier than promised. Ask again later.
+            self.arm_resume_grace(session_id, connection);
+            return;
+        }
+        self.end_session(session_id);
     }
 
     pub(super) fn end_session(&mut self, session_id: &SessionId) {

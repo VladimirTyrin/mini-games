@@ -146,18 +146,21 @@ impl Hub {
     }
 
     /// A Google sign-in: the social actor remembers the account's name and picture.
-    pub(super) fn announce_sign_in(&self, session: &SessionId) {
-        let Some(session) = self.sessions.get(session) else {
+    pub(super) fn announce_sign_in(&self, session_id: &SessionId) {
+        let Some(session) = self.sessions.get(session_id) else {
             return;
         };
         let Some(account) = session_account(&session.who) else {
             return;
         };
-        self.social.send(SocialCommand::SignedIn(AccountRecord {
-            id: account.clone(),
-            display_name: session.identity.display_name.clone(),
-            avatar_url: session.identity.avatar_url.clone(),
-        }));
+        self.social.send(SocialCommand::SignedIn {
+            account: AccountRecord {
+                id: account.clone(),
+                display_name: session.identity.display_name.clone(),
+                avatar_url: session.identity.avatar_url.clone(),
+            },
+            session: session_id.clone(),
+        });
         self.announce_account_presence(account);
     }
 }

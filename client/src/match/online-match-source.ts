@@ -20,6 +20,8 @@ export class OnlineMatchSource implements MatchSource {
   private readonly events = new Emitter<MatchSourceEvents>();
   private readonly unsubscribe: (() => void)[] = [];
   private isLeft = false;
+  /** The server said the match is over: a later "match not found" adds nothing. */
+  private hasEnded = false;
 
   constructor(
     private session: Session,
@@ -41,7 +43,10 @@ export class OnlineMatchSource implements MatchSource {
   start(): void {
     const session = this.session.events;
     this.unsubscribe.push(
-      session.on("frame", (frame) => this.events.emit("frame", frame)),
+      // Frames carry no match id: once this match is over, they are the next match's.
+      session.on("frame", (frame) => {
+        if (!this.hasEnded) this.events.emit("frame", frame);
+      }),
       session.on("catchUp", (catchUp) => {
         if (catchUp.header?.matchId === this.matchId) this.events.emit("catchUp", catchUp);
       }),
@@ -56,7 +61,9 @@ export class OnlineMatchSource implements MatchSource {
           this.events.emit("resumed", { countdownMs: resumed.countdownMs });
       }),
       session.on("ended", (ended) => {
-        if (ended.matchId === this.matchId) this.events.emit("ended", ended.result ?? null);
+        if (ended.matchId !== this.matchId) return;
+        this.hasEnded = true;
+        this.events.emit("ended", ended.result ?? null);
       }),
       // After a reconnect the server resumes the seat; frames sent meanwhile are lost.
       session.on("signedIn", ({ resumed }) => {
@@ -94,6 +101,17 @@ export class OnlineMatchSource implements MatchSource {
       // retried; a lost connection triggers its own catch-up on resume.
       if (error instanceof RequestError && error.code === ErrorCode.RATE_LIMITED && !this.isLeft) {
         setTimeout(() => this.requestCatchUp(), CATCH_UP_RETRY_MS);
+      }
+      // The match is over on the server (it ended or was stopped while this device was away):
+      // end it here too rather than wait for frames that never come.
+      if (
+        error instanceof RequestError &&
+        error.code === ErrorCode.MATCH_NOT_FOUND &&
+        !this.isLeft &&
+        !this.hasEnded
+      ) {
+        this.hasEnded = true;
+        this.events.emit("ended", null);
       }
     });
   }

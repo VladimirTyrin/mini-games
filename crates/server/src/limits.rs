@@ -26,6 +26,9 @@ impl Limits {
     /// General messages: burst / sustained rate.
     pub(crate) const MESSAGE_BURST: u32 = 60;
     pub(crate) const MESSAGE_REFILL: Duration = Duration::from_millis(25);
+    /// A rate-limited frame up to this size is still decoded: a ping is answered, a request is
+    /// refused with its id.
+    pub(crate) const RATE_LIMITED_PEEK_BYTES: usize = 512;
     pub(crate) const CHAT_BURST: u32 = 5;
     pub(crate) const CHAT_REFILL: Duration = Duration::from_secs(1);
 

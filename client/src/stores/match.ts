@@ -34,6 +34,10 @@ export const useMatchStore = defineStore("match", () => {
   const controller = shallowRef<MatchController | null>(null);
   const replay = shallowRef<ReplayMatchSource | null>(null);
 
+  /** An online match on screen that has not ended: leaving the lobby would drop the seat. */
+  const isInOnlineMatch = computed(
+    () => controller.value?.source instanceof OnlineMatchSource && !controller.value.ended.value,
+  );
   /** A match is being played that this build can follow. */
   const isPlaying = computed(() => controller.value !== null && !controller.value.incompatible.value);
   /**
@@ -145,8 +149,21 @@ export const useMatchStore = defineStore("match", () => {
       const offStarted = session.events.on("matchStarted", (header) => void startOnline(header));
       // A reload or reconnect into a running match: the server sends only a catch-up.
       const offCatchUp = session.events.on("catchUp", (catchUp) => {
-        if (controller.value || !catchUp.header || lobby.isLeaving) return;
+        if (!catchUp.header || lobby.isLeaving) return;
+        const shown = controller.value?.source;
+        // A catch-up for the match on screen is that match's own business (its source applies
+        // it); one for another match means the lobby moved on to it while this device was away.
+        if (
+          shown &&
+          !(shown instanceof OnlineMatchSource && shown.header.matchId !== catchUp.header.matchId)
+        ) {
+          return;
+        }
         startOnline(catchUp.header)?.applyCatchUp(catchUp);
+      });
+      // Kicked, or the lobby closed: its match is gone for this player.
+      const offLobbyClosed = session.events.on("lobbyClosed", () => {
+        if (controller.value?.source instanceof OnlineMatchSource) close();
       });
       // The server kept the seat no longer (away past its grace period): the match is gone.
       const offSignedIn = session.events.on("signedIn", ({ resumed }) => {
@@ -155,13 +172,14 @@ export const useMatchStore = defineStore("match", () => {
         toasts.show(
           connection.lostToRestart()
             ? "The server restarted for an update, and the match was stopped"
-            : "You were away too long, and the match went on without you",
+            : "You are no longer in the match you were in",
         );
       });
       detach = () => {
         offStarted();
         offCatchUp();
         offSignedIn();
+        offLobbyClosed();
       };
     },
     { immediate: true },
@@ -171,6 +189,7 @@ export const useMatchStore = defineStore("match", () => {
     controller,
     replay,
     isPlaying,
+    isInOnlineMatch,
     holdsUpdates,
     startLocal,
     startOnline,

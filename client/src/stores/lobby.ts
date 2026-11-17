@@ -88,7 +88,8 @@ export const useLobbyStore = defineStore("lobby", () => {
             if (connection.lostToRestart()) {
               toasts.show("The server restarted for an update, and the lobby was closed");
             } else if (reconnecting) {
-              toasts.show("You were away too long and lost your place in the lobby");
+              // The server does not say why: away too long, removed, or the lobby closed meanwhile.
+              toasts.show("You are no longer in the lobby you were in");
             }
           }
           reconnecting = true;

@@ -171,7 +171,7 @@ player id before the dot.
   - The inviting session gets `InviteUpdate` as the invitation moves on: pending, then
     accepted, declined, expired (after 90 s) or cancelled (`CancelInvite`).
   - Every connected device of the friend gets `GameInvite`, and so does a device that signs in
-    while it is open. Every device also gets a push notification with the same data, so an open
+    while it is open (that device only). Every device also gets a push notification with the same data, so an open
     browser tab shows both. `expires_in_ms` is the time left: count down from it, not from
     `expires_at_unix_ms`, since device clocks may be off.
   - Leaving the lobby, the lobby closing, or the two no longer being friends cancels it. Asking

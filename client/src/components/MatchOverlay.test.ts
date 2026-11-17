@@ -11,9 +11,10 @@ vi.mock("@/games", () => ({
 }));
 
 /** A controller whose match has ended with its result on screen. */
-function endedMatch(game: string): MatchController {
+function endedMatch(game: string, changes: Partial<Record<string, unknown>> = {}): MatchController {
   return {
     aborted: shallowRef(false),
+    droppedSlots: shallowRef(new Set()),
     ended: shallowRef(true),
     mySlot: 0,
     pauses: shallowRef([]),
@@ -21,6 +22,7 @@ function endedMatch(game: string): MatchController {
     resultRevealAt: shallowRef(0),
     resumeAt: shallowRef(null),
     source: { kind: "local", header: { settings: { game: { case: game } }, seats: [] } },
+    ...changes,
   } as unknown as MatchController;
 }
 
@@ -41,5 +43,24 @@ describe("MatchOverlay", () => {
   it("does not take Space as Play again in a game that jumps with it", () => {
     expect(playAgainRequests("stackAttack", " ")).toBe(0);
     expect(playAgainRequests("stackAttack", "Enter")).toBe(1);
+  });
+
+  it("offers Play again neither to an observer nor after an aborted match", () => {
+    const buttons = (controller: MatchController) => {
+      const wrapper = mount(MatchOverlay, { props: { controller } });
+      const texts = wrapper.findAll("button").map((button) => button.text());
+      wrapper.unmount();
+      return texts;
+    };
+
+    expect(buttons(endedMatch("tictactoe")).some((text) => text.startsWith("Play again"))).toBe(true);
+    expect(
+      buttons(endedMatch("tictactoe", { mySlot: null })).some((text) => text.startsWith("Play again")),
+    ).toBe(false);
+    expect(
+      buttons(endedMatch("tictactoe", { aborted: shallowRef(true) })).some((text) =>
+        text.startsWith("Play again"),
+      ),
+    ).toBe(false);
   });
 });

@@ -433,3 +433,58 @@ async fn a_real_time_game_counts_down_before_play_goes_on() {
         .await;
     assert!(resumed.countdown_ms > 0);
 }
+
+#[tokio::test]
+async fn pings_are_answered_even_past_the_message_rate_limit() {
+    let server = TestServer::start().await;
+    let mut alice = server.guest("Alice").await.client;
+    let mut sent = Vec::new();
+
+    for _ in 0..150 {
+        sent.push(
+            alice
+                .send(Request::Ping(proto::Ping { client_time_ms: 1 }))
+                .await,
+        );
+    }
+
+    let mut unanswered: std::collections::BTreeSet<u32> = sent.into_iter().collect();
+    while !unanswered.is_empty() {
+        let message = alice.receive().await;
+        if unanswered.remove(&message.request_id) {
+            assert!(
+                matches!(message.message, Some(Reply::Pong(_))),
+                "{message:?}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_request_past_the_rate_limit_is_refused_with_its_own_id() {
+    let server = TestServer::start().await;
+    let mut alice = server.guest("Alice").await.client;
+    let mut sent = Vec::new();
+
+    for _ in 0..150 {
+        sent.push(
+            alice
+                .send(Request::ListLobbies(proto::ListLobbies {}))
+                .await,
+        );
+    }
+
+    // Refusals come straight from the connection, answers from the hub: in any order.
+    let mut unanswered: std::collections::BTreeSet<u32> = sent.into_iter().collect();
+    let mut refused = 0;
+    while !unanswered.is_empty() {
+        let message = alice.receive().await;
+        if unanswered.remove(&message.request_id)
+            && let Some(Reply::Error(error)) = message.message
+        {
+            assert_eq!(error.code, proto::ErrorCode::RateLimited as i32);
+            refused += 1;
+        }
+    }
+    assert!(refused > 0, "the burst should have hit the limit");
+}

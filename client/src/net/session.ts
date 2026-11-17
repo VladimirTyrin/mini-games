@@ -176,8 +176,10 @@ export class Session {
       }
     } catch (error) {
       if (!(error instanceof RequestError) || socket !== this.socket) return;
-      // No answer is not a refusal: keep the credentials and try again.
-      if (error.failure !== "refused") {
+      // No answer is not a refusal: keep the credentials and try again. Nor is a server that
+      // cannot check them just now (Google's keys out of reach, a hiccup of its own).
+      const transient = error.code === ErrorCode.RATE_LIMITED || error.code === ErrorCode.INTERNAL;
+      if (error.failure !== "refused" || transient) {
         this.abandon(socket);
         return;
       }

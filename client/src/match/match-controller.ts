@@ -29,6 +29,8 @@ export class MatchController {
   readonly previous: ShallowRef<ViewSnapshot | null> = shallowRef(null);
   readonly pauses: ShallowRef<SeatPause[]> = shallowRef([]);
   readonly resumeAt: ShallowRef<number | null> = shallowRef(null);
+  /** Seats out of play (left, voted out, budget spent): they can no longer vote. */
+  readonly droppedSlots: ShallowRef<ReadonlySet<number>> = shallowRef(new Set());
   readonly result: ShallowRef<MatchResult | null> = shallowRef(null);
   readonly ended = shallowRef(false);
   /** `performance.now()` from which the result may cover the board (the ending plays out first). */
@@ -132,6 +134,13 @@ export class MatchController {
     this.mirror.free();
   }
 
+  private noteDrops(frames: readonly TickFrame[]): void {
+    const dropped = frames.flatMap((frame) =>
+      frame.inputs.flatMap((input) => (input.input.case === "droppedSlot" ? [input.input.value] : [])),
+    );
+    if (dropped.length > 0) this.droppedSlots.value = new Set([...this.droppedSlots.value, ...dropped]);
+  }
+
   private onFrame(frame: TickFrame): void {
     if (this.resyncing || this.incompatible.value) return;
     const expected = BigInt(this.mirror.nextTick);
@@ -139,6 +148,7 @@ export class MatchController {
     try {
       if (frame.tick > expected) throw new Error(`missed frames ${expected}..${frame.tick}`);
       this.mirror.applyFrame(frame);
+      this.noteDrops([frame]);
     } catch (error) {
       this.resyncsSinceVerifiedFrame += 1;
       if (this.resyncsSinceVerifiedFrame > MAX_RESYNCS) {
@@ -173,6 +183,8 @@ export class MatchController {
       return;
     }
     this.incompatible.value = false;
+    this.droppedSlots.value = new Set();
+    this.noteDrops(catchUp.frames);
     const now = performance.now();
     const pauses = catchUp.pauses.length > 0 ? catchUp.pauses : catchUp.pause ? [catchUp.pause] : [];
     this.pauses.value = seatPauses(pauses, now);

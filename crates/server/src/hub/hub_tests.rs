@@ -407,3 +407,70 @@ async fn a_second_device_signing_in_while_the_first_is_connected_is_a_new_player
 
     assert_ne!(phone.unwrap().session, laptop.unwrap().session);
 }
+
+fn start_hub_with(timing: Timing) -> HubHandle {
+    let (sender, receiver) = mpsc::unbounded_channel();
+    let handle = HubHandle::new(sender);
+    let (social, _ignored) = mpsc::unbounded_channel();
+    let hub = Hub::new(
+        handle.clone(),
+        SocialHandle::new(social),
+        Arc::new(Semaphore::new(1)),
+        timing,
+    );
+    tokio::spawn(hub.run(receiver));
+    handle
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_seat_lost_in_the_lobby_is_kept_for_the_match_budget_not_the_lobby_grace() {
+    let hub = start_hub_with(Timing {
+        resume_grace: std::time::Duration::from_secs(10),
+        disconnect_budget: std::time::Duration::from_secs(60),
+        ..Timing::default()
+    });
+    let (host, _) = sign_in(&hub, guest("Host")).await;
+    let mut host = host.unwrap();
+    let (player, welcome) = sign_in(&hub, guest("Guest")).await;
+    let mut player = player.unwrap();
+    let SignInOutcome::Welcome(welcome) = welcome else {
+        panic!("guest refused");
+    };
+    let lobby = create_lobby(&mut host).await;
+    player
+        .request(Request::JoinLobby(proto::JoinLobby {
+            lobby_id: lobby.lobby_id,
+            as_observer: false,
+        }))
+        .await;
+    player
+        .request(Request::SetReady(proto::SetReady { ready: true }))
+        .await;
+    hub.send(HubCommand::Disconnected {
+        session: player.session.clone(),
+        connection: player.id,
+    });
+    assert!(matches!(
+        host.request(Request::StartMatch(proto::StartMatch {}))
+            .await,
+        Reply::Ack(_)
+    ));
+
+    // Past the lobby's grace, well within the match's budget. The woken grace timer posts to
+    // the hub; a request answered after that shows the hub has handled it.
+    tokio::time::advance(std::time::Duration::from_secs(25)).await;
+    tokio::task::yield_now().await;
+    host.request(Request::ListLobbies(proto::ListLobbies {}))
+        .await;
+    let (_back, outcome) = sign_in_resuming(
+        &hub,
+        guest("Guest"),
+        ResumeToken::parse(&welcome.resume_token),
+    )
+    .await;
+
+    let SignInOutcome::Welcome(back) = outcome else {
+        panic!("refused");
+    };
+    assert!(back.resumed, "the seat in the running match was kept");
+}
