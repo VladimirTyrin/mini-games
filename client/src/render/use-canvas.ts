@@ -7,6 +7,16 @@ export interface CanvasSize {
 }
 
 /**
+ * Pixel density the canvas is drawn at, at most 2: a 3× phone screen would fill over twice the
+ * pixels every frame for detail nobody sees at game size, and weak phones have exactly such screens.
+ */
+const MAX_CANVAS_PIXEL_RATIO = 2;
+
+export function canvasPixelRatio(): number {
+  return Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXEL_RATIO);
+}
+
+/**
  * A crisp canvas that tracks its container: the backing store is scaled by devicePixelRatio and
  * the context is pre-scaled, so drawing code uses CSS pixels. `draw` runs on demand
  * (`invalidate`) or every animation frame while `animating()` returns true — no idle rAF loop.
@@ -26,7 +36,7 @@ export function useCanvas(
     const target = canvas.value;
     const context = target?.getContext("2d");
     if (!target || !context) return;
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = canvasPixelRatio();
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     draw(context, size.value, now);
     if (animating()) invalidate();
@@ -40,7 +50,7 @@ export function useCanvas(
     const target = canvas.value;
     const box = container.value;
     if (!target || !box) return;
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = canvasPixelRatio();
     const width = Math.floor(box.clientWidth);
     const height = Math.floor(box.clientHeight);
     size.value = { width, height };

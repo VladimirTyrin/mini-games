@@ -1,4 +1,5 @@
 import type { WorkerPose } from "./worker-animator";
+import { canvasPixelRatio } from "@/render/use-canvas";
 
 /**
  * The worker, drawn as vector parts in a unit frame: 1 unit = 1 cell, origin at the centre of the
@@ -67,9 +68,9 @@ const rig: Rig = {
   backHand: { x: 0, y: 0 },
 };
 
-/** Rounds to the device pixel grid so the sprite does not shimmer as it moves. */
+/** Rounds to the canvas's pixel grid so the sprite does not shimmer as it moves. */
 function snap(value: number): number {
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = canvasPixelRatio();
   return Math.round(value * ratio) / ratio;
 }
 

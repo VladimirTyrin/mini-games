@@ -103,8 +103,9 @@ const { invalidate } = useCanvas(
   () => {
     if (!transition) return false;
     const now = performance.now();
+    // While held (paused, counting down) nothing moves but effects: the next frame restarts it.
     return (
-      transition.view.endReason === undefined ||
+      (transition.view.endReason === undefined && !isHeld()) ||
       tickProgress(props.controller.current.value, props.controller.tickMs, now) < 1 ||
       animator.hasEffectsAt(now)
     );

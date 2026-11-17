@@ -107,7 +107,10 @@ const afloat = computed(() => view.value?.waters[targetSlot.value]?.afloat ?? []
 
 // The time to place a fleet online, from the header; the server places a random one after it.
 const now = ref(Date.now());
-const clock = setInterval(() => (now.value = Date.now()), 500);
+// Only while the player places a fleet against the clock; the board need not re-render otherwise.
+const clock = setInterval(() => {
+  if (needsFleet.value && header.value.secretSetupMs > 0) now.value = Date.now();
+}, 500);
 onBeforeUnmount(() => clearInterval(clock));
 const secondsLeft = computed(() => {
   if (header.value.secretSetupMs === 0) return null;

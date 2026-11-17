@@ -86,14 +86,30 @@ export function drawSnakeScene(
   context.restore();
 }
 
+/** The checkered ground as a pattern of two by two cells, made once per cell size. */
+let groundTile: { cellSize: number; pattern: CanvasPattern } | null = null;
+
+function groundPattern(context: CanvasRenderingContext2D, cellSize: number): CanvasPattern | null {
+  if (groundTile?.cellSize === cellSize) return groundTile.pattern;
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = Math.max(1, Math.round(cellSize * 2));
+  const tileContext = tile.getContext("2d");
+  if (!tileContext) return null;
+  tileContext.fillStyle = GROUND_LIGHT;
+  tileContext.fillRect(0, 0, tile.width, tile.height);
+  tileContext.fillStyle = GROUND_DARK;
+  tileContext.fillRect(0, 0, cellSize, cellSize);
+  tileContext.fillRect(cellSize, cellSize, cellSize, cellSize);
+  const pattern = context.createPattern(tile, "repeat");
+  if (!pattern) return null;
+  groundTile = { cellSize, pattern };
+  return pattern;
+}
+
+// One fill with a cached pattern: drawing the cells one by one cost hundreds of rectangles a frame.
 function drawGround({ context, field, cellSize }: Frame): void {
-  context.fillStyle = GROUND_LIGHT;
+  context.fillStyle = groundPattern(context, cellSize) ?? GROUND_LIGHT;
   context.fillRect(0, 0, field.width * cellSize, field.height * cellSize);
-  context.fillStyle = GROUND_DARK;
-  context.beginPath();
-  for (let y = 0; y < field.height; y++)
-    for (let x = y % 2; x < field.width; x += 2) context.rect(x * cellSize, y * cellSize, cellSize, cellSize);
-  context.fill();
 }
 
 function drawBorder({ context, scene }: Frame, width: number, height: number): void {
@@ -164,6 +180,8 @@ function drawSnake(frame: Frame, seat: SnakeSeatView): void {
   const path = snakeBodyPath(seat.body, seat.direction, previousBody, field, scene.progress);
   if (!path) return;
   const color = seat.alive ? snakeColor(seat.slot) : DEAD_SNAKE_COLOR;
+  // Sampled once: the copies across a wrap-around border are the same line, shifted.
+  const line = sampleCentreline(path.points);
   context.save();
   context.globalAlpha = opacity;
   // The centre line may run past a wrap-around border; shifted copies show the part that
@@ -171,7 +189,7 @@ function drawSnake(frame: Frame, seat: SnakeSeatView): void {
   for (const shift of borderShifts(path.points, field)) {
     context.save();
     context.translate(shift.x * frame.cellSize, shift.y * frame.cellSize);
-    drawBody(frame, path.points, color);
+    drawBody(frame, line, color);
     drawHead(frame, path, color);
     context.restore();
   }
@@ -222,16 +240,14 @@ function bodyWidthAt(fromTail: number, taper: number): number {
  * narrowing towards the tail, with spots that sit on the body itself: they are counted from the
  * tail end, so they slide forward with the snake and show it moving.
  */
-function drawBody(frame: Frame, points: readonly CellPosition[], color: RgbColor): void {
-  if (points.length < 2) return;
+function drawBody(frame: Frame, line: readonly CentrelinePoint[], color: RgbColor): void {
   const { context, cellSize } = frame;
-  const line = sampleCentreline(points);
   const length = line[0]?.fromTail ?? 0;
   if (line.length < 2 || length <= 0) return;
   const taper = Math.min(TAIL_TAPER, length * 0.4);
   // The full-width part is one stroke; the taper is a filled outline per layer, so the three
   // bands narrow together and the edge stays smooth.
-  const full = line.filter((point) => point.fromTail >= taper);
+  const full = strokeVertices(line.filter((point) => point.fromTail >= taper));
   const tail = line.filter((point) => point.fromTail <= taper + TAPER_OVERLAP);
   const layers = [
     { width: TUBE.width, sheetColor: TUBE.outline },
@@ -257,6 +273,19 @@ function drawBody(frame: Frame, points: readonly CellPosition[], color: RgbColor
     fillTaper(context, tail, taper, layer.width * cellSize, cellSize, style);
   }
   drawSpots(frame, line, length, taper, color);
+}
+
+/**
+ * The points a stroke needs: the corners' arcs, and only the ends of each straight run. The line
+ * is sampled finely everywhere (spots and the taper read it), but a straight run's inner points
+ * add nothing to a stroke and cost the canvas thousands of vertices a frame.
+ */
+export function strokeVertices(line: readonly CentrelinePoint[]): CentrelinePoint[] {
+  const sameDirection = (a: CentrelinePoint | undefined, b: CentrelinePoint | undefined) =>
+    a !== undefined && b !== undefined && Math.abs(a.angle - b.angle) < 1e-9;
+  return line.filter(
+    (point, index) => !sameDirection(line[index - 1], point) || !sameDirection(point, line[index + 1]),
+  );
 }
 
 /**
@@ -311,14 +340,19 @@ function drawSpots(
   context.save();
   context.fillStyle = cssColor(tintedBySprite(color, TUBE.outline));
   context.globalAlpha *= 0.7;
-  // `line` runs head first, so its distances from the tail fall; walk them with one cursor.
+  // `line` runs head first, so its distances from the tail fall; walk them with one cursor. All
+  // spots go into one path: a fill per spot was dozens of draw calls a frame for a long snake.
+  context.beginPath();
   let index = line.length - 1;
   for (let at = SPOT_SPACING; at < length - SPOT_HEAD_CLEARANCE; at += SPOT_SPACING) {
     while (index > 0 && (line[index - 1]?.fromTail ?? Infinity) <= at) index--;
     const point = line[index];
     if (!point) break;
     const size = bodyWidthAt(at, taper) * cellSize;
-    context.beginPath();
+    context.moveTo(
+      point.x * cellSize + size * 0.1 * Math.cos(point.angle),
+      point.y * cellSize + size * 0.1 * Math.sin(point.angle),
+    );
     context.ellipse(
       point.x * cellSize,
       point.y * cellSize,
@@ -328,8 +362,8 @@ function drawSpots(
       0,
       Math.PI * 2,
     );
-    context.fill();
   }
+  context.fill();
   context.restore();
 }
 

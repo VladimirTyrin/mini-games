@@ -8,8 +8,45 @@ const BOX_MARK = "#4a1d07";
 /** Colours of the splinters a broken crate bursts into. */
 export const BOX_FRAGMENT_COLORS: readonly string[] = [BOX_FILL, BOX_SHADE, BOX_LIGHT];
 
+/**
+ * Crates drawn once per look at the current size, then copied: a field of crates is hundreds of
+ * fills and strokes a frame when drawn piece by piece. Only one size is kept; a resize starts over.
+ */
+const sprites = new Map<number, HTMLCanvasElement>();
+let spritePixels = 0;
+
 /** A crate with the marking of its pattern (0..8), drawn into a `size` square at (x, y). */
 export function drawBox(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  patternId: number,
+): void {
+  // The canvas is scaled for the screen's pixel density; the sprite is made at device pixels.
+  const pixels = Math.round(size * context.getTransform().a);
+  const sprite = pixels >= 4 ? boxSprite(pixels, patternId) : null;
+  if (sprite) context.drawImage(sprite, x, y, size, size);
+  else paintBox(context, x, y, size, patternId);
+}
+
+function boxSprite(pixels: number, patternId: number): HTMLCanvasElement | null {
+  if (pixels !== spritePixels) {
+    sprites.clear();
+    spritePixels = pixels;
+  }
+  const cached = sprites.get(patternId);
+  if (cached) return cached;
+  const sprite = document.createElement("canvas");
+  sprite.width = sprite.height = pixels;
+  const spriteContext = sprite.getContext("2d");
+  if (!spriteContext) return null;
+  paintBox(spriteContext, 0, 0, pixels, patternId);
+  sprites.set(patternId, sprite);
+  return sprite;
+}
+
+function paintBox(
   context: CanvasRenderingContext2D,
   x: number,
   y: number,

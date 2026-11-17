@@ -160,9 +160,10 @@ function screenCell(square: number): { column: number; row: number } {
   return flipped.value ? { column: 7 - x, row: y } : { column: x, row: 7 - y };
 }
 
-function screenPosition(square: number): { left: string; top: string } {
+/** Moved with a transform (a share of the piece's own size), which slides on the GPU without layout. */
+function screenPosition(square: number): { transform: string } {
   const { column, row } = screenCell(square);
-  return { left: `${column * 12.5}%`, top: `${row * 12.5}%` };
+  return { transform: `translate(${column * 100}%, ${row * 100}%)` };
 }
 
 function tap(square: number): void {
@@ -277,7 +278,7 @@ const status = computed(() => {
         <div
           v-for="piece in shownPieces"
           :key="piece.id"
-          class="checkers-piece absolute h-[12.5%] w-[12.5%]"
+          class="checkers-piece absolute top-0 left-0 h-[12.5%] w-[12.5%]"
           :style="screenPosition(shownSquare(piece))"
         >
           <div
@@ -326,9 +327,7 @@ const status = computed(() => {
 
 <style scoped>
 .checkers-piece {
-  transition:
-    left 0.22s ease-out,
-    top 0.22s ease-out;
+  transition: transform 0.22s ease-out;
 }
 .checkers-piece-leave-active {
   transition: opacity 0.25s ease;

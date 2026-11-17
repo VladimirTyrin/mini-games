@@ -17,7 +17,12 @@ const props = defineProps<{
 const emit = defineEmits<{ leave: []; replay: []; again: [] }>();
 
 const now = ref(performance.now());
-const timer = setInterval(() => (now.value = performance.now()), 250);
+// Ticks only while a countdown shows (a seat away, the resume countdown): otherwise it would
+// re-render the overlay four times a second for the whole match.
+const timer = setInterval(() => {
+  if (props.controller.pauses.value.length > 0 || props.controller.resumeAt.value !== null)
+    now.value = performance.now();
+}, 250);
 
 // The result waits until the ending (a crush, the winning move) has been seen.
 const revealed = ref(false);
