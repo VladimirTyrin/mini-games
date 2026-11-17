@@ -7,6 +7,12 @@ const CARRIED_BOX_ROWS = 1;
 const FLOOR_ROWS = 0.35;
 
 /**
+ * Where the field stands in spare height: on the bottom edge where touch controls sit under it
+ * (the worker stays near the thumbs), in the middle on a big screen played with keys.
+ */
+export type VerticalAnchor = "bottom" | "middle";
+
+/**
  * Where game cells land on the canvas. Game rows count from the floor (y = 0) upwards; above the
  * field sits the row of boxes carried by cranes (y = fieldHeight) and above that the crane rail.
  */
@@ -19,18 +25,20 @@ export class StackAttackLayout implements ParticleProjection {
     readonly fieldHeight: number,
   ) {}
 
-  /**
-   * Largest whole-pixel cells that fit, centred horizontally and standing on the bottom edge: on a
-   * tall phone screen the spare height goes above the cranes, keeping the worker near the controls.
-   */
-  static fit(canvas: CanvasSize, fieldWidth: number, fieldHeight: number): StackAttackLayout {
+  /** Largest whole-pixel cells that fit, centred horizontally, standing as `anchor` says. */
+  static fit(
+    canvas: CanvasSize,
+    fieldWidth: number,
+    fieldHeight: number,
+    anchor: VerticalAnchor,
+  ): StackAttackLayout {
     const rows = CRANE_RAIL_ROWS + CARRIED_BOX_ROWS + fieldHeight + FLOOR_ROWS;
     const fit = Math.min(canvas.width / fieldWidth, canvas.height / rows);
     const cellSize = fit >= 1 ? Math.floor(fit) : fit;
     return new StackAttackLayout(
       cellSize,
       Math.floor((canvas.width - cellSize * fieldWidth) / 2),
-      Math.floor(canvas.height - cellSize * rows),
+      Math.floor((canvas.height - cellSize * rows) / (anchor === "bottom" ? 1 : 2)),
       fieldWidth,
       fieldHeight,
     );

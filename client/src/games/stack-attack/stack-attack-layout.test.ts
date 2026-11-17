@@ -3,13 +3,19 @@ import { describe, expect, it } from "vitest";
 import { CRANE_RAIL_ROWS, StackAttackLayout } from "./stack-attack-layout";
 
 describe("StackAttackLayout", () => {
-  const layout = StackAttackLayout.fit({ width: 400, height: 900 }, 10, 12);
+  const layout = StackAttackLayout.fit({ width: 400, height: 900 }, 10, 12, "bottom");
 
   it("fits whole-pixel cells to the narrower dimension, centred and standing on the bottom", () => {
     expect(layout.cellSize).toBe(40);
     expect(layout.originX).toBe(0);
     expect(layout.originY).toBeGreaterThan(0);
     expect(layout.bottomY).toBeCloseTo(900, 0);
+  });
+
+  it("stands in the middle of spare height on a big screen", () => {
+    const middle = StackAttackLayout.fit({ width: 400, height: 900 }, 10, 12, "middle");
+    expect(middle.cellSize).toBe(40);
+    expect(middle.originY).toBeCloseTo(900 - middle.bottomY, 0);
   });
 
   it("puts row 0 on the floor and the carried boxes right above the ceiling", () => {

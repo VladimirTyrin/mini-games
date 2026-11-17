@@ -3,11 +3,12 @@ import {
   StackAttackCraneState,
   StackAttackWorkerStatus,
 } from "@/proto/minigames/v2/stack_attack_pb";
+import { prefersTouch } from "@/input/prefers-touch";
 import { lerp } from "@/render/tick-progress";
 import type { CanvasSize } from "@/render/use-canvas";
 
 import { drawBox } from "./box-sprite";
-import { StackAttackLayout } from "./stack-attack-layout";
+import { StackAttackLayout, type VerticalAnchor } from "./stack-attack-layout";
 import type { StackAttackTransition } from "./stack-attack-transition";
 import type { WorkerAnimator } from "./worker-animator";
 import { WORKER_DRAWN_HEIGHT_CELLS } from "./worker-dimensions";
@@ -41,6 +42,9 @@ interface Painter {
   readonly frame: StackAttackFrame;
 }
 
+/** Touch screens keep the field above their controls; see `VerticalAnchor`. */
+const FIELD_ANCHOR: VerticalAnchor = prefersTouch() ? "bottom" : "middle";
+
 export function drawStackAttackScene(
   context: CanvasRenderingContext2D,
   canvas: CanvasSize,
@@ -49,7 +53,7 @@ export function drawStackAttackScene(
   context.clearRect(0, 0, canvas.width, canvas.height);
   const { view } = frame.transition;
   if (view.fieldWidth <= 0 || view.fieldHeight <= 0) return;
-  const layout = StackAttackLayout.fit(canvas, view.fieldWidth, view.fieldHeight);
+  const layout = StackAttackLayout.fit(canvas, view.fieldWidth, view.fieldHeight, FIELD_ANCHOR);
   const painter: Painter = { context, layout, frame };
 
   context.save();

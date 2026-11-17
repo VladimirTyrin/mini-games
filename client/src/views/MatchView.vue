@@ -232,7 +232,10 @@ function again(): void {
     @confirm="leave"
     @cancel="confirmingLeave = false"
   />
-  <main v-if="controller && plugin" class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3">
+  <main
+    v-if="controller && plugin"
+    class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3 xl:max-w-6xl 2xl:max-w-7xl"
+  >
     <div class="relative flex min-h-0 flex-1 flex-col">
       <component :is="plugin.Board" :key="boardKey" :controller="controller" class="min-h-0 flex-1" />
       <div
