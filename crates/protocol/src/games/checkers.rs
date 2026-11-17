@@ -1,11 +1,12 @@
 use mg_checkers::{
-    BotKind, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, Path,
-    PlacedPiece, RawSettings, Side, Square, View, WhitePlayer, WinReason, WorldEvent,
+    BotKind, CaptureRule, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove,
+    Path, PlacedPiece, RawSettings, Side, Square, View, WhitePlayer, WinReason, WorldEvent,
 };
 
 use crate::proto::{
-    CheckersBotKind, CheckersEndReason, CheckersSide, CheckersWhitePlayer, checkers_command,
-    checkers_world_event, game_command, game_settings, game_view, game_world_event,
+    CheckersBotKind, CheckersCaptureRule, CheckersEndReason, CheckersSide, CheckersWhitePlayer,
+    checkers_command, checkers_world_event, game_command, game_settings, game_view,
+    game_world_event,
 };
 use crate::{WireBots, WireError, WireGame, proto, slot_from_wire, slot_to_wire};
 
@@ -26,7 +27,18 @@ impl WireGame for Checkers {
             }
             Err(_) => return Err(WireError::UnknownEnumValue("white_player")),
         };
-        Ok(RawSettings { white_player })
+        let capture_rule = match CheckersCaptureRule::try_from(settings.capture_rule) {
+            // Unset in settings and replays from before the rule existed.
+            Ok(CheckersCaptureRule::Unspecified | CheckersCaptureRule::ToTheEnd) => {
+                CaptureRule::ToTheEnd
+            }
+            Ok(CheckersCaptureRule::MayStop) => CaptureRule::MayStop,
+            Err(_) => return Err(WireError::UnknownEnumValue("capture_rule")),
+        };
+        Ok(RawSettings {
+            white_player,
+            capture_rule,
+        })
     }
 
     fn settings_to_wire(settings: &RawSettings) -> proto::GameSettings {
@@ -35,9 +47,14 @@ impl WireGame for Checkers {
             WhitePlayer::Host => CheckersWhitePlayer::Host,
             WhitePlayer::Guest => CheckersWhitePlayer::Guest,
         };
+        let capture_rule = match settings.capture_rule {
+            CaptureRule::ToTheEnd => CheckersCaptureRule::ToTheEnd,
+            CaptureRule::MayStop => CheckersCaptureRule::MayStop,
+        };
         proto::GameSettings {
             game: Some(game_settings::Game::Checkers(proto::CheckersSettings {
                 white_player: white_player.into(),
+                capture_rule: capture_rule.into(),
             })),
         }
     }

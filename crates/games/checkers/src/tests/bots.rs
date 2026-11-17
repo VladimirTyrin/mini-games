@@ -1,6 +1,9 @@
 use mg_core::{Budget, CoreRng, Game, HasBots, PlayerSpec, Slot};
 
-use crate::{BotKind, Checkers, Command, GameEnd, Path, Rank, Settings, Side, Square, WhitePlayer};
+use crate::{
+    BotKind, CaptureRule, Checkers, Command, GameEnd, Path, Rank, Settings, Side, Square,
+    WhitePlayer,
+};
 
 const HOST: Slot = Slot::new(0);
 /// Small enough for debug builds; the strength gap shows already.
@@ -11,6 +14,7 @@ fn play(white: BotKind, black: BotKind, seed: u64) -> GameEnd {
     let mut game = Checkers::new(
         &Settings {
             white_player: WhitePlayer::Host,
+            capture_rule: CaptureRule::ToTheEnd,
         },
         &[PlayerSpec::BOT; 2],
     )

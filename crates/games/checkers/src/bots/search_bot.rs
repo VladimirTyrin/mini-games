@@ -6,6 +6,7 @@ use crate::game::Checkers;
 use crate::io::Command;
 use crate::model::{Board, Side};
 use crate::rules::{LegalMove, apply_move, legal_moves, position_key};
+use crate::settings::CaptureRule;
 
 /// Beats any evaluation: the side to move cannot move (no pieces or all blocked). A loss found
 /// `ply` plies from the root scores `LOSS + ply`, so the losing side holds out longest and the
@@ -52,6 +53,7 @@ impl Bot<Checkers> for SearchBot {
         }
         let mut search = Search {
             budget,
+            rule: game.capture_rule(),
             table: match self.memory {
                 SearchMemory::None => None,
                 SearchMemory::TranspositionTable => Some(TranspositionTable::new()),
@@ -71,6 +73,7 @@ impl Bot<Checkers> for SearchBot {
 
 struct Search<'budget> {
     budget: &'budget mut Budget,
+    rule: CaptureRule,
     table: Option<TranspositionTable>,
 }
 
@@ -139,7 +142,7 @@ impl Search<'_> {
             }
         }
 
-        let moves = legal_moves(board, side);
+        let moves = legal_moves(board, side, self.rule);
         if moves.is_empty() {
             return Ok(LOSS + i32::from(ply));
         }

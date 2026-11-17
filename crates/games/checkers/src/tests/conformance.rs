@@ -3,7 +3,9 @@ use std::cell::Cell;
 use mg_core::conformance::{self, Conformance, Setup};
 use mg_core::{BotSeat, CoreRng, Game, HasBots, PlayerSpec, Slot, Viewer};
 
-use crate::{BotKind, Checkers, Command, GameEnd, Path, RawSettings, Side, Square, WhitePlayer};
+use crate::{
+    BotKind, CaptureRule, Checkers, Command, GameEnd, Path, RawSettings, Side, Square, WhitePlayer,
+};
 
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
 const BOT: PlayerSpec = PlayerSpec::BOT;
@@ -22,7 +24,23 @@ fn with_bot_plan(plan: [BotKind; 2], run: impl FnOnce()) {
 }
 
 fn setup(white_player: WhitePlayer, players: [PlayerSpec; 2]) -> Setup<Checkers> {
-    Setup::new(RawSettings { white_player }, players.to_vec())
+    Setup::new(
+        RawSettings {
+            white_player,
+            capture_rule: CaptureRule::ToTheEnd,
+        },
+        players.to_vec(),
+    )
+}
+
+fn may_stop(white_player: WhitePlayer, players: [PlayerSpec; 2]) -> Setup<Checkers> {
+    Setup::new(
+        RawSettings {
+            white_player,
+            capture_rule: CaptureRule::MayStop,
+        },
+        players.to_vec(),
+    )
 }
 
 impl Conformance for Checkers {
@@ -36,6 +54,8 @@ impl Conformance for Checkers {
             setup(Host, [BOT, HUMAN]),
             setup(Random, [BOT, BOT]),
             setup(Guest, [BOT, BOT]),
+            may_stop(Random, [HUMAN, BOT]),
+            may_stop(Host, [BOT, BOT]),
         ]
     }
 

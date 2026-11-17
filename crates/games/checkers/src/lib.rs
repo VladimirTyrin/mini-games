@@ -29,7 +29,7 @@ pub use model::{Path, Piece, PieceId, Rank, Side, Square};
 pub use rules::{
     DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, REPETITIONS_FOR_DRAW, WinReason,
 };
-pub use settings::{PLAYERS, RawSettings, Settings, WhitePlayer};
+pub use settings::{CaptureRule, PLAYERS, RawSettings, Settings, WhitePlayer};
 pub use view::{PlacedPiece, View};
 
 #[cfg(test)]

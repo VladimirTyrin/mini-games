@@ -1,11 +1,13 @@
 use mg_core::{GameSettings, SettingRange, SettingsError};
 
-use crate::settings::{RawSettings, WhitePlayer};
+use crate::settings::{CaptureRule, RawSettings, WhitePlayer};
 
-/// The board and the rules are fixed (Russian draughts); only who plays white is chosen.
+/// Russian draughts on a fixed board; who plays white and whether a capture must go on to the
+/// end are chosen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Settings {
     pub white_player: WhitePlayer,
+    pub capture_rule: CaptureRule,
 }
 
 /// Seats at the board.
@@ -17,12 +19,14 @@ impl GameSettings for Settings {
     fn parse(raw: RawSettings) -> Result<Self, SettingsError> {
         Ok(Self {
             white_player: raw.white_player,
+            capture_rule: raw.capture_rule,
         })
     }
 
     fn to_raw(&self) -> RawSettings {
         RawSettings {
             white_player: self.white_player,
+            capture_rule: self.capture_rule,
         }
     }
 

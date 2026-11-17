@@ -1,5 +1,6 @@
 use mg_checkers::{
-    BotKind, Checkers, Command, Path, RawSettings, Settings, Square, WhitePlayer, WorldEvent,
+    BotKind, CaptureRule, Checkers, Command, Path, RawSettings, Settings, Square, WhitePlayer,
+    WorldEvent,
 };
 use mg_core::{
     Authority, Awaiting, BotSeat, Game, GameSettings, HasBots, Match, PlayerSpec, Slot, Viewer,
@@ -31,10 +32,31 @@ fn checkers_view(view: &mg_checkers::View) -> proto::CheckersView {
 #[test]
 fn settings_round_trip() {
     for white_player in [WhitePlayer::Random, WhitePlayer::Host, WhitePlayer::Guest] {
-        let original = RawSettings { white_player };
-        let wire = Checkers::settings_to_wire(&original);
-        assert_eq!(Checkers::settings_from_wire(&wire), Ok(original));
+        for capture_rule in [CaptureRule::ToTheEnd, CaptureRule::MayStop] {
+            let original = RawSettings {
+                white_player,
+                capture_rule,
+            };
+            let wire = Checkers::settings_to_wire(&original);
+            assert_eq!(Checkers::settings_from_wire(&wire), Ok(original));
+        }
     }
+}
+
+#[test]
+fn settings_from_before_the_capture_rule_play_to_the_end() {
+    let wire = proto::GameSettings {
+        game: Some(proto::game_settings::Game::Checkers(
+            proto::CheckersSettings {
+                white_player: proto::CheckersWhitePlayer::Host.into(),
+                capture_rule: 0,
+            },
+        )),
+    };
+    assert_eq!(
+        Checkers::settings_from_wire(&wire).map(|raw| raw.capture_rule),
+        Ok(CaptureRule::ToTheEnd)
+    );
 }
 
 #[test]
@@ -89,6 +111,7 @@ fn unknown_or_missing_white_player_is_rejected() {
             game: Some(proto::game_settings::Game::Checkers(
                 proto::CheckersSettings {
                     white_player: value,
+                    capture_rule: 0,
                 },
             )),
         };
@@ -101,6 +124,7 @@ fn view_carries_pieces_players_and_moves() {
     let game = Checkers::new(
         &Settings {
             white_player: WhitePlayer::Host,
+            capture_rule: CaptureRule::ToTheEnd,
         },
         &[PlayerSpec::HUMAN; 2],
     )
@@ -121,7 +145,10 @@ fn view_carries_pieces_players_and_moves() {
 /// Every sealed frame goes through the wire (binary protobuf, and protobuf JSON with the `json`
 /// feature) before a `Match` applies it, like on a real client.
 fn mirror_through_the_wire(white_player: WhitePlayer, players: [PlayerSpec; 2], seed: u64) {
-    let raw = RawSettings { white_player };
+    let raw = RawSettings {
+        white_player,
+        capture_rule: CaptureRule::ToTheEnd,
+    };
     let settings = Settings::parse(raw).unwrap();
     let wire_settings = Checkers::settings_to_wire(&raw);
     let bots = Slot::all(2)

@@ -2,17 +2,19 @@
 //! necessarily the longest). Captured pieces stay on the board until the move is over: they
 //! block, and none can be jumped twice. A man that reaches the far row while capturing goes on
 //! as a king. A king may land on any empty square beyond the piece it jumps, but must land
-//! where it can capture again when there is such a square.
+//! where it can capture again when there is such a square. Under [`CaptureRule::MayStop`] the
+//! move may also end after any jump, and the king may land anywhere beyond.
 
 use crate::model::{Board, Direction, Path, Rank, Side, Square};
 use crate::rules::LegalMove;
+use crate::settings::CaptureRule;
 
 /// Every legal move of `side`, in a fixed order (squares a1 first, then directions).
-pub(crate) fn legal_moves(board: &Board, side: Side) -> Vec<LegalMove> {
+pub(crate) fn legal_moves(board: &Board, side: Side, rule: CaptureRule) -> Vec<LegalMove> {
     let mut captures = Vec::new();
     for (square, piece) in board.pieces() {
         if piece.side == side {
-            CaptureSearch::new(board, side, square).collect(piece.rank, &mut captures);
+            CaptureSearch::new(board, side, square, rule).collect(piece.rank, &mut captures);
         }
     }
     if !captures.is_empty() {
@@ -63,14 +65,16 @@ struct CaptureSearch<'board> {
     side: Side,
     /// The moving piece has left it: it counts as empty during the move.
     origin: Square,
+    rule: CaptureRule,
 }
 
 impl<'board> CaptureSearch<'board> {
-    fn new(board: &'board Board, side: Side, origin: Square) -> Self {
+    fn new(board: &'board Board, side: Side, origin: Square, rule: CaptureRule) -> Self {
         Self {
             board,
             side,
             origin,
+            rule,
         }
     }
 
@@ -140,17 +144,16 @@ impl<'board> CaptureSearch<'board> {
         out: &mut Vec<LegalMove>,
     ) {
         let jumps = self.jumps(from, rank, captured);
-        if jumps.is_empty() {
-            if !captured.is_empty()
-                && let Some(complete) = Path::new(path.clone())
-            {
-                out.push(LegalMove {
-                    path: complete,
-                    captured: captured.clone(),
-                    crowns: start_rank == Rank::Man && rank == Rank::King,
-                });
-            }
-            return;
+        let may_end_here = jumps.is_empty() || self.rule == CaptureRule::MayStop;
+        if may_end_here
+            && !captured.is_empty()
+            && let Some(complete) = Path::new(path.clone())
+        {
+            out.push(LegalMove {
+                path: complete,
+                captured: captured.clone(),
+                crowns: start_rank == Rank::Man && rank == Rank::King,
+            });
         }
         for jump in jumps {
             captured.push(jump.victim);
@@ -163,8 +166,8 @@ impl<'board> CaptureSearch<'board> {
                     !self.jumps(*landing, next, captured).is_empty()
                 })
                 .collect();
-            // Where the capture can go on, it must.
-            let landings = if continuing.is_empty() {
+            // Where the capture can go on, it must (unless it may stop anywhere).
+            let landings = if continuing.is_empty() || self.rule == CaptureRule::MayStop {
                 jump.landings
             } else {
                 continuing

@@ -15,9 +15,19 @@ enum CheckersWhitePlayer {
   CHECKERS_WHITE_PLAYER_GUEST = 3;
 }
 
-// Russian draughts; the rules are fixed, only who plays white is chosen.
+enum CheckersCaptureRule {
+  // Read as TO_THE_END: settings and replays from before the rule existed.
+  CHECKERS_CAPTURE_RULE_UNSPECIFIED = 0;
+  // Russian draughts: a capture goes on while it can; a king lands where it can capture again.
+  CHECKERS_CAPTURE_RULE_TO_THE_END = 1;
+  // House rule: the move may end after any jump; a king may land anywhere beyond the piece.
+  CHECKERS_CAPTURE_RULE_MAY_STOP = 2;
+}
+
+// Russian draughts; who plays white and the capture rule are chosen.
 message CheckersSettings {
   CheckersWhitePlayer white_player = 1;
+  CheckersCaptureRule capture_rule = 2;
 }
 
 // A whole move: the start square, then every square the piece lands on (one per captured piece

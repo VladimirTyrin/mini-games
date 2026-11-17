@@ -1,8 +1,8 @@
 use mg_core::{Awaiting, CommandError, Game, PlayerSpec, Slot};
 
 use crate::{
-    Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, Path, Rank, Settings, Side,
-    Square, WhitePlayer, WinReason, WorldEvent,
+    CaptureRule, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, Path, Rank, Settings,
+    Side, Square, WhitePlayer, WinReason, WorldEvent,
 };
 
 const HOST: Slot = Slot::new(0);
@@ -45,6 +45,7 @@ fn white_starts_with_seven_moves_and_twelve_men_a_side() {
     let game = Checkers::new(
         &Settings {
             white_player: WhitePlayer::Host,
+            capture_rule: CaptureRule::ToTheEnd,
         },
         &[PlayerSpec::HUMAN; 2],
     )
@@ -308,4 +309,81 @@ fn only_the_side_to_move_moves() {
     let refused = game.apply_command(GUEST, &mv(&["f8", "e7"]));
 
     assert_eq!(refused, Err(CommandError::NotYourTurn));
+}
+
+#[test]
+fn a_capture_must_go_on_to_the_end_by_default() {
+    let game = position(
+        &[("c3", White, Man), ("d4", Black, Man), ("f6", Black, Man)],
+        White,
+    );
+
+    assert_eq!(paths(&game), vec![path(&["c3", "e5", "g7"])]);
+}
+
+#[test]
+fn under_the_house_rule_a_capture_may_stop_after_any_jump() {
+    let game = position(
+        &[("c3", White, Man), ("d4", Black, Man), ("f6", Black, Man)],
+        White,
+    )
+    .with_capture_rule(CaptureRule::MayStop);
+
+    assert_eq!(
+        paths(&game),
+        vec![path(&["c3", "e5"]), path(&["c3", "e5", "g7"])]
+    );
+}
+
+#[test]
+fn a_king_lands_where_it_can_go_on_by_default_anywhere_under_the_house_rule() {
+    let pieces = [("a1", White, King), ("b2", Black, Man), ("f2", Black, Man)];
+
+    let strict = position(&pieces, White);
+    assert_eq!(paths(&strict), vec![path(&["a1", "d4", "g1"])]);
+
+    let free = position(&pieces, White).with_capture_rule(CaptureRule::MayStop);
+    let mut moves = paths(&free);
+    moves.sort_by_key(|moved| {
+        moved
+            .squares()
+            .iter()
+            .map(|square| square.index())
+            .collect::<Vec<_>>()
+    });
+    let mut expected = vec![
+        path(&["a1", "c3"]),
+        path(&["a1", "d4"]),
+        path(&["a1", "d4", "g1"]),
+        path(&["a1", "e5"]),
+        path(&["a1", "f6"]),
+        path(&["a1", "g7"]),
+        path(&["a1", "h8"]),
+    ];
+    expected.sort_by_key(|moved| {
+        moved
+            .squares()
+            .iter()
+            .map(|square| square.index())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(moves, expected);
+}
+
+#[test]
+fn stopping_early_under_the_house_rule_takes_only_the_jumped_pieces() {
+    let mut game = position(
+        &[("c3", White, Man), ("d4", Black, Man), ("f6", Black, Man)],
+        White,
+    )
+    .with_capture_rule(CaptureRule::MayStop);
+
+    game.apply_command(HOST, &mv(&["c3", "e5"])).unwrap();
+
+    assert!(game.board().at(sq("d4")).is_none());
+    assert!(game.board().at(sq("f6")).is_some());
+    assert_eq!(
+        game.board().at(sq("e5")).map(|piece| piece.side),
+        Some(White)
+    );
 }

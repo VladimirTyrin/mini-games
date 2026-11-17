@@ -11,7 +11,7 @@ use crate::rules::{
     DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, REPETITIONS_FOR_DRAW, WinReason,
     apply_move, legal_moves, position_key,
 };
-use crate::settings::{PLAYERS, Settings, WhitePlayer};
+use crate::settings::{CaptureRule, PLAYERS, Settings, WhitePlayer};
 use crate::view::{PlacedPiece, View};
 
 const HOST: Slot = Slot::new(0);
@@ -26,6 +26,7 @@ fn other_seat(slot: Slot) -> Slot {
 pub struct Checkers {
     board: Board,
     white_mode: WhitePlayer,
+    capture_rule: CaptureRule,
     /// `None` until drawn by lot.
     white_player: Option<Slot>,
     to_move: Side,
@@ -62,6 +63,7 @@ impl Checkers {
         Self {
             board,
             white_mode: WhitePlayer::Host,
+            capture_rule: CaptureRule::ToTheEnd,
             white_player: Some(HOST),
             to_move,
             king_moves,
@@ -69,6 +71,16 @@ impl Checkers {
             last_move: None,
             end: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_capture_rule(mut self, rule: CaptureRule) -> Self {
+        self.capture_rule = rule;
+        self
+    }
+
+    pub(crate) fn capture_rule(&self) -> CaptureRule {
+        self.capture_rule
     }
 
     pub(crate) fn board(&self) -> &Board {
@@ -108,7 +120,7 @@ impl Checkers {
         if self.end.is_some() {
             return Vec::new();
         }
-        legal_moves(&self.board, self.to_move)
+        legal_moves(&self.board, self.to_move, self.capture_rule)
     }
 
     /// Plays a move known to be legal: the bots search with this.
@@ -149,7 +161,7 @@ impl Checkers {
                 reason: WinReason::NoPieces,
             });
         }
-        if legal_moves(&self.board, loser).is_empty() {
+        if legal_moves(&self.board, loser, self.capture_rule).is_empty() {
             return Some(GameEnd::Win {
                 winner,
                 reason: WinReason::NoMoves,
@@ -193,6 +205,7 @@ impl Game for Checkers {
         Ok(Self {
             board,
             white_mode: settings.white_player,
+            capture_rule: settings.capture_rule,
             white_player,
             to_move: Side::White,
             king_moves: 0,
@@ -217,7 +230,7 @@ impl Game for Checkers {
             return Err(CommandError::NotYourTurn);
         }
         let Command::Move(path) = command;
-        let moves = legal_moves(&self.board, self.to_move);
+        let moves = legal_moves(&self.board, self.to_move, self.capture_rule);
         let Some(chosen) = moves.iter().find(|candidate| &candidate.path == path) else {
             let must_capture = moves.iter().any(|candidate| !candidate.captured.is_empty());
             return Err(CommandError::Illegal(if must_capture {
@@ -317,6 +330,11 @@ impl Game for Checkers {
 
     fn hash_state(&self, hasher: &mut StateHasher) {
         hasher.u8(self.white_mode.code());
+        // Only the house rule is hashed: games under the default rule (all of them before it
+        // existed, replays included) keep the hashes they were recorded with.
+        if self.capture_rule == CaptureRule::MayStop {
+            hasher.u8(1);
+        }
         for square in Square::all() {
             match self.board.at(square) {
                 None => hasher.u8(0),
