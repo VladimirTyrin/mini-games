@@ -1,5 +1,10 @@
 import type { GamePlugin } from "../game-plugin";
-import { CheckersBotKind, CheckersEndReason, CheckersWhitePlayer } from "@/proto/minigames/v2/checkers_pb";
+import {
+  CheckersBotKind,
+  CheckersCaptureRule,
+  CheckersEndReason,
+  CheckersWhitePlayer,
+} from "@/proto/minigames/v2/checkers_pb";
 
 import Board from "./CheckersBoard.vue";
 import CheckersIcon from "./CheckersIcon.vue";
@@ -51,7 +56,11 @@ export const checkersPlugin: GamePlugin = {
   SettingsForm,
   Board,
   describeSettings(settings) {
-    return settings.game.case === "checkers" ? [whiteLabel(settings.game.value.whitePlayer)] : [];
+    if (settings.game.case !== "checkers") return [];
+    const { whitePlayer, captureRule } = settings.game.value;
+    return captureRule === CheckersCaptureRule.MAY_STOP
+      ? [whiteLabel(whitePlayer), "captures may stop"]
+      : [whiteLabel(whitePlayer)];
   },
   botLabel(kind) {
     return kind.game.case === "checkers" ? (BOT_LABELS[kind.game.value] ?? "Bot") : "Bot";

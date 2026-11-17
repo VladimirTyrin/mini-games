@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import type { MatchController } from "@/match/match-controller";
-import { CheckersEndReason, CheckersSide } from "@/proto/minigames/v2/checkers_pb";
+import { type CheckersPiece, CheckersEndReason, CheckersSide } from "@/proto/minigames/v2/checkers_pb";
 import { useToastStore } from "@/stores/toasts";
 import { seatLabels } from "@/util/players";
 
-import { choosePath } from "./path-choice";
+import { canStopHere, choosePath } from "./path-choice";
 
 const props = defineProps<{ controller: MatchController }>();
 const names = seatLabels(props.controller.source.header);
@@ -64,6 +64,65 @@ const jumped = computed(() => {
   return new Set(steps > 0 && move ? move.captured.slice(0, steps) : []);
 });
 const lastMoveSquares = computed(() => new Set(view.value?.lastMove?.path ?? []));
+/** The house rule lets this capture end here although it could go on. */
+const stoppable = computed(() => myTurn.value && canStopHere(myPaths.value, selection.value));
+
+/** Per jump of a capture the opponent made, as it is played back. */
+const STEP_MS = 220;
+/** The opponent's piece walking its capture: where it stands for now. */
+const walk = ref<{ id: number; square: number } | null>(null);
+/** Pieces the walking piece has yet to jump: still shown until it has. */
+const ghosts = ref<CheckersPiece[]>([]);
+let walkTimers: ReturnType<typeof setTimeout>[] = [];
+
+function stopWalk(): void {
+  for (const timer of walkTimers) clearTimeout(timer);
+  walkTimers = [];
+  walk.value = null;
+  ghosts.value = [];
+}
+onBeforeUnmount(stopWalk);
+
+// Someone else's capture is played back jump by jump (a plain move just slides); the player's own
+// was already walked while it was picked. Set before the new position is drawn, so the piece
+// starts from where it was.
+watch(view, (current, previous) => {
+  const move = current?.lastMove;
+  if (!previous || !move || move.path.join(",") === previous.lastMove?.path.join(",")) return;
+  stopWalk();
+  const path = move.path;
+  const mover = current.pieces.find((piece) => piece.square === path.at(-1));
+  if (!mover || mover.side === mySide.value || (path.length <= 2 && move.captured.length === 0)) return;
+  ghosts.value = move.captured.flatMap((square) =>
+    previous.pieces.filter((piece) => piece.square === square),
+  );
+  walk.value = { id: mover.id, square: path[1] ?? mover.square };
+  for (let step = 1; step < path.length; step += 1) {
+    walkTimers.push(
+      setTimeout(() => {
+        const jumpedSquare = move.captured[step - 1];
+        ghosts.value = ghosts.value.filter((piece) => piece.square !== jumpedSquare);
+        const next = path[step + 1];
+        walk.value = next === undefined ? null : { id: mover.id, square: next };
+      }, step * STEP_MS),
+    );
+  }
+});
+
+/** In id order: a piece keeps its place among the elements, so moving it is a transition. */
+const shownPieces = computed(() =>
+  [...(view.value?.pieces ?? []), ...ghosts.value].sort((first, second) => first.id - second.id),
+);
+
+/** Centres of the last move's squares, for its trail over the board (in eighths). */
+const lastMoveTrail = computed(() =>
+  (view.value?.lastMove?.path ?? [])
+    .map((square) => {
+      const { column, row } = screenCell(square);
+      return `${column + 0.5},${row + 0.5}`;
+    })
+    .join(" "),
+);
 
 interface Cell {
   square: number;
@@ -86,16 +145,23 @@ function boardCoordinates(row: number, column: number): { x: number; y: number }
   return flipped.value ? { x: 7 - column, y: row } : { x: column, y: 7 - row };
 }
 
-/** A piece being moved stands on the last square picked for it, so a capture is walked visibly. */
-function shownSquare(square: number): number {
-  return square === selection.value[0] ? (selection.value.at(-1) ?? square) : square;
+/**
+ * Where a piece is drawn: a piece being moved stands on the last square picked for it, and the
+ * opponent's capturing piece where its playback has got to.
+ */
+function shownSquare(piece: CheckersPiece): number {
+  if (walk.value?.id === piece.id) return walk.value.square;
+  return piece.square === selection.value[0] ? (selection.value.at(-1) ?? piece.square) : piece.square;
+}
+
+function screenCell(square: number): { column: number; row: number } {
+  const x = square % 8;
+  const y = Math.floor(square / 8);
+  return flipped.value ? { column: 7 - x, row: y } : { column: x, row: 7 - y };
 }
 
 function screenPosition(square: number): { left: string; top: string } {
-  const x = square % 8;
-  const y = Math.floor(square / 8);
-  const column = flipped.value ? 7 - x : x;
-  const row = flipped.value ? y : 7 - y;
+  const { column, row } = screenCell(square);
   return { left: `${column * 12.5}%`, top: `${row * 12.5}%` };
 }
 
@@ -130,8 +196,8 @@ async function submit(path: number[]): Promise<void> {
 
 function squareColor(cell: Cell): string {
   if (!cell.dark) return "bg-[#ecd9b8]";
-  if (selection.value.includes(cell.square)) return "bg-[#b0893a]";
-  if (lastMoveSquares.value.has(cell.square)) return "bg-[#a8743f]";
+  if (selection.value.includes(cell.square)) return "bg-[#5f7f35]";
+  if (lastMoveSquares.value.has(cell.square)) return "bg-[#b7791f]";
   return "bg-[#8b5a3c]";
 }
 
@@ -189,14 +255,30 @@ const status = computed(() => {
           />
         </button>
       </div>
+      <svg
+        v-if="view.lastMove"
+        viewBox="0 0 8 8"
+        class="pointer-events-none absolute inset-0 h-full w-full"
+        aria-hidden="true"
+      >
+        <polyline
+          :points="lastMoveTrail"
+          fill="none"
+          stroke="#fcd34d"
+          stroke-opacity="0.75"
+          stroke-width="0.12"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
       <!-- Pieces are drawn over the squares, keyed by id, so a move slides instead of jumping; the
            squares underneath take the taps. -->
       <TransitionGroup name="checkers-piece" tag="div" class="pointer-events-none absolute inset-0">
         <div
-          v-for="piece in view.pieces"
+          v-for="piece in shownPieces"
           :key="piece.id"
           class="checkers-piece absolute h-[12.5%] w-[12.5%]"
-          :style="screenPosition(shownSquare(piece.square))"
+          :style="screenPosition(shownSquare(piece))"
         >
           <div
             class="absolute inset-[9%] flex items-center justify-center rounded-full border-2 shadow-md"
@@ -226,7 +308,16 @@ const status = computed(() => {
         </div>
       </TransitionGroup>
     </div>
-    <p v-if="mustCapture" class="text-sm text-amber-300">You must capture</p>
+    <button
+      v-if="stoppable"
+      type="button"
+      class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-emerald-500"
+      :disabled="sending"
+      @click="submit(selection)"
+    >
+      End the move here
+    </button>
+    <p v-else-if="mustCapture" class="text-sm text-amber-300">You must capture</p>
     <p v-else-if="view.kingMoves > 0 && !view.end" class="text-sm text-gray-400">
       Kings only: {{ view.kingMoves }} of {{ view.kingMovesForDraw }} moves to a draw
     </p>
@@ -236,8 +327,8 @@ const status = computed(() => {
 <style scoped>
 .checkers-piece {
   transition:
-    left 0.25s ease,
-    top 0.25s ease;
+    left 0.22s ease-out,
+    top 0.22s ease-out;
 }
 .checkers-piece-leave-active {
   transition: opacity 0.25s ease;

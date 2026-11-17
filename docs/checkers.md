@@ -1,7 +1,7 @@
 # Checkers
 
-Russian draughts (шашки) for two seats, in `crates/games/checkers`. The rules are fixed; the only
-setting is who plays white (the host, the guest, or drawn by lot when the match starts).
+Russian draughts (шашки) for two seats, in `crates/games/checkers`. Two settings: who plays white
+(the host, the guest, or drawn by lot when the match starts) and the capture rule (below).
 
 ## Board
 
@@ -22,6 +22,11 @@ white moves first. A player who plays black sees the board turned round.
   block the way (the Turkish strike).
 - A man that reaches the far row in the middle of a capture is crowned there and goes on capturing
   as a king.
+
+**Capture rule** (lobby setting). *To the end* (default) is the Russian rule above. *May stop*
+is a house rule: the move may end after any jump, and a king may land on any square beyond the
+piece it takes. Settings and replays from before the setting existed play to the end; only the
+house rule is hashed, so their recorded hashes still match.
 
 A move is sent as its whole path: the start square and every landing (at most 13 squares). The
 game checks it against the generated legal moves; nothing else is accepted.
@@ -55,4 +60,9 @@ advancement, the home row, the centre and the long diagonal.
 The board (`client/src/games/checkers/CheckersBoard.vue`) picks a move square by square from the
 legal moves in the view: tap a piece, then each landing; a tap on a later landing goes straight
 there when only one route reaches it (`path-choice.ts`). When only one piece can move it is picked
-already, so a forced capture is a single tap.
+already, so a forced capture is a single tap. Under *May stop* a capture that could go on waits on
+each landing; "End the move here" (or a tap on the piece where it stands) ends it.
+
+The last move is marked: its squares in amber and a trail through its landings. Pieces are drawn
+in id order, so a move slides; the opponent's capture is played back jump by jump, each taken piece
+staying until it is jumped.

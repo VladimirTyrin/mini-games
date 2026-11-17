@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { choosePath } from "./path-choice";
+import { canStopHere, choosePath } from "./path-choice";
 
 describe("choosePath", () => {
   const simple = [
@@ -59,6 +59,27 @@ describe("choosePath", () => {
     expect(choosePath(loop, [0, 18, 36, 18], 0)).toEqual({
       kind: "complete",
       selection: [0, 18, 36, 18, 0],
+    });
+  });
+
+  describe("under the house rule, where a capture may stop after any jump", () => {
+    const stoppable = [
+      [0, 18],
+      [0, 18, 36],
+    ];
+
+    it("waits on a landing the capture could go on from, and may end there", () => {
+      expect(choosePath(stoppable, [0], 18)).toEqual({ kind: "partial", selection: [0, 18] });
+      expect(canStopHere(stoppable, [0, 18])).toBe(true);
+      expect(choosePath(stoppable, [0, 18], 18)).toEqual({ kind: "complete", selection: [0, 18] });
+    });
+
+    it("goes on to the next landing", () => {
+      expect(choosePath(stoppable, [0, 18], 36)).toEqual({ kind: "complete", selection: [0, 18, 36] });
+    });
+
+    it("offers no stop where the capture must go on", () => {
+      expect(canStopHere([[0, 18, 36]], [0, 18])).toBe(false);
     });
   });
 });

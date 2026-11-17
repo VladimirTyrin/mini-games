@@ -3,7 +3,7 @@ import { computed } from "vue";
 
 import SegmentedField from "@/components/form/SegmentedField.vue";
 import { useGameSettingsForm } from "@/components/form/settings-form";
-import { CheckersWhitePlayer } from "@/proto/minigames/v2/checkers_pb";
+import { CheckersCaptureRule, CheckersWhitePlayer } from "@/proto/minigames/v2/checkers_pb";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 
 const settings = defineModel<GameSettings>({ required: true });
@@ -19,6 +19,11 @@ const whiteOptions = computed(() => {
     { value: CheckersWhitePlayer.RANDOM, label: "Random" },
   ];
 });
+
+const captureOptions = [
+  { value: CheckersCaptureRule.TO_THE_END, label: "To the end" },
+  { value: CheckersCaptureRule.MAY_STOP, label: "May stop" },
+];
 </script>
 
 <template>
@@ -30,6 +35,18 @@ const whiteOptions = computed(() => {
       :options="whiteOptions"
       :model-value="value.whitePlayer"
       @update:model-value="form.update({ whitePlayer: $event })"
+    />
+    <SegmentedField
+      label="Captures"
+      help="Russian rules take every piece a capture can reach"
+      stacked
+      :options="captureOptions"
+      :model-value="
+        value.captureRule === CheckersCaptureRule.MAY_STOP
+          ? CheckersCaptureRule.MAY_STOP
+          : CheckersCaptureRule.TO_THE_END
+      "
+      @update:model-value="form.update({ captureRule: $event })"
     />
   </div>
 </template>
