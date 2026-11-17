@@ -18,8 +18,11 @@ use crate::viewer::Viewer;
 /// Determinism contract (lockstep relies on it, the conformance suite checks it):
 /// * every state transition is a pure function of the state and its arguments: no clocks, no
 ///   global RNG, no `HashMap` iteration, no floats;
-/// * randomness exists only in [`Game::roll_world`], which runs on the authority; its result
-///   travels as `WorldEvent`s, so clients never need the seed;
+/// * randomness exists only in [`Game::roll_secret`] and [`Game::roll_world`], which run on the
+///   authority; their results travel as `WorldEvent`s, so clients never need the seed;
+/// * what only the authority may know (a hidden word, the fleets) lives in [`Game::Secret`],
+///   outside the game state: it is never hashed and reaches clients only as the events the game
+///   chooses to derive from it;
 /// * a rejected command or world event leaves the state untouched;
 /// * [`Game::hash_state`] covers every gameplay-relevant field in a fixed order.
 ///
@@ -29,6 +32,9 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     type Command: Clone + Debug + PartialEq + Send + Sync + 'static;
     type WorldEvent: Clone + Debug + PartialEq + Send + Sync + 'static;
     type View: Debug;
+    /// Held by the authority beside the game and never sent as it is. `()` for games that hide
+    /// nothing.
+    type Secret: Default + Clone + Debug + Send + 'static;
 
     const INFO: GameInfo;
 
@@ -57,8 +63,21 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
         Ok(next)
     }
 
+    /// Called by the authority once per frame, after the frame's commands and before
+    /// [`Game::roll_world`]: settles the secret (chooses it, answers what depends on it) and says
+    /// what everyone may learn of it, as events. They are applied before `roll_world` runs.
+    fn roll_secret(&self, _secret: &mut Self::Secret, _rng: &mut CoreRng) -> Vec<Self::WorldEvent> {
+        Vec::new()
+    }
+
     /// Called by the authority once per frame, after the frame's commands. May return nothing.
     fn roll_world(&self, rng: &mut CoreRng) -> Vec<Self::WorldEvent>;
+
+    /// Called by the authority once, in the frame the game finishes: what was hidden, as events
+    /// for everyone (replays included). `apply_world` must accept them on a finished game.
+    fn reveal(&self, _secret: &Self::Secret) -> Vec<Self::WorldEvent> {
+        Vec::new()
+    }
 
     fn apply_world(&mut self, event: &Self::WorldEvent) -> Result<(), CommandError>;
 

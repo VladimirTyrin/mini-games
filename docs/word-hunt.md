@@ -23,8 +23,17 @@ elsewhere in the word, grey not in it (repeated letters count only as often as t
 
 A guess must be a word of the right length in the language's alphabet and not tried before. Whether
 it is a real word is the client's check against the word list: the rules only need the letters, so
-replays never depend on a word list version, and the answer travels as a world event holding the
-word itself.
+replays never depend on a word list version.
+
+The word is the authority's secret (`HiddenWord`, see architecture.md). No client has it while
+the game runs, not even in a group game online:
+- the first frame says only that a word was chosen;
+- each guess is marked by the authority in the same frame;
+- the word itself is sent once the game is over, as an event holding the word, so replays show
+  it.
+
+Replays recorded before the word was kept secret carried the word at the start; they are no
+longer accepted.
 
 ## Bots
 
@@ -40,5 +49,4 @@ client loads when the game starts (cached by the service worker, updated with th
 
 ## Compatibility
 
-Single-player state hashes are unchanged since group play arrived (the seat, turn and authors are
-hashed only for groups); `single_player_hash_matches_the_version_before_group_play` pins it.
+Since the word became a secret, replays from before it are refused; hashes changed with it.

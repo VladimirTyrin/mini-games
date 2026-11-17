@@ -2,10 +2,11 @@ use mg_core::{
     Authority, CommandError, Game, GameSettings, OutcomeKind, PlayerSpec, Slot, Status, Viewer,
 };
 
+use super::table::Table;
 use crate::model::Answers;
 use crate::{
-    Command, DayNumber, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings, Settings,
-    Word, WordError, WordHunt, WordLength, WorldEvent,
+    Command, DayNumber, HiddenWord, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings,
+    Settings, Word, WordError, WordHunt, WordLength, WorldEvent,
 };
 
 const PLAYER: Slot = Slot::new(0);
@@ -22,20 +23,17 @@ fn settings(language: Language, word_length: u32, hard_mode: bool) -> Settings {
 }
 
 /// A started game whose answer is `answer`.
-fn game_with_answer(answer: &str, language: Language, hard_mode: bool) -> WordHunt {
+fn game_with_answer(answer: &str, language: Language, hard_mode: bool) -> Table {
     let length = u32::try_from(answer.chars().count()).unwrap();
-    let mut game =
-        WordHunt::new(&settings(language, length, hard_mode), &[PlayerSpec::HUMAN]).unwrap();
-    game.apply_world(&WorldEvent::AnswerChosen(answer.into()))
-        .unwrap();
-    game
+    let game = WordHunt::new(&settings(language, length, hard_mode), &[PlayerSpec::HUMAN]).unwrap();
+    Table::new(game, answer)
 }
 
-fn guess(game: &mut WordHunt, text: &str) -> Result<(), CommandError> {
-    game.apply_command(PLAYER, &Command::Guess(text.into()))
+fn guess(game: &mut Table, text: &str) -> Result<(), CommandError> {
+    game.command(PLAYER, &Command::Guess(text.into()))
 }
 
-fn last_marks(game: &WordHunt) -> Vec<LetterMark> {
+fn last_marks(game: &Table) -> Vec<LetterMark> {
     game.view(Viewer::Player(PLAYER))
         .guesses
         .last()
@@ -230,14 +228,64 @@ fn keyboard_shows_each_guessed_letters_best_mark() {
 #[test]
 fn guesses_wait_for_the_answer() {
     let mut game = WordHunt::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
-    // Nobody's turn until the answer is chosen.
-    assert_eq!(guess(&mut game, "crane"), Err(CommandError::NotYourTurn));
-    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
-        .unwrap();
-    assert!(
-        game.apply_world(&WorldEvent::AnswerChosen("plumb".into()))
-            .is_err()
+    assert_eq!(
+        game.apply_command(PLAYER, &Command::Guess("crane".into())),
+        Err(CommandError::Illegal("the word is not chosen yet"))
     );
+    game.apply_world(&WorldEvent::WordChosen).unwrap();
+    assert!(game.apply_world(&WorldEvent::WordChosen).is_err());
+}
+
+#[test]
+fn a_guess_waits_for_its_marks() {
+    let mut game = WordHunt::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
+    game.apply_world(&WorldEvent::WordChosen).unwrap();
+    game.apply_command(PLAYER, &Command::Guess("plumb".into()))
+        .unwrap();
+    assert_eq!(game.awaiting(), mg_core::Awaiting::Nobody);
+    assert_eq!(
+        game.apply_command(PLAYER, &Command::Guess("fight".into())),
+        Err(CommandError::Illegal("the last guess is not marked yet"))
+    );
+    assert!(
+        game.apply_world(&WorldEvent::GuessMarked(vec![Absent; 4]))
+            .is_err(),
+        "marks that do not fit the guess"
+    );
+    game.apply_world(&WorldEvent::GuessMarked(vec![Absent; 5]))
+        .unwrap();
+    assert_eq!(game.awaiting(), mg_core::Awaiting::Turn(PLAYER));
+    assert_eq!(game.view(Viewer::Spectator).guesses.len(), 1);
+}
+
+/// The word reaches the players only at the end: the frames before carry the marks, never the
+/// word, and the view does not show it.
+#[test]
+fn the_word_is_sent_only_once_the_game_is_over() {
+    let settings = settings(Language::English, 5, false);
+    let mut authority =
+        Authority::<WordHunt>::new(&settings, &[PlayerSpec::HUMAN], 3, Vec::new()).unwrap();
+    authority.seal_frame();
+    authority
+        .submit(PLAYER, Command::Guess("plumb".into()))
+        .unwrap();
+    authority.seal_frame();
+    assert_eq!(authority.game().view(Viewer::Spectator).answer, None);
+    authority.submit(PLAYER, Command::GiveUp).unwrap();
+    authority.seal_frame();
+
+    let answer = authority
+        .game()
+        .view(Viewer::Spectator)
+        .answer
+        .expect("the word is shown at the end");
+    let (last, earlier) = authority.compact_log().split_last().unwrap();
+    for frame in earlier {
+        let sent = format!("{frame:?}");
+        assert!(!sent.contains(&answer), "{sent}");
+        assert!(!sent.contains("WordRevealed"), "{sent}");
+    }
+    assert!(format!("{last:?}").contains(&format!("WordRevealed({answer:?})")));
 }
 
 #[test]
@@ -263,15 +311,14 @@ fn the_word_of_the_day_is_the_same_for_everyone_and_changes_daily() {
         })
         .unwrap();
         let game = WordHunt::new(&settings, &[PlayerSpec::HUMAN]).unwrap();
-        let mut seeded = mg_core::CoreRng::new(day.into());
-        let events = game.roll_world(&mut seeded);
-        let mut other = mg_core::CoreRng::new(u64::from(day) + 99);
-        assert_eq!(
-            events,
-            game.roll_world(&mut other),
-            "the seed must not matter"
-        );
-        events
+        let drawn = |seed| {
+            let mut secret = HiddenWord::default();
+            game.roll_secret(&mut secret, &mut mg_core::CoreRng::new(seed));
+            secret.answer.unwrap()
+        };
+        let word = drawn(day.into());
+        assert_eq!(word, drawn(u64::from(day) + 99), "the seed must not matter");
+        word
     };
     assert_ne!(daily(20_000), daily(20_001));
     assert_eq!(daily(20_000), daily(20_000));
@@ -299,23 +346,11 @@ fn every_built_in_answer_is_a_valid_word_and_no_list_is_empty() {
 fn giving_up_alone_loses_and_shows_the_word() {
     let mut game = game_with_answer("crane", Language::English, false);
     guess(&mut game, "plumb").unwrap();
-    game.apply_command(PLAYER, &Command::GiveUp).unwrap();
+    game.command(PLAYER, &Command::GiveUp).unwrap();
     let view = game.view(Viewer::Spectator);
     assert_eq!(view.phase, Phase::Failed);
     assert_eq!(view.answer.as_deref(), Some("crane"));
     assert!(
         matches!(game.status(), Status::Finished(outcome) if outcome.kind == OutcomeKind::Defeat)
     );
-}
-
-/// Single-player state hashes must not change when group play exists, or single-player
-/// replays recorded before it would fail to replay. The value was computed with the code of
-/// 1a85fa3 (before group play) for the same script.
-#[test]
-fn single_player_hash_matches_the_version_before_group_play() {
-    let mut game = game_with_answer("crane", Language::English, false);
-    for text in ["cable", "plumb", "crane"] {
-        guess(&mut game, text).unwrap();
-    }
-    assert_eq!(game.state_hash(), 0x82AC_6C91_4782_D3EB);
 }

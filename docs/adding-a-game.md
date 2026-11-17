@@ -71,6 +71,13 @@ Replace the sample rules. Keep the shape:
 - **WorldEvent** — every random outcome (dealt cards, spawned food, who starts). Produce them
   in `roll_world(&self, rng)`, apply them in `apply_world`. `apply_*` and `step` never see an
   RNG — the type system enforces it.
+- **Secret** — `type Secret = ();` unless the game hides something from every player (a word to
+  guess). Then the secret type holds it.
+  - `roll_secret(&self, &mut secret, rng)` chooses it and answers from it as events (the marks
+    of a guess).
+  - `reveal(&self, &secret)` sends it as events once the game is over; `apply_world` must accept
+    them on a finished game.
+  - The game state, its hash and its view never hold the secret before the reveal. See Word Hunt.
 - **Clock** — `TurnBased` (one frame per accepted move) or `Realtime { tick_ms }` (implement
   `step`). Real-time input that must wait for the next tick goes into a small per-seat queue
   inside the state (see Snake, Stack Attack).

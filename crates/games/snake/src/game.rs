@@ -86,6 +86,7 @@ impl Game for Snake {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = ();
 
     const INFO: GameInfo = GameInfo {
         id: "snake",

@@ -62,6 +62,7 @@ impl Game for Race {
     type Command = Add;
     type WorldEvent = FirstPlayer;
     type View = Vec<u32>;
+    type Secret = ();
     const INFO: GameInfo = GameInfo {
         id: "race",
         name: "Race",

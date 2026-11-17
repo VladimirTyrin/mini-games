@@ -4,8 +4,10 @@ use mg_core::{
 };
 
 use crate::io::{Command, WorldEvent};
-use crate::model::{Answers, LetterMark, Phase, ScoredGuess, Seats, Word};
-use crate::rules::{GROUP_GUESS_CAP, check_hard_mode, score};
+use crate::model::{
+    Answers, HiddenWord, LetterMark, PendingGuess, Phase, ScoredGuess, Seats, Word,
+};
+use crate::rules::{GROUP_GUESS_CAP, check_hard_mode, mark_guess};
 use crate::settings::{FirstTurn, Puzzle, Settings};
 use crate::view::{KeyHint, View};
 
@@ -15,11 +17,16 @@ const SOLO_PLAYER: Slot = Slot::new(0);
 /// Guess a hidden word: every guess marks its letters as in place, elsewhere in the word, or
 /// absent. Alone, within the guesses the settings allow; in a group (2–4 seats, people or bots)
 /// the players take turns on one shared board and whoever finds the word wins.
+///
+/// The word is the authority's secret ([`HiddenWord`]): a guess waits for the authority to mark
+/// it, and the word itself is revealed only once the game is over.
 #[derive(Clone, Debug)]
 pub struct WordHunt {
     settings: Settings,
     seats: Seats,
-    answer: Option<Word>,
+    pending_guess: Option<PendingGuess>,
+    /// Known once the game is over.
+    revealed_answer: Option<Word>,
     guesses: Vec<ScoredGuess>,
     phase: Phase,
     /// Whose guess is next; `None` before the first player is chosen and after the end.
@@ -109,6 +116,35 @@ impl WordHunt {
         }
     }
 
+    fn record_marks(&mut self, marks: &[LetterMark]) -> Result<(), CommandError> {
+        if self.phase != Phase::Guessing {
+            return Err(CommandError::Illegal("no guess is being made"));
+        }
+        let Some(pending) = &self.pending_guess else {
+            return Err(CommandError::Illegal("there is no guess to mark"));
+        };
+        if marks.len() != pending.word.letters().len() {
+            return Err(CommandError::Illegal("the marks do not fit the guess"));
+        }
+        let scored = ScoredGuess {
+            word: pending.word.clone(),
+            marks: marks.to_vec(),
+            by: pending.by,
+        };
+        self.pending_guess = None;
+        let by = scored.by;
+        let solved = scored.is_solved();
+        self.guesses.push(scored);
+        if solved {
+            self.end(Phase::Solved, Some(by));
+        } else if self.guesses.len() >= self.guess_limit() {
+            self.end(Phase::Failed, None);
+        } else {
+            self.turn = self.seats.next_after(by);
+        }
+        Ok(())
+    }
+
     fn give_up(&mut self, slot: Slot) -> Result<(), CommandError> {
         if self.phase != Phase::Guessing || !self.seats.is_in_play(slot) {
             return Err(CommandError::Illegal(
@@ -130,6 +166,7 @@ impl Game for WordHunt {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = HiddenWord;
 
     const INFO: GameInfo = GameInfo {
         id: "word_hunt",
@@ -154,7 +191,8 @@ impl Game for WordHunt {
         Ok(Self {
             settings: *settings,
             seats: Seats::new(players),
-            answer: None,
+            pending_guess: None,
+            revealed_answer: None,
             guesses: Vec::new(),
             phase: Phase::Choosing,
             turn: None,
@@ -174,12 +212,15 @@ impl Game for WordHunt {
             Command::GiveUp => return self.give_up(slot),
             Command::Guess(text) => text,
         };
+        if self.phase != Phase::Guessing {
+            return Err(CommandError::Illegal("the word is not chosen yet"));
+        }
+        if self.pending_guess.is_some() {
+            return Err(CommandError::Illegal("the last guess is not marked yet"));
+        }
         if self.turn != Some(slot) {
             return Err(CommandError::NotYourTurn);
         }
-        let Some(answer) = &self.answer else {
-            return Err(CommandError::Illegal("the word is not chosen yet"));
-        };
         let guess = Word::parse(text, self.settings.language, self.settings.word_length())
             .map_err(|error| CommandError::Illegal(error.reason()))?;
         if self.guesses.iter().any(|earlier| earlier.word == guess) {
@@ -189,55 +230,72 @@ impl Game for WordHunt {
             check_hard_mode(&guess, &self.guesses)
                 .map_err(|violation| CommandError::Illegal(violation.reason()))?;
         }
-        let scored = score(&guess, answer, slot);
-        let solved = scored.is_solved();
-        self.guesses.push(scored);
-        if solved {
-            self.end(Phase::Solved, Some(slot));
-        } else if self.guesses.len() >= self.guess_limit() {
-            self.end(Phase::Failed, None);
-        } else {
-            self.turn = self.seats.next_after(slot);
-        }
+        self.pending_guess = Some(PendingGuess {
+            word: guess,
+            by: slot,
+        });
         Ok(())
     }
 
-    fn roll_world(&self, rng: &mut CoreRng) -> Vec<WorldEvent> {
-        if self.phase != Phase::Choosing {
-            return Vec::new();
-        }
-        let answer = match self.settings.puzzle() {
-            Puzzle::Unlimited => self.answers().random(rng),
-            Puzzle::Daily(day) => self.answers().daily(day),
-        };
-        let Some(answer) = answer else {
-            return Vec::new();
-        };
-        let mut events = vec![WorldEvent::AnswerChosen(answer.text())];
-        if self.seats.is_group() {
-            let seats: Vec<Slot> = self.seats.in_play().collect();
-            // Chosen here even when the settings fix it, so every group game starts the same way
-            // on the wire and a replay holds the first player.
-            let first = match self.fixed_first_player() {
-                Some(fixed) => Some(fixed),
-                None => rng.pick(&seats).copied(),
-            };
-            if let Some(first) = first {
-                events.push(WorldEvent::FirstPlayerChosen(first));
+    fn roll_secret(&self, secret: &mut HiddenWord, rng: &mut CoreRng) -> Vec<WorldEvent> {
+        match self.phase {
+            Phase::Choosing => {
+                let answer = match self.settings.puzzle() {
+                    Puzzle::Unlimited => self.answers().random(rng),
+                    Puzzle::Daily(day) => self.answers().daily(day),
+                };
+                let Some(answer) = answer else {
+                    return Vec::new();
+                };
+                secret.answer = Some(answer);
+                vec![WorldEvent::WordChosen]
             }
+            Phase::Guessing => match (&self.pending_guess, &secret.answer) {
+                (Some(pending), Some(answer)) => {
+                    vec![WorldEvent::GuessMarked(mark_guess(&pending.word, answer))]
+                }
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
         }
-        events
+    }
+
+    fn roll_world(&self, rng: &mut CoreRng) -> Vec<WorldEvent> {
+        let is_starting_group = self.phase == Phase::Guessing
+            && self.seats.is_group()
+            && self.turn.is_none()
+            && self.guesses.is_empty()
+            && self.pending_guess.is_none();
+        if !is_starting_group {
+            return Vec::new();
+        }
+        let seats: Vec<Slot> = self.seats.in_play().collect();
+        // Chosen here even when the settings fix it, so every group game starts the same way on
+        // the wire and a replay holds the first player.
+        let first = match self.fixed_first_player() {
+            Some(fixed) => Some(fixed),
+            None => rng.pick(&seats).copied(),
+        };
+        first
+            .map(WorldEvent::FirstPlayerChosen)
+            .into_iter()
+            .collect()
+    }
+
+    fn reveal(&self, secret: &HiddenWord) -> Vec<WorldEvent> {
+        secret
+            .answer
+            .iter()
+            .map(|answer| WorldEvent::WordRevealed(answer.text()))
+            .collect()
     }
 
     fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
         match event {
-            WorldEvent::AnswerChosen(text) => {
+            WorldEvent::WordChosen => {
                 if self.phase != Phase::Choosing {
-                    return Err(CommandError::Illegal("the answer is already chosen"));
+                    return Err(CommandError::Illegal("the word is already chosen"));
                 }
-                let answer = Word::parse(text, self.settings.language, self.settings.word_length())
-                    .map_err(|error| CommandError::Illegal(error.reason()))?;
-                self.answer = Some(answer);
                 self.phase = Phase::Guessing;
                 // Alone there is nobody to choose: the one seat starts.
                 if !self.seats.is_group() {
@@ -264,6 +322,16 @@ impl Game for WordHunt {
                 self.turn = Some(*slot);
                 Ok(())
             }
+            WorldEvent::GuessMarked(marks) => self.record_marks(marks),
+            WorldEvent::WordRevealed(text) => {
+                if !self.phase.is_over() || self.revealed_answer.is_some() {
+                    return Err(CommandError::Illegal("the word is revealed at the end"));
+                }
+                let answer = Word::parse(text, self.settings.language, self.settings.word_length())
+                    .map_err(|error| CommandError::Illegal(error.reason()))?;
+                self.revealed_answer = Some(answer);
+                Ok(())
+            }
         }
     }
 
@@ -276,7 +344,7 @@ impl Game for WordHunt {
 
     fn awaiting(&self) -> Awaiting {
         match (self.phase, self.turn) {
-            (Phase::Guessing, Some(slot)) => Awaiting::Turn(slot),
+            (Phase::Guessing, Some(slot)) if self.pending_guess.is_none() => Awaiting::Turn(slot),
             _ => Awaiting::Nobody,
         }
     }
@@ -317,11 +385,7 @@ impl Game for WordHunt {
             phase: self.phase,
             guesses: self.guesses.clone(),
             keyboard: self.keyboard(),
-            answer: self
-                .answer
-                .as_ref()
-                .filter(|_| self.phase.is_over())
-                .map(Word::text),
+            answer: self.revealed_answer.as_ref().map(Word::text),
             turn: self.turn,
             winner: self.winner,
             guess_limit: u32::try_from(self.guess_limit()).unwrap_or(u32::MAX),
@@ -340,9 +404,16 @@ impl Game for WordHunt {
             Puzzle::Daily(day) => hasher.u32(day.get()),
         }
         hasher.u8(self.phase.hash_code());
-        hasher.bool(self.answer.is_some());
-        for letter in self.answer.iter().flat_map(Word::letters) {
+        hasher.bool(self.revealed_answer.is_some());
+        for letter in self.revealed_answer.iter().flat_map(Word::letters) {
             hasher.u32(u32::from(*letter));
+        }
+        hasher.bool(self.pending_guess.is_some());
+        if let Some(pending) = &self.pending_guess {
+            for letter in pending.word.letters() {
+                hasher.u32(u32::from(*letter));
+            }
+            hasher.u8(pending.by.get());
         }
         hasher.length(self.guesses.len());
         for guess in &self.guesses {

@@ -24,6 +24,9 @@ use crate::tick::Tick;
 #[derive(Debug)]
 pub struct Authority<G: Game> {
     game: G,
+    /// See [`Game::Secret`]: never leaves the authority, bots included.
+    secret: G::Secret,
+    is_secret_revealed: bool,
     players: Vec<PlayerSpec>,
     world_rng: CoreRng,
     bots: Vec<SeatedBot<G>>,
@@ -72,6 +75,8 @@ impl<G: Game> Authority<G> {
         let hash_policy = HashPolicy::for_clock(game.clock());
         Ok(Self {
             game,
+            secret: G::Secret::default(),
+            is_secret_revealed: false,
             players: players.to_vec(),
             world_rng: CoreRng::derive(seed, 0),
             bots,
@@ -279,20 +284,36 @@ impl<G: Game> Authority<G> {
         true
     }
 
+    fn apply_own_events(&mut self, events: Vec<G::WorldEvent>, inputs: &mut Vec<GameInput<G>>) {
+        for event in events {
+            if self.game.apply_world(&event).is_ok() {
+                inputs.push(Input::World(event));
+            } else {
+                debug_assert!(
+                    false,
+                    "apply_world rejected the game's own event: {event:?}"
+                );
+            }
+        }
+    }
+
     pub fn seal_frame(&mut self) -> GameFrame<G> {
         self.revision += 1;
         let mut inputs = std::mem::take(&mut self.pending_inputs);
         if !self.game.status().is_finished() {
-            for event in self.game.roll_world(&mut self.world_rng) {
-                if self.game.apply_world(&event).is_ok() {
-                    inputs.push(Input::World(event));
-                } else {
-                    debug_assert!(
-                        false,
-                        "apply_world rejected its own roll_world event: {event:?}"
-                    );
-                }
-            }
+            let events = self.game.roll_secret(&mut self.secret, &mut self.world_rng);
+            self.apply_own_events(events, &mut inputs);
+        }
+        if !self.game.status().is_finished() {
+            let events = self.game.roll_world(&mut self.world_rng);
+            self.apply_own_events(events, &mut inputs);
+        }
+        // Before the step, which Match runs after all inputs: a real-time game that a step ends
+        // reveals in the next frame sealed.
+        if self.game.status().is_finished() && !self.is_secret_revealed {
+            self.is_secret_revealed = true;
+            let events = self.game.reveal(&self.secret);
+            self.apply_own_events(events, &mut inputs);
         }
         // Must mirror Match::apply_frame exactly.
         if self.game.clock().is_realtime() && !self.game.status().is_finished() {

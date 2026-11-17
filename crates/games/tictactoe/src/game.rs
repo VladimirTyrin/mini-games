@@ -72,6 +72,7 @@ impl Game for TicTacToe {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = ();
 
     const INFO: GameInfo = GameInfo {
         id: "tictactoe",

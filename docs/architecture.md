@@ -31,9 +31,11 @@ authority:
 
 1. applies human commands as they arrive (`Authority::submit`);
 2. lets bots decide (`run_bots`);
-3. rolls randomness (`Game::roll_world`) and applies it as `WorldEvent`s;
-4. steps real-time games (`Game::step`);
-5. seals a `Frame { tick, inputs, hash? }` — the hash every N frames and on the final frame.
+3. settles its secret (`Game::roll_secret`), then rolls randomness (`Game::roll_world`), and
+   applies both as `WorldEvent`s;
+4. in the frame the game finishes, reveals the secret (`Game::reveal`) as `WorldEvent`s;
+5. steps real-time games (`Game::step`);
+6. seals a `Frame { tick, inputs, hash? }` — the hash every N frames and on the final frame.
 
 Receivers (`Match`) apply frames in the same order and compare hashes. A mismatch or a gap
 means desync: the client asks for a catch-up (header + compact log) and rebuilds.
@@ -41,6 +43,13 @@ means desync: the client asks for a catch-up (header + compact log) and rebuilds
 Why: frames are tiny (usually empty), clients never learn the seed (bot competitions stay
 fair), replays are just the frame log, and late joiners, observers and reconnects all reuse
 the catch-up path.
+
+**Secrets.** What no player may see until the end (Word Hunt's word) is the game's
+`Game::Secret`. The authority keeps it beside the game, outside the state that clients replay
+and hash. `roll_secret` is the only place that reads it, and it tells everyone only what the
+rules make public: a guess's marks, say, never the word. At the end `reveal` sends the secret
+itself, so replays are complete. Bots decide from the public game like everyone else, so they
+cannot peek either.
 
 Determinism rules live in `AGENTS.md`; `mg_core::conformance` enforces them per game, and
 every game pins a `scripted_hash`.

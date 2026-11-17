@@ -99,6 +99,7 @@ impl Game for Puzzle2048 {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = ();
 
     const INFO: GameInfo = GameInfo {
         id: "puzzle2048",

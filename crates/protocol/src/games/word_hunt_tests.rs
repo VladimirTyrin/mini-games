@@ -1,6 +1,7 @@
 use mg_core::{Game, PlayerSpec, Viewer};
 use mg_word_hunt::{
-    BotKind, Command, FirstTurn, Language, PuzzleMode, RawSettings, Settings, WordHunt, WorldEvent,
+    BotKind, Command, FirstTurn, Language, LetterMark, PuzzleMode, RawSettings, Settings, WordHunt,
+    WorldEvent,
 };
 use prost::Message;
 
@@ -69,12 +70,47 @@ fn commands_and_world_events_round_trip() {
         assert_eq!(WordHunt::command_from_wire(&wire), Ok(command));
     }
     for event in [
-        WorldEvent::AnswerChosen("crane".into()),
+        WorldEvent::WordChosen,
         WorldEvent::FirstPlayerChosen(mg_core::Slot::new(2)),
+        WorldEvent::GuessMarked(vec![
+            LetterMark::Correct,
+            LetterMark::Present,
+            LetterMark::Absent,
+        ]),
+        WorldEvent::WordRevealed("ёлка".into()),
     ] {
         let wire = binary(&WordHunt::world_event_to_wire(&event));
         assert_eq!(WordHunt::world_event_from_wire(&wire), Ok(event));
     }
+}
+
+/// Before the word was kept secret, the first frame carried it (field 1); such a replay must be
+/// refused, not read as an empty event.
+#[test]
+fn the_old_event_with_the_word_is_refused() {
+    let word = b"crane";
+    let mut chosen = vec![0x0A, u8::try_from(word.len()).unwrap()];
+    chosen.extend_from_slice(word);
+    let mut event = vec![0x0A, u8::try_from(chosen.len()).unwrap()];
+    event.extend_from_slice(&chosen);
+    let old = proto::WordHuntWorldEvent::decode(event.as_slice()).unwrap();
+    let wire = proto::GameWorldEvent {
+        game: Some(proto::game_world_event::Game::WordHunt(old)),
+    };
+    assert_eq!(
+        WordHunt::world_event_from_wire(&wire),
+        Err(WireError::Missing("event"))
+    );
+}
+
+#[test]
+fn too_many_marks_are_refused_on_the_wire() {
+    let event = WorldEvent::GuessMarked(vec![LetterMark::Absent; 8]);
+    let wire = WordHunt::world_event_to_wire(&event);
+    assert_eq!(
+        WordHunt::world_event_from_wire(&wire),
+        Err(WireError::OutOfRange("marks"))
+    );
 }
 
 #[test]
@@ -96,11 +132,15 @@ fn an_overlong_word_is_refused_on_the_wire() {
 
 #[test]
 fn view_carries_guesses_marks_and_the_revealed_answer() {
+    use LetterMark::{Absent, Correct, Present};
     let mut game = WordHunt::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
-    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
-        .unwrap();
+    game.apply_world(&WorldEvent::WordChosen).unwrap();
     game.apply_command(mg_core::Slot::new(0), &Command::Guess("cable".into()))
         .unwrap();
+    game.apply_world(&WorldEvent::GuessMarked(vec![
+        Correct, Present, Absent, Absent, Correct,
+    ]))
+    .unwrap();
     let Some(proto::game_view::Game::WordHunt(view)) =
         binary(&WordHunt::view_to_wire(&game.view(Viewer::Spectator))).game
     else {
@@ -114,6 +154,10 @@ fn view_carries_guesses_marks_and_the_revealed_answer() {
     );
     assert_eq!(view.answer, None);
     game.apply_command(mg_core::Slot::new(0), &Command::Guess("crane".into()))
+        .unwrap();
+    game.apply_world(&WorldEvent::GuessMarked(vec![Correct; 5]))
+        .unwrap();
+    game.apply_world(&WorldEvent::WordRevealed("crane".into()))
         .unwrap();
     let Some(proto::game_view::Game::WordHunt(view)) =
         WordHunt::view_to_wire(&game.view(Viewer::Spectator)).game

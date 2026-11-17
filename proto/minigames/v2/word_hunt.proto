@@ -54,10 +54,18 @@ message WordHuntGuess {
   string word = 1;
 }
 
+// The word is the authority's secret: it is chosen, each guess is marked, and only once the
+// game is over is the word itself sent.
 message WordHuntWorldEvent {
+  // Field 1 carried the word at the start of the game (before the word was kept secret);
+  // replays that hold it are refused.
+  reserved 1;
+  reserved "answer_chosen";
   oneof event {
-    WordHuntAnswerChosen answer_chosen = 1;
     WordHuntFirstPlayerChosen first_player_chosen = 2;
+    WordHuntWordChosen word_chosen = 3;
+    WordHuntGuessMarked guess_marked = 4;
+    WordHuntWordRevealed word_revealed = 5;
   }
 }
 
@@ -66,7 +74,15 @@ message WordHuntFirstPlayerChosen {
   uint32 slot = 1;
 }
 
-message WordHuntAnswerChosen {
+message WordHuntWordChosen {}
+
+// The marks of the guess just made, position by position.
+message WordHuntGuessMarked {
+  repeated WordHuntLetterMark marks = 1;
+}
+
+// The word, once the game is over.
+message WordHuntWordRevealed {
   string word = 1;
 }
 

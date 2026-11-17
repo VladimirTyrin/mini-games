@@ -1,7 +1,7 @@
 use mg_core::GameSettings;
 use mg_word_hunt::{
     BotKind, Command, FirstTurn, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings,
-    ScoredGuess, View, WordHunt, WorldEvent,
+    ScoredGuess, View, WordHunt, WordLength, WorldEvent,
 };
 
 use crate::proto::{
@@ -70,25 +70,48 @@ impl WireGame for WordHunt {
             return Err(WireError::WrongGame);
         };
         match event.event.as_ref().ok_or(WireError::Missing("event"))? {
-            word_hunt_world_event::Event::AnswerChosen(chosen) => {
-                Ok(WorldEvent::AnswerChosen(bounded_word(&chosen.word)?))
-            }
+            word_hunt_world_event::Event::WordChosen(_) => Ok(WorldEvent::WordChosen),
             word_hunt_world_event::Event::FirstPlayerChosen(chosen) => {
                 Ok(WorldEvent::FirstPlayerChosen(slot_from_wire(chosen.slot)?))
+            }
+            word_hunt_world_event::Event::GuessMarked(marked) => {
+                if marked.marks.len() > WordLength::MAX as usize {
+                    return Err(WireError::OutOfRange("marks"));
+                }
+                let marks = marked
+                    .marks
+                    .iter()
+                    .map(|mark| mark_from_wire(*mark))
+                    .collect::<Result<_, _>>()?;
+                Ok(WorldEvent::GuessMarked(marks))
+            }
+            word_hunt_world_event::Event::WordRevealed(revealed) => {
+                Ok(WorldEvent::WordRevealed(bounded_word(&revealed.word)?))
             }
         }
     }
 
     fn world_event_to_wire(event: &WorldEvent) -> proto::GameWorldEvent {
         let event = match event {
-            WorldEvent::AnswerChosen(word) => {
-                word_hunt_world_event::Event::AnswerChosen(proto::WordHuntAnswerChosen {
-                    word: word.clone(),
-                })
+            WorldEvent::WordChosen => {
+                word_hunt_world_event::Event::WordChosen(proto::WordHuntWordChosen {})
             }
             WorldEvent::FirstPlayerChosen(slot) => {
                 word_hunt_world_event::Event::FirstPlayerChosen(proto::WordHuntFirstPlayerChosen {
                     slot: slot_to_wire(*slot),
+                })
+            }
+            WorldEvent::GuessMarked(marks) => {
+                word_hunt_world_event::Event::GuessMarked(proto::WordHuntGuessMarked {
+                    marks: marks
+                        .iter()
+                        .map(|mark| mark_to_wire(*mark).into())
+                        .collect(),
+                })
+            }
+            WorldEvent::WordRevealed(word) => {
+                word_hunt_world_event::Event::WordRevealed(proto::WordHuntWordRevealed {
+                    word: word.clone(),
                 })
             }
         };
@@ -178,6 +201,16 @@ fn raw_settings_to_wire(settings: &RawSettings) -> proto::WordHuntSettings {
             FirstTurn::HostLast => proto::WordHuntFirstTurn::HostLast,
         }
         .into(),
+    }
+}
+
+fn mark_from_wire(mark: i32) -> Result<LetterMark, WireError> {
+    match proto::WordHuntLetterMark::try_from(mark) {
+        Ok(proto::WordHuntLetterMark::Absent) => Ok(LetterMark::Absent),
+        Ok(proto::WordHuntLetterMark::Present) => Ok(LetterMark::Present),
+        Ok(proto::WordHuntLetterMark::Correct) => Ok(LetterMark::Correct),
+        Ok(proto::WordHuntLetterMark::Unspecified) => Err(WireError::Missing("mark")),
+        Err(_) => Err(WireError::UnknownEnumValue("mark")),
     }
 }
 

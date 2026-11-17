@@ -190,6 +190,7 @@ impl Game for NumbersMatch {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = ();
 
     const INFO: GameInfo = GameInfo {
         id: "numbers_match",

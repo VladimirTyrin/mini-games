@@ -5,6 +5,7 @@ use mg_core::{
     SetupError, Slot, Status, Viewer,
 };
 
+use super::table::Table;
 use crate::model::Answers;
 use crate::{
     BotKind, Command, FirstTurn, GROUP_GUESS_CAP, Language, Phase, PuzzleMode, RawSettings,
@@ -22,17 +23,14 @@ fn english() -> Settings {
 }
 
 /// A started group game: answer `crane`, `first` to guess.
-fn group(players: &[PlayerSpec], first: Slot) -> WordHunt {
-    let mut game = WordHunt::new(&english(), players).unwrap();
-    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
-        .unwrap();
-    game.apply_world(&WorldEvent::FirstPlayerChosen(first))
-        .unwrap();
+fn group(players: &[PlayerSpec], first: Slot) -> Table {
+    let mut game = Table::new(WordHunt::new(&english(), players).unwrap(), "crane");
+    game.world(&WorldEvent::FirstPlayerChosen(first)).unwrap();
     game
 }
 
-fn guess(game: &mut WordHunt, slot: Slot, text: &str) -> Result<(), CommandError> {
-    game.apply_command(slot, &Command::Guess(text.into()))
+fn guess(game: &mut Table, slot: Slot, text: &str) -> Result<(), CommandError> {
+    game.command(slot, &Command::Guess(text.into()))
 }
 
 fn outcome(game: &WordHunt) -> mg_core::Outcome {
@@ -213,12 +211,12 @@ fn a_bot_guesses_from_the_hints_only() {
 #[test]
 fn a_player_may_give_up_out_of_turn_and_the_others_play_on() {
     let mut game = group(&[HUMAN, HUMAN, HUMAN], FIRST);
-    game.apply_command(THIRD, &Command::GiveUp).unwrap();
+    game.command(THIRD, &Command::GiveUp).unwrap();
     guess(&mut game, FIRST, "plumb").unwrap();
     // The turn skips the seat that gave up.
     assert_eq!(game.view(Viewer::Spectator).turn, Some(SECOND));
     assert_eq!(
-        game.apply_command(THIRD, &Command::GiveUp),
+        game.command(THIRD, &Command::GiveUp),
         Err(CommandError::Illegal(
             "only a player still guessing can give up"
         ))
@@ -228,7 +226,7 @@ fn a_player_may_give_up_out_of_turn_and_the_others_play_on() {
 #[test]
 fn giving_up_against_a_bot_lets_the_bot_win() {
     let mut game = group(&[HUMAN, BOT], FIRST);
-    game.apply_command(FIRST, &Command::GiveUp).unwrap();
+    game.command(FIRST, &Command::GiveUp).unwrap();
     assert_eq!(game.view(Viewer::Spectator).phase, Phase::Forfeited);
     assert_eq!(outcome(&game).winners, [SECOND]);
 }
@@ -236,7 +234,7 @@ fn giving_up_against_a_bot_lets_the_bot_win() {
 #[test]
 fn giving_up_on_ones_own_turn_passes_the_turn() {
     let mut game = group(&[HUMAN, HUMAN, HUMAN], SECOND);
-    game.apply_command(SECOND, &Command::GiveUp).unwrap();
+    game.command(SECOND, &Command::GiveUp).unwrap();
     let view = game.view(Viewer::Spectator);
     assert_eq!(view.turn, Some(THIRD));
     assert_eq!(view.playing, [FIRST, THIRD]);
@@ -245,7 +243,7 @@ fn giving_up_on_ones_own_turn_passes_the_turn() {
 #[test]
 fn the_last_person_giving_up_among_bots_ends_the_game() {
     let mut game = group(&[HUMAN, BOT, BOT], FIRST);
-    game.apply_command(FIRST, &Command::GiveUp).unwrap();
+    game.command(FIRST, &Command::GiveUp).unwrap();
     assert_eq!(game.view(Viewer::Spectator).phase, Phase::Abandoned);
 }
 
@@ -257,12 +255,13 @@ fn the_first_turn_follows_the_setting() {
             ..RawSettings::default()
         })
         .unwrap();
-        let game = WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap();
+        let mut game = WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap();
+        game.apply_world(&WorldEvent::WordChosen).unwrap();
         game.roll_world(&mut mg_core::CoreRng::new(3))
             .into_iter()
             .find_map(|event| match event {
                 WorldEvent::FirstPlayerChosen(slot) => Some(slot),
-                WorldEvent::AnswerChosen(_) => None,
+                _ => None,
             })
     };
     assert_eq!(first_of(FirstTurn::HostFirst), Some(FIRST));
@@ -276,10 +275,11 @@ fn with_host_last_the_host_closes_every_round() {
         ..RawSettings::default()
     })
     .unwrap();
-    let mut game = WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap();
-    for event in game.roll_world(&mut mg_core::CoreRng::new(5)) {
-        game.apply_world(&event).unwrap();
-    }
+    let mut game = Table::new(
+        WordHunt::new(&settings, &[HUMAN, BOT, BOT]).unwrap(),
+        "crane",
+    );
+    game.roll();
     for word in ["plumb", "fight", "dozen", "quick", "jumpy", "vowel"] {
         let turn = game.view(Viewer::Player(FIRST)).turn.unwrap();
         guess(&mut game, turn, word).unwrap();
@@ -301,8 +301,7 @@ fn a_first_player_other_than_the_settings_name_is_refused() {
     })
     .unwrap();
     let mut game = WordHunt::new(&settings, &[HUMAN, BOT]).unwrap();
-    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
-        .unwrap();
+    game.apply_world(&WorldEvent::WordChosen).unwrap();
     assert_eq!(
         game.apply_world(&WorldEvent::FirstPlayerChosen(SECOND)),
         Err(CommandError::Illegal(
@@ -326,9 +325,7 @@ fn a_table_of_bots_plays_on_when_one_is_dropped() {
 
 #[test]
 fn a_lone_bot_dropped_ends_the_game() {
-    let mut game = WordHunt::new(&english(), &[BOT]).unwrap();
-    game.apply_world(&WorldEvent::AnswerChosen("crane".into()))
-        .unwrap();
+    let mut game = Table::new(WordHunt::new(&english(), &[BOT]).unwrap(), "crane");
     game.drop_player(FIRST);
     assert!(game.status().is_finished(), "a game nobody plays must end");
 }

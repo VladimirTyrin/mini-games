@@ -4,7 +4,7 @@ use super::BotKind;
 use crate::game::WordHunt;
 use crate::io::Command;
 use crate::model::{LetterMark, ScoredGuess, Word};
-use crate::rules::{check_hard_mode, score};
+use crate::rules::{check_hard_mode, mark_guess};
 
 /// Guesses a word from the answer list that fits the hints its level takes into account. It
 /// reads only the guesses on the board, never the answer.
@@ -20,7 +20,7 @@ impl GuessingBot {
 
     /// Would `candidate`, were it the answer, have produced exactly these marks?
     fn explains(candidate: &Word, guess: &ScoredGuess) -> bool {
-        score(&guess.word, candidate, guess.by).marks == guess.marks
+        mark_guess(&guess.word, candidate) == guess.marks
     }
 
     /// The green and yellow marks hold for `candidate`; greys are not checked.

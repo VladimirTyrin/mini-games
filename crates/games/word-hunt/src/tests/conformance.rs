@@ -150,5 +150,5 @@ fn passes_conformance() {
 fn scripted_hash_is_pinned() {
     let setup = solo(RawSettings::default());
     let hash = conformance::scripted_hash(&setup, 42);
-    assert_eq!(hash, 0x7E2C_A294_DFF1_63DA);
+    assert_eq!(hash, 0x1470_156F_07C6_9754);
 }
