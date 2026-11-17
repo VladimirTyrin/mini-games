@@ -441,3 +441,62 @@ fn omitted_frame_after_the_end_is_rejected() {
         Err(FrameError::MissingFrameAfterFinish { tick: end })
     );
 }
+
+/// Seals until a seat is on turn; returns it.
+fn seal_until_turn(authority: &mut Authority<Race>) -> Slot {
+    loop {
+        authority.seal_frame();
+        if let Awaiting::Turn(slot) = authority.game().awaiting() {
+            return slot;
+        }
+    }
+}
+
+#[test]
+fn bot_turns_thought_away_play_as_run_bots_does() {
+    let settings = race(30);
+    let players = [PlayerSpec::BOT, PlayerSpec::BOT];
+    let mut inline =
+        Authority::<Race>::new(&settings, &players, 9, Race::bots_for(&players)).unwrap();
+    let mut away =
+        Authority::<Race>::new(&settings, &players, 9, Race::bots_for(&players)).unwrap();
+    seal_until_turn(&mut inline);
+    seal_until_turn(&mut away);
+    while !inline.game().status().is_finished() {
+        inline.run_bots();
+        inline.seal_frame();
+        let turn = away.begin_bot_turn().expect("a bot is on turn");
+        away.finish_bot_turn(turn.think());
+        away.seal_frame();
+    }
+    assert!(away.game().status().is_finished());
+    assert_eq!(away.game().state_hash(), inline.game().state_hash());
+}
+
+#[test]
+fn a_bot_move_for_a_match_that_moved_on_is_not_played() {
+    let settings = race(10);
+    let players = [PlayerSpec::HUMAN, PlayerSpec::BOT];
+    let mut authority =
+        Authority::<Race>::new(&settings, &players, 3, Race::bots_for(&players)).unwrap();
+    if seal_until_turn(&mut authority) == Slot::new(0) {
+        authority.submit(Slot::new(0), Add(1)).unwrap();
+        authority.seal_frame();
+    }
+    let turn = authority.begin_bot_turn().expect("the bot is on turn");
+    // Out thinking: neither a second turn nor an inline run (which would forfeit it) starts.
+    assert!(authority.begin_bot_turn().is_none());
+    authority.run_bots();
+    assert!(!authority.has_pending_inputs());
+
+    let decided = turn.think();
+    authority.seal_frame();
+    authority.finish_bot_turn(decided);
+    assert!(!authority.has_pending_inputs(), "a stale move is dropped");
+
+    let turn = authority.begin_bot_turn().expect("the bot thinks again");
+    authority.finish_bot_turn(turn.think());
+    assert!(authority.has_pending_inputs());
+    assert_eq!(authority.rejected_bot_commands(), 0);
+    assert_eq!(authority.game().awaiting(), Awaiting::Turn(Slot::new(0)));
+}

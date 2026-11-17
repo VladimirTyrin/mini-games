@@ -1,6 +1,8 @@
 use mg_core::{Awaiting, Clock, Slot, Status, Tick};
 use mg_protocol::proto;
 
+use crate::dyn_bot_decision::DynBotDecision;
+use crate::dyn_bot_turn::DynBotTurn;
 use crate::game_kind::GameKind;
 use crate::submit_error::SubmitError;
 
@@ -12,6 +14,10 @@ pub trait DynAuthority: Send + std::fmt::Debug {
     fn drop_player(&mut self, slot: Slot);
     fn run_bots(&mut self);
     fn is_waiting_for_bot(&self) -> bool;
+    /// See [`mg_core::Authority::begin_bot_turn`].
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>>;
+    /// See [`mg_core::Authority::finish_bot_turn`]; `decision` must come from this authority.
+    fn finish_bot_turn(&mut self, decision: DynBotDecision);
     fn has_pending_inputs(&self) -> bool;
     fn seal_frame(&mut self) -> proto::TickFrame;
     fn awaiting(&self) -> Awaiting;

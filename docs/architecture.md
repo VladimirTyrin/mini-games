@@ -61,7 +61,9 @@ Actors, no shared locks:
   in match → post match / replay). Handles one command at a time.
 - **Match actor** (one task per match): owns the `DynAuthority`, ticks real-time games,
   runs bot searches on the blocking pool under a CPU semaphore, broadcasts each frame encoded
-  once, handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
+  once. A turn-based bot thinks on a copy of the game (`Authority::begin_bot_turn`) while the
+  actor goes on answering; its move is played when it comes back unless the match moved on
+  meanwhile (then it thinks again), handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
 
 - **Social actor** (one task): friends, friend links, push targets and invitations, kept in a
   SQLite database (`MG_DATABASE`, migrated at start by `PRAGMA user_version`; a database written

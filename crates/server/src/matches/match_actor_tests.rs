@@ -1,8 +1,11 @@
-use mg_core::Awaiting;
-use mg_registry::GameKind;
+use std::sync::Mutex;
+
+use mg_core::{Awaiting, Outcome};
+use mg_registry::{DynBotTurn, GameKind};
 use tokio::sync::mpsc;
 
 use super::*;
+use crate::ids::ConnectionId;
 use crate::limits::Limits;
 use crate::matches::MatchHandle;
 
@@ -37,6 +40,10 @@ impl DynAuthority for FailingAuthority {
     fn is_waiting_for_bot(&self) -> bool {
         matches!(self.failure, Failure::InBotTask)
     }
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        matches!(self.failure, Failure::InBotTask).then(|| Box::new(PanickingTurn) as _)
+    }
+    fn finish_bot_turn(&mut self, _decision: DynBotDecision) {}
     fn has_pending_inputs(&self) -> bool {
         false
     }
@@ -57,6 +64,14 @@ impl DynAuthority for FailingAuthority {
     }
     fn compact_log(&self) -> &[proto::TickFrame] {
         &[]
+    }
+}
+
+struct PanickingTurn;
+
+impl DynBotTurn for PanickingTurn {
+    fn think(self: Box<Self>) -> DynBotDecision {
+        panic!("bot search failed");
     }
 }
 
@@ -95,4 +110,119 @@ async fn a_panicking_bot_task_is_reported_as_aborted() {
         matches!(command, HubCommand::MatchAborted(_)),
         "{command:?}"
     );
+}
+
+/// A turn-based match where a bot is always on turn and thinks until `gate` is released; the
+/// one human seat (slot 0) leaving ends it.
+#[derive(Debug)]
+struct SlowBotAuthority {
+    gate: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
+    finished: bool,
+}
+
+struct GatedTurn {
+    gate: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
+}
+
+impl DynBotTurn for GatedTurn {
+    fn think(self: Box<Self>) -> DynBotDecision {
+        let gate = self.gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            // Released (or the test is over) when the sender is dropped.
+            gate.recv().ok();
+        }
+        DynBotDecision::new(())
+    }
+}
+
+impl DynAuthority for SlowBotAuthority {
+    fn kind(&self) -> GameKind {
+        GameKind::ALL[0]
+    }
+    fn clock(&self) -> Clock {
+        Clock::TurnBased
+    }
+    fn submit(&mut self, _slot: Slot, _command: &proto::GameCommand) -> Result<(), SubmitError> {
+        Ok(())
+    }
+    fn drop_player(&mut self, _slot: Slot) {
+        self.finished = true;
+    }
+    fn run_bots(&mut self) {}
+    fn is_waiting_for_bot(&self) -> bool {
+        !self.finished
+    }
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        (!self.finished).then(|| {
+            Box::new(GatedTurn {
+                gate: self.gate.clone(),
+            }) as _
+        })
+    }
+    fn finish_bot_turn(&mut self, _decision: DynBotDecision) {}
+    fn has_pending_inputs(&self) -> bool {
+        false
+    }
+    fn seal_frame(&mut self) -> proto::TickFrame {
+        proto::TickFrame::default()
+    }
+    fn awaiting(&self) -> Awaiting {
+        Awaiting::Turn(Slot::new(1))
+    }
+    fn status(&self) -> Status {
+        if self.finished {
+            Status::Finished(Outcome {
+                kind: mg_core::OutcomeKind::Winner,
+                winners: vec![Slot::new(1)],
+                scores: Vec::new(),
+            })
+        } else {
+            Status::InProgress
+        }
+    }
+    fn next_tick(&self) -> Tick {
+        Tick::new(0)
+    }
+    fn compact_log(&self) -> &[proto::TickFrame] {
+        &[]
+    }
+}
+
+#[tokio::test]
+async fn a_player_leaves_while_a_bot_is_still_thinking() {
+    let (release, gate) = std::sync::mpsc::channel::<()>();
+    let gate = Arc::new(Mutex::new(Some(gate)));
+    let (hub_sender, mut hub_commands) = mpsc::unbounded_channel();
+    let match_id = MatchId::random();
+    let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
+    let session = SessionId::random();
+    let (outbound, _received) = Outbound::channel(ConnectionId::next());
+    MatchActor::new(MatchSetup {
+        lobby: LobbyId::random(),
+        match_id,
+        header: proto::MatchHeader::default(),
+        authority: Box::new(SlowBotAuthority {
+            gate: gate.clone(),
+            finished: false,
+        }),
+        participants: vec![Participant {
+            session: session.clone(),
+            slot: Some(Slot::new(0)),
+            outbound: Some(outbound),
+        }],
+        hub: HubHandle::new(hub_sender),
+        bot_cpu: Arc::new(Semaphore::new(1)),
+        timing: Timing::default(),
+    })
+    .spawn(inbox);
+
+    handle.control(MatchControl::Leave { session });
+
+    let command = hub_commands.recv().await.expect("the hub must hear back");
+    assert!(
+        matches!(command, HubCommand::MatchFinished(_)),
+        "{command:?}"
+    );
+    // Still thinking (or not started yet): the leave did not wait for the bot.
+    drop(release);
 }

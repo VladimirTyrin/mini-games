@@ -1,7 +1,10 @@
 use crate::awaiting::Awaiting;
+use crate::bot_mind::BotMind;
 use crate::bot_seat::BotSeat;
+use crate::bot_turn::BotTurn;
 use crate::budget::Budget;
 use crate::command_error::CommandError;
+use crate::decided_bot_turn::DecidedBotTurn;
 use crate::frame::{Frame, GameFrame};
 use crate::game::Game;
 use crate::hash_policy::HashPolicy;
@@ -31,6 +34,8 @@ pub struct Authority<G: Game> {
     /// See [`crate::CompactLog`]. `None` once the host keeps its own log.
     compact_log: Option<Vec<GameFrame<G>>>,
     rejected_bot_commands: u64,
+    /// Counts every change of the game or the log, so a [`BotTurn`] can tell it went stale.
+    revision: u64,
 }
 
 impl<G: Game> Authority<G> {
@@ -57,8 +62,10 @@ impl<G: Game> Authority<G> {
             .into_iter()
             .map(|seat| SeatedBot {
                 slot: seat.slot,
-                bot: seat.bot,
-                rng: CoreRng::derive(seed, 1 + u64::from(seat.slot.get())),
+                mind: Some(BotMind {
+                    bot: seat.bot,
+                    rng: CoreRng::derive(seed, 1 + u64::from(seat.slot.get())),
+                }),
                 budget_nodes: seat.budget_nodes,
             })
             .collect();
@@ -74,6 +81,7 @@ impl<G: Game> Authority<G> {
             hash_policy,
             compact_log: Some(Vec::new()),
             rejected_bot_commands: 0,
+            revision: 0,
         })
     }
 
@@ -143,6 +151,7 @@ impl<G: Game> Authority<G> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.apply_command(slot, &command)?;
         self.pending_inputs.push(Input::Command { slot, command });
+        self.revision += 1;
         Ok(())
     }
 
@@ -162,6 +171,7 @@ impl<G: Game> Authority<G> {
         *dropped = true;
         self.game.drop_player(slot);
         self.pending_inputs.push(Input::Dropped { slot });
+        self.revision += 1;
     }
 
     /// Real-time: every live bot decides once. Turn-based: the bot on turn decides; one that
@@ -173,7 +183,7 @@ impl<G: Game> Authority<G> {
         match self.game.awaiting() {
             Awaiting::Nobody => {}
             Awaiting::Turn(slot) => {
-                if self.is_live_bot(slot) && !self.let_bot_act(slot) {
+                if self.is_live_bot(slot) && !self.is_thinking(slot) && !self.let_bot_act(slot) {
                     self.drop_player(slot);
                 }
             }
@@ -191,16 +201,73 @@ impl<G: Game> Authority<G> {
         }
     }
 
+    /// Turn-based: the bot on turn, taken out of its seat to think on a copy of the game while
+    /// the host goes on. `None` when no bot is on turn or it is thinking already.
+    pub fn begin_bot_turn(&mut self) -> Option<BotTurn<G>> {
+        if self.game.status().is_finished() {
+            return None;
+        }
+        let Awaiting::Turn(slot) = self.game.awaiting() else {
+            return None;
+        };
+        if self.is_dropped(slot) {
+            return None;
+        }
+        let seat = self.bots.iter_mut().find(|b| b.slot == slot)?;
+        let mind = seat.mind.take()?;
+        Some(BotTurn {
+            slot,
+            mind,
+            budget_nodes: seat.budget_nodes,
+            game: self.game.clone(),
+            revision: self.revision,
+        })
+    }
+
+    /// Seats the bot again and plays its move, unless the match moved on while it thought (a
+    /// player left, say): then nothing is played, and [`Self::begin_bot_turn`] starts over. A
+    /// bot that finds no legal move forfeits, as in [`Self::run_bots`].
+    pub fn finish_bot_turn(&mut self, decided: DecidedBotTurn<G>) {
+        let DecidedBotTurn {
+            slot,
+            mind,
+            revision,
+            command,
+        } = decided;
+        if let Some(seat) = self.bots.iter_mut().find(|b| b.slot == slot) {
+            seat.mind = Some(mind);
+        }
+        let current = revision == self.revision
+            && !self.game.status().is_finished()
+            && self.game.awaiting() == Awaiting::Turn(slot)
+            && !self.is_dropped(slot);
+        if current && !self.play_bot_command(slot, command) {
+            self.drop_player(slot);
+        }
+    }
+
+    fn is_thinking(&self, slot: Slot) -> bool {
+        self.bots.iter().any(|b| b.slot == slot && b.mind.is_none())
+    }
+
     /// Returns whether the bot produced an accepted command.
     fn let_bot_act(&mut self, slot: Slot) -> bool {
         let Some(seat) = self.bots.iter_mut().find(|b| b.slot == slot) else {
             return false;
         };
+        let Some(mind) = seat.mind.as_mut() else {
+            return false;
+        };
         let mut budget = Budget::new(seat.budget_nodes);
-        let Some(command) = seat
+        let command = mind
             .bot
-            .decide(&self.game, slot, &mut seat.rng, &mut budget)
-        else {
+            .decide(&self.game, slot, &mut mind.rng, &mut budget);
+        self.play_bot_command(slot, command)
+    }
+
+    /// Returns whether the command was accepted.
+    fn play_bot_command(&mut self, slot: Slot, command: Option<G::Command>) -> bool {
+        let Some(command) = command else {
             return false;
         };
         if self.game.apply_command(slot, &command).is_err() {
@@ -208,10 +275,12 @@ impl<G: Game> Authority<G> {
             return false;
         }
         self.pending_inputs.push(Input::Command { slot, command });
+        self.revision += 1;
         true
     }
 
     pub fn seal_frame(&mut self) -> GameFrame<G> {
+        self.revision += 1;
         let mut inputs = std::mem::take(&mut self.pending_inputs);
         if !self.game.status().is_finished() {
             for event in self.game.roll_world(&mut self.world_rng) {

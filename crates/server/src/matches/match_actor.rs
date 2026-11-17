@@ -6,9 +6,10 @@ use axum::extract::ws::Utf8Bytes;
 use mg_core::{Clock, OutcomeKind, Slot, Status, Tick};
 use mg_protocol::proto::server_message::Message;
 use mg_protocol::{REPLAY_FORMAT_VERSION, proto, slot_from_wire};
-use mg_registry::{DynAuthority, SubmitError};
+use mg_registry::{DynAuthority, DynBotDecision, SubmitError};
 use prost::Message as _;
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, mpsc};
+use tokio::task::JoinError;
 use tokio::time::{Instant, MissedTickBehavior};
 
 use super::disconnect_budget::DisconnectBudgets;
@@ -64,7 +65,13 @@ pub(crate) struct MatchActor {
     catch_up_cache: Option<CachedCatchUp>,
     hub: HubHandle,
     bot_cpu: Arc<Semaphore>,
+    /// A turn-based bot is thinking on the blocking pool; its move comes back on `bot_moves`.
+    bot_thinking: bool,
+    /// Set when the actor runs.
+    bot_moves: Option<BotMoveSender>,
 }
+
+type BotMoveSender = mpsc::UnboundedSender<Result<DynBotDecision, JoinError>>;
 
 pub(crate) struct MatchSetup {
     pub lobby: LobbyId,
@@ -101,6 +108,8 @@ impl MatchActor {
             catch_up_cache: None,
             hub: setup.hub,
             bot_cpu: setup.bot_cpu,
+            bot_thinking: false,
+            bot_moves: None,
         }
     }
 
@@ -126,12 +135,14 @@ impl MatchActor {
     }
 
     async fn run(mut self, mut inbox: MatchInbox) -> MatchExit {
+        let (bot_moves, mut decided_bot_moves) = mpsc::unbounded_channel();
+        self.bot_moves = Some(bot_moves);
         self.broadcast(&codec::push(Message::MatchStarted(self.header.clone())));
         // Setup frame: initial randomness (first player, dealt board, spawned tiles).
         self.seal_and_broadcast();
         self.pause_for_absent_seats();
         if self.clock == Clock::TurnBased {
-            self.drive_bots().await;
+            self.drive_bots();
         }
         let tick_every = match self.clock {
             Clock::Realtime { tick_ms } => Duration::from_millis(u64::from(tick_ms.max(1))),
@@ -152,6 +163,7 @@ impl MatchActor {
                     Some(control) => self.handle_control(control).await,
                 },
                 _ = ticker.tick(), if ticking => self.tick().await,
+                Some(decided) = decided_bot_moves.recv() => self.on_bot_move(decided),
                 () = sleep_until_opt(deadline), if deadline.is_some() => self.on_deadline().await,
                 request = inbox.requests.recv() => match request {
                     Some(request) => self.handle_request(request).await,
@@ -238,7 +250,7 @@ impl MatchActor {
                 outbound.send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
                 if self.clock == Clock::TurnBased {
                     self.seal_and_broadcast();
-                    self.drive_bots().await;
+                    self.drive_bots();
                 }
             }
             Err(SubmitError::Wire(error)) => {
@@ -263,27 +275,60 @@ impl MatchActor {
         self.seal_and_broadcast();
     }
 
-    /// Turn-based: lets bots move until a human is on turn.
-    async fn drive_bots(&mut self) {
-        loop {
-            let waiting = self
-                .authority
-                .as_ref()
-                .is_some_and(|a| a.is_waiting_for_bot() && !a.status().is_finished());
-            if !waiting || self.state != RunState::Running {
-                return;
+    /// Turn-based: the bot on turn thinks on the blocking pool (under the CPU semaphore) with its
+    /// own copy of the game, while the match keeps answering: a slow bot holds up nobody's
+    /// leaving, chat or reconnect. Its move comes back to [`Self::on_bot_move`].
+    fn drive_bots(&mut self) {
+        if self.bot_thinking || self.state != RunState::Running {
+            return;
+        }
+        let Some(bot_moves) = self.bot_moves.clone() else {
+            return;
+        };
+        let Some(turn) = self.authority.as_mut().and_then(|a| a.begin_bot_turn()) else {
+            return;
+        };
+        self.bot_thinking = true;
+        let bot_cpu = self.bot_cpu.clone();
+        let match_id = self.match_id.clone();
+        tokio::spawn(async move {
+            let permit = bot_cpu.acquire_owned().await;
+            let decided = tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                turn.think()
+            })
+            .await;
+            if bot_moves.send(decided).is_err() {
+                tracing::debug!(%match_id, "match over before its bot moved");
             }
-            self.run_bots().await;
-            if self.authority.is_none() {
-                return;
+        });
+    }
+
+    /// The match may have moved on meanwhile (a player left): the authority then drops the
+    /// move and the bot thinks again. A panicking bot ends the match as aborted.
+    fn on_bot_move(&mut self, decided: Result<DynBotDecision, JoinError>) {
+        self.bot_thinking = false;
+        match decided {
+            Ok(decision) => {
+                let Some(authority) = self.authority.as_mut() else {
+                    return;
+                };
+                authority.finish_bot_turn(decision);
+                if authority.has_pending_inputs() {
+                    self.seal_and_broadcast();
+                }
+                self.drive_bots();
             }
-            self.seal_and_broadcast();
+            Err(error) => {
+                tracing::error!(match_id = %self.match_id, %error, "bot task panicked");
+                self.authority = None;
+            }
         }
     }
 
-    /// Bot decisions run on the blocking pool under the CPU semaphore, so a minimax search (or
-    /// many real-time bots at once) never stalls the async workers. A panicking bot leaves the
-    /// authority `None`, which ends the actor as aborted.
+    /// Real-time bots decide on the blocking pool under the CPU semaphore, so many bots at once
+    /// never stall the async workers. A panicking bot leaves the authority `None`, which ends
+    /// the actor as aborted.
     async fn run_bots(&mut self) {
         let Some(mut authority) = self.authority.take() else {
             return;
@@ -338,7 +383,7 @@ impl MatchActor {
             // A turn-based game goes on at once when the last player is back (no countdown
             // whose end would do it): a bot on turn must move now, or nobody can.
             if self.clock == Clock::TurnBased {
-                self.drive_bots().await;
+                self.drive_bots();
             }
         }
     }
@@ -416,7 +461,7 @@ impl MatchActor {
             self.after_reconnect();
         }
         if self.clock == Clock::TurnBased {
-            self.drive_bots().await;
+            self.drive_bots();
         }
     }
 
@@ -453,7 +498,7 @@ impl MatchActor {
             RunState::Countdown { .. } => {
                 self.state = RunState::Running;
                 if self.clock == Clock::TurnBased {
-                    self.drive_bots().await;
+                    self.drive_bots();
                 }
             }
             RunState::Paused => {

@@ -1,13 +1,18 @@
-use mg_core::{Authority, Awaiting, BotSeat, Clock, HasBots, PlayerSpec, Slot, Status, Tick};
+use mg_core::{
+    Authority, Awaiting, BotSeat, Clock, DecidedBotTurn, HasBots, PlayerSpec, Slot, Status, Tick,
+};
 use mg_protocol::{WireBots, WireGame, frame_to_wire, proto};
 
 use crate::parse_settings;
 
 use crate::create_error::CreateError;
 use crate::dyn_authority::DynAuthority;
+use crate::dyn_bot_decision::DynBotDecision;
+use crate::dyn_bot_turn::DynBotTurn;
 use crate::game_kind::GameKind;
 use crate::seat_spec::SeatSpec;
 use crate::submit_error::SubmitError;
+use crate::typed_bot_turn::TypedBotTurn;
 
 #[derive(Debug)]
 pub(crate) struct AuthorityAdapter<G: WireGame> {
@@ -51,6 +56,19 @@ impl<G: WireGame> DynAuthority for AuthorityAdapter<G> {
 
     fn is_waiting_for_bot(&self) -> bool {
         self.authority.is_waiting_for_bot()
+    }
+
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        self.authority
+            .begin_bot_turn()
+            .map(|turn| Box::new(TypedBotTurn(turn)) as Box<dyn DynBotTurn>)
+    }
+
+    fn finish_bot_turn(&mut self, decision: DynBotDecision) {
+        match decision.downcast::<DecidedBotTurn<G>>() {
+            Some(decided) => self.authority.finish_bot_turn(decided),
+            None => debug_assert!(false, "a bot decision from another game"),
+        }
     }
 
     fn has_pending_inputs(&self) -> bool {

@@ -43,7 +43,7 @@ game checks it against the generated legal moves; nothing else is accepted.
   by another move order is not searched again and the best move found earlier is tried first; it
   sees several plies deeper. 5 000 000 positions a move: about five seconds natively, ten to
   fifteen in WASM on a phone. Online it thinks on the server's blocking pool, one core per
-  thinking bot (`bot_cpu`); the match answers other requests only after the move.
+  thinking bot (`bot_cpu`), on a copy of the game: the match goes on answering meanwhile.
 
 The search bots look up to six plies further while captures are pending, so an exchange is
 judged once it is over rather than halfway, prefer the quickest win (and the slowest loss), and
