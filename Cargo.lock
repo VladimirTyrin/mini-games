@@ -1218,7 +1218,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mg-arena"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "mg-core",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "mg-bot-sdk"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "clap",
  "futures-util",
@@ -1250,18 +1250,18 @@ dependencies = [
 
 [[package]]
 name = "mg-checkers"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-core"
-version = "2.0.0"
+version = "2.1.0"
 
 [[package]]
 name = "mg-ffi"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
  "mg-protocol",
@@ -1273,14 +1273,14 @@ dependencies = [
 
 [[package]]
 name = "mg-numbers-match"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-protocol"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-checkers",
  "mg-core",
@@ -1303,14 +1303,14 @@ dependencies = [
 
 [[package]]
 name = "mg-puzzle2048"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-registry"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-checkers",
  "mg-core",
@@ -1328,14 +1328,14 @@ dependencies = [
 
 [[package]]
 name = "mg-sea-battle"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-server"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "aes-gcm",
  "axum",
@@ -1371,28 +1371,28 @@ dependencies = [
 
 [[package]]
 name = "mg-snake"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-stack-attack"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-tictactoe"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
 
 [[package]]
 name = "mg-wasm"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
  "mg-protocol",
@@ -1404,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "mg-word-hunt"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "mg-core",
 ]
@@ -2943,7 +2943,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xtask"
-version = "2.0.0"
+version = "2.1.0"
 
 [[package]]
 name = "yoke"
