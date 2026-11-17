@@ -262,7 +262,9 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
             _ => None,
         })
         .await;
-    assert!(resumed.countdown_ms > 0);
+    // A turn-based game needs no countdown to get ready: play goes on at once.
+    assert_eq!(resumed.countdown_ms, 0);
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
 }
 
 #[tokio::test]
@@ -401,4 +403,33 @@ async fn shared_replay_is_validated() {
         host_only_control: true,
     });
     expect_error(host.request(request).await, proto::ErrorCode::InvalidReplay);
+}
+
+#[tokio::test]
+async fn a_real_time_game_counts_down_before_play_goes_on() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let guest = server.guest("Guest").await;
+    let resume_token = guest.welcome.resume_token.clone();
+    let mut guest = guest.client;
+    let lobby = create_lobby(&mut host, snake_settings(), 2).await;
+    join_ready(&mut guest, &lobby.lobby_id).await;
+    start(&mut host).await;
+    drop(guest);
+    host.expect(|m| match &m.message {
+        Some(Reply::Paused(p)) => p.pause,
+        _ => None,
+    })
+    .await;
+
+    let mut back = server.client().await;
+    back.hello_guest("Guest", &resume_token).await.unwrap();
+
+    let resumed = host
+        .expect(|m| match &m.message {
+            Some(Reply::Resumed(r)) => Some(r.clone()),
+            _ => None,
+        })
+        .await;
+    assert!(resumed.countdown_ms > 0);
 }

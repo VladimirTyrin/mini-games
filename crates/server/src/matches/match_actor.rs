@@ -57,6 +57,8 @@ pub(crate) struct MatchActor {
     dropped: BTreeSet<Slot>,
     budgets: DisconnectBudgets,
     state: RunState,
+    /// Zero in turn-based games: a pause there holds back nobody's reflexes, so play goes on at
+    /// once when the last player is back.
     resume_countdown: Duration,
     /// Catch-ups are the whole log; one encoding serves every request until the next frame.
     catch_up_cache: Option<CachedCatchUp>,
@@ -77,11 +79,12 @@ pub(crate) struct MatchSetup {
 
 impl MatchActor {
     pub(crate) fn new(setup: MatchSetup) -> Self {
+        let clock = setup.authority.clock();
         Self {
             lobby: setup.lobby,
             match_id: setup.match_id,
             header: setup.header,
-            clock: setup.authority.clock(),
+            clock,
             authority: Some(setup.authority),
             participants: setup.participants,
             dropped: BTreeSet::new(),
@@ -90,7 +93,11 @@ impl MatchActor {
                 setup.timing.drop_vote_after,
             ),
             state: RunState::Running,
-            resume_countdown: setup.timing.resume_countdown,
+            resume_countdown: if clock.is_realtime() {
+                setup.timing.resume_countdown
+            } else {
+                Duration::ZERO
+            },
             catch_up_cache: None,
             hub: setup.hub,
             bot_cpu: setup.bot_cpu,
@@ -414,8 +421,12 @@ impl MatchActor {
             return;
         }
         if self.state == RunState::Paused {
-            self.state = RunState::Countdown {
-                until: Instant::now() + self.resume_countdown,
+            self.state = if self.resume_countdown.is_zero() {
+                RunState::Running
+            } else {
+                RunState::Countdown {
+                    until: Instant::now() + self.resume_countdown,
+                }
             };
             self.broadcast(&codec::push(Message::Resumed(proto::MatchResumed {
                 match_id: self.match_id.to_string(),

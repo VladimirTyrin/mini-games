@@ -108,7 +108,9 @@ client → RequestReplay(match_id)            → ReplayData(bytes)
 - `Paused.pauses` lists every seat the match waits for and replaces the previous list (when one
   of two absent seats returns, the others are re-announced). `Resumed` clears it.
 - `CatchUp.pauses` lists every seat the match waits for (`pause` repeats the first one for
-  older clients); `resume_countdown_ms` is non-zero while the resume countdown runs.
+  older clients); `resume_countdown_ms` is non-zero while the resume countdown runs. Only
+  real-time games count down (3 s) when the last missing player is back; turn-based ones go on at
+  once (`countdown_ms` 0).
 - `Ended` without `result` means the server aborted the match (internal error): there is no
   replay and the lobby returns to `OPEN`.
 - Submits, catch-ups and drop votes may be answered `RATE_LIMITED` when the match is too busy

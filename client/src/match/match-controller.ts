@@ -73,7 +73,7 @@ export class MatchController {
       }),
       source.on("resumed", ({ countdownMs }) => {
         this.pauses.value = [];
-        this.resumeAt.value = performance.now() + countdownMs;
+        this.resumeAt.value = countdownMs > 0 ? performance.now() + countdownMs : null;
       }),
       source.on("rate", (rate) => {
         this.playbackRate = rate;
