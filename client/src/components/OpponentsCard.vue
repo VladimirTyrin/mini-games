@@ -71,16 +71,19 @@ function remove(index: number): void {
         <Avatar url="" :name="plugin.botLabel(bot)" bot />
         <span class="flex-1 truncate">{{ plugin.botLabel(bot) }}</span>
         <span v-if="hasChoice" class="text-gray-400" aria-hidden="true">▾</span>
-        <!-- The native picker sits invisibly over the row: phones get their own wheel or sheet. -->
+        <!-- The native picker sits invisibly over the row: phones get their own wheel or sheet.
+             Its list gets explicit colours: some browsers (the desktop app's) open it white
+             despite the dark colour scheme. -->
         <select
           v-if="hasChoice"
-          class="absolute inset-0 cursor-pointer opacity-0"
+          class="absolute inset-0 cursor-pointer bg-[#1f2937] text-[#f3f4f6] opacity-0"
           :aria-label="`Opponent ${index + 1}`"
           @change="replace(index, $event)"
         >
           <option
             v-for="kind in available"
             :key="plugin.botLabel(kind)"
+            class="bg-[#1f2937] text-[#f3f4f6]"
             :selected="plugin.botLabel(kind) === plugin.botLabel(bot)"
           >
             {{ plugin.botLabel(kind) }}
