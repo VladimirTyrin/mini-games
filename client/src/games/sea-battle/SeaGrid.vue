@@ -3,6 +3,7 @@ import { computed } from "vue";
 
 import { SeaBattleCellMark } from "@/proto/minigames/v2/sea_battle_pb";
 
+import ShipSprite from "./ShipSprite.vue";
 import { type CellPoint, type EditorShip, SIDE } from "./fleet-editor";
 
 const props = withDefaults(
@@ -49,7 +50,7 @@ function cellClass(cell: { index: number; x: number; y: number; mark: SeaBattleC
   const ring = isLast ? " ring-2 ring-inset ring-amber-300" : "";
   switch (cell.mark) {
     case SeaBattleCellMark.HIT:
-      return "bg-orange-600/90" + ring;
+      return "bg-orange-600/60" + ring;
     // The sunk ship is drawn underneath; the cell only marks the hit.
     case SeaBattleCellMark.SUNK:
       return ring.trim();
@@ -63,21 +64,13 @@ function cellClass(cell: { index: number; x: number; y: number; mark: SeaBattleC
   }
 }
 
-/** Of a cell, in percent of the sea (padding is measured on its width): a hull is slimmer across
- *  than along, so even a single-decker reads as a boat, not a dot. */
-const HULL_ACROSS_INSET = 1.8;
-const HULL_ALONG_INSET = 0.3;
-
 function shipStyle(ship: EditorShip): Record<string, string> {
   const unit = 100 / SIDE;
-  const across = `${HULL_ACROSS_INSET}%`;
-  const along = `${HULL_ALONG_INSET}%`;
   return {
     left: `${ship.x * unit}%`,
     top: `${ship.y * unit}%`,
     width: `${(ship.horizontal ? ship.length : 1) * unit}%`,
     height: `${(ship.horizontal ? 1 : ship.length) * unit}%`,
-    padding: ship.horizontal ? `${across} ${along}` : `${along} ${across}`,
   };
 }
 </script>
@@ -89,33 +82,17 @@ function shipStyle(ship: EditorShip): Record<string, string> {
     :aria-label="label"
   >
     <div class="pointer-events-none absolute inset-0">
-      <!-- A notch between decks, so a ship's length can be counted at a glance. -->
       <div
         v-for="(ship, index) in [...ships, ...sunkShips]"
         :key="index"
         class="absolute"
         :style="shipStyle(ship)"
       >
-        <div
-          class="flex h-full w-full overflow-hidden rounded-full border"
-          :class="[
-            ship.horizontal ? 'flex-row' : 'flex-col',
-            index < ships.length ? 'border-slate-100/90 bg-slate-300/85' : 'border-red-300/90 bg-red-700/90',
-          ]"
-        >
-          <span
-            v-for="deck in ship.length"
-            :key="deck"
-            class="flex-1"
-            :class="
-              deck === 1
-                ? ''
-                : ship.horizontal
-                  ? 'border-l-2 border-slate-600/50'
-                  : 'border-t-2 border-slate-600/50'
-            "
-          />
-        </div>
+        <ShipSprite
+          :length="ship.length"
+          :horizontal="ship.horizontal"
+          :look="index < ships.length ? 'afloat' : 'sunk'"
+        />
       </div>
     </div>
     <div class="absolute inset-0 grid grid-cols-10 grid-rows-10">
