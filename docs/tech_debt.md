@@ -17,3 +17,16 @@ match and the lobby.
   `expires_in_ms` on invitations, so device clocks do not matter.
 - The app shows a banner that counts down. `ServerUpdating` arrives again on every later
   sign-in, so a reconnect picks up the same deadline.
+
+## Pause in online real-time games
+
+**Now.** A local real-time match (against bots) can be paused; an online one pauses only when a
+seated player disconnects (budget per seat, drop vote; see [protocol.md](protocol.md)).
+
+**Wanted.** A player pausing an online real-time match on purpose.
+
+**Open questions** (to agree before building):
+- How many pauses a player gets per match, and for how long each (or a shared time budget).
+- Who may resume: only the player who paused, anyone after a while, or by vote.
+- What happens when the pause runs out: resume with a countdown, or drop the player.
+- Whether spectators see it and whether it counts against the disconnect budget.
