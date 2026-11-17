@@ -1,6 +1,6 @@
 use mg_core::{Budget, CoreRng, Game, HasBots, PlayerSpec, Slot};
 
-use crate::{BotKind, Checkers, GameEnd, Settings, WhitePlayer};
+use crate::{BotKind, Checkers, Command, GameEnd, Path, Rank, Settings, Side, Square, WhitePlayer};
 
 const HOST: Slot = Slot::new(0);
 /// Small enough for debug builds; the strength gap shows already.
@@ -61,4 +61,34 @@ fn the_hard_bot_beats_the_easy_one() {
         hard_wins >= 3,
         "the hard bot won both colours in {hard_wins} of 4"
     );
+}
+
+#[test]
+fn search_bots_take_a_win_at_once_instead_of_a_later_one() {
+    // White king e5, men c1 and g1; black men a3 and h2. Ke5-b2 leaves black without a move;
+    // other king moves win too, but only later.
+    let square = |x, y| Square::new(x, y).unwrap();
+    let game = Checkers::from_position(
+        &[
+            (square(4, 4), Side::White, Rank::King),
+            (square(2, 0), Side::White, Rank::Man),
+            (square(6, 0), Side::White, Rank::Man),
+            (square(0, 2), Side::Black, Rank::Man),
+            (square(7, 1), Side::Black, Rank::Man),
+        ],
+        Side::White,
+        0,
+    );
+    let winning = Command::Move(Path::new(vec![square(4, 4), square(1, 1)]).unwrap());
+    for kind in [BotKind::Medium, BotKind::Hard, BotKind::Master] {
+        for seed in 0..10 {
+            let decided = Checkers::make_bot(kind).decide(
+                &game,
+                HOST,
+                &mut CoreRng::new(seed),
+                &mut Budget::new(TEST_SEARCH_BUDGET),
+            );
+            assert_eq!(decided.as_ref(), Some(&winning), "{kind:?}, seed {seed}");
+        }
+    }
 }

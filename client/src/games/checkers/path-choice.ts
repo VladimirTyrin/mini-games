@@ -20,7 +20,10 @@ export function choosePath(
   const candidates = paths.filter((path) => startsWith(path, selection));
   const step = selection.length;
 
-  // A landing comes before starting over: a king's capture can end on the square it left.
+  // A tap on the picked piece puts it back, even where a capture could end on the square it left
+  // (that one is walked landing by landing).
+  if (step === 1 && selection[0] === square) return { kind: "partial", selection: [] };
+  // Past that, a landing comes before starting over: a capture can end on the square it left.
   if (step > 0) {
     const routes = new Set<string>();
     let reached: number[] | null = null;
@@ -39,9 +42,6 @@ export function choosePath(
     }
   }
 
-  if (paths.some((path) => path[0] === square)) {
-    if (step === 1 && selection[0] === square) return { kind: "partial", selection: [] };
-    return { kind: "partial", selection: [square] };
-  }
+  if (paths.some((path) => path[0] === square)) return { kind: "partial", selection: [square] };
   return { kind: "ignore" };
 }

@@ -49,6 +49,11 @@ describe("choosePath", () => {
     expect(choosePath(captures, [0], 36)).toEqual({ kind: "ignore" });
   });
 
+  it("puts the piece back on a tap even where a capture could end on its square", () => {
+    const loop = [[0, 18, 36, 18, 0]];
+    expect(choosePath(loop, [0], 0)).toEqual({ kind: "partial", selection: [] });
+  });
+
   it("lands back on the starting square of a king's capture", () => {
     const loop = [[0, 18, 36, 18, 0]];
     expect(choosePath(loop, [0, 18, 36, 18], 0)).toEqual({

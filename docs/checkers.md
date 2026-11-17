@@ -45,8 +45,9 @@ game checks it against the generated legal moves; nothing else is accepted.
   fifteen in WASM on a phone. Online it thinks on the server's blocking pool, one core per
   thinking bot (`bot_cpu`); the match answers other requests only after the move.
 
-Both search bots extend captures, so a search never stops in the middle of an exchange, and pick
-at random among equally good moves. The evaluation counts material (a king is worth three men),
+The search bots look up to six plies further while captures are pending, so an exchange is
+judged once it is over rather than halfway, prefer the quickest win (and the slowest loss), and
+pick at random among equally good moves. They do not see the draw rules. The evaluation counts material (a king is worth three men),
 advancement, the home row, the centre and the long diagonal.
 
 ## Client

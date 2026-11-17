@@ -7,8 +7,12 @@ use crate::io::Command;
 use crate::model::{Board, Side};
 use crate::rules::{LegalMove, apply_move, legal_moves, position_key};
 
-/// Beats any evaluation: the side to move cannot move (no pieces or all blocked).
+/// Beats any evaluation: the side to move cannot move (no pieces or all blocked). A loss found
+/// `ply` plies from the root scores `LOSS + ply`, so the losing side holds out longest and the
+/// winning side takes the shortest win.
 const LOSS: i32 = -1_000_000;
+/// Scores this far from `LOSS` (or `-LOSS`) are wins and losses, not evaluations.
+const DECIDED: i32 = 10_000;
 /// Extra plies searched past the horizon while captures are pending: stopping in the middle of
 /// an exchange misjudges it badly.
 const CAPTURE_EXTENSION: u8 = 6;
@@ -92,6 +96,7 @@ impl Search<'_> {
                 side.opponent(),
                 depth.saturating_sub(1),
                 CAPTURE_EXTENSION,
+                1,
                 i32::MIN.saturating_add(1),
                 floor.saturating_neg(),
             )?;
@@ -112,6 +117,7 @@ impl Search<'_> {
         side: Side,
         depth: u8,
         extension: u8,
+        ply: u8,
         mut alpha: i32,
         beta: i32,
     ) -> Result<i32, OutOfBudget> {
@@ -124,18 +130,18 @@ impl Search<'_> {
             && entry.depth >= depth
             && entry.extension >= extension
         {
+            let score = from_table(entry.score, ply);
             match entry.bound {
-                Bound::Exact => return Ok(entry.score),
-                Bound::Lower if entry.score >= beta => return Ok(entry.score),
-                Bound::Upper if entry.score <= alpha => return Ok(entry.score),
+                Bound::Exact => return Ok(score),
+                Bound::Lower if score >= beta => return Ok(score),
+                Bound::Upper if score <= alpha => return Ok(score),
                 Bound::Lower | Bound::Upper => {}
             }
         }
 
         let moves = legal_moves(board, side);
         if moves.is_empty() {
-            // Closer losses are worse: the bot prefers to lose later and win sooner.
-            return Ok(LOSS.saturating_add(i32::from(extension) + i32::from(depth)));
+            return Ok(LOSS + i32::from(ply));
         }
         let capturing = moves
             .first()
@@ -166,6 +172,7 @@ impl Search<'_> {
                 side.opponent(),
                 remaining - 1,
                 remaining_extension,
+                ply.saturating_add(1),
                 beta.saturating_neg(),
                 alpha.saturating_neg(),
             )?;
@@ -188,7 +195,7 @@ impl Search<'_> {
             };
             table.store(TableEntry {
                 key,
-                score: best,
+                score: to_table(best, ply),
                 bound,
                 depth,
                 extension,
@@ -197,5 +204,27 @@ impl Search<'_> {
             });
         }
         Ok(best)
+    }
+}
+
+/// A win or loss is stored as counted from the stored position, not from the root, so it holds
+/// wherever the position comes up again.
+fn to_table(score: i32, ply: u8) -> i32 {
+    if score <= LOSS + DECIDED {
+        score - i32::from(ply)
+    } else if score >= -LOSS - DECIDED {
+        score + i32::from(ply)
+    } else {
+        score
+    }
+}
+
+fn from_table(score: i32, ply: u8) -> i32 {
+    if score <= LOSS + DECIDED {
+        score + i32::from(ply)
+    } else if score >= -LOSS - DECIDED {
+        score - i32::from(ply)
+    } else {
+        score
     }
 }
