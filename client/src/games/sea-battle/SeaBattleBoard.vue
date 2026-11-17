@@ -6,7 +6,11 @@ import { create, fromBinary } from "@bufbuild/protobuf";
 import type { MatchController } from "@/match/match-controller";
 import { MatchCatchUpSchema } from "@/proto/minigames/v2/match_pb";
 import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
-import { SeaBattlePhase, type SeaBattleRevealedFleet } from "@/proto/minigames/v2/sea_battle_pb";
+import {
+  SeaBattleCellMark,
+  SeaBattlePhase,
+  type SeaBattleRevealedFleet,
+} from "@/proto/minigames/v2/sea_battle_pb";
 import { useToastStore } from "@/stores/toasts";
 import { seatLabels } from "@/util/players";
 import { Mirror } from "@/wasm/core";
@@ -85,6 +89,13 @@ function seaLabel(slot: number): string {
   if (mySlot.value === null) return names.value[slot] ?? `Seat ${slot + 1}`;
   return slot === mySlot.value ? "Your fleet" : `${names.value[slot] ?? "Opponent"}'s sea`;
 }
+
+/** Cells of the other sea a shot may go to: those still unknown, on the player's turn. */
+const targets = computed(() => {
+  const marks = view.value?.waters[targetSlot.value]?.marks ?? [];
+  if (!myTurn.value) return new Set<number>();
+  return new Set(marks.flatMap((mark, index) => (mark === SeaBattleCellMark.UNKNOWN ? [index] : [])));
+});
 
 const afloat = computed(() => view.value?.waters[targetSlot.value]?.afloat ?? []);
 
@@ -166,8 +177,8 @@ async function fire(cell: CellPoint): Promise<void> {
           :marks="view.waters[targetSlot]?.marks ?? []"
           :ships="fleetOf(targetSlot)"
           :last-shot="lastShotOn(targetSlot)"
-          :can-fire="myTurn"
-          @fire="fire"
+          :tappable="targets"
+          @tap="fire"
         />
       </section>
       <section class="flex flex-col gap-1" :style="{ width: 'min(56vw, 24vh, 300px)' }">

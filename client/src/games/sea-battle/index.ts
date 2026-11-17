@@ -25,8 +25,8 @@ export const seaBattlePlugin: GamePlugin = {
     return kind.game.case === "seaBattle" ? (BOT_LABELS[kind.game.value] ?? "Bot") : "Bot";
   },
   controls: {
-    keyboard: "Place your fleet, then click a cell of the other sea to fire",
-    touch: "Place your fleet, then tap a cell of the other sea to fire",
+    keyboard: "Click cells to place your fleet, then click the other sea to fire",
+    touch: "Tap cells to place your fleet, then tap the other sea to fire",
   },
   describeEnd(view) {
     if (view.game.case !== "seaBattle") return null;

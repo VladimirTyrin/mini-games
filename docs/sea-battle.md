@@ -30,11 +30,15 @@ client, bot or observer has the other fleet while the game runs.
 
 ## Placing a fleet in the app
 
-- The editor starts from a random fleet that the core makes (`Game::default_secret_command`
-  through the mirror), so the page never needs to know the fleet's rules.
-- Drag a ship to move it, tap it to turn it about its bow, tap open water to move the picked ship
-  there. Ships that touch another are drawn red.
-- **Ready** stays off while the core refuses the fleet (`Match::check_secret_command`).
+- The sea starts empty. A tap on a free cell adds a deck, a tap on a ship's cell takes it away,
+  which shortens the ship or splits it in two. Cells joined by a side are one ship.
+- Free cells are lit: those where one more deck still leaves a fleet possible. A ship may not bend,
+  touch another (not even at a corner) or grow past four. There may be no more ships of a length
+  or longer than the fleet has. This is a hint for the player only.
+- The fleet's ship lengths come from a fleet the core makes, and so does **Random**
+  (`Game::default_secret_command` through the mirror). **Clear** empties the sea.
+- **Ready** stays off until the core accepts the fleet (`Match::check_secret_command`), so the page
+  never decides what a fleet is.
 
 ## Bots
 

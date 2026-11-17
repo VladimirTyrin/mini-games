@@ -2,7 +2,7 @@ import { type SeaBattleShip, SeaBattleOrientation } from "@/proto/minigames/v2/s
 
 export const SIDE = 10;
 
-/** A ship being placed: its bow (top or left end), length and direction. */
+/** A ship on the board: its bow (top or left end), length and direction. */
 export interface EditorShip {
   x: number;
   y: number;
@@ -15,45 +15,129 @@ export interface CellPoint {
   y: number;
 }
 
+/** Row-major index of a cell, `0..SIDE * SIDE`. */
+export function cellIndex(cell: CellPoint): number {
+  return cell.y * SIDE + cell.x;
+}
+
+function cellAt(index: number): CellPoint {
+  return { x: index % SIDE, y: Math.floor(index / SIDE) };
+}
+
+function neighbours(index: number, withCorners: boolean): number[] {
+  const { x, y } = cellAt(index);
+  const found: number[] = [];
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if ((dx === 0 && dy === 0) || (!withCorners && dx !== 0 && dy !== 0)) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx >= 0 && nx < SIDE && ny >= 0 && ny < SIDE) found.push(ny * SIDE + nx);
+    }
+  }
+  return found;
+}
+
 export function shipCells(ship: EditorShip): CellPoint[] {
   return Array.from({ length: ship.length }, (_, step) =>
     ship.horizontal ? { x: ship.x + step, y: ship.y } : { x: ship.x, y: ship.y + step },
   );
 }
 
-/** The ship with its bow at (x, y), shifted back onto the board where it would stick out. */
-export function placed(ship: EditorShip, x: number, y: number): EditorShip {
-  const maxX = SIDE - (ship.horizontal ? ship.length : 1);
-  const maxY = SIDE - (ship.horizontal ? 1 : ship.length);
-  return { ...ship, x: clamp(x, 0, maxX), y: clamp(y, 0, maxY) };
+/** Groups of filled cells joined by a side, each sorted from the top left. */
+function groups(filled: ReadonlySet<number>): number[][] {
+  const seen = new Set<number>();
+  const found: number[][] = [];
+  for (const start of [...filled].sort((a, b) => a - b)) {
+    if (seen.has(start)) continue;
+    const group: number[] = [];
+    const queue = [start];
+    seen.add(start);
+    while (queue.length > 0) {
+      const index = queue.pop() as number;
+      group.push(index);
+      for (const next of neighbours(index, false)) {
+        if (filled.has(next) && !seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    found.push(group.sort((a, b) => a - b));
+  }
+  return found;
 }
 
-/** Turned about its bow, kept on the board. */
-export function rotated(ship: EditorShip): EditorShip {
-  return placed({ ...ship, horizontal: !ship.horizontal }, ship.x, ship.y);
+/** A straight group as a ship; `null` for a bent one. */
+function asShip(group: readonly number[]): EditorShip | null {
+  const cells = group.map(cellAt);
+  const first = cells[0];
+  if (!first) return null;
+  if (cells.every((cell) => cell.y === first.y)) return { ...first, length: cells.length, horizontal: true };
+  if (cells.every((cell) => cell.x === first.x)) return { ...first, length: cells.length, horizontal: false };
+  return null;
+}
+
+/** The ships the filled cells make (cells joined by a side are one ship). */
+export function shipsOf(filled: ReadonlySet<number>): EditorShip[] {
+  return groups(filled).flatMap((group) => asShip(group) ?? []);
 }
 
 /**
- * Which ships stand on or right next to another, to draw them as misplaced while the player
- * arranges the fleet. The core still decides whether the fleet is legal.
+ * Whether the filled cells can still grow into a fleet of `lengths`: every group straight and no
+ * longer than the longest ship, no two groups touching at a corner, and for every length no more
+ * groups that long or longer than the fleet has ships. A hint for the player while placing; the
+ * core decides whether the finished fleet is legal.
  */
-export function crowdedShips(ships: readonly EditorShip[]): Set<number> {
-  const crowded = new Set<number>();
-  ships.forEach((ship, index) => {
-    ships.forEach((other, otherIndex) => {
-      if (otherIndex <= index) return;
-      const near = shipCells(ship).some((cell) =>
-        shipCells(other).some(
-          (otherCell) => Math.abs(cell.x - otherCell.x) <= 1 && Math.abs(cell.y - otherCell.y) <= 1,
-        ),
-      );
-      if (near) {
-        crowded.add(index);
-        crowded.add(otherIndex);
-      }
+export function canGrowInto(filled: ReadonlySet<number>, lengths: readonly number[]): boolean {
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  if (filled.size > total) return false;
+  const all = groups(filled);
+  const groupOf = new Map<number, number>();
+  all.forEach((group, at) => group.forEach((index) => groupOf.set(index, at)));
+  for (const [at, group] of all.entries()) {
+    if (asShip(group) === null) return false;
+    const touches = group.some((index) =>
+      neighbours(index, true).some((near) => groupOf.has(near) && groupOf.get(near) !== at),
+    );
+    if (touches) return false;
+  }
+  const longest = Math.max(0, ...lengths);
+  for (let length = 1; length <= longest + 1; length += 1) {
+    const groupsThatLong = all.filter((group) => group.length >= length).length;
+    const shipsThatLong = lengths.filter((ship) => ship >= length).length;
+    if (groupsThatLong > shipsThatLong) return false;
+  }
+  return true;
+}
+
+/** Empty cells where one more filled cell still leaves a fleet possible. */
+export function allowedCells(filled: ReadonlySet<number>, lengths: readonly number[]): Set<number> {
+  const allowed = new Set<number>();
+  for (let index = 0; index < SIDE * SIDE; index += 1) {
+    if (filled.has(index)) continue;
+    if (canGrowInto(new Set([...filled, index]), lengths)) allowed.add(index);
+  }
+  return allowed;
+}
+
+/** The fleet's ship lengths, longest first, each with whether a ship of it is on the board. */
+export function shipsLeft(
+  filled: ReadonlySet<number>,
+  lengths: readonly number[],
+): { length: number; isPlaced: boolean }[] {
+  const placed = shipsOf(filled).map((ship) => ship.length);
+  return [...lengths]
+    .sort((a, b) => b - a)
+    .map((length) => {
+      const at = placed.indexOf(length);
+      if (at >= 0) placed.splice(at, 1);
+      return { length, isPlaced: at >= 0 };
     });
-  });
-  return crowded;
+}
+
+export function cellsOf(ships: readonly EditorShip[]): Set<number> {
+  return new Set(ships.flatMap((ship) => shipCells(ship).map(cellIndex)));
 }
 
 export function fromWire(ship: SeaBattleShip): EditorShip {
@@ -75,8 +159,4 @@ export function toWire(ship: EditorShip): {
     length: ship.length,
     orientation: ship.horizontal ? SeaBattleOrientation.HORIZONTAL : SeaBattleOrientation.VERTICAL,
   };
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(Math.max(value, low), high);
 }

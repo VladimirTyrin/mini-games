@@ -10,42 +10,37 @@ const props = withDefaults(
     /** Row by row; empty draws open water. */
     marks?: readonly SeaBattleCellMark[];
     ships?: readonly EditorShip[];
-    /** Indexes into `ships` drawn as misplaced. */
-    crowded?: ReadonlySet<number>;
-    selected?: number | null;
+    /** Indexes of the cells that take taps. */
+    tappable?: ReadonlySet<number>;
+    /** Indexes of the cells shown as free to use (where a ship may still go). */
+    hints?: ReadonlySet<number>;
     lastShot?: CellPoint | null;
-    /** Unknown cells take taps. */
-    canFire?: boolean;
     label: string;
   }>(),
   {
     marks: () => [],
     ships: () => [],
-    crowded: () => new Set<number>(),
-    selected: null,
+    tappable: () => new Set<number>(),
+    hints: () => new Set<number>(),
     lastShot: null,
-    canFire: false,
   },
 );
-const emit = defineEmits<{ fire: [cell: CellPoint] }>();
+const emit = defineEmits<{ tap: [cell: CellPoint] }>();
 
 const COLUMNS = "ABCDEFGHIJ";
 
 const cells = computed(() =>
   Array.from({ length: SIDE * SIDE }, (_, index) => ({
+    index,
     x: index % SIDE,
     y: Math.floor(index / SIDE),
     mark: props.marks[index] ?? SeaBattleCellMark.UNKNOWN,
   })),
 );
 
-function isOpen(mark: SeaBattleCellMark): boolean {
-  return mark === SeaBattleCellMark.UNKNOWN;
-}
-
 // Ships are drawn under the cells, so a shot's mark stays visible on a ship; open water is
 // see-through.
-function cellClass(cell: { x: number; y: number; mark: SeaBattleCellMark }): string {
+function cellClass(cell: { index: number; x: number; y: number; mark: SeaBattleCellMark }): string {
   const isLast = props.lastShot?.x === cell.x && props.lastShot?.y === cell.y;
   const ring = isLast ? " ring-2 ring-inset ring-amber-300" : "";
   switch (cell.mark) {
@@ -58,7 +53,8 @@ function cellClass(cell: { x: number; y: number; mark: SeaBattleCellMark }): str
     case SeaBattleCellMark.CLEARED:
       return "bg-sky-950/40";
     default:
-      return props.canFire ? "hover:bg-sky-400/40 active:bg-sky-300/50" : "";
+      if (props.hints.has(cell.index)) return "bg-sky-500/40 hover:bg-sky-400/60";
+      return props.tappable.has(cell.index) ? "hover:bg-sky-400/40 active:bg-sky-300/50" : "";
   }
 }
 
@@ -71,12 +67,6 @@ function shipStyle(ship: EditorShip): Record<string, string> {
     height: `${(ship.horizontal ? 1 : ship.length) * unit}%`,
   };
 }
-
-function shipClass(index: number): string {
-  if (props.crowded.has(index)) return "bg-red-500/80 border-red-200";
-  if (props.selected === index) return "bg-amber-300/90 border-amber-100";
-  return "bg-slate-300/80 border-slate-100/80";
-}
 </script>
 
 <template>
@@ -86,25 +76,20 @@ function shipClass(index: number): string {
     :aria-label="label"
   >
     <div class="pointer-events-none absolute inset-0">
-      <div
-        v-for="(ship, index) in ships"
-        :key="index"
-        class="sea-ship absolute p-[1.2%]"
-        :style="shipStyle(ship)"
-      >
-        <div class="h-full w-full rounded-[30%] border" :class="shipClass(index)" />
+      <div v-for="(ship, index) in ships" :key="index" class="absolute p-[1.2%]" :style="shipStyle(ship)">
+        <div class="h-full w-full rounded-[30%] border border-slate-100/80 bg-slate-300/80" />
       </div>
     </div>
     <div class="absolute inset-0 grid grid-cols-10 grid-rows-10">
       <button
         v-for="cell in cells"
-        :key="cell.y * SIDE + cell.x"
+        :key="cell.index"
         type="button"
         class="relative flex items-center justify-center border-[0.5px] border-sky-950/50 disabled:cursor-default disabled:opacity-100"
         :class="cellClass(cell)"
-        :disabled="!canFire || !isOpen(cell.mark)"
+        :disabled="!tappable.has(cell.index)"
         :aria-label="`${COLUMNS[cell.x]}${cell.y + 1}`"
-        @click="emit('fire', { x: cell.x, y: cell.y })"
+        @click="emit('tap', { x: cell.x, y: cell.y })"
       >
         <span
           v-if="cell.mark === SeaBattleCellMark.MISS"
@@ -123,11 +108,3 @@ function shipClass(index: number): string {
     </div>
   </div>
 </template>
-
-<style scoped>
-.sea-ship {
-  transition:
-    left 0.12s ease-out,
-    top 0.12s ease-out;
-}
-</style>
