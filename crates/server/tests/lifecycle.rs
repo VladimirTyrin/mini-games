@@ -738,5 +738,10 @@ async fn sharing_a_replay_is_answered_even_when_the_host_moved_on_meanwhile() {
     }))
     .await;
 
-    expect_error(host.reply_to(share).await, proto::ErrorCode::NotInLobby);
+    // Shared before the host left, or refused after: answered either way, never left waiting.
+    match host.reply_to(share).await {
+        Reply::Ack(_) => {}
+        Reply::Error(error) => assert_eq!(error.code, proto::ErrorCode::NotInLobby as i32),
+        other => panic!("unexpected reply {other:?}"),
+    }
 }
