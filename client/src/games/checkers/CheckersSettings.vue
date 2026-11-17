@@ -1,0 +1,21 @@
+<script setup lang="ts">
+import { useGameSettingsForm } from "@/components/form/settings-form";
+import StepperField from "@/components/form/StepperField.vue";
+import type { GameSettings } from "@/proto/minigames/v2/game_pb";
+
+const settings = defineModel<GameSettings>({ required: true });
+const form = useGameSettingsForm(settings, "checkers");
+const value = form.value;
+</script>
+
+<template>
+  <div v-if="value" class="divide-y divide-white/5">
+    <StepperField
+      label="Target"
+      help="Total that ends the game"
+      v-bind="form.field('target')"
+      :model-value="value.target"
+      @update:model-value="form.update({ target: $event })"
+    />
+  </div>
+</template>

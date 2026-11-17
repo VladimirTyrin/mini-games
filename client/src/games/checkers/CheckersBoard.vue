@@ -1,0 +1,54 @@
+<script setup lang="ts">
+import { computed } from "vue";
+
+import { useGameKeys } from "@/input/use-game-keys";
+import type { MatchController } from "@/match/match-controller";
+import { useToastStore } from "@/stores/toasts";
+
+const props = defineProps<{ controller: MatchController }>();
+const toasts = useToastStore();
+
+const view = computed(() => {
+  const game = props.controller.current.value?.view.game;
+  return game?.case === "checkers" ? game.value : null;
+});
+const myTurn = computed(
+  () => view.value?.currentSlot !== undefined && view.value.currentSlot === props.controller.mySlot,
+);
+
+async function add(amount: number): Promise<void> {
+  if (!myTurn.value) return;
+  try {
+    await props.controller.submit({
+      game: { case: "checkers", value: { command: { case: "add", value: { amount } } } },
+    });
+  } catch (error) {
+    toasts.error(error instanceof Error ? error.message : String(error));
+  }
+}
+
+useGameKeys((key) => {
+  const amount = Number(key);
+  if (amount < 1 || amount > 3) return false;
+  void add(amount);
+  return true;
+});
+</script>
+
+<template>
+  <div v-if="view" class="flex flex-col items-center gap-6 p-6">
+    <p class="text-6xl font-bold">{{ view.total }} / {{ view.target }}</p>
+    <p class="text-gray-300">{{ myTurn ? "Your move" : "Waiting…" }}</p>
+    <div class="flex gap-3">
+      <button
+        v-for="amount in [1, 2, 3]"
+        :key="amount"
+        class="h-16 w-16 rounded-xl bg-emerald-700 text-2xl font-bold"
+        :disabled="!myTurn"
+        @click="add(amount)"
+      >
+        +{{ amount }}
+      </button>
+    </div>
+  </div>
+</template>

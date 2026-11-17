@@ -49,7 +49,12 @@ fn published_ranges_are_the_ones_validation_enforces() {
     for &kind in GameKind::ALL {
         let defaults = default_settings(kind);
         let ranges = setting_ranges(&defaults).unwrap();
-        assert!(!ranges.is_empty(), "{kind:?} publishes no ranges");
+        // Checkers has no numeric setting (only who plays white); every other game has some, and
+        // must publish them.
+        assert!(
+            !ranges.is_empty() || kind == GameKind::Checkers,
+            "{kind:?} publishes no ranges"
+        );
         for range in ranges {
             assert!(range.min <= range.max, "{kind:?} {range:?}");
             for inside in [range.min, range.max] {

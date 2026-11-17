@@ -11,6 +11,7 @@ macro_rules! games {
             Puzzle2048 => mg_puzzle2048::Puzzle2048, Puzzle2048, no_bots;
             NumbersMatch => mg_numbers_match::NumbersMatch, NumbersMatch, no_bots;
             WordHunt => mg_word_hunt::WordHunt, WordHunt, bots;
+            Checkers => mg_checkers::Checkers, Checkers, bots;
             // xtask:games
         }
     };

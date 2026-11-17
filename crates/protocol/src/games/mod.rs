@@ -1,3 +1,4 @@
+mod checkers;
 mod numbers_match;
 mod puzzle2048;
 mod snake;

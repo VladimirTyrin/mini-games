@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+// Squares are numbered y * 8 + x: (0, 0) is a1, white's left corner, y grows towards black.
+// Only the dark squares (x + y even) are played on.
+
+enum CheckersWhitePlayer {
+  CHECKERS_WHITE_PLAYER_UNSPECIFIED = 0;
+  // Drawn by lot and announced as a world event in the first frame; nobody moves before that.
+  CHECKERS_WHITE_PLAYER_RANDOM = 1;
+  // The lobby host (slot 0) plays white.
+  CHECKERS_WHITE_PLAYER_HOST = 2;
+  // The other seat (slot 1) plays white.
+  CHECKERS_WHITE_PLAYER_GUEST = 3;
+}
+
+// Russian draughts; the rules are fixed, only who plays white is chosen.
+message CheckersSettings {
+  CheckersWhitePlayer white_player = 1;
+}
+
+// A whole move: the start square, then every square the piece lands on (one per captured piece
+// in a capture). At most 13 squares; the game rejects anything that is not a legal move.
+message CheckersMove {
+  repeated uint32 path = 1;
+}
+
+message CheckersCommand {
+  oneof command {
+    CheckersMove move = 1;
+  }
+}
+
+message CheckersWhiteChosen {
+  // Plays white and moves first.
+  uint32 white_slot = 1;
+}
+
+message CheckersWorldEvent {
+  oneof event {
+    CheckersWhiteChosen white_chosen = 1;
+  }
+}
+
+enum CheckersSide {
+  CHECKERS_SIDE_UNSPECIFIED = 0;
+  // Starts on rows 1–3 and moves first.
+  CHECKERS_SIDE_WHITE = 1;
+  CHECKERS_SIDE_BLACK = 2;
+}
+
+message CheckersPiece {
+  // Stable for the whole game: the board animates a piece by its id.
+  uint32 id = 1;
+  uint32 square = 2;
+  CheckersSide side = 3;
+  bool king = 4;
+}
+
+message CheckersLegalMove {
+  repeated uint32 path = 1;
+  // Squares of the captured pieces, in the order they are jumped.
+  repeated uint32 captured = 2;
+  // The moving man ends as a king.
+  bool crowns = 3;
+}
+
+enum CheckersEndReason {
+  CHECKERS_END_REASON_UNSPECIFIED = 0;
+  // The loser has no pieces left.
+  CHECKERS_END_REASON_NO_PIECES = 1;
+  // The loser cannot move.
+  CHECKERS_END_REASON_NO_MOVES = 2;
+  // The loser left, was kicked or ran out of disconnect budget.
+  CHECKERS_END_REASON_OPPONENT_LEFT = 3;
+  // Draw: the same position came up a third time.
+  CHECKERS_END_REASON_REPETITION = 4;
+  // Draw: fifteen moves each with only kings moving and nothing captured.
+  CHECKERS_END_REASON_KING_MOVES = 5;
+}
+
+message CheckersGameEnd {
+  CheckersEndReason reason = 1;
+  // Unset for a draw.
+  optional uint32 winner_slot = 2;
+}
+
+// Checkers has no hidden information: views differ only in `you`.
+message CheckersView {
+  repeated CheckersPiece pieces = 1;
+  // Unset until drawn by lot.
+  optional uint32 white_slot = 2;
+  optional uint32 black_slot = 3;
+  // Unset before white is known and after the game ended.
+  optional uint32 current_slot = 4;
+  CheckersSide side_to_move = 5;
+  // The viewer's own seat; unset for spectators.
+  optional uint32 you = 6;
+  // Everything the side to move may do; empty when nobody is to move.
+  repeated CheckersLegalMove legal_moves = 7;
+  // Unset before the first move.
+  CheckersLegalMove last_move = 8;
+  // Unset while the match runs.
+  CheckersGameEnd end = 9;
+  // Moves in a row with only kings moving and nothing captured; 30 is a draw.
+  uint32 king_moves = 10;
+}
+
+enum CheckersBotKind {
+  CHECKERS_BOT_KIND_UNSPECIFIED = 0;
+  // Random legal moves, half the time the one taking most.
+  CHECKERS_BOT_KIND_EASY = 1;
+  // Looks three moves ahead.
+  CHECKERS_BOT_KIND_MEDIUM = 2;
+  // Searches as deep as its budget allows.
+  CHECKERS_BOT_KIND_HARD = 3;
+}
