@@ -34,7 +34,8 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     type WorldEvent: Clone + Debug + PartialEq + Send + Sync + 'static;
     type View: Debug;
     /// Held by the authority beside the game and never sent as it is. `()` for games that hide
-    /// nothing.
+    /// nothing. Only turn-based games may hide something: a real-time game that a step ends
+    /// would reveal its secret only in a frame after the last, which hosts do not seal.
     type Secret: GameSecret;
 
     const INFO: GameInfo;

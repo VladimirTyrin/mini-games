@@ -54,13 +54,15 @@ clients replay and hash.
   `SubmitSecretCommand` on the wire). It is never put in a frame. The seat gets back what it
   may see of the secret (`Game::seat_secret`, pushed as `MatchSeatSecret` to that seat only,
   again after each of its catch-ups).
-- While the game awaits a private command (`Game::awaits_secret`), bots send theirs when a frame
-  is sealed. The server gives people `MatchHeader.secret_setup_ms` and then submits the game's
+- While the game awaits a private command (`Game::awaits_secret`), built-in bots send theirs when
+  a frame is sealed (network bots cannot yet; see tech_debt.md). The server gives people `MatchHeader.secret_setup_ms` and then submits the game's
   default for them (`Game::default_secret_command`, a random fleet).
 - Clients ask their mirror whether a private command would be refused
   (`Match::check_secret_command`, against an empty secret) and for the game's default, so the
   page never re-implements the rules.
 - Bots decide from the public game like everyone else, so they cannot peek either.
+- Only turn-based games may have a secret: a real-time game that a step ends would reveal it in
+  a frame after the last, which hosts do not seal.
 
 Determinism rules live in `AGENTS.md`; `mg_core::conformance` enforces them per game, and
 every game pins a `scripted_hash`.

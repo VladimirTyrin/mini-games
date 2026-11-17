@@ -86,7 +86,7 @@ pub fn simulate<G: Conformance>(setup: &Setup<G>, seed: u64) -> Result<u64, Stri
         if authority.game().status().is_finished() {
             break;
         }
-        settle_human_secrets(&mut authority, &humans, &mut fuzz);
+        settle_human_secrets(&mut authority, &humans, &mut fuzz)?;
         if realtime {
             for &slot in &humans {
                 if fuzz.chance(1, 3) {
@@ -164,21 +164,26 @@ fn settle_human_secrets<G: Conformance>(
     authority: &mut Authority<G>,
     humans: &[Slot],
     fuzz: &mut CoreRng,
-) {
+) -> Result<(), String> {
     for &slot in humans {
         if !authority.game().awaits_secret(slot) {
             continue;
         }
         if let Some(command) = G::arbitrary_secret_command(authority.game(), slot, fuzz) {
-            let before = authority.game().state_hash();
-            if authority.submit_secret(slot, &command).is_err() {
-                debug_assert_eq!(before, authority.game().state_hash());
+            let before = authority.seat_secret(slot);
+            if authority.submit_secret(slot, &command).is_err()
+                && authority.seat_secret(slot) != before
+            {
+                return Err(format!(
+                    "rejected private command {command:?} changed the secret"
+                ));
             }
         }
         if authority.game().awaits_secret(slot) {
             authority.submit_default_secret(slot);
         }
     }
+    Ok(())
 }
 
 fn drive_turn<G: Conformance>(

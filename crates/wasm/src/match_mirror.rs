@@ -109,17 +109,15 @@ impl MatchMirror {
         }
     }
 
-    /// Encoded `MatchResult` when `command` from `slot` would end the match, empty when the match
-    /// would go on; an error when the game refuses the command.
     /// Why the rules would refuse the private command (encoded `GameSecretCommand`) from `slot`,
-    /// as far as the public state tells; `None` when they accept it.
+    /// as far as the public state tells, in words for the player; `None` when they accept it.
     #[wasm_bindgen(js_name = secretRefusalOf)]
     pub fn secret_refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<String>, JsError> {
         let command = proto::GameSecretCommand::decode(command)?;
         Ok(
             match self.mirror.check_secret_command(Slot::new(slot), &command) {
                 Ok(()) => None,
-                Err(SubmitError::Rejected(error)) => Some(error.to_string()),
+                Err(SubmitError::Rejected(refusal)) => Some(refusal.explanation().to_owned()),
                 Err(SubmitError::Wire(error)) => return Err(error.into()),
             },
         )
@@ -136,6 +134,8 @@ impl MatchMirror {
             .unwrap_or_default()
     }
 
+    /// Encoded `MatchResult` when `command` from `slot` would end the match, empty when the match
+    /// would go on; an error when the game refuses the command.
     #[wasm_bindgen(js_name = resultAfter)]
     pub fn result_after(&self, slot: u8, command: &[u8]) -> Result<Vec<u8>, JsError> {
         let command = proto::GameCommand::decode(command)?;

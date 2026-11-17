@@ -501,12 +501,26 @@ fn classic_fleet() -> proto::GameSecretCommand {
     <SeaBattle as mg_protocol::WireGame>::secret_command_to_wire(&SecretCommand::PlaceFleet(ships))
 }
 
-/// Two guests in a running Sea Battle: the host's connection, the guest's, the match id.
-async fn start_sea_battle(hub: &HubHandle) -> (TestConnection, TestConnection, String) {
+/// Two guests in a running Sea Battle, and an observer.
+struct SeaBattleTable {
+    host: TestConnection,
+    player: TestConnection,
+    /// For the player to come back after a lost connection.
+    player_resume: ResumeToken,
+    observer: TestConnection,
+    match_id: String,
+}
+
+async fn start_sea_battle(hub: &HubHandle) -> SeaBattleTable {
     let (host, _) = sign_in(hub, guest("Host")).await;
     let mut host = host.unwrap();
-    let (player, _) = sign_in(hub, guest("Guest")).await;
+    let (player, welcome) = sign_in(hub, guest("Guest")).await;
     let mut player = player.unwrap();
+    let SignInOutcome::Welcome(welcome) = welcome else {
+        panic!("guest refused");
+    };
+    let (observer, _) = sign_in(hub, guest("Watcher")).await;
+    let mut observer = observer.unwrap();
     let Reply::LobbyState(lobby) = host
         .request(Request::CreateLobby(proto::CreateLobby {
             name: "test".into(),
@@ -519,12 +533,18 @@ async fn start_sea_battle(hub: &HubHandle) -> (TestConnection, TestConnection, S
     };
     player
         .request(Request::JoinLobby(proto::JoinLobby {
-            lobby_id: lobby.lobby_id,
+            lobby_id: lobby.lobby_id.clone(),
             as_observer: false,
         }))
         .await;
     player
         .request(Request::SetReady(proto::SetReady { ready: true }))
+        .await;
+    observer
+        .request(Request::JoinLobby(proto::JoinLobby {
+            lobby_id: lobby.lobby_id,
+            as_observer: true,
+        }))
         .await;
     assert!(matches!(
         host.request(Request::StartMatch(proto::StartMatch {}))
@@ -537,8 +557,22 @@ async fn start_sea_battle(hub: &HubHandle) -> (TestConnection, TestConnection, S
     };
     let header = host.expect(started).await;
     player.expect(started).await;
+    observer.expect(started).await;
     assert_eq!(header.secret_setup_ms, 90_000, "people have time to place");
-    (host, player, header.match_id)
+    SeaBattleTable {
+        host,
+        player,
+        player_resume: ResumeToken::parse(&welcome.resume_token).unwrap(),
+        observer,
+        match_id: header.match_id,
+    }
+}
+
+fn place_fleet(match_id: &str) -> Request {
+    Request::SubmitSecretCommand(proto::SubmitSecretCommand {
+        match_id: match_id.into(),
+        command: Some(classic_fleet()),
+    })
 }
 
 fn seat_secret(message: &proto::ServerMessage) -> Option<proto::GameSeatSecret> {
@@ -567,16 +601,17 @@ fn has_event(
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_fleet_reaches_only_its_own_seat_and_the_other_learns_it_is_placed() {
+async fn a_fleet_reaches_only_its_own_seat_and_the_others_learn_it_is_placed() {
     let hub = start_hub();
-    let (mut host, mut player, match_id) = start_sea_battle(&hub).await;
+    let SeaBattleTable {
+        mut host,
+        mut player,
+        mut observer,
+        match_id,
+        ..
+    } = start_sea_battle(&hub).await;
 
-    let placed = host
-        .request(Request::SubmitSecretCommand(proto::SubmitSecretCommand {
-            match_id: match_id.clone(),
-            command: Some(classic_fleet()),
-        }))
-        .await;
+    let placed = host.request(place_fleet(&match_id)).await;
     assert!(matches!(placed, Reply::Ack(_)), "{placed:?}");
     let Some(proto::game_seat_secret::Game::SeaBattle(own)) = host.expect(seat_secret).await.game
     else {
@@ -584,22 +619,19 @@ async fn a_fleet_reaches_only_its_own_seat_and_the_other_learns_it_is_placed() {
     };
     assert_eq!(own.ships.len(), 10);
 
-    player
-        .expect(|message| {
-            assert!(seat_secret(message).is_none(), "another seat's fleet was sent");
-            has_event(message, |event| {
-                matches!(event, proto::sea_battle_world_event::Event::FleetPlaced(placed) if placed.slot == 0)
+    for other in [&mut player, &mut observer] {
+        other
+            .expect(|message| {
+                assert!(seat_secret(message).is_none(), "another seat's fleet was sent");
+                has_event(message, |event| {
+                    matches!(event, proto::sea_battle_world_event::Event::FleetPlaced(placed) if placed.slot == 0)
+                })
+                .then_some(())
             })
-            .then_some(())
-        })
-        .await;
+            .await;
+    }
 
-    let again = host
-        .request(Request::SubmitSecretCommand(proto::SubmitSecretCommand {
-            match_id,
-            command: Some(classic_fleet()),
-        }))
-        .await;
+    let again = host.request(place_fleet(&match_id)).await;
     assert!(
         matches!(&again, Reply::Error(error) if error.code == i32::from(proto::ErrorCode::CommandRejected)),
         "{again:?}"
@@ -609,7 +641,11 @@ async fn a_fleet_reaches_only_its_own_seat_and_the_other_learns_it_is_placed() {
 #[tokio::test(start_paused = true)]
 async fn people_out_of_time_get_a_random_fleet_and_the_battle_starts() {
     let hub = start_hub();
-    let (mut host, mut player, _) = start_sea_battle(&hub).await;
+    let SeaBattleTable {
+        mut host,
+        mut player,
+        ..
+    } = start_sea_battle(&hub).await;
 
     tokio::time::advance(Duration::from_secs(91)).await;
 
@@ -625,4 +661,74 @@ async fn people_out_of_time_get_a_random_fleet_and_the_battle_starts() {
         .then_some(())
     })
     .await;
+}
+
+/// The time to place runs on while the match waits for someone who lost the connection: they
+/// get a random fleet like anyone, and see it once back.
+#[tokio::test(start_paused = true)]
+async fn a_seat_away_when_time_runs_out_gets_a_random_fleet_and_sees_it_when_back() {
+    let hub = start_hub_with(Timing {
+        disconnect_budget: Duration::from_secs(300),
+        ..Timing::default()
+    });
+    let SeaBattleTable {
+        mut host,
+        player,
+        player_resume,
+        match_id,
+        ..
+    } = start_sea_battle(&hub).await;
+    assert!(matches!(
+        host.request(place_fleet(&match_id)).await,
+        Reply::Ack(_)
+    ));
+    hub.send(HubCommand::Disconnected {
+        session: player.session.clone(),
+        connection: player.id,
+    });
+    host.expect(|message| match &message.message {
+        Some(Reply::Paused(_)) => Some(()),
+        _ => None,
+    })
+    .await;
+
+    tokio::time::advance(Duration::from_secs(91)).await;
+    host.expect(|message| {
+        has_event(message, |event| {
+            matches!(event, proto::sea_battle_world_event::Event::FleetPlaced(placed) if placed.slot == 1)
+        })
+        .then_some(())
+    })
+    .await;
+
+    let (back, outcome) = sign_in_resuming(&hub, guest("Guest"), Some(player_resume)).await;
+    assert!(matches!(outcome, SignInOutcome::Welcome(welcome) if welcome.resumed));
+    let mut back = back.unwrap();
+    let Some(proto::game_seat_secret::Game::SeaBattle(fleet)) = back.expect(seat_secret).await.game
+    else {
+        panic!("not a sea battle fleet");
+    };
+    assert_eq!(fleet.ships.len(), 10, "the random fleet placed while away");
+}
+
+/// A catch-up asked for (after a desync) brings the seat's own fleet again with the log.
+#[tokio::test(start_paused = true)]
+async fn a_catch_up_brings_the_own_fleet_again() {
+    let hub = start_hub();
+    let SeaBattleTable {
+        mut host, match_id, ..
+    } = start_sea_battle(&hub).await;
+    assert!(matches!(
+        host.request(place_fleet(&match_id)).await,
+        Reply::Ack(_)
+    ));
+    host.expect(seat_secret).await;
+
+    host.send(Request::RequestCatchUp(proto::RequestCatchUp { match_id }));
+    host.expect(|message| match &message.message {
+        Some(Reply::CatchUp(_)) => Some(()),
+        _ => None,
+    })
+    .await;
+    host.expect(seat_secret).await;
 }

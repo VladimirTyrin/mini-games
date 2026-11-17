@@ -16,8 +16,9 @@ import SeaGrid from "./SeaGrid.vue";
 import { type CellPoint, type EditorShip, fromWire } from "./fleet-editor";
 
 const props = defineProps<{ controller: MatchController }>();
-const header = props.controller.source.header;
-const names = seatLabels(header);
+// Computed: Play again keeps this board and hands it the next match's controller.
+const header = computed(() => props.controller.source.header);
+const names = computed(() => seatLabels(header.value));
 const toasts = useToastStore();
 const sending = ref(false);
 
@@ -52,10 +53,10 @@ onMounted(async () => {
   const bytes = await props.controller.source.replayFile();
   if (!bytes) return;
   const replay = fromBinary(ReplayFileSchema, bytes);
-  const mirror = Mirror.forHeader(header);
+  const mirror = Mirror.forHeader(header.value);
   try {
     mirror.applyCatchUp(
-      create(MatchCatchUpSchema, { header, frames: replay.frames, nextTick: replay.endTick }),
+      create(MatchCatchUpSchema, { header: header.value, frames: replay.frames, nextTick: replay.endTick }),
     );
     const final = mirror.view(null).game;
     if (final.case === "seaBattle") replayFleets.value = final.value.revealed;
@@ -81,8 +82,8 @@ function lastShotOn(slot: number): CellPoint | null {
 }
 
 function seaLabel(slot: number): string {
-  if (mySlot.value === null) return names[slot] ?? `Seat ${slot + 1}`;
-  return slot === mySlot.value ? "Your fleet" : `${names[slot] ?? "Opponent"}'s sea`;
+  if (mySlot.value === null) return names.value[slot] ?? `Seat ${slot + 1}`;
+  return slot === mySlot.value ? "Your fleet" : `${names.value[slot] ?? "Opponent"}'s sea`;
 }
 
 const afloat = computed(() => view.value?.waters[targetSlot.value]?.afloat ?? []);
@@ -92,8 +93,8 @@ const now = ref(Date.now());
 const clock = setInterval(() => (now.value = Date.now()), 500);
 onBeforeUnmount(() => clearInterval(clock));
 const secondsLeft = computed(() => {
-  if (header.secretSetupMs === 0) return null;
-  const deadline = Number(header.startedAtUnixMs) + header.secretSetupMs;
+  if (header.value.secretSetupMs === 0) return null;
+  const deadline = Number(header.value.startedAtUnixMs) + header.value.secretSetupMs;
   return Math.max(0, Math.ceil((deadline - now.value) / 1000));
 });
 
@@ -113,13 +114,13 @@ const status = computed(() => {
     case SeaBattlePhase.BATTLE: {
       const turn = current.turnSlot;
       if (turn === undefined) return "…";
-      if (watching) return `${names[turn] ?? "A player"} fires`;
+      if (watching) return `${names.value[turn] ?? "A player"} fires`;
       return turn === mySlot.value ? "Your shot" : "Opponent's shot";
     }
     default: {
       const winner = current.winnerSlot;
       if (winner === undefined) return "Draw";
-      if (watching) return `${names[winner] ?? "A player"} wins`;
+      if (watching) return `${names.value[winner] ?? "A player"} wins`;
       if (current.phase === SeaBattlePhase.FORFEITED && winner === mySlot.value)
         return "Opponent left — you win";
       return winner === mySlot.value ? "You win!" : "You lose";

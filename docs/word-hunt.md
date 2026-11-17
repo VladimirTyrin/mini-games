@@ -32,6 +32,9 @@ the game runs, not even in a group game online:
 - the word itself is sent once the game is over, as an event holding the word, so replays show
   it.
 
+The word of the day is the exception by nature: it follows from the day and the built-in list, so
+a client could work it out. It is played alone, so there is nobody to hide it from.
+
 Replays recorded before the word was kept secret carried the word at the start; they are no
 longer accepted.
 

@@ -40,6 +40,8 @@ interface Drag {
   grabX: number;
   grabY: number;
   hasMoved: boolean;
+  /** The ship was picked before this touch: a tap turns it (a first tap only picks it). */
+  wasPicked: boolean;
 }
 let drag: Drag | null = null;
 
@@ -79,14 +81,15 @@ function onPointerDown(event: PointerEvent): void {
     if (picked && selected.value !== null) replace(selected.value, placed(picked, cell.x, cell.y));
     return;
   }
-  selected.value = index;
   drag = {
     index,
     pointerId: event.pointerId,
     grabX: cell.x - ship.x,
     grabY: cell.y - ship.y,
     hasMoved: false,
+    wasPicked: selected.value === index,
   };
+  selected.value = index;
   overlay.value?.setPointerCapture(event.pointerId);
 }
 
@@ -104,9 +107,13 @@ function onPointerMove(event: PointerEvent): void {
 function onPointerUp(event: PointerEvent): void {
   if (!drag || event.pointerId !== drag.pointerId) return;
   const ship = ships.value[drag.index];
-  // A tap without a move turns the ship.
-  if (!drag.hasMoved && ship) replace(drag.index, rotated(ship));
+  if (!drag.hasMoved && drag.wasPicked && ship) replace(drag.index, rotated(ship));
   drag = null;
+}
+
+/** The browser took the gesture over (a scroll, say): the ship stays where it got to. */
+function onPointerCancel(event: PointerEvent): void {
+  if (drag?.pointerId === event.pointerId) drag = null;
 }
 
 function shuffle(): void {
@@ -118,11 +125,11 @@ async function ready(): Promise<void> {
   if (refusal.value || sending.value) return;
   sending.value = true;
   try {
+    // Stays sending once accepted: the editor goes away with the frame that says so.
     await props.controller.submitSecret(placement.value);
   } catch (error) {
-    toasts.failure(error);
-  } finally {
     sending.value = false;
+    toasts.failure(error);
   }
 }
 </script>
@@ -137,10 +144,12 @@ async function ready(): Promise<void> {
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
+        @pointercancel="onPointerCancel"
       />
     </div>
-    <p class="text-center text-sm text-gray-400">Drag a ship to move it, tap it to turn it</p>
+    <p class="text-center text-sm text-gray-400">
+      Drag a ship to move it; tap it to pick it, tap again to turn it
+    </p>
     <p v-if="crowded.size > 0" class="text-center text-sm text-amber-300">
       Ships may not touch, not even at a corner
     </p>

@@ -42,6 +42,10 @@ A `BotSession` signs in with a bot key, hosts or joins a lobby and plays matches
 every match with the core (the server's frames, catch-ups after a gap, desync or reconnect) and
 asks a `Strategy` for commands once per new state.
 
+Network bots cannot send private commands yet (Sea Battle's fleet): in Sea Battle the server places
+a random fleet for them when the time to place runs out, so such a match starts after 90 s (see
+[tech_debt.md](tech_debt.md)).
+
 ```rust
 use mg_bot_sdk::{BotConfig, BotSession, LobbySetup, ViewBot, ViewStrategy};
 use mg_core::Slot;

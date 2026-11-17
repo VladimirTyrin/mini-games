@@ -234,6 +234,9 @@ impl MatchActor {
                 if let Some(outbound) = self.outbound_of(&session).cloned() {
                     outbound.send_encoded(self.catch_up());
                 }
+                if let Some(slot) = self.slot_of(&session) {
+                    self.send_seat_secret(slot);
+                }
             }
         }
     }
@@ -305,10 +308,11 @@ impl MatchActor {
             Ok(()) => {
                 outbound.send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
                 self.send_seat_secret(slot);
-                // What the others may learn of it (that the fleet is placed) goes out now, also
-                // in a real-time game: it changes nothing a tick would move.
-                self.seal_and_broadcast();
+                // What the others may learn of it (the fleet is placed) goes out now in a
+                // turn-based game; a real-time one sends it with the next tick, as sealing now
+                // would step the game between two ticks.
                 if self.clock == Clock::TurnBased {
+                    self.seal_and_broadcast();
                     self.drive_bots();
                 }
             }
@@ -358,8 +362,9 @@ impl MatchActor {
         for slot in settled {
             self.send_seat_secret(slot);
         }
-        self.seal_and_broadcast();
+        // As in `submit_secret`: a real-time game sends it with the next tick.
         if self.clock == Clock::TurnBased {
+            self.seal_and_broadcast();
             self.drive_bots();
         }
     }

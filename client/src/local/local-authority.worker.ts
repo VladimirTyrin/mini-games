@@ -85,9 +85,12 @@ async function handle(message: ToWorker): Promise<void> {
         post({ type: "accepted", requestId: message.requestId });
         const secret = host.seatSecret(message.slot);
         if (secret.length > 0) post({ type: "seatSecret", secret }, [secret.buffer]);
-        // What the others may learn of it (the fleet is placed) goes out at once.
-        sealAndPost();
-        if (host.tickMs() === 0) driveBots();
+        // What the others may learn of it (the fleet is placed) goes out at once in a turn-based
+        // game; a real-time one sends it with the next tick (sealing now would add a tick).
+        if (host.tickMs() === 0) {
+          sealAndPost();
+          driveBots();
+        }
       } catch (error) {
         post({
           type: "rejected",
