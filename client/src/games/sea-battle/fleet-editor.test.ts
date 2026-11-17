@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { allowedCells, canGrowInto, cellIndex, shipsLeft, shipsOf } from "./fleet-editor";
+import { allowedCells, canGrowInto, cellIndex, roomForTheRest, shipsLeft, shipsOf } from "./fleet-editor";
 
 const FLEET = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1];
 
@@ -45,6 +45,54 @@ describe("fleet editor", () => {
     expect(canGrowInto(threeThrees, FLEET)).toBe(true);
     // A fourth has no ship left to become.
     expect(canGrowInto(new Set([...threeThrees, ...filled(...three(6))]), FLEET)).toBe(false);
+  });
+
+  it("lets two lone decks wait for the cell that joins them", () => {
+    // The whole fleet but one three-decker, which is begun at both ends.
+    const almost = filled(
+      ...([0, 1, 2, 3].map((x) => [x, 0]) as [number, number][]),
+      [0, 2],
+      [1, 2],
+      [2, 2],
+      [5, 0],
+      [6, 0],
+      [8, 0],
+      [9, 0],
+      [4, 2],
+      [5, 2],
+      [0, 4],
+      [2, 4],
+      [4, 4],
+      [6, 4],
+    );
+    const bothEnds = new Set([...almost, ...filled([0, 9], [2, 9])]);
+    expect(canGrowInto(bothEnds, FLEET)).toBe(true);
+    expect(allowedCells(bothEnds, FLEET).has(cellIndex({ x: 1, y: 9 }))).toBe(true);
+  });
+
+  it("says when the ships not yet started have no room left", () => {
+    // Everything but the four-decker, spread so that no straight run of four free cells is left.
+    const crowded = filled(
+      [1, 4],
+      [2, 4],
+      [3, 4],
+      [7, 6],
+      [8, 6],
+      [9, 6],
+      [8, 1],
+      [9, 1],
+      [2, 8],
+      [3, 8],
+      [7, 8],
+      [7, 9],
+      [4, 1],
+      [5, 3],
+      [4, 6],
+      [0, 8],
+    );
+    expect(canGrowInto(crowded, FLEET)).toBe(true);
+    expect(roomForTheRest(crowded, FLEET)).toBe("full");
+    expect(roomForTheRest(filled([0, 0], [1, 0]), FLEET)).toBe("fits");
   });
 
   it("tells which ships are on the board", () => {

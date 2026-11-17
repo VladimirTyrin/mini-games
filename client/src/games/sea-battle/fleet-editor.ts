@@ -84,10 +84,12 @@ export function shipsOf(filled: ReadonlySet<number>): EditorShip[] {
 }
 
 /**
- * Whether the filled cells can still grow into a fleet of `lengths`: every group straight and no
- * longer than the longest ship, no two groups touching at a corner, and for every length no more
- * groups that long or longer than the fleet has ships. A hint for the player while placing; the
- * core decides whether the finished fleet is legal.
+ * Whether the filled cells keep to the fleet's rules so far: every group straight and no longer
+ * than the longest ship, no two groups touching at a corner, and for every length from two up no
+ * more groups that long or longer than the fleet has ships. Lone decks are not counted: two of
+ * them may still become one ship when the cell between them is filled. A hint for the player while
+ * placing (whether the rest still fits is `roomForTheRest`); the core decides whether the finished
+ * fleet is legal.
  */
 export function canGrowInto(filled: ReadonlySet<number>, lengths: readonly number[]): boolean {
   const total = lengths.reduce((sum, length) => sum + length, 0);
@@ -103,7 +105,7 @@ export function canGrowInto(filled: ReadonlySet<number>, lengths: readonly numbe
     if (touches) return false;
   }
   const longest = Math.max(0, ...lengths);
-  for (let length = 1; length <= longest + 1; length += 1) {
+  for (let length = 2; length <= longest + 1; length += 1) {
     const groupsThatLong = all.filter((group) => group.length >= length).length;
     const shipsThatLong = lengths.filter((ship) => ship >= length).length;
     if (groupsThatLong > shipsThatLong) return false;
@@ -111,7 +113,7 @@ export function canGrowInto(filled: ReadonlySet<number>, lengths: readonly numbe
   return true;
 }
 
-/** Empty cells where one more filled cell still leaves a fleet possible. */
+/** Empty cells where one more deck keeps to the fleet's rules (see `canGrowInto`). */
 export function allowedCells(filled: ReadonlySet<number>, lengths: readonly number[]): Set<number> {
   const allowed = new Set<number>();
   for (let index = 0; index < SIDE * SIDE; index += 1) {
@@ -119,6 +121,56 @@ export function allowedCells(filled: ReadonlySet<number>, lengths: readonly numb
     if (canGrowInto(new Set([...filled, index]), lengths)) allowed.add(index);
   }
   return allowed;
+}
+
+/** Placements tried before the search for room gives up and assumes there is some. */
+const ROOM_SEARCH_BUDGET = 20_000;
+
+export type Room = "fits" | "full";
+
+/**
+ * Whether the ships not yet started still have room: each group on the board stands for the
+ * shortest ship it can still become, and the others must fit, longest first, on cells that touch
+ * nothing placed. A bounded search: when it runs out of tries it answers `fits`.
+ */
+export function roomForTheRest(filled: ReadonlySet<number>, lengths: readonly number[]): Room {
+  const notStarted = [...lengths].sort((a, b) => a - b);
+  for (const size of groups(filled)
+    .map((group) => group.length)
+    .sort((a, b) => b - a)) {
+    const at = notStarted.findIndex((length) => length >= size);
+    if (at >= 0) notStarted.splice(at, 1);
+  }
+  notStarted.reverse();
+  const blocked = new Set<number>();
+  for (const index of filled) {
+    blocked.add(index);
+    for (const near of neighbours(index, true)) blocked.add(near);
+  }
+  let budget = ROOM_SEARCH_BUDGET;
+  const place = (next: number): boolean => {
+    const length = notStarted[next];
+    if (length === undefined) return true;
+    for (let index = 0; index < SIDE * SIDE; index += 1) {
+      for (const horizontal of length === 1 ? [true] : [true, false]) {
+        budget -= 1;
+        if (budget <= 0) return true;
+        const ship = { ...cellAt(index), length, horizontal };
+        const cells = shipCells(ship);
+        const fits = cells.every((cell) => cell.x < SIDE && cell.y < SIDE && !blocked.has(cellIndex(cell)));
+        if (!fits) continue;
+        const added = cells
+          .flatMap((cell) => [cellIndex(cell), ...neighbours(cellIndex(cell), true)])
+          .filter((taken) => !blocked.has(taken));
+        for (const taken of added) blocked.add(taken);
+        const rest = place(next + 1);
+        for (const taken of added) blocked.delete(taken);
+        if (rest) return true;
+      }
+    }
+    return false;
+  };
+  return place(0) ? "fits" : "full";
 }
 
 /** The fleet's ship lengths, longest first, each with whether a ship of it is on the board. */

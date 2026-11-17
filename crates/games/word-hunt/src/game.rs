@@ -120,15 +120,13 @@ impl WordHunt {
         if self.phase != Phase::Guessing {
             return Err(CommandError::Illegal("no guess is being made"));
         }
-        let fits = match &self.pending_guess {
-            None => return Err(CommandError::Illegal("there is no guess to mark")),
-            Some(pending) => marks.len() == pending.word.letters().len(),
-        };
-        if !fits {
-            return Err(CommandError::Illegal("the marks do not fit the guess"));
-        }
-        let Some(pending) = self.pending_guess.take() else {
-            return Err(CommandError::Illegal("there is no guess to mark"));
+        let pending = match self.pending_guess.take() {
+            Some(pending) if marks.len() == pending.word.letters().len() => pending,
+            unfit => {
+                // A refused event leaves the state untouched: the guess goes back.
+                self.pending_guess = unfit;
+                return Err(CommandError::Illegal("there is no guess these marks fit"));
+            }
         };
         let scored = ScoredGuess {
             word: pending.word,

@@ -354,7 +354,14 @@ impl MatchActor {
             .collect();
         let settled: Vec<Slot> = late
             .into_iter()
-            .filter(|slot| authority.submit_default_secret(*slot).is_ok())
+            .filter(|slot| match authority.submit_default_secret(*slot) {
+                Ok(()) => true,
+                Err(error) => {
+                    // The seat keeps owing its private command: the match cannot start.
+                    tracing::error!(match_id = %self.match_id, %slot, %error, "no default private command");
+                    false
+                }
+            })
             .collect();
         if settled.is_empty() {
             return;
