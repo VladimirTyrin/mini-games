@@ -22,7 +22,7 @@ mod rules;
 mod settings;
 mod view;
 
-pub use bots::{BotKind, EASY_BOT_BUDGET, HARD_BOT_BUDGET, MEDIUM_BOT_BUDGET};
+pub use bots::{BotKind, EASY_BOT_BUDGET, HARD_BOT_BUDGET, MASTER_BOT_BUDGET, MEDIUM_BOT_BUDGET};
 pub use game::Checkers;
 pub use io::{Command, WorldEvent};
 pub use model::{Path, Piece, PieceId, Rank, Side, Square};

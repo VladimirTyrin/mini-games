@@ -1,6 +1,6 @@
 use mg_core::{Bot, HasBots};
 
-use super::{EasyBot, SearchBot};
+use super::{EasyBot, SearchBot, SearchMemory};
 use crate::game::Checkers;
 
 pub const EASY_BOT_BUDGET: u64 = 1;
@@ -9,24 +9,38 @@ pub const MEDIUM_BOT_BUDGET: u64 = 20_000;
 /// Positions the hard bot may visit per move: about a microsecond each in a native release
 /// build (a quarter of a second for a move at worst), two to three times that in WASM on a phone.
 pub const HARD_BOT_BUDGET: u64 = 250_000;
+/// The master bot takes its time on purpose: several seconds a move natively, longer in WASM
+/// on a phone.
+pub const MASTER_BOT_BUDGET: u64 = 5_000_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BotKind {
     Easy,
     Medium,
     Hard,
+    /// Remembers positions it has searched, so it sees much deeper than the hard bot.
+    Master,
 }
 
 impl HasBots for Checkers {
     type BotKind = BotKind;
 
-    const BOT_KINDS: &'static [BotKind] = &[BotKind::Easy, BotKind::Medium, BotKind::Hard];
+    const BOT_KINDS: &'static [BotKind] = &[
+        BotKind::Easy,
+        BotKind::Medium,
+        BotKind::Hard,
+        BotKind::Master,
+    ];
 
     fn make_bot(kind: BotKind) -> Box<dyn Bot<Self>> {
         match kind {
             BotKind::Easy => Box::new(EasyBot),
-            BotKind::Medium => Box::new(SearchBot::new(MEDIUM_MAX_DEPTH)),
-            BotKind::Hard => Box::new(SearchBot::new(HARD_MAX_DEPTH)),
+            BotKind::Medium => Box::new(SearchBot::new(MEDIUM_MAX_DEPTH, SearchMemory::None)),
+            BotKind::Hard => Box::new(SearchBot::new(HARD_MAX_DEPTH, SearchMemory::None)),
+            BotKind::Master => Box::new(SearchBot::new(
+                MASTER_MAX_DEPTH,
+                SearchMemory::TranspositionTable,
+            )),
         }
     }
 
@@ -35,6 +49,7 @@ impl HasBots for Checkers {
             BotKind::Easy => EASY_BOT_BUDGET,
             BotKind::Medium => MEDIUM_BOT_BUDGET,
             BotKind::Hard => HARD_BOT_BUDGET,
+            BotKind::Master => MASTER_BOT_BUDGET,
         }
     }
 }
@@ -43,3 +58,5 @@ impl HasBots for Checkers {
 const MEDIUM_MAX_DEPTH: u8 = 3;
 /// The hard bot deepens until its budget runs out.
 const HARD_MAX_DEPTH: u8 = 16;
+/// Like the hard bot: the budget is the real limit.
+const MASTER_MAX_DEPTH: u8 = 40;

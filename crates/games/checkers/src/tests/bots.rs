@@ -24,7 +24,7 @@ fn play(white: BotKind, black: BotKind, seed: u64) -> GameEnd {
         let kind = if slot == HOST { white } else { black };
         let budget = match kind {
             BotKind::Easy => Checkers::default_bot_budget(kind),
-            BotKind::Medium | BotKind::Hard => TEST_SEARCH_BUDGET,
+            BotKind::Medium | BotKind::Hard | BotKind::Master => TEST_SEARCH_BUDGET,
         };
         let command = bots[slot.index()]
             .decide(&game, slot, &mut rng, &mut Budget::new(budget))
@@ -37,7 +37,12 @@ fn play(white: BotKind, black: BotKind, seed: u64) -> GameEnd {
 
 #[test]
 fn every_bot_plays_legal_moves_to_the_end() {
-    for kind in [BotKind::Easy, BotKind::Medium, BotKind::Hard] {
+    for kind in [
+        BotKind::Easy,
+        BotKind::Medium,
+        BotKind::Hard,
+        BotKind::Master,
+    ] {
         play(kind, BotKind::Easy, 7);
     }
 }

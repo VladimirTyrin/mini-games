@@ -117,4 +117,6 @@ enum CheckersBotKind {
   CHECKERS_BOT_KIND_MEDIUM = 2;
   // Searches as deep as its budget allows.
   CHECKERS_BOT_KIND_HARD = 3;
+  // Searches far deeper, remembering the positions it has searched: seconds a move.
+  CHECKERS_BOT_KIND_MASTER = 4;
 }

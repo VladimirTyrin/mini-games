@@ -139,6 +139,7 @@ impl WireBots for Checkers {
             Ok(CheckersBotKind::Easy) => Ok(BotKind::Easy),
             Ok(CheckersBotKind::Medium) => Ok(BotKind::Medium),
             Ok(CheckersBotKind::Hard) => Ok(BotKind::Hard),
+            Ok(CheckersBotKind::Master) => Ok(BotKind::Master),
             Ok(CheckersBotKind::Unspecified) => Err(WireError::Missing("bot_kind")),
             Err(_) => Err(WireError::UnknownEnumValue("bot_kind")),
         }
@@ -149,6 +150,7 @@ impl WireBots for Checkers {
             BotKind::Easy => CheckersBotKind::Easy,
             BotKind::Medium => CheckersBotKind::Medium,
             BotKind::Hard => CheckersBotKind::Hard,
+            BotKind::Master => CheckersBotKind::Master,
         };
         proto::BotKind {
             game: Some(proto::bot_kind::Game::Checkers(kind.into())),

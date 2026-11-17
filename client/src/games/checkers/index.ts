@@ -20,6 +20,7 @@ const BOT_LABELS: Record<number, string> = {
   [CheckersBotKind.EASY]: "Easy bot",
   [CheckersBotKind.MEDIUM]: "Medium bot",
   [CheckersBotKind.HARD]: "Hard bot",
+  [CheckersBotKind.MASTER]: "Master bot (slow)",
 };
 
 /** Why the game ended, shown with the result. */

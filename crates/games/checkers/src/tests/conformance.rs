@@ -77,7 +77,7 @@ impl Conformance for Checkers {
                 bot: Checkers::make_bot(kind),
                 budget_nodes: match kind {
                     BotKind::Easy => Checkers::default_bot_budget(kind),
-                    BotKind::Medium | BotKind::Hard => CONFORMANCE_SEARCH_BUDGET,
+                    BotKind::Medium | BotKind::Hard | BotKind::Master => CONFORMANCE_SEARCH_BUDGET,
                 },
             })
             .collect()

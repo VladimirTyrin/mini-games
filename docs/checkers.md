@@ -39,6 +39,11 @@ game checks it against the generated legal moves; nothing else is accepted.
 - **Medium**: alpha-beta three plies deep.
 - **Hard**: iterative-deepening alpha-beta within its node budget (250 000 positions, about a
   quarter of a second natively at worst).
+- **Master** (slow on purpose): the same search with a transposition table, so a position reached
+  by another move order is not searched again and the best move found earlier is tried first; it
+  sees several plies deeper. 5 000 000 positions a move: about five seconds natively, ten to
+  fifteen in WASM on a phone. Online it thinks on the server's blocking pool, one core per
+  thinking bot (`bot_cpu`); the match answers other requests only after the move.
 
 Both search bots extend captures, so a search never stops in the middle of an exchange, and pick
 at random among equally good moves. The evaluation counts material (a king is worth three men),
