@@ -17,6 +17,7 @@ import { Mirror } from "@/wasm/core";
 
 import FleetEditor from "./FleetEditor.vue";
 import SeaGrid from "./SeaGrid.vue";
+import ShipPip from "./ShipPip.vue";
 import { type CellPoint, type EditorShip, fromWire } from "./fleet-editor";
 
 const props = defineProps<{ controller: MatchController }>();
@@ -76,6 +77,11 @@ function fleetOf(slot: number): EditorShip[] {
   if (revealed.length > 0) return revealed.map(fromWire);
   if (slot === mySlot.value && ownFleet.value) return ownFleet.value;
   return (replayFleets.value[slot]?.ships ?? []).map(fromWire);
+}
+
+/** The ships sunk on `slot`'s sea, as everyone sees them. */
+function sunkOf(slot: number): EditorShip[] {
+  return (view.value?.waters[slot]?.sunk ?? []).map(fromWire);
 }
 
 /** The latest shot, on the sea it hit. */
@@ -163,12 +169,13 @@ async function fire(cell: CellPoint): Promise<void> {
         <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->
         <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-gray-300">
           <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
-          <span class="flex shrink-0 gap-0.5" aria-label="Ships afloat">
-            <span
+          <span class="flex shrink-0 flex-wrap gap-1" aria-label="Ships afloat">
+            <ShipPip
               v-for="(length, index) in afloat"
               :key="index"
-              class="h-2 rounded-sm bg-slate-300/70"
-              :style="{ width: `${length * 5}px` }"
+              :length="length"
+              look="solid"
+              size="small"
             />
           </span>
         </div>
@@ -176,6 +183,7 @@ async function fire(cell: CellPoint): Promise<void> {
           :label="seaLabel(targetSlot)"
           :marks="view.waters[targetSlot]?.marks ?? []"
           :ships="fleetOf(targetSlot)"
+          :sunk-ships="sunkOf(targetSlot)"
           :last-shot="lastShotOn(targetSlot)"
           :tappable="targets"
           @tap="fire"
@@ -187,6 +195,7 @@ async function fire(cell: CellPoint): Promise<void> {
           :label="seaLabel(homeSlot)"
           :marks="view.waters[homeSlot]?.marks ?? []"
           :ships="fleetOf(homeSlot)"
+          :sunk-ships="sunkOf(homeSlot)"
           :last-shot="lastShotOn(homeSlot)"
         />
       </section>

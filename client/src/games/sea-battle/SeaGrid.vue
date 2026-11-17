@@ -10,6 +10,8 @@ const props = withDefaults(
     /** Row by row; empty draws open water. */
     marks?: readonly SeaBattleCellMark[];
     ships?: readonly EditorShip[];
+    /** Sunk ships, drawn whole in red so their size shows. */
+    sunkShips?: readonly EditorShip[];
     /** Indexes of the cells that take taps. */
     tappable?: ReadonlySet<number>;
     /** Indexes of the cells shown as free to use (where a ship may still go). */
@@ -20,6 +22,7 @@ const props = withDefaults(
   {
     marks: () => [],
     ships: () => [],
+    sunkShips: () => [],
     tappable: () => new Set<number>(),
     hints: () => new Set<number>(),
     lastShot: null,
@@ -42,14 +45,16 @@ const cells = computed(() =>
 // see-through.
 function cellClass(cell: { index: number; x: number; y: number; mark: SeaBattleCellMark }): string {
   const isLast = props.lastShot?.x === cell.x && props.lastShot?.y === cell.y;
+  // Whole class names only: Tailwind finds classes in the source text, not in built strings.
   const ring = isLast ? " ring-2 ring-inset ring-amber-300" : "";
   switch (cell.mark) {
     case SeaBattleCellMark.HIT:
-      return `bg-orange-600/90${ring}`;
+      return "bg-orange-600/90" + ring;
+    // The sunk ship is drawn underneath; the cell only marks the hit.
     case SeaBattleCellMark.SUNK:
-      return `bg-red-900/90${ring}`;
+      return ring.trim();
     case SeaBattleCellMark.MISS:
-      return `bg-sky-950/60${ring}`;
+      return "bg-sky-950/60" + ring;
     case SeaBattleCellMark.CLEARED:
       return "bg-sky-950/40";
     default:
@@ -76,8 +81,33 @@ function shipStyle(ship: EditorShip): Record<string, string> {
     :aria-label="label"
   >
     <div class="pointer-events-none absolute inset-0">
-      <div v-for="(ship, index) in ships" :key="index" class="absolute p-[1.2%]" :style="shipStyle(ship)">
-        <div class="h-full w-full rounded-[30%] border border-slate-100/80 bg-slate-300/80" />
+      <!-- A notch between decks, so a ship's length can be counted at a glance. -->
+      <div
+        v-for="(ship, index) in [...ships, ...sunkShips]"
+        :key="index"
+        class="absolute p-[0.5%]"
+        :style="shipStyle(ship)"
+      >
+        <div
+          class="flex h-full w-full overflow-hidden rounded-full border"
+          :class="[
+            ship.horizontal ? 'flex-row' : 'flex-col',
+            index < ships.length ? 'border-slate-100/90 bg-slate-300/85' : 'border-red-300/90 bg-red-700/90',
+          ]"
+        >
+          <span
+            v-for="deck in ship.length"
+            :key="deck"
+            class="flex-1"
+            :class="
+              deck === 1
+                ? ''
+                : ship.horizontal
+                  ? 'border-l-2 border-slate-600/50'
+                  : 'border-t-2 border-slate-600/50'
+            "
+          />
+        </div>
       </div>
     </div>
     <div class="absolute inset-0 grid grid-cols-10 grid-rows-10">

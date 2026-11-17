@@ -5,6 +5,7 @@ import type { MatchController } from "@/match/match-controller";
 import { useToastStore } from "@/stores/toasts";
 
 import SeaGrid from "./SeaGrid.vue";
+import ShipPip from "./ShipPip.vue";
 import {
   allowedCells,
   type CellPoint,
@@ -106,12 +107,12 @@ async function send(onFailure: "toast" | "quiet"): Promise<void> {
       <SeaGrid label="Your fleet" :ships="ships" :tappable="tappable" :hints="hints" @tap="tap" />
     </div>
     <div class="flex flex-wrap justify-center gap-1.5" aria-label="Ships to place">
-      <span
+      <ShipPip
         v-for="(ship, index) in left"
         :key="index"
-        class="h-2.5 rounded-sm"
-        :class="ship.isPlaced ? 'bg-slate-300/80' : 'border border-slate-400/60'"
-        :style="{ width: `${ship.length * 9}px` }"
+        :length="ship.length"
+        :look="ship.isPlaced ? 'solid' : 'outline'"
+        size="medium"
       />
     </div>
     <p v-if="room === 'full'" class="text-center text-sm text-amber-300">
