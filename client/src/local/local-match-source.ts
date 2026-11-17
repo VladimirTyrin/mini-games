@@ -20,6 +20,9 @@ interface Pending {
 }
 
 /** Match against bots (or alone) with the authority in a Web Worker: no server, no network. */
+/** `hidden`: the tab or app is in the background; `player`: the player paused. */
+export type PauseReason = "hidden" | "player";
+
 export class LocalMatchSource implements MatchSource {
   readonly kind = "local";
   private readonly events = new Emitter<MatchSourceEvents>();
@@ -28,6 +31,8 @@ export class LocalMatchSource implements MatchSource {
   private readonly pending = new Map<number, Pending>();
   private started = false;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Why the game is held; it runs again only once every reason is gone. */
+  private readonly pauseReasons = new Set<PauseReason>();
 
   constructor(
     readonly header: MatchHeader,
@@ -91,13 +96,19 @@ export class LocalMatchSource implements MatchSource {
   }
 
   /**
-   * Background tabs / backgrounded app: freeze the game instead of letting bots play on. A
-   * real-time game resumes after `countdownMs`, as an online match does, not under your feet.
+   * Holds the game for `reason` (a backgrounded tab or app must not let bots play on; the player
+   * may pause too) or lets it go. A real-time game resumes after `countdownMs`, as an online match
+   * does, not under your feet.
    */
-  setPaused(paused: boolean, countdownMs = 0): void {
+  setPaused(reason: PauseReason, paused: boolean, countdownMs = 0): void {
+    const wasPaused = this.pauseReasons.size > 0;
+    if (paused) this.pauseReasons.add(reason);
+    else this.pauseReasons.delete(reason);
+    const isPaused = this.pauseReasons.size > 0;
+    if (isPaused === wasPaused) return;
     if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.resumeTimer = null;
-    if (paused) {
+    if (isPaused) {
       this.send({ type: "pause" });
       this.events.emit("paused", []);
       return;

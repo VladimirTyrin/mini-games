@@ -44,14 +44,28 @@ describe("LocalMatchSource", () => {
     const countdowns: number[] = [];
     match.on("resumed", ({ countdownMs }) => countdowns.push(countdownMs));
 
-    match.setPaused(true);
-    match.setPaused(false, 3_000);
+    match.setPaused("hidden", true);
+    match.setPaused("hidden", false, 3_000);
     vi.advanceTimersByTime(2_999);
     expect(worker.posted).toEqual(["pause"]);
     vi.advanceTimersByTime(1);
 
     expect(worker.posted).toEqual(["pause", "resume"]);
     expect(countdowns).toEqual([3_000]);
+  });
+
+  it("stays paused by the player when the app comes back from the background", () => {
+    const { match, worker } = source();
+
+    match.setPaused("player", true);
+    match.setPaused("hidden", true);
+    match.setPaused("hidden", false, 3_000);
+    vi.advanceTimersByTime(3_000);
+    expect(worker.posted).toEqual(["pause"]);
+
+    match.setPaused("player", false, 3_000);
+    vi.advanceTimersByTime(3_000);
+    expect(worker.posted).toEqual(["pause", "resume"]);
   });
 
   it("ends the match as aborted when the authority fails, instead of leaving an empty board", () => {

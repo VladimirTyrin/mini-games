@@ -68,15 +68,44 @@ watch(controller, (current) => {
   if (!current && !isLeavingOnPurpose) void router.replace(lobby.current ? "/lobby" : "/online");
 });
 
+/** The online countdown's length; turn-based games just wait for the next move. */
+function resumeCountdownMs(): number {
+  return (controller.value?.gameTickMs ?? 0) > 0 ? 3_000 : 0;
+}
+
 // A backgrounded tab or app must not let bots play on alone.
 function onVisibility(): void {
   const source = controller.value?.source;
-  // The online countdown's length; turn-based games just wait for the next move.
-  const countdownMs = (controller.value?.gameTickMs ?? 0) > 0 ? 3_000 : 0;
-  if (source instanceof LocalMatchSource) source.setPaused(document.hidden, countdownMs);
+  if (source instanceof LocalMatchSource) source.setPaused("hidden", document.hidden, resumeCountdownMs());
 }
 document.addEventListener("visibilitychange", onVisibility);
 onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisibility));
+
+/** A local real-time game can be paused; a turn-based one waits anyway, an online one is shared. */
+const canPause = computed(
+  () =>
+    controller.value?.source instanceof LocalMatchSource &&
+    (controller.value?.gameTickMs ?? 0) > 0 &&
+    !controller.value.ended.value,
+);
+const pausedByPlayer = ref(false);
+function setPausedByPlayer(paused: boolean): void {
+  const source = controller.value?.source;
+  if (!(source instanceof LocalMatchSource)) return;
+  pausedByPlayer.value = paused;
+  source.setPaused("player", paused, resumeCountdownMs());
+}
+// A new match (Play again) starts unpaused.
+watch(controller, () => {
+  pausedByPlayer.value = false;
+});
+function onPauseKey(event: KeyboardEvent): void {
+  if (event.key !== "Escape" || !canPause.value || confirmingLeave.value) return;
+  event.preventDefault();
+  setPausedByPlayer(!pausedByPlayer.value);
+}
+window.addEventListener("keydown", onPauseKey);
+onBeforeUnmount(() => window.removeEventListener("keydown", onPauseKey));
 
 /** A running match is easy to quit by accident (back gesture, header arrow): ask first. */
 const confirmingLeave = ref(false);
@@ -178,7 +207,16 @@ function again(): void {
 </script>
 
 <template>
-  <AppHeader :title="plugin?.title ?? 'Match'" :back="requestLeave" />
+  <AppHeader :title="plugin?.title ?? 'Match'" :back="requestLeave">
+    <button
+      v-if="canPause && !pausedByPlayer"
+      type="button"
+      class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
+      @click="setPausedByPlayer(true)"
+    >
+      ⏸ Pause
+    </button>
+  </AppHeader>
   <ConfirmDialog
     v-if="confirmingLeave"
     title="Leave the match?"
@@ -213,6 +251,19 @@ function again(): void {
             Leave
           </button>
         </div>
+      </div>
+      <div
+        v-if="pausedByPlayer && canPause"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-950/85 p-4 text-center"
+      >
+        <h2 class="text-xl font-semibold">Paused</h2>
+        <button
+          type="button"
+          class="rounded-lg bg-emerald-600 px-6 py-2 font-medium whitespace-nowrap text-white hover:bg-emerald-500"
+          @click="setPausedByPlayer(false)"
+        >
+          Resume
+        </button>
       </div>
       <MatchOverlay
         :controller="controller"
