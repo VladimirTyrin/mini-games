@@ -14,6 +14,7 @@ import { InviteState } from "@/proto/minigames/v2/social_pb";
 
 import { useConnectionStore } from "./connection";
 import { useFriendsStore } from "./friends";
+import { useLobbyStore } from "./lobby";
 
 vi.mock("@/platform/push-notifications", () => ({
   canNotifyWithoutAsking: vi.fn().mockResolvedValue(true),
@@ -135,5 +136,41 @@ describe("friends store", () => {
     await friends.cancelInvite("invite-1");
 
     expect(friends.sentInvites.get("invite-1")?.state).toBe(InviteState.EXPIRED);
+  });
+
+  it("forgets an accepted invitation once the friend is in the lobby, so leaving shows no stale news", async () => {
+    const friends = useFriendsStore();
+    const socket = await signedIn();
+    const bobsDevice = { ...bob, id: `${bob.id}.2` };
+    const lobbyWith = (members: (typeof me)[]) =>
+      create(ServerMessageSchema, {
+        message: {
+          case: "lobbyState",
+          value: {
+            lobbyId: "lobby-1",
+            host: me,
+            maxSeats: 2,
+            seats: members.map((occupant) => ({ occupant })),
+          },
+        },
+      });
+    socket.push(lobbyWith([me]));
+    await vi.waitFor(() => expect(useLobbyStore().current?.lobbyId).toBe("lobby-1"));
+    socket.push(
+      create(ServerMessageSchema, {
+        message: {
+          case: "inviteUpdate",
+          value: { inviteId: "invite-1", friend: bob, state: InviteState.ACCEPTED, expiresInMs: 60_000 },
+        },
+      }),
+    );
+    await vi.waitFor(() => expect(friends.sentInvites.size).toBe(1));
+
+    socket.push(lobbyWith([me, bobsDevice]));
+    await vi.waitFor(() => expect(friends.sentInvites.size).toBe(0));
+    socket.push(lobbyWith([me]));
+
+    await vi.waitFor(() => expect(useLobbyStore().current?.seats).toHaveLength(1));
+    expect(friends.sentInvites.size).toBe(0);
   });
 });

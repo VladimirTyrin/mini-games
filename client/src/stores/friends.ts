@@ -30,6 +30,9 @@ export function accountOf(playerId: string): string {
 /** Set once the app asked for notifications on its own: asking again after a "no" only annoys. */
 const ASKED_FOR_NOTIFICATIONS_KEY = "mini-games.notifications-asked";
 
+/** How long "Coming!" shows for a friend who accepted but has not come into the lobby yet. */
+const ACCEPTED_SHOWN_MS = 30_000;
+
 /** An invitation the player opened from a notification, kept until the app is signed in. */
 interface OpenedInvite {
   inviteId: string;
@@ -99,6 +102,8 @@ export const useFriendsStore = defineStore("friends", () => {
         session.events.on("gameInviteClosed", ({ inviteId }) => forgetInvite(inviteId)),
         session.events.on("inviteUpdate", (update) => {
           if (update.state === InviteState.PENDING) setDeadline(update.inviteId, update.expiresInMs);
+          // "Coming!" until the friend shows up in the lobby, or for a while if they never do.
+          if (update.state === InviteState.ACCEPTED) setDeadline(update.inviteId, ACCEPTED_SHOWN_MS);
           sentInvites.value = new Map(sentInvites.value).set(update.inviteId, update);
           const name = update.friend?.displayName ?? "Your friend";
           if (update.state === InviteState.DECLINED) toasts.show(`${name} declined the invitation`);
@@ -113,6 +118,16 @@ export const useFriendsStore = defineStore("friends", () => {
   watch(
     () => lobby.current?.lobbyId,
     () => (sentInvites.value = new Map()),
+  );
+  // A friend who came in needs no news of the invitation any more; once gone again, they can be
+  // invited afresh.
+  watch(
+    () => lobby.members.map((member) => (member ? accountOf(member.id) : "")),
+    (accounts) => {
+      const present = new Set(accounts);
+      const kept = [...sentInvites.value].filter(([, update]) => !present.has(update.friend?.id ?? ""));
+      if (kept.length !== sentInvites.value.size) sentInvites.value = new Map(kept);
+    },
   );
 
   function setDeadline(inviteId: string, expiresInMs: number): void {

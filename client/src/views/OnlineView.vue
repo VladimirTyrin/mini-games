@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import GameIcon from "@/components/GameIcon.vue";
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
@@ -14,11 +15,14 @@ import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useFriendsStore } from "@/stores/friends";
 import { useLobbyStore } from "@/stores/lobby";
+import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
 import { type SettingsProblem, defaultSettings, gameCatalog } from "@/wasm/core";
 
 const connection = useConnectionStore();
 const friends = useFriendsStore();
+const router = useRouter();
+const match = useMatchStore();
 const lobby = useLobbyStore();
 const prefs = usePrefsStore();
 const catalog = gameCatalog();
@@ -45,6 +49,10 @@ watch(
 );
 onMounted(() => connection.isSignedIn && void lobby.refresh());
 
+function openCurrent(): void {
+  void router.push(match.controller ? { name: "match" } : { name: "lobby" });
+}
+
 async function create(): Promise<void> {
   prefs.rememberSettings(gameId.value, settings.value);
   await lobby.create(lobbyName.value, settings.value, maxSeats.value).catch(() => undefined);
@@ -68,6 +76,16 @@ const phaseLabel: Record<number, string> = {
   <main class="mx-auto w-full max-w-3xl flex-1 space-y-4 p-4">
     <SignInPanel v-if="!connection.isSignedIn" />
     <template v-else>
+      <!-- Reachable while in a lobby (from Home, or back from Friends): one lobby at a time, so
+           the way on is back into it. -->
+      <button
+        v-if="lobby.current"
+        class="flex min-h-12 w-full items-center gap-2 rounded-xl bg-emerald-700 px-4 text-left font-semibold"
+        @click="openCurrent"
+      >
+        <span class="min-w-0 flex-1 truncate">You are in {{ lobby.current.name || "a lobby" }}</span>
+        <span class="shrink-0">Open ›</span>
+      </button>
       <RouterLink
         v-if="friends.hasAccount"
         to="/friends"
@@ -86,6 +104,7 @@ const phaseLabel: Record<number, string> = {
             Refresh
           </button>
           <button
+            v-if="!lobby.current"
             class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm font-semibold whitespace-nowrap"
             @click="creating = !creating"
           >
@@ -93,7 +112,7 @@ const phaseLabel: Record<number, string> = {
           </button>
         </div>
       </div>
-      <section v-if="creating && plugin" class="space-y-3 rounded-2xl bg-panel p-4">
+      <section v-if="creating && plugin && !lobby.current" class="space-y-3 rounded-2xl bg-panel p-4">
         <h2 class="font-semibold">New lobby</h2>
         <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Game">
           <button
@@ -165,18 +184,27 @@ const phaseLabel: Record<number, string> = {
             </span>
           </span>
           <button
-            v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+            v-if="summary.lobbyId === lobby.current?.lobbyId"
             class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
-            @click="lobby.join(summary.lobbyId, false)"
+            @click="openCurrent"
           >
-            Join
+            Open
           </button>
-          <button
-            class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
-            @click="lobby.join(summary.lobbyId, true)"
-          >
-            Watch
-          </button>
+          <template v-else-if="!lobby.current">
+            <button
+              v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+              class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
+              @click="lobby.join(summary.lobbyId, false)"
+            >
+              Join
+            </button>
+            <button
+              class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
+              @click="lobby.join(summary.lobbyId, true)"
+            >
+              Watch
+            </button>
+          </template>
         </li>
         <li v-if="!lobby.lobbies.length" class="rounded-xl bg-panel p-6 text-center text-gray-400">
           No lobbies yet — create one!

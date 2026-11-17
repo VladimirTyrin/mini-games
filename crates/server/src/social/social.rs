@@ -622,6 +622,13 @@ impl Social {
             tokio::time::sleep(lifetime).await;
             handle.send(SocialCommand::InviteExpired(id));
         });
+        tracing::info!(
+            invite = %invite.id,
+            from = %invite.from.account,
+            to = %friend,
+            lobby = %invite.lobby.id,
+            "invitation sent"
+        );
         self.invites.insert(invite.id.clone(), invite);
         ack()
     }
@@ -680,6 +687,7 @@ impl Social {
         state: proto::InviteState,
         answered_by: Option<&SessionId>,
     ) {
+        tracing::info!(invite = %invite.id, ?state, "invitation closed");
         // Through the hub to the session, not the connection it asked from: that one may have
         // been replaced by a reconnect since.
         self.deliver_to_session(
@@ -723,6 +731,8 @@ impl Social {
         let store = self.store.clone();
         let push = self.push.clone();
         let account = account.clone();
+        // What the notification is about, for the log.
+        let about = notification.data.get("kind").cloned().unwrap_or_default();
         self.push_queue.submit(move || {
             let targets = match store.push_targets(&account) {
                 Ok(targets) => targets,
@@ -737,8 +747,11 @@ impl Social {
                 .filter(|target| push.can_reach(target))
             {
                 match push.send(target, &notification) {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        tracing::info!(%account, device = target.kind(), %about, "push sent");
+                    }
                     Err(PushError::TargetGone) => {
+                        tracing::info!(%account, device = target.kind(), "push target gone");
                         if let Err(error) = store.forget_push_target(target.address()) {
                             tracing::warn!(error = %error_chain(&error), "push target not forgotten");
                         }

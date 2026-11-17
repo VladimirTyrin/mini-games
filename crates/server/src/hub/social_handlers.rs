@@ -65,10 +65,22 @@ impl Hub {
     }
 
     pub(super) fn deliver_to_account(&self, account: &AccountId, message: &proto::ServerMessage) {
+        let mut connected = 0;
         for session in self.sessions.values() {
-            if session_account(&session.who) == Some(account.clone()) {
+            if session_account(&session.who).as_ref() == Some(account)
+                && session.connection.is_some()
+            {
                 session.send(message);
+                connected += 1;
             }
+        }
+        if let Some(proto::server_message::Message::GameInvite(invite)) = &message.message {
+            tracing::info!(
+                invite = invite.invite_id,
+                %account,
+                connected,
+                "invitation shown on connected devices"
+            );
         }
     }
 

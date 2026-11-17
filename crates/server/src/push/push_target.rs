@@ -21,6 +21,14 @@ impl PushTarget {
         }
     }
 
+    /// For logs: which push service it goes through.
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            Self::Fcm(_) => "fcm",
+            Self::WebPush(_) => "web",
+        }
+    }
+
     /// Unique per device: the FCM token or the push endpoint.
     pub(crate) fn address(&self) -> &str {
         match self {

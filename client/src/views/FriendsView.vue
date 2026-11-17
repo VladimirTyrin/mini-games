@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
@@ -15,6 +16,12 @@ import { useFriendsStore } from "@/stores/friends";
 import { usePrefsStore } from "@/stores/prefs";
 import { useToastStore } from "@/stores/toasts";
 
+const router = useRouter();
+/** Back where the player came from (a lobby, say); Online when this screen was the first one. */
+function goBack(): void {
+  if (window.history.state?.back) router.back();
+  else void router.push("/online");
+}
 const connection = useConnectionStore();
 const friends = useFriendsStore();
 const prefs = usePrefsStore();
@@ -89,7 +96,7 @@ function expiry(unixMs: bigint): string {
 </script>
 
 <template>
-  <AppHeader title="Friends" back="/online" />
+  <AppHeader title="Friends" :back="goBack" />
   <main class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
     <template v-if="!friends.hasAccount">
       <p class="rounded-xl bg-panel p-4 text-sm text-gray-300">

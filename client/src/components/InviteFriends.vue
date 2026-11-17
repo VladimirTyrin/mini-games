@@ -34,12 +34,15 @@ function invitationTo(accountId: string) {
   return latest;
 }
 
-/** Pending until its time is up, even if the news of its end never arrived. */
+/**
+ * Pending until its time is up, even if the news of its end never arrived; accepted only for a
+ * while, since a friend who accepted and never came is free to be asked again.
+ */
 function stateOf(accountId: string): InviteState | undefined {
   const update = invitationTo(accountId);
-  if (update?.state === InviteState.PENDING && friends.deadlineOf(update.inviteId) <= now.value) {
-    return InviteState.EXPIRED;
-  }
+  const timeUp = update !== undefined && friends.deadlineOf(update.inviteId) <= now.value;
+  if (update?.state === InviteState.PENDING && timeUp) return InviteState.EXPIRED;
+  if (update?.state === InviteState.ACCEPTED && timeUp) return undefined;
   return update?.state;
 }
 
