@@ -1,5 +1,6 @@
 use crate::bot_mind::BotMind;
 use crate::budget::Budget;
+use crate::cancel_token::CancelToken;
 use crate::decided_bot_turn::DecidedBotTurn;
 use crate::game::Game;
 use crate::slot::Slot;
@@ -17,8 +18,9 @@ pub struct BotTurn<G: Game> {
 }
 
 impl<G: Game> BotTurn<G> {
-    pub fn think(mut self) -> DecidedBotTurn<G> {
-        let mut budget = Budget::new(self.budget_nodes);
+    /// A cancelled `cancel` cuts the thinking short (the move is not wanted any more).
+    pub fn think(mut self, cancel: &CancelToken) -> DecidedBotTurn<G> {
+        let mut budget = Budget::cancellable(self.budget_nodes, cancel.clone());
         let command = self
             .mind
             .bot

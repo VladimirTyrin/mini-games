@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;
-use mg_core::{Clock, OutcomeKind, Slot, Status, Tick};
+use mg_core::{CancelToken, Clock, OutcomeKind, Slot, Status, Tick};
 use mg_protocol::proto::server_message::Message;
 use mg_protocol::{REPLAY_FORMAT_VERSION, proto, slot_from_wire};
 use mg_registry::{DynAuthority, DynBotDecision, SubmitError};
@@ -12,6 +12,7 @@ use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinError;
 use tokio::time::{Instant, MissedTickBehavior};
 
+use super::cancel_on_drop::CancelOnDrop;
 use super::disconnect_budget::DisconnectBudgets;
 use super::match_aborted::MatchAborted;
 use super::match_control::MatchControl;
@@ -69,6 +70,9 @@ pub(crate) struct MatchActor {
     bot_thinking: bool,
     /// Set when the actor runs.
     bot_moves: Option<BotMoveSender>,
+    /// Cancelled when the actor is gone, so a bot still thinking for an ended match stops at once
+    /// instead of holding a core (which real-time bots of other matches wait for).
+    bot_cancel: CancelOnDrop,
 }
 
 type BotMoveSender = mpsc::UnboundedSender<Result<DynBotDecision, JoinError>>;
@@ -110,6 +114,7 @@ impl MatchActor {
             bot_cpu: setup.bot_cpu,
             bot_thinking: false,
             bot_moves: None,
+            bot_cancel: CancelOnDrop::new(CancelToken::new()),
         }
     }
 
@@ -291,11 +296,15 @@ impl MatchActor {
         self.bot_thinking = true;
         let bot_cpu = self.bot_cpu.clone();
         let match_id = self.match_id.clone();
+        let cancel = self.bot_cancel.token().clone();
         tokio::spawn(async move {
             let permit = bot_cpu.acquire_owned().await;
+            if cancel.is_cancelled() {
+                return;
+            }
             let decided = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                turn.think()
+                turn.think(&cancel)
             })
             .await;
             if bot_moves.send(decided).is_err() {

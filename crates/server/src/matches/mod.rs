@@ -1,3 +1,4 @@
+mod cancel_on_drop;
 mod disconnect_budget;
 mod match_aborted;
 mod match_actor;

@@ -466,7 +466,7 @@ fn bot_turns_thought_away_play_as_run_bots_does() {
         inline.run_bots();
         inline.seal_frame();
         let turn = away.begin_bot_turn().expect("a bot is on turn");
-        away.finish_bot_turn(turn.think());
+        away.finish_bot_turn(turn.think(&CancelToken::new()));
         away.seal_frame();
     }
     assert!(away.game().status().is_finished());
@@ -489,14 +489,24 @@ fn a_bot_move_for_a_match_that_moved_on_is_not_played() {
     authority.run_bots();
     assert!(!authority.has_pending_inputs());
 
-    let decided = turn.think();
+    let decided = turn.think(&CancelToken::new());
     authority.seal_frame();
     authority.finish_bot_turn(decided);
     assert!(!authority.has_pending_inputs(), "a stale move is dropped");
 
     let turn = authority.begin_bot_turn().expect("the bot thinks again");
-    authority.finish_bot_turn(turn.think());
+    authority.finish_bot_turn(turn.think(&CancelToken::new()));
     assert!(authority.has_pending_inputs());
     assert_eq!(authority.rejected_bot_commands(), 0);
     assert_eq!(authority.game().awaiting(), Awaiting::Turn(Slot::new(0)));
+}
+
+#[test]
+fn a_cancelled_budget_runs_out_at_once() {
+    let cancel = CancelToken::new();
+    let mut budget = Budget::cancellable(1_000, cancel.clone());
+    assert!(budget.spend(1));
+    cancel.cancel();
+    assert!(!budget.spend(1));
+    assert!(budget.is_exhausted());
 }

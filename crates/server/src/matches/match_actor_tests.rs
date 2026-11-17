@@ -70,7 +70,7 @@ impl DynAuthority for FailingAuthority {
 struct PanickingTurn;
 
 impl DynBotTurn for PanickingTurn {
-    fn think(self: Box<Self>) -> DynBotDecision {
+    fn think(self: Box<Self>, _cancel: &CancelToken) -> DynBotDecision {
         panic!("bot search failed");
     }
 }
@@ -112,20 +112,25 @@ async fn a_panicking_bot_task_is_reported_as_aborted() {
     );
 }
 
-/// A turn-based match where a bot is always on turn and thinks until `gate` is released; the
-/// one human seat (slot 0) leaving ends it.
+type Gate = Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>;
+
+/// A turn-based match where a bot is always on turn and thinks until `gate` is released,
+/// announcing on `thinking` that it started; the one human seat (slot 0) leaving ends it.
 #[derive(Debug)]
 struct SlowBotAuthority {
-    gate: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
+    gate: Gate,
+    thinking: mpsc::UnboundedSender<CancelToken>,
     finished: bool,
 }
 
 struct GatedTurn {
-    gate: Arc<Mutex<Option<std::sync::mpsc::Receiver<()>>>>,
+    gate: Gate,
+    thinking: mpsc::UnboundedSender<CancelToken>,
 }
 
 impl DynBotTurn for GatedTurn {
-    fn think(self: Box<Self>) -> DynBotDecision {
+    fn think(self: Box<Self>, cancel: &CancelToken) -> DynBotDecision {
+        self.thinking.send(cancel.clone()).unwrap();
         let gate = self.gate.lock().unwrap().take();
         if let Some(gate) = gate {
             // Released (or the test is over) when the sender is dropped.
@@ -156,6 +161,7 @@ impl DynAuthority for SlowBotAuthority {
         (!self.finished).then(|| {
             Box::new(GatedTurn {
                 gate: self.gate.clone(),
+                thinking: self.thinking.clone(),
             }) as _
         })
     }
@@ -189,9 +195,10 @@ impl DynAuthority for SlowBotAuthority {
 }
 
 #[tokio::test]
-async fn a_player_leaves_while_a_bot_is_still_thinking() {
+async fn a_player_leaves_while_a_bot_is_still_thinking_and_the_bot_is_stopped() {
     let (release, gate) = std::sync::mpsc::channel::<()>();
     let gate = Arc::new(Mutex::new(Some(gate)));
+    let (thinking, mut started_thinking) = mpsc::unbounded_channel();
     let (hub_sender, mut hub_commands) = mpsc::unbounded_channel();
     let match_id = MatchId::random();
     let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
@@ -203,6 +210,7 @@ async fn a_player_leaves_while_a_bot_is_still_thinking() {
         header: proto::MatchHeader::default(),
         authority: Box::new(SlowBotAuthority {
             gate: gate.clone(),
+            thinking,
             finished: false,
         }),
         participants: vec![Participant {
@@ -216,6 +224,8 @@ async fn a_player_leaves_while_a_bot_is_still_thinking() {
     })
     .spawn(inbox);
 
+    let bot_cancel = started_thinking.recv().await.expect("the bot thinks");
+
     handle.control(MatchControl::Leave { session });
 
     let command = hub_commands.recv().await.expect("the hub must hear back");
@@ -223,6 +233,10 @@ async fn a_player_leaves_while_a_bot_is_still_thinking() {
         matches!(command, HubCommand::MatchFinished(_)),
         "{command:?}"
     );
-    // Still thinking (or not started yet): the leave did not wait for the bot.
+    // The single-threaded test runtime ran the actor to its end (and drop) before this line.
+    assert!(
+        bot_cancel.is_cancelled(),
+        "the ended match's bot must stop thinking"
+    );
     drop(release);
 }
