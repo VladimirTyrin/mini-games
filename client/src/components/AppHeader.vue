@@ -13,7 +13,7 @@ const connection = useConnectionStore();
 const status = computed(() => {
   switch (connection.state) {
     case "signed-in":
-      return { text: connection.identity?.displayName ?? "online", tone: "bg-emerald-400" };
+      return { text: connection.identity?.displayName ?? "online", tone: latencyTone(connection.latencyMs) };
     case "connecting":
     case "reconnecting":
       return { text: "connecting…", tone: "bg-amber-400" };
@@ -25,6 +25,13 @@ const status = computed(() => {
       return null;
   }
 });
+
+/** Green while play feels instant, amber when a real-time game starts to lag, red beyond. */
+function latencyTone(ms: number | null): string {
+  if (ms === null || ms < 150) return "bg-emerald-400";
+  if (ms < 400) return "bg-amber-400";
+  return "bg-rose-500";
+}
 
 function goBack(): void {
   if (typeof props.back === "function") props.back();
@@ -51,13 +58,24 @@ if (props.back) useBackHandler(goBack);
     <slot />
     <span v-if="status" class="flex min-w-0 items-center gap-2 text-xs text-gray-400">
       <span class="h-2 w-2 shrink-0 rounded-full" :class="status.tone" />
+      <span
+        v-if="connection.state === 'signed-in' && connection.latencyMs !== null"
+        class="shrink-0 tabular-nums"
+        title="Round trip to the server"
+        >{{ connection.latencyMs }} ms</span
+      >
       <Avatar
         v-if="connection.state === 'signed-in' && connection.identity"
         :url="connection.identity.avatarUrl"
         :name="connection.identity.displayName"
         :player-id="connection.identity.id"
       />
-      <span class="truncate">{{ status.text }}</span>
+      <!-- On a phone the avatar says who you are; the name would squeeze out the screen's title. -->
+      <span
+        class="truncate"
+        :class="{ 'hidden sm:inline': connection.state === 'signed-in' && connection.identity }"
+        >{{ status.text }}</span
+      >
     </span>
   </header>
 </template>

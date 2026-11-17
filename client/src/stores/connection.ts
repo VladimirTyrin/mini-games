@@ -30,6 +30,8 @@ export const useConnectionStore = defineStore("connection", () => {
 
   const session = shallowRef<Session | null>(null);
   const state = ref<ConnectionState>("offline");
+  /** The last ping's round trip; `null` until one comes back on this connection. */
+  const latencyMs = ref<number | null>(null);
   /** The server waits to restart for an update: matches running finish, new ones are refused. */
   const serverUpdating = ref(false);
   /**
@@ -75,7 +77,11 @@ export const useConnectionStore = defineStore("connection", () => {
     session.value?.close();
     const resumeKey = resumeKeyFor(prefs.serverUrl);
     const created = new Session(prefs.serverUrl, credentials, resumeStorage.get(resumeKey) ?? "");
-    created.events.on("state", (next) => (state.value = next));
+    created.events.on("state", (next) => {
+      state.value = next;
+      if (next !== "signed-in") latencyMs.value = null;
+    });
+    created.events.on("latency", (ms) => (latencyMs.value = ms));
     created.events.on("signedIn", ({ identity: who, sessionToken, resumeToken, serverInfo: info }) => {
       serverUpdating.value = false;
       identity.value = who;
@@ -157,6 +163,7 @@ export const useConnectionStore = defineStore("connection", () => {
     lostToRestart,
     session,
     state,
+    latencyMs,
     identity,
     serverInfo,
     serverError,

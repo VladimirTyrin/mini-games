@@ -76,13 +76,36 @@ describe("Session", () => {
   it("drops a connection that stops answering pings and reconnects", async () => {
     const { socket, states } = await signedInSession();
 
-    // The ping goes out after 15 s; the server never answers it.
-    await vi.advanceTimersByTimeAsync(15_000 + 10_000);
+    // The first ping goes out at once; the server never answers it.
+    await vi.advanceTimersByTimeAsync(10_000);
 
     expect(socket.readyState).toBe(3);
     expect(states.at(-1)).toBe("reconnecting");
     await vi.advanceTimersByTimeAsync(30_000);
     expect(FakeSocket.opened).toHaveLength(2);
+  });
+
+  it("reports the round trip of a ping", async () => {
+    const session = new Session("ws://test/ws", { kind: "guest", displayName: "Alice" });
+    const latencies: number[] = [];
+    session.events.on("latency", (ms) => latencies.push(ms));
+    session.connect();
+    const socket = FakeSocket.opened[0];
+    if (!socket) throw new Error("no socket opened");
+    socket.accept();
+    socket.push(welcome(socket.lastRequestId()));
+    // Signed in without time passing: the first ping goes out now.
+    await vi.advanceTimersByTimeAsync(0);
+    const ping = socket.lastSent();
+    expect(ping.message.case).toBe("ping");
+
+    await vi.advanceTimersByTimeAsync(42);
+    socket.push(
+      create(ServerMessageSchema, { requestId: ping.requestId, message: { case: "pong", value: {} } }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(latencies).toEqual([42]);
   });
 
   it("retries a sign-in the server did not answer, without reporting a refusal", async () => {

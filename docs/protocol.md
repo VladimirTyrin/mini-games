@@ -67,7 +67,8 @@ server are pushes (lobby updates, frames, chat, some errors).
    whose name or avatar changed meanwhile takes the new ones, and its lobby receives an updated
    `LobbyState`. The web client keeps the resume token per tab; the Android app keeps it across
    restarts, so a killed app gets its seat back.
-7. Ping every 15 s; the server closes connections silent for 45 s.
+7. Ping right after sign-in and every 5 s (the header shows the round trip); the server closes
+   connections silent for 45 s.
 8. On shutdown the server pushes `ServerShuttingDown` and closes connections.
 
 ## Lobbies

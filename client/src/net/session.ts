@@ -15,7 +15,8 @@ import { RequestError } from "./request-error";
 
 export const PROTOCOL_VERSION = 2;
 const REQUEST_TIMEOUT_MS = 10_000;
-const PING_EVERY_MS = 15_000;
+/** Often enough for the ping shown in the header to be current; a ping is a few bytes. */
+const PING_EVERY_MS = 5_000;
 const BACKOFF_MS = [500, 1_000, 2_000, 4_000, 8_000, 15_000];
 
 export type ConnectionState =
@@ -51,6 +52,8 @@ interface SessionEvents extends PushEvents {
     serverInfo: ServerInfo | null;
   };
   refused: RequestError;
+  /** Round trip of a ping, in milliseconds. */
+  latency: number;
 }
 
 interface Pending {
@@ -242,11 +245,18 @@ export class Session {
   private startPing(): void {
     const socket = this.socket;
     if (!socket) return;
-    this.pingTimer = setInterval(() => {
-      this.request({ case: "ping", value: { clientTimeMs: BigInt(Date.now()) } }).catch((error) => {
-        if (error instanceof RequestError && error.failure === "timed-out") this.abandon(socket);
-      });
-    }, PING_EVERY_MS);
+    const ping = () => {
+      const sentAt = performance.now();
+      this.request({ case: "ping", value: { clientTimeMs: BigInt(Date.now()) } })
+        .then(() => {
+          if (socket === this.socket) this.events.emit("latency", Math.round(performance.now() - sentAt));
+        })
+        .catch((error) => {
+          if (error instanceof RequestError && error.failure === "timed-out") this.abandon(socket);
+        });
+    };
+    ping();
+    this.pingTimer = setInterval(ping, PING_EVERY_MS);
   }
 
   /**
