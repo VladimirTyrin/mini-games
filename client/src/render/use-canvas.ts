@@ -6,14 +6,9 @@ export interface CanvasSize {
   height: number;
 }
 
-/**
- * Pixel density the canvas is drawn at, at most 2: a 3× phone screen would fill over twice the
- * pixels every frame for detail nobody sees at game size, and weak phones have exactly such screens.
- */
-const MAX_CANVAS_PIXEL_RATIO = 2;
-
+/** Pixel density the canvas is drawn at: the screen's own, so drawings stay sharp. */
 export function canvasPixelRatio(): number {
-  return Math.min(window.devicePixelRatio || 1, MAX_CANVAS_PIXEL_RATIO);
+  return window.devicePixelRatio || 1;
 }
 
 /**
