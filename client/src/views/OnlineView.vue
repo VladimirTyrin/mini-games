@@ -80,8 +80,13 @@ const phaseLabel: Record<number, string> = {
 
 <template>
   <AppHeader title="Online" back="/">
-    <button v-if="connection.isSignedIn" class="text-sm text-gray-400" @click="connection.signOut()">
-      Sign out
+    <!-- Where Settings stands on the home screen; Sign out lives in Settings, out of a stray tap's
+         reach. -->
+    <button
+      class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
+      @click="router.push('/settings')"
+    >
+      ⚙ Settings
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
