@@ -167,19 +167,18 @@ async function fire(cell: CellPoint): Promise<void> {
   <div v-if="view" class="flex w-full flex-col items-center gap-2">
     <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">{{ status }}</p>
     <FleetEditor v-if="needsFleet" :controller="controller" :seconds-left="secondsLeft" />
-    <!-- Stacked on a phone, the player's own sea smaller; side by side and equal on a wide screen
-         held sideways (a tablet, a desktop), where both grow with the screen's height. The rows above the seas have one height there, so
-         the seas line up. -->
+    <!-- Stacked on a phone, the player's own sea smaller. On a wide screen held sideways (a tablet,
+         a desktop) the seas stand side by side, equal, growing with the screen's height, in one
+         grid whose first row holds both captions: when the ships afloat wrap onto a second line,
+         the player's caption gets the same height, so the seas still line up. -->
     <div
       v-else
-      class="flex w-full flex-col items-center gap-3 sm:landscape:flex-row sm:landscape:items-start sm:landscape:justify-center sm:landscape:gap-6"
+      class="flex w-full flex-col items-center gap-3 sm:landscape:grid sm:landscape:grid-flow-col sm:landscape:grid-rows-[auto_auto] sm:landscape:justify-center sm:landscape:gap-x-6 sm:landscape:gap-y-1"
     >
-      <section
-        class="flex w-[min(92vw,42dvh,560px)] flex-col gap-1 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
-      >
+      <section class="flex w-[min(92vw,42dvh,560px)] flex-col gap-1 sm:landscape:contents">
         <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->
         <div
-          class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-gray-300 sm:landscape:min-h-7 sm:landscape:items-end"
+          class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm sm:landscape:self-end text-gray-300 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
         >
           <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
           <span class="flex shrink-0 flex-wrap gap-1" aria-label="Ships afloat">
@@ -192,30 +191,31 @@ async function fire(cell: CellPoint): Promise<void> {
             />
           </span>
         </div>
-        <SeaGrid
-          :label="seaLabel(targetSlot)"
-          :marks="view.waters[targetSlot]?.marks ?? []"
-          :ships="fleetOf(targetSlot)"
-          :sunk-ships="sunkOf(targetSlot)"
-          :last-shot="lastShotOn(targetSlot)"
-          :tappable="targets"
-          @tap="fire"
-        />
+        <div class="sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]">
+          <SeaGrid
+            :label="seaLabel(targetSlot)"
+            :marks="view.waters[targetSlot]?.marks ?? []"
+            :ships="fleetOf(targetSlot)"
+            :sunk-ships="sunkOf(targetSlot)"
+            :last-shot="lastShotOn(targetSlot)"
+            :tappable="targets"
+            @tap="fire"
+          />
+        </div>
       </section>
-      <section
-        class="flex w-[min(72vw,34dvh,420px)] flex-col gap-1 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
-      >
-        <span
-          class="text-sm text-gray-300 [overflow-wrap:anywhere] sm:landscape:flex sm:landscape:min-h-7 sm:landscape:items-end"
-          >{{ seaLabel(homeSlot) }}</span
-        >
-        <SeaGrid
-          :label="seaLabel(homeSlot)"
-          :marks="view.waters[homeSlot]?.marks ?? []"
-          :ships="fleetOf(homeSlot)"
-          :sunk-ships="sunkOf(homeSlot)"
-          :last-shot="lastShotOn(homeSlot)"
-        />
+      <section class="flex w-[min(72vw,34dvh,420px)] flex-col gap-1 sm:landscape:contents">
+        <span class="text-sm text-gray-300 sm:landscape:self-end [overflow-wrap:anywhere]">{{
+          seaLabel(homeSlot)
+        }}</span>
+        <div class="sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]">
+          <SeaGrid
+            :label="seaLabel(homeSlot)"
+            :marks="view.waters[homeSlot]?.marks ?? []"
+            :ships="fleetOf(homeSlot)"
+            :sunk-ships="sunkOf(homeSlot)"
+            :last-shot="lastShotOn(homeSlot)"
+          />
+        </div>
       </section>
     </div>
   </div>
