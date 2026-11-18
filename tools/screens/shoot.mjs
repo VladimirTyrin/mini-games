@@ -18,14 +18,15 @@ import { pathToFileURL } from "node:url";
 const SIZES = [
   { id: "iphone-se-old", label: "iPhone SE 1st 320×568", width: 320, height: 568, scale: 2, touch: true },
   { id: "iphone-se", label: "iPhone SE 375×667", width: 375, height: 667, scale: 2, touch: true },
+  { id: "iphone-15-pro", label: "iPhone 15 Pro 393×852", width: 393, height: 852, scale: 3, touch: true },
   { id: "pixel-10a", label: "Pixel 10a 412×915", width: 412, height: 915, scale: 2, touch: true },
   { id: "pixel-10a-landscape", label: "Pixel 10a sideways 915×412", width: 915, height: 412, scale: 2, touch: true },
   { id: "ipad", label: "iPad 2018 768×1024", width: 768, height: 1024, scale: 2, touch: true },
   { id: "ipad-landscape", label: "iPad 2018 sideways 1024×768", width: 1024, height: 768, scale: 2, touch: true },
   { id: "laptop-half", label: "2K 16\" half 853×1067", width: 853, height: 1067, scale: 1, touch: false },
   { id: "laptop", label: "2K 16\" laptop 1707×1067", width: 1707, height: 1067, scale: 1, touch: false },
-  { id: "monitor-half", label: "4K 27\" half 1280×1440", width: 1280, height: 1440, scale: 1, touch: false },
-  { id: "monitor", label: "4K 27\" 2560×1440", width: 2560, height: 1440, scale: 1, touch: false },
+  { id: "monitor-half", label: "4K 27\" at 150% half 1280×1440", width: 1280, height: 1440, scale: 1, touch: false },
+  { id: "monitor", label: "4K 27\" at 150% 2560×1440", width: 2560, height: 1440, scale: 1, touch: false },
 ];
 
 const click = (text) => `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(${JSON.stringify(text)}))?.click()`;
@@ -163,22 +164,39 @@ async function shoot(game, size) {
   }
 }
 
-/** One page per game: every size scaled to the same height, labelled, shot as one image. */
-async function contactSheet(game, sizes) {
-  const rowHeight = 520;
-  const cells = sizes
-    .map(
-      (size) =>
-        `<figure><img src="${game.id}--${size.id}.png" style="height:${rowHeight}px"><figcaption>${size.label}</figcaption></figure>`,
-    )
-    .join("");
-  const html = `<!doctype html><meta charset="utf-8"><style>
+const SHEET_STYLE = `<style>
     body { margin: 0; padding: 16px; background: #0b0f17; color: #e5e7eb; font: 16px system-ui; }
-    h1 { margin: 0 0 12px; font-size: 22px; }
+    h1 { margin: 24px 0 12px; font-size: 22px; } h1:first-of-type { margin-top: 0; }
     main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
     figure { margin: 0; } img { display: block; border: 1px solid #374151; }
     figcaption { margin-top: 4px; color: #9ca3af; }
-  </style><h1>${game.id}</h1><main>${cells}</main>`;
+  </style>`;
+
+/** A game's shots at every size, scaled to one height and labelled. */
+function gameSection(game, sizes, rowHeight) {
+  const cells = sizes
+    .map(
+      (size) =>
+        `<figure><a href="${game.id}--${size.id}.png"><img src="${game.id}--${size.id}.png" style="height:${rowHeight}px" loading="lazy"></a><figcaption>${size.label}</figcaption></figure>`,
+    )
+    .join("");
+  return `<h1 id="${game.id}">${game.id}</h1><main>${cells}</main>`;
+}
+
+/** all.html: every game on one page, each shot opening at full size. */
+function writeAllPage(games, sizes) {
+  const links = games.map((game) => `<a href="#${game.id}" style="color:#93c5fd;margin-right:12px">${game.id}</a>`).join("");
+  const html = `<!doctype html><meta charset="utf-8"><title>Screens</title>${SHEET_STYLE}<p>${links}</p>${games
+    .map((game) => gameSection(game, sizes, 420))
+    .join("")}`;
+  const page = join(out, "all.html");
+  writeFileSync(page, html);
+  return page;
+}
+
+/** One page per game: every size scaled to the same height, labelled, shot as one image. */
+async function contactSheet(game, sizes) {
+  const html = `<!doctype html><meta charset="utf-8">${SHEET_STYLE}${gameSection(game, sizes, 520)}`;
   const page = join(out, `${game.id}.html`);
   writeFileSync(page, html);
   const tab = await openTab();
@@ -207,11 +225,22 @@ try {
   const sizes = SIZES.filter((size) => !onlySizes || onlySizes.includes(size.id));
   for (const game of games) {
     for (const size of sizes) {
-      const file = await shoot(game, size);
-      console.log(file);
+      // A page reloading itself mid-script (a service worker taking over, say) loses the shot:
+      // try again, then go on without it rather than lose the whole run.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          console.log(await shoot(game, size));
+          break;
+        } catch (error) {
+          console.error(`${game.id} at ${size.id}, attempt ${attempt}: ${error.message}`);
+          if (attempt === 3) break;
+        }
+      }
     }
     console.log(await contactSheet(game, sizes));
   }
+  // The page lists every game and size, shot in this run or an earlier one.
+  console.log(writeAllPage(GAMES, SIZES));
 } finally {
   chrome.kill();
 }

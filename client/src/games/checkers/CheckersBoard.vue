@@ -237,7 +237,7 @@ const status = computed(() => {
     </p>
     <div
       class="relative aspect-square overflow-hidden rounded-md border-4 border-[#3f2a1d] shadow-lg"
-      :style="{ width: 'min(92vw, 62vh, 560px)' }"
+      :style="{ width: 'min(100%, max(62dvh, calc(100dvh - 11rem)))' }"
     >
       <div class="grid h-full w-full grid-cols-8 grid-rows-8">
         <button

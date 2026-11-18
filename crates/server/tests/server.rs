@@ -100,7 +100,15 @@ async fn malformed_and_oversized_messages_get_errors_without_closing() {
         "x".repeat(70_000)
     );
     alice.send_raw(&huge_chat).await;
-    expect_error(alice.reply_to(9).await, proto::ErrorCode::InvalidRequest);
+    // Too big to be worth decoding: refused without its request id.
+    let error = alice
+        .expect(|m| match &m.message {
+            Some(Reply::Error(e)) => Some(e.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(error.code, proto::ErrorCode::InvalidRequest as i32);
+    assert_eq!(error.message, "message too large");
     let Reply::LobbyList(_) = alice
         .request(Request::ListLobbies(proto::ListLobbies {}))
         .await
@@ -314,6 +322,26 @@ async fn kicked_member_is_notified_and_can_keep_using_the_server() {
 }
 
 #[tokio::test]
+async fn a_seated_player_cannot_be_kicked_during_a_match() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let guest = server.guest("Guest").await;
+    let guest_id = guest.welcome.identity.clone().unwrap().id;
+    let mut guest = guest.client;
+    let match_id = start_two_player_tictactoe(&mut host, &mut guest).await;
+    expect_error(
+        host.request(Request::KickMember(proto::KickMember {
+            player_id: guest_id,
+        }))
+        .await,
+        proto::ErrorCode::WrongPhase,
+    );
+    // The guest still holds their seat: their move is accepted.
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
+    expect_ok(guest.request(place(&match_id, 1, 1)).await);
+}
+
+#[tokio::test]
 async fn host_leaving_hands_the_lobby_over() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;
@@ -388,6 +416,7 @@ async fn shared_replay_is_validated() {
     let garbage = Request::ShareReplay(proto::ShareReplay {
         replay_file: vec![0xff, 0x01, 0x02],
         host_only_control: true,
+        more_parts: false,
     });
     expect_error(host.request(garbage).await, proto::ErrorCode::InvalidReplay);
     let huge_board = proto::ReplayFile {
@@ -401,6 +430,7 @@ async fn shared_replay_is_validated() {
     let request = Request::ShareReplay(proto::ShareReplay {
         replay_file: huge_board.encode_to_vec(),
         host_only_control: true,
+        more_parts: false,
     });
     expect_error(host.request(request).await, proto::ErrorCode::InvalidReplay);
 }

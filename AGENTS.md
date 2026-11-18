@@ -52,15 +52,16 @@ may depend on the screen's shape (portrait, landscape, nearly square), not only 
 small screens give up secondary interface (Stack Attack's stats, say) to make the game field
 larger; on big screens use the room instead of leaving it empty.
 
-Check every UI change at least on these (CSS pixels, in the browser pane's viewport):
+Check every UI change at least on these, in CSS pixels (what the browser sees: a 4K screen at Windows' 150% scaling is 2560×1440). `node tools/screens/shoot.mjs` (with `npm run dev` running) screenshots every game at all of them into `screens-out/` (`all.html` shows them all):
 
 | Screen | Viewport |
 |---|---|
 | Small phone (iPhone SE) | 375×667, and 320×568 for the oldest |
+| iPhone 15 Pro | 393×852 |
 | Google Pixel 10a | about 412×915, also held sideways |
 | iPad 2018 (9.7") | 768×1024 and 1024×768 |
 | New laptop, 2K 16" (scaled 150%) | about 1707×1067, and its half (a window beside another): 853×1067 |
-| 4K 27–31" monitor (scaled 150%) | 2560×1440, and its half: 1280×1440 |
+| 4K 27–31" monitor, scaled 150% | 2560×1440, and its half: 1280×1440 |
 
 No text may be clipped, ellipsized or spill out of its control, and nothing may scroll sideways.
 

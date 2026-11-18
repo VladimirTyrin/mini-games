@@ -171,7 +171,10 @@ useGameKeys((key) => {
 </script>
 
 <template>
-  <div v-if="view" class="flex flex-col items-center gap-2">
+  <div
+    v-if="view"
+    class="flex flex-col items-center gap-2 short-landscape:flex-row short-landscape:items-stretch"
+  >
     <!-- Two lines reserved: a longer message (why a pair was refused) must not push the board. -->
     <p class="flex min-h-10 items-center text-center text-sm leading-5 font-medium" :class="status.tone">
       {{ status.text }}
@@ -191,7 +194,9 @@ useGameKeys((key) => {
         />
       </div>
     </div>
-    <div class="flex items-center justify-center gap-8 pt-2 pb-1">
+    <div
+      class="flex items-center justify-center gap-8 pt-2 pb-1 short-landscape:flex-col short-landscape:gap-4"
+    >
       <ActionButton
         caption="Refill"
         label="Refill (R)"

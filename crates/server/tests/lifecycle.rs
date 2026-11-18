@@ -388,6 +388,40 @@ async fn real_time_bots_play_every_tick() {
 }
 
 #[tokio::test]
+async fn a_replay_shared_in_parts_reaches_members_whole() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    let match_id = play_tictactoe_to_the_end(&mut host, &mut guest).await;
+    host.expect(post_match).await;
+    let Reply::ReplayData(replay) = host
+        .request(Request::RequestReplay(proto::RequestReplay { match_id }))
+        .await
+    else {
+        panic!("expected replay data");
+    };
+    let parts: Vec<&[u8]> = replay.replay_file.chunks(7).collect();
+    assert!(parts.len() > 2, "the replay must take several parts");
+    for (index, part) in parts.iter().enumerate() {
+        expect_ok(
+            host.request(Request::ShareReplay(proto::ShareReplay {
+                replay_file: part.to_vec(),
+                host_only_control: true,
+                more_parts: index + 1 < parts.len(),
+            }))
+            .await,
+        );
+    }
+    let shared = guest
+        .expect(|m| match &m.message {
+            Some(Reply::SharedReplay(shared)) => Some(shared.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(shared.replay_file, replay.replay_file);
+}
+
+#[tokio::test]
 async fn a_shared_replay_reaches_late_joiners_with_its_controls_until_stopped() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;
@@ -412,6 +446,7 @@ async fn a_shared_replay_reaches_late_joiners_with_its_controls_until_stopped() 
         host.request(Request::ShareReplay(proto::ShareReplay {
             replay_file: replay.replay_file.clone(),
             host_only_control: true,
+            more_parts: false,
         }))
         .await,
     );
@@ -520,6 +555,7 @@ async fn an_idle_lobby_watching_a_replay_is_closed() {
         host.request(Request::ShareReplay(proto::ShareReplay {
             replay_file: replay.replay_file,
             host_only_control: false,
+            more_parts: false,
         }))
         .await,
     );
@@ -728,6 +764,7 @@ async fn sharing_a_replay_is_answered_even_when_the_host_moved_on_meanwhile() {
         .send(Request::ShareReplay(proto::ShareReplay {
             replay_file: replay.replay_file,
             host_only_control: true,
+            more_parts: false,
         }))
         .await;
     host.send(Request::LeaveLobby(proto::LeaveLobby {})).await;

@@ -77,6 +77,7 @@ fn build_context(
         ),
         push_queue: PushQueue::start(),
         timing: config.timing,
+        replay_upload_budget: Arc::new(Semaphore::new(Limits::REPLAY_UPLOAD_BUDGET_BYTES)),
         shutting_down,
     })
 }
@@ -253,8 +254,8 @@ async fn websocket(
         }
     };
     upgrade
-        .max_message_size(Limits::MAX_REPLAY_MESSAGE_BYTES)
-        .max_frame_size(Limits::MAX_REPLAY_MESSAGE_BYTES)
+        .max_message_size(Limits::MAX_SOCKET_MESSAGE_BYTES)
+        .max_frame_size(Limits::MAX_SOCKET_MESSAGE_BYTES)
         .on_upgrade(move |socket| async move {
             connection::run(state.context, socket).await;
             drop(slot);

@@ -33,6 +33,8 @@ pub(crate) struct ServerContext {
     pub push: Arc<PushSender>,
     pub push_queue: PushQueue,
     pub timing: Timing,
+    /// Bytes of half-uploaded shared replays, across all connections.
+    pub replay_upload_budget: Arc<Semaphore>,
     /// Turns `true` when the server stops; connections that never signed in close at once
     /// (signed-in ones are told by the hub).
     pub shutting_down: watch::Receiver<bool>,

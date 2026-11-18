@@ -61,7 +61,14 @@ async function handle(message: ToWorker): Promise<void> {
       break;
     }
     case "submit": {
-      if (!host) return;
+      if (!host) {
+        post({ type: "rejected", requestId: message.requestId, message: "the match is not running" });
+        break;
+      }
+      if (paused) {
+        post({ type: "rejected", requestId: message.requestId, message: "the game is paused" });
+        break;
+      }
       try {
         host.submit(message.slot, message.command);
         post({ type: "accepted", requestId: message.requestId });
@@ -79,7 +86,10 @@ async function handle(message: ToWorker): Promise<void> {
       break;
     }
     case "submitSecret": {
-      if (!host) return;
+      if (!host) {
+        post({ type: "rejected", requestId: message.requestId, message: "the match is not running" });
+        break;
+      }
       try {
         host.submitSecret(message.slot, message.command);
         post({ type: "accepted", requestId: message.requestId });
@@ -108,7 +118,8 @@ async function handle(message: ToWorker): Promise<void> {
       if (host && host.tickMs() === 0) driveBots();
       break;
     case "replay":
-      if (host) post({ type: "replay", requestId: message.requestId, replay: host.replayFile() });
+      // Answered either way: the page waits for it.
+      post({ type: "replay", requestId: message.requestId, replay: host ? host.replayFile() : null });
       break;
     case "stop":
       stopTicker();

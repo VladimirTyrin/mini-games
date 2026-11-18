@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { onNotification } from "./push-notifications";
+import { onNotification, tappedInApp } from "./push-notifications";
 
 describe("onNotification", () => {
   afterEach(() => history.replaceState(null, "", "/"));
@@ -26,5 +26,19 @@ describe("onNotification", () => {
     await onNotification(handler);
 
     expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe("tappedInApp", () => {
+  it("marks a notification tapped in the Android app as tapped, so the tap opens what it is about", () => {
+    const notification = tappedInApp({ kind: "invite", sentAt: "1000", inviteId: "i", lobbyId: "l" }, 5_000);
+
+    expect(notification).toEqual(
+      expect.objectContaining({
+        kind: "invite",
+        tappedAt: 5_000,
+        data: expect.objectContaining({ inviteId: "i" }),
+      }),
+    );
   });
 });

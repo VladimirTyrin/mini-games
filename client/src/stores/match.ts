@@ -146,7 +146,10 @@ export const useMatchStore = defineStore("match", () => {
         return;
       }
       if (source instanceof OnlineMatchSource) source.rebind(session);
-      const offStarted = session.events.on("matchStarted", (header) => void startOnline(header));
+      // Leaving the lobby as its match starts: the match is not this player's any more.
+      const offStarted = session.events.on("matchStarted", (header) => {
+        if (!lobby.isLeaving) void startOnline(header);
+      });
       // A reload or reconnect into a running match: the server sends only a catch-up.
       const offCatchUp = session.events.on("catchUp", (catchUp) => {
         if (!catchUp.header || lobby.isLeaving) return;

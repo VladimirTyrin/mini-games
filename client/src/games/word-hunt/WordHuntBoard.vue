@@ -73,7 +73,7 @@ const turnLine = computed(() => {
 const typed = ref("");
 const submitting = ref(false);
 watch(
-  () => guesses.value.length,
+  () => [guesses.value.length, isPlaying.value],
   () => {
     typed.value = "";
   },
@@ -412,7 +412,7 @@ const gridSize = computed(() => ({
     />
     <WordHuntKeyboard
       v-if="controller.mySlot !== null"
-      class="wh-keyboard mt-auto"
+      class="wh-keyboard mt-4 pointer-coarse:mt-auto"
       :rows="keyboardRows(settings.language)"
       :hints="view.keyboard"
       :disabled="!canType"
@@ -431,7 +431,7 @@ const gridSize = computed(() => ({
   --tile: max(
     1.6rem,
     min(
-      4.5rem,
+      6.5rem,
       calc((100vw - 4.5rem) / var(--letters) - 0.375rem),
       calc((100dvh - 20rem) / var(--rows) - 0.375rem)
     )
@@ -445,7 +445,7 @@ const gridSize = computed(() => ({
   --tile: max(
     1.75rem,
     min(
-      4.5rem,
+      6.5rem,
       calc((100vw - 2rem) / var(--letters) - 0.375rem),
       calc((100dvh - 20rem) / var(--rows) - 0.375rem)
     )

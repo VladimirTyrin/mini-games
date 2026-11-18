@@ -27,9 +27,13 @@ message ReplayData {
 }
 
 // Lobby members watch the same replay; the server only relays the file and the controls.
+// A replay larger than one message (64 KiB, base64 inside JSON) goes up in parts of at most
+// 46 KiB: every part but the last sets `more_parts` and is answered with Ack; the last one is
+// answered once the whole file (up to 4 MiB) is checked, and its `host_only_control` counts.
 message ShareReplay {
   bytes replay_file = 1;
   bool host_only_control = 2;
+  bool more_parts = 3;
 }
 
 message SharedReplay {

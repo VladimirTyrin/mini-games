@@ -130,7 +130,7 @@ async function place(index: number): Promise<void> {
           gridTemplateColumns: `repeat(${view.fieldWidth}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${view.fieldHeight}, minmax(0, 1fr))`,
           aspectRatio: `${view.fieldWidth} / ${view.fieldHeight}`,
-          width: `max(${view.fieldWidth * MIN_CELL_PX}px, min(90vw, calc(70vh * ${view.fieldWidth} / ${view.fieldHeight})))`,
+          width: `max(${view.fieldWidth * MIN_CELL_PX}px, min(90vw, calc(max(62dvh, 100dvh - 11rem) * ${view.fieldWidth} / ${view.fieldHeight})))`,
         }"
       >
         <button

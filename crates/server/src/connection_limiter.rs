@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv6Addr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -13,8 +13,10 @@ pub(crate) enum ConnectionRefused {
     TooManyFromAddress,
 }
 
-/// Counts live WebSocket connections, overall and per client IP. A slot is taken before the
-/// upgrade and released when the connection ends (or the upgrade fails).
+/// Counts live WebSocket connections, overall and per client address. A slot is taken before
+/// the upgrade and released when the connection ends (or the upgrade fails). An IPv6 client
+/// counts by its /64: one subscriber usually gets a whole /64 and could take every slot
+/// otherwise.
 #[derive(Debug)]
 pub(crate) struct ConnectionLimiter {
     max_total: usize,
@@ -46,6 +48,7 @@ impl ConnectionLimiter {
         self: &Arc<Self>,
         ip: IpAddr,
     ) -> Result<ConnectionSlot, ConnectionRefused> {
+        let ip = address_block(ip);
         // Increment first and roll back, so concurrent upgrades cannot all pass the check.
         if self.total.fetch_add(1, Ordering::AcqRel) >= self.max_total {
             self.release_total();
@@ -86,6 +89,17 @@ impl ConnectionLimiter {
             }
             notified.await;
         }
+    }
+}
+
+/// The address a client is counted by: IPv4 as it is, IPv6 by its /64 prefix.
+fn address_block(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V4(_) => ip,
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => IpAddr::V4(v4),
+            None => IpAddr::V6(Ipv6Addr::from_bits(v6.to_bits() & !u128::from(u64::MAX))),
+        },
     }
 }
 
@@ -132,6 +146,20 @@ mod tests {
         );
         drop(first);
         let _again = limiter.acquire(A).unwrap();
+    }
+
+    #[tokio::test]
+    async fn ipv6_clients_count_by_their_64_block() {
+        let limiter = Arc::new(ConnectionLimiter::new(10, 2));
+        let address = |last: u16| IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, 2, 0, 0, 0, last));
+        let _first = limiter.acquire(address(1)).unwrap();
+        let _second = limiter.acquire(address(2)).unwrap();
+        assert_eq!(
+            limiter.acquire(address(3)).unwrap_err(),
+            ConnectionRefused::TooManyFromAddress
+        );
+        let next_block = IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, 3, 0, 0, 0, 1));
+        assert!(limiter.acquire(next_block).is_ok());
     }
 
     #[tokio::test]

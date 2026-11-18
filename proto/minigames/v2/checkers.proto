@@ -82,7 +82,7 @@ enum CheckersEndReason {
   CHECKERS_END_REASON_NO_PIECES = 1;
   // The loser cannot move.
   CHECKERS_END_REASON_NO_MOVES = 2;
-  // The loser left, was kicked or ran out of disconnect budget.
+  // The loser left or ran out of disconnect budget.
   CHECKERS_END_REASON_OPPONENT_LEFT = 3;
   // Draw: the same position came up a third time.
   CHECKERS_END_REASON_REPETITION = 4;

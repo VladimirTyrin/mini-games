@@ -172,6 +172,12 @@ async function leave(): Promise<void> {
 // A board times its animations by `controller.tickMs` once, when it is created; a new replay
 // speed changes that, so the board is rebuilt (it draws from the controller's state).
 const boardKey = ref(0);
+// Boards and the overlay read the header (seats, names, who is who) once, when created: a new
+// match (another round in the same lobby, maybe with other players) gets new ones.
+const controllerKey = ref(0);
+watch(controller, () => {
+  controllerKey.value += 1;
+});
 watch(
   () => match.replay,
   (replay, _, onCleanup) => {
@@ -233,11 +239,17 @@ function again(): void {
     @cancel="confirmingLeave = false"
   />
   <main
-    v-if="controller && plugin"
+    v-if="controller"
     class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3 xl:max-w-6xl 2xl:max-w-7xl"
   >
     <div class="relative flex min-h-0 flex-1 flex-col">
-      <component :is="plugin.Board" :key="boardKey" :controller="controller" class="min-h-0 flex-1" />
+      <component
+        :is="plugin.Board"
+        v-if="plugin"
+        :key="`${controllerKey}:${boardKey}`"
+        :controller="controller"
+        class="min-h-0 flex-1"
+      />
       <div
         v-if="controller.incompatible.value"
         class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-950/90 p-4 text-center"
@@ -261,29 +273,35 @@ function again(): void {
           </button>
         </div>
       </div>
+      <!-- A light veil: the player may want to study the field while the game stands still. -->
       <div
         v-if="pausedByPlayer && canPause"
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-gray-950/85 p-4 text-center"
+        class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-gray-950/25 p-4"
       >
-        <h2 class="text-xl font-semibold">Paused</h2>
-        <button
-          type="button"
-          class="rounded-lg bg-emerald-600 px-6 py-2 font-medium whitespace-nowrap text-white hover:bg-emerald-500"
-          @click="setPausedByPlayer(false)"
+        <div
+          class="flex flex-col items-center gap-3 rounded-2xl bg-panel/95 px-6 py-4 text-center shadow-xl ring-1 ring-white/10"
         >
-          Resume
-        </button>
+          <h2 class="text-xl font-semibold">Paused</h2>
+          <button
+            type="button"
+            class="rounded-lg bg-emerald-600 px-6 py-2 font-medium whitespace-nowrap text-white hover:bg-emerald-500"
+            @click="setPausedByPlayer(false)"
+          >
+            Resume
+          </button>
+        </div>
       </div>
       <MatchOverlay
+        :key="controllerKey"
         :controller="controller"
         :end-reason="endReason"
         @leave="leave"
-        @replay="match.saveReplay(plugin.title)"
+        @replay="match.saveReplay(plugin?.title ?? 'Match')"
         @again="again"
       />
     </div>
     <ReplayBar v-if="match.replay" :replay="match.replay" />
-    <p class="text-center text-xs text-gray-500">{{ controlsHintFor(plugin) }}</p>
+    <p v-if="plugin" class="text-center text-xs text-gray-500">{{ controlsHintFor(plugin) }}</p>
     <ChatPanel
       v-if="isOnline && lobby.current"
       :messages="lobby.lobbyChat"

@@ -19,6 +19,7 @@ mod matches;
 mod outbound;
 mod player_id;
 mod push;
+mod replay_parts;
 mod social;
 mod text;
 mod timing;

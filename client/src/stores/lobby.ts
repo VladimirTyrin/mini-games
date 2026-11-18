@@ -103,7 +103,14 @@ export const useLobbyStore = defineStore("lobby", () => {
   /** Ignores late updates for a lobby we already left. */
   function accept(state: LobbyState): void {
     const known = current.value;
-    if (known && known.lobbyId !== state.lobbyId) return;
+    const isMember =
+      state.seats.some((seat) => sameIdentity(seat.occupant, connection.identity)) ||
+      state.observers.some((observer) => sameIdentity(observer, connection.identity));
+    if (known && known.lobbyId !== state.lobbyId) {
+      // This session is in another lobby now: taken over from another device that was there.
+      if (isMember && !isLeaving.value && state.lobbyId !== leftLobbyId) enter(state);
+      return;
+    }
     if (!known && (isLeaving.value || state.lobbyId === leftLobbyId)) return;
     const hadVoted = known?.playAgainVotes.some((voter) => sameIdentity(voter, connection.identity));
     const stillVoted = state.playAgainVotes.some((voter) => sameIdentity(voter, connection.identity));
@@ -111,9 +118,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     if (hadVoted && !stillVoted && state.phase === LobbyPhase.POST_MATCH) {
       toasts.show("The players or settings changed: vote again to play");
     }
-    if (!known && !state.seats.some((seat) => sameIdentity(seat.occupant, connection.identity))) {
-      if (!state.observers.some((observer) => sameIdentity(observer, connection.identity))) return;
-    }
+    if (!known && !isMember) return;
     current.value = state;
   }
 

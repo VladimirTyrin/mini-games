@@ -30,6 +30,10 @@ pub trait DynAuthority: Send + std::fmt::Debug {
     fn awaits_secret(&self, _slot: Slot) -> bool {
         false
     }
+    /// See `mg_core::Game::has_left_play`.
+    fn has_left_play(&self, _slot: Slot) -> bool {
+        false
+    }
     /// What `slot` may see of the game's secret, for that seat's connection only.
     fn seat_secret(&self, _slot: Slot) -> Option<proto::GameSeatSecret> {
         None

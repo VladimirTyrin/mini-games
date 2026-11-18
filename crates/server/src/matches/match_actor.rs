@@ -65,6 +65,8 @@ pub(crate) struct MatchActor {
     /// Catch-ups are the whole log; one encoding serves every request until the next frame.
     catch_up_cache: Option<CachedCatchUp>,
     hub: HubHandle,
+    /// Caps the turn-based bot searches (seconds each) running at once. Real-time bots never
+    /// take it: they decide every tick, and waiting behind a search would freeze their match.
     bot_cpu: Arc<Semaphore>,
     /// A turn-based bot is thinking on the blocking pool; its move comes back on `bot_moves`.
     bot_thinking: bool,
@@ -444,16 +446,15 @@ impl MatchActor {
         }
     }
 
-    /// Real-time bots decide on the blocking pool under the CPU semaphore, so many bots at once
-    /// never stall the async workers. A panicking bot leaves the authority `None`, which ends
-    /// the actor as aborted.
+    /// Real-time bots decide on the blocking pool, so many bots at once never stall the async
+    /// workers, but without the CPU semaphore: a turn-based search holding it for seconds must
+    /// not stop this match's clock. A panicking bot leaves the authority `None`, which ends the
+    /// actor as aborted.
     async fn run_bots(&mut self) {
         let Some(mut authority) = self.authority.take() else {
             return;
         };
-        let permit = self.bot_cpu.clone().acquire_owned().await;
         let joined = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
             authority.run_bots();
             authority
         })
@@ -515,7 +516,11 @@ impl MatchActor {
         };
         participant.outbound = None;
         let Some(slot) = participant.slot else { return };
-        if self.is_finished() || self.dropped.contains(&slot) {
+        let has_left_play = self
+            .authority
+            .as_ref()
+            .is_some_and(|authority| authority.has_left_play(slot));
+        if self.is_finished() || self.dropped.contains(&slot) || has_left_play {
             return;
         }
         let now = Instant::now();

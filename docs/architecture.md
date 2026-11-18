@@ -83,8 +83,9 @@ Actors, no shared locks:
 - **Hub** (one task): sessions, accounts (one session per account), resume tokens, lobbies (explicit phases: open →
   in match → post match / replay). Handles one command at a time.
 - **Match actor** (one task per match): owns the `DynAuthority`, ticks real-time games,
-  runs bot searches on the blocking pool under a CPU semaphore, broadcasts each frame encoded
-  once. A turn-based bot thinks on a copy of the game (`Authority::begin_bot_turn`) while the
+  runs bots on the blocking pool, broadcasts each frame encoded once. Turn-based searches
+  (seconds each) share a CPU semaphore, one per core; real-time bots decide every tick without
+  it, so a long search never stops another match's clock. A turn-based bot thinks on a copy of the game (`Authority::begin_bot_turn`) while the
   actor goes on answering; its move is played when it comes back unless the match moved on
   meanwhile (then it thinks again), handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
 

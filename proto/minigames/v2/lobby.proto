@@ -93,7 +93,8 @@ message RemoveSeat {
 message KickMember {
   reserved 1;
   reserved "member";
-  // `Identity.id` of the member to remove.
+  // `Identity.id` of the member to remove. A seated player cannot be kicked during a match
+  // (WRONG_PHASE): their seat would be forfeited.
   string player_id = 2;
 }
 

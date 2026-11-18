@@ -224,6 +224,14 @@ fn a_player_may_give_up_out_of_turn_and_the_others_play_on() {
 }
 
 #[test]
+fn a_player_who_gave_up_has_left_play_while_the_others_have_not() {
+    let mut game = group(&[HUMAN, HUMAN, HUMAN], FIRST);
+    game.command(THIRD, &Command::GiveUp).unwrap();
+    assert!(game.has_left_play(THIRD));
+    assert!(!game.has_left_play(FIRST));
+}
+
+#[test]
 fn giving_up_against_a_bot_lets_the_bot_win() {
     let mut game = group(&[HUMAN, BOT], FIRST);
     game.command(FIRST, &Command::GiveUp).unwrap();

@@ -214,6 +214,39 @@ fn boxes_cannot_be_pushed_into_another_worker() {
 }
 
 #[test]
+fn boxes_cannot_be_pushed_onto_another_workers_head() {
+    let mut game = new_game(8, 8, 2);
+    // Columns 1 and 2 are two crates high, a third crate sits on column 2; the second worker
+    // stands in the pit at column 3, head at row 1, just below where that crate would go.
+    for x in [1, 2] {
+        put_box(&mut game, x, 0);
+        put_box(&mut game, x, 1);
+    }
+    let pushed = put_box(&mut game, 2, 2);
+    place_worker(&mut game, 0, 1, 2);
+    place_worker(&mut game, 1, 3, 0);
+    send(&mut game, 0, RIGHT);
+    steps(&mut game, 1);
+    assert_eq!(worker(&game, 1).status, WorkerStatus::Alive);
+    assert_eq!(box_cell(&game, pushed), Some(Cell::new(2, 2)));
+    assert_eq!(worker(&game, 0).feet, Cell::new(1, 2));
+}
+
+#[test]
+fn a_cleared_row_lowers_the_workers_above_it_with_the_crates() {
+    let mut game = new_game(8, 8, 1);
+    fill_row(&mut game, 0, &[]);
+    place_worker(&mut game, 0, 0, 1);
+    // This tick's gravity brings it to row 3, right above the head; the clear lowers both.
+    let falling = put_falling_box(&mut game, 0, 4);
+    steps(&mut game, 1);
+    assert_eq!(view(&game).lines_cleared, 1);
+    assert_eq!(worker(&game, 0).status, WorkerStatus::Alive);
+    assert_eq!(worker(&game, 0).feet, Cell::new(0, 0));
+    assert_eq!(box_cell(&game, falling), Some(Cell::new(0, 2)));
+}
+
+#[test]
 fn workers_may_still_overlap() {
     let mut game = new_game(8, 8, 2);
     place_worker(&mut game, 0, 2, 0);

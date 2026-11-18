@@ -122,6 +122,16 @@ describe("lobby store", () => {
     expect(lobby.current).toBeNull();
   });
 
+  it("follows this session into another lobby when the server says it is there", async () => {
+    const socket = await inLobby();
+    const lobby = useLobbyStore();
+
+    // Continuing a session another device left in a different lobby.
+    pushLobbyState(socket, "elsewhere");
+
+    await vi.waitFor(() => expect(lobby.current?.lobbyId).toBe("elsewhere"));
+  });
+
   it("finishes a leave sent while offline once the connection is back", async () => {
     vi.useFakeTimers();
     try {

@@ -10,7 +10,8 @@ impl StackAttack {
     /// Phase order matters:
     /// * worker actions run before gravity, so a jump-then-move lands on the box it reached;
     /// * head hits are part of the jump action, so a broken box never counts for a line clear;
-    /// * crush detection runs after line clears, which can shift boxes down into a worker;
+    /// * line clears lower the workers above a cleared row along with the crates, so a clear
+    ///   never shifts a crate into a worker; crush detection runs after them;
     /// * the ceiling check runs last, after clears (A6).
     pub(crate) fn run_tick(&mut self) {
         let mut events = std::mem::take(&mut self.pending_events);
@@ -72,7 +73,11 @@ impl StackAttack {
         if let Some(box_id) = self.field.box_at(target) {
             let push_to = target.shifted_x(direction.dx());
             // Deliberate change: legacy let a box be pushed into another worker, crushing them.
-            if self.living_worker_at(push_to) || !self.field.try_move(box_id, push_to) {
+            // Nor onto one: over a worker's head the crate would drop and crush them this tick.
+            if self.living_worker_at(push_to)
+                || self.living_worker_at(push_to.below())
+                || !self.field.try_move(box_id, push_to)
+            {
                 return;
             }
             self.boxes_pushed = self.boxes_pushed.saturating_add(1);
@@ -205,6 +210,11 @@ impl StackAttack {
         let rows = self.field.clear_full_rows();
         if rows.is_empty() {
             return;
+        }
+        for worker in self.workers.iter_mut().filter(|w| w.is_alive()) {
+            let rows_below = rows.iter().filter(|row| row.get() < worker.feet.y).count();
+            let rows_below = i32::try_from(rows_below).unwrap_or(0);
+            worker.feet = Cell::new(worker.feet.x, worker.feet.y - rows_below);
         }
         let count = u32::try_from(rows.len()).unwrap_or(u32::MAX);
         let points = line_clear_points(count);

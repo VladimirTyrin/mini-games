@@ -181,7 +181,7 @@ async function fire(cell: CellPoint): Promise<void> {
           class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm sm:landscape:self-end text-gray-300 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
         >
           <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
-          <span class="flex shrink-0 flex-wrap gap-1" aria-label="Ships afloat">
+          <span class="flex min-w-0 flex-wrap justify-end gap-1" aria-label="Ships afloat">
             <ShipPip
               v-for="(length, index) in afloat"
               :key="index"

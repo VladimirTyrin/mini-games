@@ -49,6 +49,12 @@ export class LocalMatchSource implements MatchSource {
   ) {
     this.worker = new Worker(new URL("./local-authority.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (event: MessageEvent<FromWorker>) => this.onMessage(event.data);
+    // The worker script itself failed (did not load, threw outside a message): nothing will
+    // answer from it any more.
+    this.worker.onerror = (event: ErrorEvent) => {
+      event.preventDefault();
+      this.onMessage({ type: "failed", message: event.message || "the local game stopped" });
+    };
   }
 
   on<K extends keyof MatchSourceEvents>(
@@ -71,6 +77,7 @@ export class LocalMatchSource implements MatchSource {
 
   submit(command: GameCommandInit): Promise<void> {
     if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
+    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameCommandSchema, create(GameCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -81,6 +88,7 @@ export class LocalMatchSource implements MatchSource {
 
   submitSecret(command: GameSecretCommandInit): Promise<void> {
     if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
+    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameSecretCommandSchema, create(GameSecretCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -119,6 +127,11 @@ export class LocalMatchSource implements MatchSource {
    * may pause too) or lets it go. A real-time game resumes after `countdownMs`, as an online match
    * does, not under your feet.
    */
+  /** Paused, or counting down to the restart: the game takes no commands. */
+  private get isHeld(): boolean {
+    return this.pauseReasons.size > 0 || this.resumeTimer !== null;
+  }
+
   setPaused(reason: PauseReason, paused: boolean, countdownMs = 0): void {
     const wasPaused = this.pauseReasons.size > 0;
     if (paused) this.pauseReasons.add(reason);
@@ -134,6 +147,7 @@ export class LocalMatchSource implements MatchSource {
     }
     if (countdownMs <= 0) {
       this.send({ type: "resume" });
+      this.events.emit("resumed", { countdownMs: 0 });
       return;
     }
     this.events.emit("resumed", { countdownMs });

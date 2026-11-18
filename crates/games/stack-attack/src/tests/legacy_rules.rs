@@ -135,19 +135,15 @@ fn jump_needs_ground_and_headroom() {
 }
 
 #[test]
-fn no_jump_off_a_row_that_was_just_cleared() {
+fn a_worker_on_a_row_that_was_just_cleared_comes_down_with_it() {
     let mut game = new_game(8, 8, 1);
     fill_row(&mut game, 0, &[2]);
     put_falling_box(&mut game, 2, 1);
     place_worker(&mut game, 0, 4, 1);
-    // The crate settles into the gap and the row clears, leaving the worker standing on nothing.
+    // The crate settles into the gap and the row clears: the worker is lowered with it.
     steps(&mut game, 2);
     assert_eq!(view(&game).lines_cleared, 1);
-
-    send(&mut game, 0, Command::Jump);
-    steps(&mut game, 1);
-
-    assert_eq!(worker(&game, 0).feet.y, 0, "jumped off thin air");
+    assert_eq!(worker(&game, 0).feet, Cell::new(4, 0));
 }
 
 #[test]

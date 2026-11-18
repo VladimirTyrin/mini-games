@@ -11,6 +11,7 @@ class FakeWorker {
   static last: FakeWorker | null = null;
   readonly posted: ToWorker["type"][] = [];
   onmessage: ((event: { data: FromWorker }) => void) | null = null;
+  onerror: ((event: { message: string; preventDefault(): void }) => void) | null = null;
   constructor() {
     FakeWorker.last = this;
   }
@@ -66,6 +67,46 @@ describe("LocalMatchSource", () => {
     match.setPaused("player", false, 3_000);
     vi.advanceTimersByTime(3_000);
     expect(worker.posted).toEqual(["pause", "resume"]);
+  });
+
+  it("takes no commands while paused or counting down to the restart", async () => {
+    const { match, worker } = source();
+    match.start();
+    const turn = {
+      game: { case: "snake", value: { command: { case: "turn", value: { direction: 1 } } } },
+    } as const;
+
+    match.setPaused("player", true);
+    await expect(match.submit(turn)).rejects.toThrow("the game is paused");
+    match.setPaused("player", false, 3_000);
+    await expect(match.submit(turn)).rejects.toThrow("the game is paused");
+    vi.advanceTimersByTime(3_000);
+    void match.submit(turn);
+
+    expect(worker.posted).toEqual(["start", "pause", "resume", "submit"]);
+  });
+
+  it("announces a resume without a countdown, so the board stops holding its input", () => {
+    const { match } = source();
+    const countdowns: number[] = [];
+    match.on("resumed", ({ countdownMs }) => countdowns.push(countdownMs));
+
+    match.setPaused("player", true);
+    match.setPaused("player", false);
+
+    expect(countdowns).toEqual([0]);
+  });
+
+  it("settles what waits on a worker that broke down", async () => {
+    const { match, worker } = source();
+    const ended: unknown[] = [];
+    match.on("ended", (result) => ended.push(result));
+    const replay = match.replayFile();
+
+    worker.onerror?.({ message: "worker script failed", preventDefault: () => undefined });
+
+    await expect(replay).rejects.toThrow("worker script failed");
+    expect(ended).toEqual([null]);
   });
 
   it("ends the match as aborted when the authority fails, instead of leaving an empty board", () => {

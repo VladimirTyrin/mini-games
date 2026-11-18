@@ -80,6 +80,17 @@ describe("MatchController", () => {
     core.catchUpsReplay = true;
   });
 
+  it("holds the board while the player's own pause lasts, though it names no seat", () => {
+    const source = new FakeSource();
+    const controller = new MatchController(source);
+
+    source.events.emit("paused", []);
+    expect(controller.isHeld()).toBe(true);
+    source.events.emit("resumed", { countdownMs: 0 });
+
+    expect(controller.isHeld()).toBe(false);
+  });
+
   it("stops resyncing when the authority's history does not replay here", () => {
     const source = new FakeSource();
     const controller = new MatchController(source);

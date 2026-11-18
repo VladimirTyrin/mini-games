@@ -522,6 +522,18 @@ impl Hub {
                 "no such member",
             );
         };
+        // Kicking a seated player would forfeit their seat: a host could win that way.
+        let plays_in_this_match = self.lobbies.get(&lobby_id).is_some_and(|lobby| {
+            matches!(lobby.phase, LobbyPhase::InMatch(_)) && lobby.seat_index(&target).is_some()
+        });
+        if plays_in_this_match {
+            return self.reject(
+                session,
+                request_id,
+                ErrorCode::WrongPhase,
+                "players can be kicked only between matches",
+            );
+        }
         self.leave_lobby(&target);
         self.send_to(
             &target,

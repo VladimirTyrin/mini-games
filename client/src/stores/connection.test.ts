@@ -51,6 +51,46 @@ describe("connection store", () => {
     ]);
   });
 
+  it("forgets the session a Google sign-in returned once the server refuses it on a reconnect", async () => {
+    vi.useFakeTimers();
+    const prefs = usePrefsStore();
+    const connection = useConnectionStore();
+    const toasts = useToastStore();
+
+    connection.signInWithGoogle("google-id-token");
+    const first = openedSocket(0);
+    first.accept();
+    first.push(
+      create(ServerMessageSchema, {
+        requestId: first.lastRequestId(),
+        message: {
+          case: "welcome",
+          value: { identity: { displayName: "Alice" }, resumeToken: "resume", sessionToken: "session-token" },
+        },
+      }),
+    );
+    await vi.waitFor(() => expect(prefs.sessionToken).toBe("session-token"));
+    first.close();
+    await vi.advanceTimersByTimeAsync(60_000);
+    const second = openedSocket(1);
+    second.accept();
+    second.push(
+      create(ServerMessageSchema, {
+        requestId: second.lastRequestId(),
+        message: {
+          case: "error",
+          value: { code: ErrorCode.SIGN_IN_FAILED, message: "invalid session token" },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => expect(prefs.sessionToken).toBe(""));
+    expect(toasts.toasts.map((toast) => toast.text)).toEqual([
+      "Your session has expired. Please sign in again.",
+    ]);
+    vi.useRealTimers();
+  });
+
   it("signs in again with the stored session when continuing on this device", () => {
     const prefs = usePrefsStore();
     prefs.sessionToken = "mine";

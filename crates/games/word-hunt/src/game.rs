@@ -336,6 +336,10 @@ impl Game for WordHunt {
         }
     }
 
+    fn has_left_play(&self, slot: Slot) -> bool {
+        !self.seats.is_in_play(slot)
+    }
+
     fn drop_player(&mut self, slot: Slot) {
         if self.phase.is_over() || !self.seats.is_in_play(slot) {
             return;

@@ -38,8 +38,8 @@ pub struct Config {
     #[arg(long, env = "MG_WORKER_THREADS")]
     pub worker_threads: Option<usize>,
 
-    /// WebSocket connections per client IP. Behind a reverse proxy on the same host the IP comes
-    /// from `X-Real-IP` (trusted only when the peer is loopback).
+    /// WebSocket connections per client IP (an IPv6 client by its /64). Behind a reverse proxy
+    /// on the same host the IP comes from `X-Real-IP` (trusted only when the peer is loopback).
     #[arg(long, env = "MG_MAX_CONNECTIONS_PER_IP", default_value_t = 32)]
     pub max_connections_per_ip: usize,
 

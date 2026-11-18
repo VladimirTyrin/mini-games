@@ -83,6 +83,7 @@ watch(frameKey, async () => {
     class="cell-grid"
     :style="{
       '--columns': String(view.columns),
+      '--rows': String(Math.ceil(view.cells.length / view.columns)),
       gridTemplateColumns: `repeat(${view.columns}, minmax(0, 1fr))`,
     }"
   >
@@ -105,10 +106,22 @@ watch(frameKey, async () => {
 .cell-grid {
   --gap: 4px;
   display: grid;
-  width: min(100%, calc(var(--columns) * 3.5rem));
+  /* A cell of 3.5rem, more on a tall screen (up to 5rem). */
+  width: min(100%, calc(var(--columns) * clamp(3.5rem, 5dvh, 5rem)));
   gap: var(--gap);
   margin-inline: auto;
   container-type: inline-size;
+}
+
+/* A phone held sideways: every row in sight, cells no smaller than a fingertip (the board scrolls
+   past that). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .cell-grid {
+    width: min(
+      100%,
+      calc(var(--columns) * clamp(2.25rem, (100dvh - 7rem) / var(--rows) - var(--gap), 3.5rem))
+    );
+  }
 }
 
 .cell {

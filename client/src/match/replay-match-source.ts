@@ -37,7 +37,7 @@ export class ReplayMatchSource implements MatchSource {
   /** The game's own tick; 0 for turn-based games. */
   readonly gameTickMs: number;
 
-  constructor(bytes: Uint8Array) {
+  constructor(private readonly bytes: Uint8Array) {
     this.endTick = Mirror.replayEndTick(bytes);
     this.file = fromBinary(ReplayFileSchema, bytes);
     if (!this.file.header) throw new Error("replay has no header");
@@ -172,8 +172,9 @@ export class ReplayMatchSource implements MatchSource {
     this.pause();
   }
 
+  /** The file itself: a board may read ahead in it (Sea Battle shows the fleets from the start). */
   replayFile(): Promise<Uint8Array | null> {
-    return Promise.resolve(null);
+    return Promise.resolve(this.bytes);
   }
 
   private schedule(): void {

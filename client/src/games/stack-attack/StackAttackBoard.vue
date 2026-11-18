@@ -60,17 +60,11 @@ function commandFor(action: WorkerAction): Command {
   return { case: "move", value: { direction } };
 }
 
-/** Paused or counting down: the authority would refuse commands, and a predicted step would stick. */
-function isHeld(): boolean {
-  const resumeAt = props.controller.resumeAt.value;
-  return props.controller.pauses.value.length > 0 || (resumeAt !== null && resumeAt > performance.now());
-}
-
 const animator = new WorkerAnimator(props.controller.tickMs, props.controller.mySlot);
 const pacer = new WorkerInputPacer((action) => {
   const current = view.value;
   const slot = mySlot.value;
-  if (!canAct.value || !current || slot === null || isHeld()) return false;
+  if (!canAct.value || !current || slot === null || props.controller.isHeld()) return false;
   if (action !== "jump") {
     animator.faceOwn(action === "left" ? -1 : 1);
     const target = freeWalkTarget(current, slot, action);
@@ -105,7 +99,7 @@ const { invalidate } = useCanvas(
     const now = performance.now();
     // While held (paused, counting down) nothing moves but effects: the next frame restarts it.
     return (
-      (transition.view.endReason === undefined && !isHeld()) ||
+      (transition.view.endReason === undefined && !props.controller.isHeld()) ||
       tickProgress(props.controller.current.value, props.controller.tickMs, now) < 1 ||
       animator.hasEffectsAt(now)
     );
@@ -182,14 +176,17 @@ useSwipe(container, {
 
 <template>
   <div
-    class="flex min-h-0 flex-col gap-2 landscape:grid landscape:grid-cols-[minmax(0,1fr)_15rem] landscape:grid-rows-[minmax(0,1fr)_auto] landscape:gap-3"
+    class="flex min-h-0 flex-col gap-2 landscape:grid landscape:grid-cols-[minmax(0,1fr)_15rem] landscape:grid-rows-[minmax(0,1fr)_auto] landscape:gap-3 short-landscape:grid-cols-1"
   >
     <div ref="container" class="relative min-h-0 min-w-0 flex-1 select-none overflow-hidden">
       <canvas ref="canvas" class="absolute inset-0 block" />
     </div>
     <!-- contain:size keeps the info column from setting the row height: on a phone held sideways it
          would otherwise push the controls below the screen; it scrolls instead. -->
-    <div class="shrink-0 portrait:order-first landscape:overflow-y-auto landscape:[contain:size]">
+    <!-- A phone held sideways has no height to spare: the stats give way to the field there. -->
+    <div
+      class="shrink-0 portrait:order-first landscape:overflow-y-auto landscape:[contain:size] short-landscape:hidden"
+    >
       <StackAttackInfo v-if="view" :view="view" :seat-names="seatNames" :status="status" />
     </div>
     <StackAttackControls

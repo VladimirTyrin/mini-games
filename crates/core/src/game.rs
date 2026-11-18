@@ -120,8 +120,14 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     /// One tick of a real-time game. Not called for turn-based games or after the game ended.
     fn step(&mut self) {}
 
-    /// The seat leaves play for good (left, kicked, disconnect budget exhausted).
+    /// The seat leaves play for good (left, disconnect budget exhausted).
     fn drop_player(&mut self, slot: Slot);
+
+    /// Whether `slot` is out of a game that goes on without it (gave up in a group, say). Its
+    /// player may watch on, and losing their connection then pauses nobody.
+    fn has_left_play(&self, _slot: Slot) -> bool {
+        false
+    }
 
     fn awaiting(&self) -> Awaiting;
 

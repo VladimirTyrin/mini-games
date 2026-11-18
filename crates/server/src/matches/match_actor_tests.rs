@@ -240,3 +240,180 @@ async fn a_player_leaves_while_a_bot_is_still_thinking_and_the_bot_is_stopped() 
     );
     drop(release);
 }
+
+/// A real-time match with a bot that reports every decision on `decided`.
+#[derive(Debug)]
+struct RealtimeBotAuthority {
+    decided: mpsc::UnboundedSender<()>,
+}
+
+impl DynAuthority for RealtimeBotAuthority {
+    fn kind(&self) -> GameKind {
+        GameKind::ALL[0]
+    }
+    fn clock(&self) -> Clock {
+        Clock::Realtime { tick_ms: 1 }
+    }
+    fn submit(&mut self, _slot: Slot, _command: &proto::GameCommand) -> Result<(), SubmitError> {
+        Ok(())
+    }
+    fn drop_player(&mut self, _slot: Slot) {}
+    fn run_bots(&mut self) {
+        self.decided.send(()).ok();
+    }
+    fn is_waiting_for_bot(&self) -> bool {
+        true
+    }
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        None
+    }
+    fn finish_bot_turn(&mut self, _decision: DynBotDecision) {}
+    fn has_pending_inputs(&self) -> bool {
+        false
+    }
+    fn seal_frame(&mut self) -> proto::TickFrame {
+        proto::TickFrame::default()
+    }
+    fn awaiting(&self) -> Awaiting {
+        Awaiting::Nobody
+    }
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+    fn next_tick(&self) -> Tick {
+        Tick::new(0)
+    }
+    fn compact_log(&self) -> &[proto::TickFrame] {
+        &[]
+    }
+}
+
+#[tokio::test]
+async fn real_time_bots_decide_while_turn_based_searches_hold_every_cpu_permit() {
+    let bot_cpu = Arc::new(Semaphore::new(1));
+    // A Master search elsewhere on the host holds the only permit for the whole test.
+    let _searching = bot_cpu.clone().acquire_owned().await.unwrap();
+    let (decided, mut decisions) = mpsc::unbounded_channel();
+    let (hub_sender, _hub_commands) = mpsc::unbounded_channel();
+    let match_id = MatchId::random();
+    let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
+    MatchActor::new(MatchSetup {
+        lobby: LobbyId::random(),
+        match_id,
+        header: proto::MatchHeader::default(),
+        authority: Box::new(RealtimeBotAuthority { decided }),
+        participants: Vec::new(),
+        hub: HubHandle::new(hub_sender),
+        bot_cpu,
+        timing: Timing::default(),
+    })
+    .spawn(inbox);
+
+    for _ in 0..3 {
+        decisions.recv().await.expect("the real-time bot decides");
+    }
+    handle.control(MatchControl::Stop);
+}
+
+/// A turn-based match of three humans in which slot 2 has left play (gave up) and watches on.
+#[derive(Debug)]
+struct OneSeatGaveUpAuthority;
+
+const GAVE_UP: Slot = Slot::new(2);
+
+impl DynAuthority for OneSeatGaveUpAuthority {
+    fn kind(&self) -> GameKind {
+        GameKind::ALL[0]
+    }
+    fn clock(&self) -> Clock {
+        Clock::TurnBased
+    }
+    fn submit(&mut self, _slot: Slot, _command: &proto::GameCommand) -> Result<(), SubmitError> {
+        Ok(())
+    }
+    fn drop_player(&mut self, _slot: Slot) {}
+    fn has_left_play(&self, slot: Slot) -> bool {
+        slot == GAVE_UP
+    }
+    fn run_bots(&mut self) {}
+    fn is_waiting_for_bot(&self) -> bool {
+        false
+    }
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        None
+    }
+    fn finish_bot_turn(&mut self, _decision: DynBotDecision) {}
+    fn has_pending_inputs(&self) -> bool {
+        false
+    }
+    fn seal_frame(&mut self) -> proto::TickFrame {
+        proto::TickFrame::default()
+    }
+    fn awaiting(&self) -> Awaiting {
+        Awaiting::Turn(Slot::new(0))
+    }
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+    fn next_tick(&self) -> Tick {
+        Tick::new(0)
+    }
+    fn compact_log(&self) -> &[proto::TickFrame] {
+        &[]
+    }
+}
+
+#[tokio::test]
+async fn a_player_who_left_play_pauses_nobody_when_their_connection_drops() {
+    let (hub_sender, _hub_commands) = mpsc::unbounded_channel();
+    let match_id = MatchId::random();
+    let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
+    let sessions: Vec<SessionId> = (0..3).map(|_| SessionId::random()).collect();
+    let mut receivers = Vec::new();
+    let participants = sessions
+        .iter()
+        .enumerate()
+        .map(|(index, session)| {
+            let (outbound, receiver) = Outbound::channel(ConnectionId::next());
+            receivers.push(receiver);
+            Participant {
+                session: session.clone(),
+                slot: Some(Slot::new(u8::try_from(index).unwrap())),
+                outbound: Some(outbound),
+            }
+        })
+        .collect();
+    MatchActor::new(MatchSetup {
+        lobby: LobbyId::random(),
+        match_id,
+        header: proto::MatchHeader::default(),
+        authority: Box::new(OneSeatGaveUpAuthority),
+        participants,
+        hub: HubHandle::new(hub_sender),
+        bot_cpu: Arc::new(Semaphore::new(1)),
+        timing: Timing::default(),
+    })
+    .spawn(inbox);
+
+    // Handled in this order: had the first one paused the match, its pause would come first.
+    handle.control(MatchControl::Detach {
+        session: sessions[usize::from(GAVE_UP.get())].clone(),
+    });
+    handle.control(MatchControl::Detach {
+        session: sessions[1].clone(),
+    });
+
+    let first_seat = &mut receivers[0];
+    let pause = loop {
+        let text = first_seat.next().await.expect("the match goes on talking");
+        let message: proto::ServerMessage = serde_json::from_str(text.as_str()).unwrap();
+        if let Some(Message::Paused(paused)) = message.message {
+            break paused.pause.expect("a pause names its seat");
+        }
+    };
+    assert_eq!(
+        pause.slot, 1,
+        "only the seat still playing pauses the match"
+    );
+    handle.control(MatchControl::Stop);
+}

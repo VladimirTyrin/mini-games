@@ -88,8 +88,10 @@ Replace the sample rules. Keep the shape:
 - **Clock** — `TurnBased` (one frame per accepted move) or `Realtime { tick_ms }` (implement
   `step`). Real-time input that must wait for the next tick goes into a small per-seat queue
   inside the state (see Snake, Stack Attack).
-- **drop_player** — a seat leaves for good (disconnect budget spent, left, kicked). Decide what
+- **drop_player** — a seat leaves for good (disconnect budget spent, left). Decide what
   it means: forfeit, removed piece, game over.
+- **has_left_play** (optional) — a seat that is out while the game goes on without it (gave up
+  in a group): the server then does not pause the match when its player's connection drops.
 - **status / awaiting / view / hash_state** — `hash_state` must cover all gameplay state in a
   fixed order.
 

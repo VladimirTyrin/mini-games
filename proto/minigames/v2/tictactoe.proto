@@ -60,7 +60,7 @@ enum TicTacToeEndReason {
   TIC_TAC_TOE_END_REASON_WIN = 1;
   // The board filled up without a line.
   TIC_TAC_TOE_END_REASON_DRAW = 2;
-  // The loser left, was kicked or ran out of disconnect budget.
+  // The loser left or ran out of disconnect budget.
   TIC_TAC_TOE_END_REASON_PLAYER_DISCONNECTED = 3;
 }
 

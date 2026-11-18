@@ -111,6 +111,14 @@ async fn connections_per_client_address_are_capped() {
 }
 
 #[tokio::test]
+async fn a_message_too_big_for_any_socket_closes_even_a_signed_in_connection() {
+    let server = TestServer::start().await;
+    let mut alice = server.guest("Alice").await.client;
+    alice.send_raw(&format!("{{{}", "x".repeat(200_000))).await;
+    assert!(alice.closed().await);
+}
+
+#[tokio::test]
 async fn oversized_messages_before_sign_in_are_refused_unread_and_closed() {
     let server = TestServer::start().await;
     let mut anonymous = server.client().await;

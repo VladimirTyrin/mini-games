@@ -31,6 +31,19 @@ describe("PlaybackClock", () => {
     expect(lag).toBe(0);
   });
 
+  it("catches up at once after frames held up for seconds arrive together", () => {
+    const clock = new PlaybackClock(TICK_MS);
+    for (let tick = 0; tick < 10; tick++) clock.showAt(tick, 1_000 + tick * TICK_MS);
+    // Three seconds without frames, then ticks 10..39 in one burst.
+    const burstAt = 1_000 + 40 * TICK_MS;
+    let lastShownAt = 0;
+    for (let tick = 10; tick < 40; tick++) lastShownAt = clock.showAt(tick, burstAt);
+
+    expect(lastShownAt - burstAt).toBeLessThanOrEqual(400);
+    // And the frames that follow keep to the game's own pace from there.
+    expect(clock.showAt(40, burstAt + TICK_MS) - (burstAt + TICK_MS)).toBeLessThanOrEqual(400);
+  });
+
   it("shows turn-based frames when they arrive", () => {
     expect(new PlaybackClock(0).showAt(7, 1_234)).toBe(1_234);
   });

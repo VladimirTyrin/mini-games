@@ -77,6 +77,8 @@ export const useConnectionStore = defineStore("connection", () => {
     session.value?.close();
     const resumeKey = resumeKeyFor(prefs.serverUrl);
     const created = new Session(prefs.serverUrl, credentials, resumeStorage.get(resumeKey) ?? "");
+    /** What the next Hello carries: a Google sign-in goes on with the session token it returned. */
+    let signingInWith: Credentials["kind"] = credentials.kind;
     created.events.on("state", (next) => {
       state.value = next;
       if (next !== "signed-in") latencyMs.value = null;
@@ -91,11 +93,12 @@ export const useConnectionStore = defineStore("connection", () => {
       // of the short-lived Google ID token.
       if (sessionToken) {
         prefs.sessionToken = sessionToken;
+        signingInWith = "session";
         created.updateCredentials({ kind: "session", token: sessionToken });
       }
     });
     created.events.on("refused", (error) => {
-      if (credentials.kind !== "session") {
+      if (signingInWith !== "session") {
         toasts.error(error.message);
         return;
       }

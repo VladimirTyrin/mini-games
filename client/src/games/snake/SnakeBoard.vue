@@ -72,7 +72,7 @@ onMounted(() => {
 });
 
 function turn(direction: SnakeDirection): void {
-  if (!canSteer.value) return;
+  if (!canSteer.value || props.controller.isHeld()) return;
   // Real-time input: a refused turn (full queue, reversing) is simply dropped.
   void props.controller
     .submit({ game: { case: "snake", value: { command: { case: "turn", value: { direction } } } } })

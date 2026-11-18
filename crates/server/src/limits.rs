@@ -7,10 +7,14 @@ impl Limits {
     pub(crate) const MAX_CONNECTIONS: usize = 2_000;
     pub(crate) const MAX_LOBBIES: usize = 300;
     pub(crate) const MAX_MESSAGE_BYTES: usize = 64 * 1024;
-    /// Replays are shared inside a JSON message (base64), so the frame limit is larger. Only a
-    /// signed-in connection may send a frame above `MAX_MESSAGE_BYTES`.
+    /// What the socket reads at all. A message between this and `MAX_MESSAGE_BYTES` is still
+    /// refused with an error; a bigger one closes the connection unread. Every socket, signed
+    /// in or not, so 2000 connections hold at most ~190 MiB of incoming messages.
+    pub(crate) const MAX_SOCKET_MESSAGE_BYTES: usize = 96 * 1024;
+    /// A shared replay in all; it arrives in parts (`ShareReplay.more_parts`).
     pub(crate) const MAX_REPLAY_BYTES: usize = 4 * 1024 * 1024;
-    pub(crate) const MAX_REPLAY_MESSAGE_BYTES: usize = Self::MAX_REPLAY_BYTES * 4 / 3 + 4096;
+    /// Bytes of half-uploaded replays held across all connections.
+    pub(crate) const REPLAY_UPLOAD_BUDGET_BYTES: usize = 32 * 1024 * 1024;
     pub(crate) const MAX_CHAT_CHARS: usize = 300;
     pub(crate) const MAX_LOBBY_NAME_CHARS: usize = 48;
     pub(crate) const MAX_OBSERVERS: usize = 32;
@@ -33,11 +37,9 @@ impl Limits {
     pub(crate) const CHAT_REFILL: Duration = Duration::from_secs(1);
 
     /// Per-session cooldowns for requests whose answer is expensive (a whole match log or
-    /// replay). Frames above `MAX_MESSAGE_BYTES` (shared replays) share one cooldown per
-    /// connection, checked before the frame is decoded.
+    /// replay).
     pub(crate) const REPLAY_DOWNLOAD_COOLDOWN: Duration = Duration::from_secs(2);
     pub(crate) const CATCH_UP_COOLDOWN: Duration = Duration::from_secs(1);
-    pub(crate) const LARGE_MESSAGE_COOLDOWN: Duration = Duration::from_secs(5);
     /// Each test push is an outgoing request to a push service.
     pub(crate) const TEST_PUSH_COOLDOWN: Duration = Duration::from_secs(10);
 

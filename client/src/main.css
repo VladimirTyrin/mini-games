@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* A phone held sideways: little height, so secondary panels give way to the game field. */
+@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 520px));
+
 @theme {
   --color-surface: #111827;
   --color-panel: #1f2937;

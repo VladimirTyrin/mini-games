@@ -9,10 +9,9 @@ Source of truth: `proto/minigames/v2/*.proto` (`buf lint` clean). This page expl
   integers as strings).
 - Replay files (`.mgreplay`) are binary protobuf `ReplayFile`.
 - Limits:
-  - 64 KiB per message. Only a signed-in connection may send a bigger frame, it must be a
-    `ShareReplay` (up to 4 MiB of replay), and at most one such frame per 5 s
-    (`RATE_LIMITED`). A bigger frame before sign-in is refused unread and the connection is
-    closed.
+  - 64 KiB per message, on every connection. A bigger one is refused unread
+    (`INVALID_REQUEST`, request id 0); before sign-in the connection is closed too, and above
+    96 KiB the socket closes it anyway. Replays go up in parts (see Shared replays).
   - Messages are rate-limited per connection (burst 60, then 40/s; chat 5, then 1/s).
   - Per session: `RequestReplay` once per 2 s, `RequestCatchUp` / `ReportDesync` (shared) once
     per second; earlier requests get `RATE_LIMITED`, retry later.
@@ -133,7 +132,11 @@ owes one.
 
 ## Shared replays
 
-The host sends `ShareReplay`; the server checks the file (off its main task, one upload per
+The host sends `ShareReplay`, in parts of up to 46 KiB when the file is bigger than one
+message: each part but the last sets `more_parts` and is answered with `Ack`. A file over
+4 MiB is refused (`ERROR_CODE_INVALID_REPLAY`); when too many uploads are half-sent across the
+server (32 MiB), a part is refused with `RATE_LIMITED` and the upload starts over. With the
+last part the server checks the file (off its main task, one upload per
 session at a time) and answers `Ack` or `ERROR_CODE_INVALID_REPLAY`. Members then receive
 `SharedReplay`, and the lobby is in `REPLAY`. `ReplayControl` (host only when
 `host_only_control`) is relayed to every member; `SET_SPEED` must be 25..=400 percent, `SEEK`

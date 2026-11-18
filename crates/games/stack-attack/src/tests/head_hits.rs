@@ -116,9 +116,9 @@ fn a_worker_in_the_air_cannot_hit() {
 }
 
 #[test]
-fn landed_crates_are_not_broken_they_block_the_jump() {
+fn a_crate_is_not_pushed_over_a_head_even_when_that_worker_jumps_in_the_same_tick() {
     let mut game = new_game(8, 8, 2);
-    // Seat 0 pushes a resting crate over seat 1's head; seat 1 jumps later in the same tick.
+    // Seat 0 tries to push a resting crate over seat 1's head; seat 1 jumps later in the tick.
     put_box(&mut game, 2, 0);
     put_box(&mut game, 2, 1);
     put_box(&mut game, 3, 0);
@@ -132,16 +132,13 @@ fn landed_crates_are_not_broken_they_block_the_jump() {
     steps(&mut game, 1);
 
     assert!(broken_events(&game).is_empty());
+    assert_eq!(box_cell(&game, pushed), Some(Cell::new(3, 2)));
     assert!(
-        !view(&game)
+        view(&game)
             .events
             .contains(&GameEvent::WorkerJumped { slot: slot(1) })
     );
-    assert_eq!(box_cell(&game, pushed), Some(Cell::new(4, 1)));
-    assert!(view(&game).events.contains(&GameEvent::WorkerCrushed {
-        slot: slot(1),
-        box_id: pushed,
-    }));
+    assert_eq!(worker(&game, 1).status, WorkerStatus::Alive);
 }
 
 #[test]

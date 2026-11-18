@@ -69,7 +69,9 @@ export class OnlineMatchSource implements MatchSource {
         this.hasEnded = true;
         this.events.emit("ended", ended.result ?? null);
       }),
-      // After a reconnect the server resumes the seat; frames sent meanwhile are lost.
+      // After a reconnect the server resumes the seat; frames sent meanwhile are lost. The server
+      // pushes a catch-up as it does, so this one is mostly a second copy, but its answer is also
+      // how a match the server no longer has (MATCH_NOT_FOUND) ends here.
       session.on("signedIn", ({ resumed }) => {
         if (resumed) this.requestCatchUp();
       }),

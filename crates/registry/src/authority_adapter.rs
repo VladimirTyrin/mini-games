@@ -63,6 +63,10 @@ impl<G: WireGame> DynAuthority for AuthorityAdapter<G> {
         self.authority.game().awaits_secret(slot)
     }
 
+    fn has_left_play(&self, slot: Slot) -> bool {
+        self.authority.game().has_left_play(slot)
+    }
+
     fn seat_secret(&self, slot: Slot) -> Option<proto::GameSeatSecret> {
         self.authority
             .seat_secret(slot)

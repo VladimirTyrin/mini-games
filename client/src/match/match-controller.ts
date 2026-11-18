@@ -9,7 +9,7 @@ import {
   GameSecretCommandSchema,
   type GameView,
 } from "@/proto/minigames/v2/game_pb";
-import type { MatchCatchUp, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
+import type { MatchCatchUp, MatchHeader, MatchResult, TickFrame } from "@/proto/minigames/v2/match_pb";
 import { type CommandPreview, Mirror } from "@/wasm/core";
 
 import type { GameCommandInit, GameSecretCommandInit, MatchSource } from "./match-source";
@@ -34,6 +34,11 @@ export class MatchController {
   readonly current: ShallowRef<ViewSnapshot | null> = shallowRef(null);
   readonly previous: ShallowRef<ViewSnapshot | null> = shallowRef(null);
   readonly pauses: ShallowRef<SeatPause[]> = shallowRef([]);
+  /**
+   * The authority holds the game: a seat is away, or (locally) the player paused, which names no
+   * seat, so `pauses` alone cannot tell.
+   */
+  readonly paused = shallowRef(false);
   readonly resumeAt: ShallowRef<number | null> = shallowRef(null);
   /** Seats out of play (left, voted out, budget spent): they can no longer vote. */
   readonly droppedSlots: ShallowRef<ReadonlySet<number>> = shallowRef(new Set());
@@ -55,7 +60,8 @@ export class MatchController {
   /** Replays may play faster or slower than the game; 1 everywhere else. */
   private playbackRate = 1;
 
-  private mirror: Mirror;
+  /** `null` when this build does not know the game at all (see `incompatible`). */
+  private mirror: Mirror | null;
   private clock: PlaybackClock;
   private resyncing = false;
   /**
@@ -69,19 +75,22 @@ export class MatchController {
   private readonly unsubscribe: (() => void)[] = [];
 
   constructor(readonly source: MatchSource) {
-    this.mirror = Mirror.forHeader(source.header);
+    this.mirror = followableMirror(source.header);
+    this.incompatible.value = this.mirror === null;
     // From the game itself: local matches have no server to fill the header's tick_ms.
-    this.gameTickMs = this.mirror.tickMs;
+    this.gameTickMs = this.mirror?.tickMs ?? 0;
     this.clock = new PlaybackClock(this.tickMs);
     this.unsubscribe.push(
       source.on("frame", (frame) => this.onFrame(frame)),
       source.on("catchUp", (catchUp) => this.applyCatchUp(catchUp)),
       source.on("paused", (pauses) => {
         this.clock.reset();
+        this.paused.value = true;
         this.pauses.value = seatPauses(pauses, performance.now());
         this.resumeAt.value = null;
       }),
       source.on("resumed", ({ countdownMs }) => {
+        this.paused.value = false;
         this.pauses.value = [];
         this.resumeAt.value = countdownMs > 0 ? performance.now() + countdownMs : null;
       }),
@@ -94,7 +103,7 @@ export class MatchController {
         this.clock = new PlaybackClock(this.tickMs);
       }),
       source.on("ended", (result) => {
-        this.result.value = result ?? (this.mirror.isFinished ? this.mirror.result() : null);
+        this.result.value = result ?? (this.mirror?.isFinished ? this.mirror.result() : null);
         this.aborted.value = this.result.value === null;
         const now = performance.now();
         this.resultRevealAt.value = this.aborted.value
@@ -107,6 +116,12 @@ export class MatchController {
   }
 
   /** Real time between two ticks on screen (the game's tick at the playback speed). */
+  /** Paused or counting down to the restart: commands would be refused, predictions would stick. */
+  isHeld(now = performance.now()): boolean {
+    const resumeAt = this.resumeAt.value;
+    return this.paused.value || (resumeAt !== null && resumeAt > now);
+  }
+
   get tickMs(): number {
     return this.gameTickMs / this.playbackRate;
   }
@@ -132,6 +147,7 @@ export class MatchController {
     void this.current.value;
     const slot = this.source.mySlot;
     if (slot === null) return "you are watching";
+    if (!this.mirror) return CANNOT_FOLLOW;
     return this.mirror.refusalOf(slot, create(GameCommandSchema, command));
   }
 
@@ -140,13 +156,14 @@ export class MatchController {
     void this.current.value;
     const slot = this.source.mySlot;
     if (slot === null) return "you are watching";
+    if (!this.mirror) return CANNOT_FOLLOW;
     return this.mirror.secretRefusalOf(slot, create(GameSecretCommandSchema, command));
   }
 
   /** The private command the game would choose for this player (a random fleet). */
   defaultSecretCommand(): GameSecretCommand | null {
     const slot = this.source.mySlot;
-    return slot === null ? null : this.mirror.defaultSecretCommand(slot);
+    return slot === null || !this.mirror ? null : this.mirror.defaultSecretCommand(slot);
   }
 
   /** What this player's `command` would lead to on the state on screen; see `refusal`. */
@@ -154,13 +171,14 @@ export class MatchController {
     void this.current.value;
     const slot = this.source.mySlot;
     if (slot === null) return { kind: "refused", reason: "you are watching" };
+    if (!this.mirror) return { kind: "refused", reason: CANNOT_FOLLOW };
     return this.mirror.preview(slot, create(GameCommandSchema, command));
   }
 
   dispose(): void {
     for (const unsubscribe of this.unsubscribe) unsubscribe();
     this.dropUpcoming();
-    this.mirror.free();
+    this.mirror?.free();
   }
 
   private noteDrops(frames: readonly TickFrame[]): void {
@@ -171,7 +189,7 @@ export class MatchController {
   }
 
   private onFrame(frame: TickFrame): void {
-    if (this.resyncing || this.incompatible.value) return;
+    if (this.resyncing || this.incompatible.value || !this.mirror) return;
     const expected = BigInt(this.mirror.nextTick);
     if (frame.tick < expected) return;
     try {
@@ -200,8 +218,12 @@ export class MatchController {
   /** Replaces everything applied so far with the authority's full history. */
   applyCatchUp(catchUp: MatchCatchUp): void {
     const header = catchUp.header ?? this.source.header;
-    this.mirror.free();
-    this.mirror = Mirror.forHeader(header);
+    this.mirror?.free();
+    this.mirror = followableMirror(header);
+    if (!this.mirror) {
+      this.incompatible.value = true;
+      return;
+    }
     this.resyncing = false;
     try {
       this.mirror.applyCatchUp(catchUp);
@@ -217,6 +239,9 @@ export class MatchController {
     const now = performance.now();
     const pauses = catchUp.pauses.length > 0 ? catchUp.pauses : catchUp.pause ? [catchUp.pause] : [];
     this.pauses.value = seatPauses(pauses, now);
+    // A local catch-up is a rebuild from the worker's log and says nothing of a pause the
+    // player made, which the source keeps announcing itself.
+    this.paused.value = pauses.length > 0 || (this.source.kind === "local" && this.paused.value);
     this.resumeAt.value = catchUp.resumeCountdownMs > 0 ? now + catchUp.resumeCountdownMs : null;
     this.dropUpcoming();
     this.previous.value = null;
@@ -232,6 +257,7 @@ export class MatchController {
 
   /** Queues the mirror's view to be shown from `at` (now, unless the schedule says later). */
   private publish(at = performance.now()): void {
+    if (!this.mirror) return;
     const snapshot = { view: this.mirror.view(this.source.mySlot), at };
     if (this.upcoming.length === 0 && at <= performance.now()) {
       this.show(snapshot);
@@ -273,5 +299,17 @@ export class MatchController {
   /** When the newest view (shown or waiting) starts. */
   private latestAt(): number | null {
     return this.upcoming.at(-1)?.at ?? this.current.value?.at ?? null;
+  }
+}
+
+const CANNOT_FOLLOW = "this version of the app cannot play this game";
+
+/** A mirror for `header`, or `null` when this build does not know its game (it came later). */
+function followableMirror(header: MatchHeader): Mirror | null {
+  try {
+    return Mirror.forHeader(header);
+  } catch (error) {
+    console.error("this build cannot follow the match", error);
+    return null;
   }
 }

@@ -125,7 +125,7 @@ export async function onNotification(handler: (notification: ReceivedNotificatio
     const { PushNotifications } = await import("@capacitor/push-notifications");
     // The plugin keeps the tap that launched the app until this listener exists.
     await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      const notification = parseNotification(action.notification.data, Date.now());
+      const notification = tappedInApp(action.notification.data, Date.now());
       if (notification) handler(notification);
     });
     await PushNotifications.addListener("pushNotificationReceived", (received) => {
@@ -154,6 +154,14 @@ export async function onNotification(handler: (notification: ReceivedNotificatio
   } catch {
     // Not ours, or mangled: ignore it like any other unknown parameter.
   }
+}
+
+/**
+ * A notification the player tapped in the Android app. Unlike the web's service worker the
+ * plugin does not stamp the tap, and without `tappedAt` the tap would open nothing.
+ */
+export function tappedInApp(data: Record<string, unknown>, now: number): ReceivedNotification | null {
+  return parseNotification({ ...data, tappedAt: String(now) }, now);
 }
 
 function parseNotification(data: Record<string, unknown>, handledAt: number): ReceivedNotification | null {

@@ -20,6 +20,7 @@ use crate::ids::{ConnectionId, ResumeToken, SessionId};
 use crate::limits::Limits;
 use crate::outbound::{Outbound, OutboundReceiver};
 use crate::push::{PushTarget, TestPushDelay, test_notification};
+use crate::replay_parts::{ReplayParts, ReplayPartsError, ReplayProgress};
 use crate::token_bucket::TokenBucket;
 
 use proto::ErrorCode;
@@ -66,8 +67,8 @@ struct Connection {
     hello_deadline: Option<Instant>,
     messages: TokenBucket,
     chat: TokenBucket,
-    /// Frames above `MAX_MESSAGE_BYTES` (shared replays), checked before decoding them.
-    large_messages: TokenBucket,
+    /// A shared replay coming in parts.
+    replay_parts: ReplayParts,
     test_pushes: TokenBucket,
     /// Set after a fatal error (e.g. unsupported protocol): stop reading.
     finished: bool,
@@ -96,7 +97,7 @@ pub(crate) async fn run(context: Arc<ServerContext>, socket: WebSocket) {
         hello_deadline: Some(now + timing.hello_timeout),
         messages: TokenBucket::new(Limits::MESSAGE_BURST, Limits::MESSAGE_REFILL, now),
         chat: TokenBucket::new(Limits::CHAT_BURST, Limits::CHAT_REFILL, now),
-        large_messages: TokenBucket::new(1, Limits::LARGE_MESSAGE_COOLDOWN, now),
+        replay_parts: ReplayParts::default(),
         test_pushes: TokenBucket::new(1, Limits::TEST_PUSH_COOLDOWN, now),
         finished: false,
     };
@@ -231,16 +232,11 @@ impl Connection {
                 None => return self.reject(0, ErrorCode::RateLimited, "slow down"),
             }
         }
-        let large = text.len() > Limits::MAX_MESSAGE_BYTES;
-        if large && self.session.is_none() {
-            // Only a signed-in host may upload a replay; anything else this big is abuse and
-            // is not worth decoding.
+        if text.len() > Limits::MAX_MESSAGE_BYTES {
+            // Not worth decoding; before sign-in it is plain abuse.
             self.reject(0, ErrorCode::InvalidRequest, "message too large");
-            self.finished = true;
+            self.finished = self.session.is_none();
             return;
-        }
-        if large && !self.large_messages.try_take(now) {
-            return self.reject(0, ErrorCode::RateLimited, "too many large messages");
         }
         let message = match codec::decode(text) {
             Ok(message) => message,
@@ -256,9 +252,6 @@ impl Connection {
         let Some(payload) = message.message else {
             return self.reject(request_id, ErrorCode::InvalidRequest, "empty message");
         };
-        if large && !matches!(payload, ClientPayload::ShareReplay(_)) {
-            return self.reject(request_id, ErrorCode::InvalidRequest, "message too large");
-        }
         match payload {
             ClientPayload::Ping(ping) => {
                 let pong = proto::Pong {
@@ -282,6 +275,7 @@ impl Connection {
                     });
                     // Anonymous again: sign in anew in time, as after connecting.
                     self.hello_deadline = Some(now + self.context.timing.hello_timeout);
+                    self.replay_parts = ReplayParts::default();
                 }
                 self.outbound
                     .send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
@@ -290,9 +284,34 @@ impl Connection {
                 let Some(session) = self.session.clone() else {
                     return self.reject(request_id, ErrorCode::NotSignedIn, "sign in first");
                 };
-                if let ClientPayload::RequestTestPush(request) = payload {
-                    return self.request_test_push(request_id, request, now);
-                }
+                let payload = match payload {
+                    ClientPayload::RequestTestPush(request) => {
+                        return self.request_test_push(request_id, request, now);
+                    }
+                    ClientPayload::ShareReplay(part) => {
+                        match self
+                            .replay_parts
+                            .add(part, &self.context.replay_upload_budget)
+                        {
+                            Ok(ReplayProgress::Complete(replay)) => {
+                                ClientPayload::ShareReplay(replay)
+                            }
+                            Ok(ReplayProgress::Partial) => {
+                                return self
+                                    .outbound
+                                    .send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
+                            }
+                            Err(error) => {
+                                let code = match error {
+                                    ReplayPartsError::TooLarge => ErrorCode::InvalidReplay,
+                                    ReplayPartsError::ServerBusy => ErrorCode::RateLimited,
+                                };
+                                return self.reject(request_id, code, &error.to_string());
+                            }
+                        }
+                    }
+                    payload => payload,
+                };
                 if matches!(payload, ClientPayload::SendChat(_)) && !self.chat.try_take(now) {
                     return self.reject(
                         request_id,

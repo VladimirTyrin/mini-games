@@ -14,6 +14,6 @@ export type FromWorker =
   /** Encoded `GameSeatSecret` of the player's seat. */
   | { type: "seatSecret"; secret: Uint8Array }
   | { type: "rejected"; requestId: number; message: string }
-  | { type: "replay"; requestId: number; replay: Uint8Array }
+  | { type: "replay"; requestId: number; replay: Uint8Array | null }
   | { type: "ended" }
   | { type: "failed"; message: string };
