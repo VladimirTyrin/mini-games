@@ -25,7 +25,6 @@ const entries = computed(() =>
     .map((seat) => ({
       slot: seat.slot,
       name: props.seatNames[seat.slot] ?? `Player ${seat.slot + 1}`,
-      isBot: seat.isBot,
       isYou: seat.slot === props.view.you,
       isWinner: props.view.end?.winnerSlots.includes(seat.slot) ?? false,
       alive: seat.alive,
@@ -55,7 +54,6 @@ const entries = computed(() =>
           <span v-if="entry.isWinner" aria-label="winner">👑 </span>
           <span :class="entry.alive ? '' : 'line-through'">{{ entry.name }}</span>
           <span v-if="entry.isYou" class="text-xs text-gray-400"> (you)</span>
-          <span v-if="entry.isBot" class="text-xs text-gray-400"> bot</span>
           <span v-if="entry.deathNote" class="text-xs text-rose-300/80"> · {{ entry.deathNote }}</span>
         </span>
         <span class="font-mono font-semibold" :class="entry.alive ? 'text-emerald-300' : 'text-gray-500'">

@@ -9,7 +9,8 @@ import type { SeatPause } from "@/match/seat-pause";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
-import { sameIdentity, seatLabels } from "@/util/players";
+import { sameIdentity } from "@/util/players";
+import { matchSeatNames } from "@/games/seat-names";
 
 const props = defineProps<{
   controller: MatchController;
@@ -113,7 +114,7 @@ const headline = computed(() => {
   }
 });
 
-const labels = computed(() => seatLabels(props.controller.source.header));
+const labels = computed(() => matchSeatNames(props.controller.source.header));
 const seatName = (slot: number) => labels.value[slot] ?? `Player ${slot + 1}`;
 
 const resultFolded = ref(false);

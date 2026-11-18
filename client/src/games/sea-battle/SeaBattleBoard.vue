@@ -12,7 +12,7 @@ import {
   type SeaBattleRevealedFleet,
 } from "@/proto/minigames/v2/sea_battle_pb";
 import { useToastStore } from "@/stores/toasts";
-import { seatLabels } from "@/util/players";
+import { matchSeatNames } from "@/games/seat-names";
 import { Mirror } from "@/wasm/core";
 
 import FleetEditor from "./FleetEditor.vue";
@@ -23,7 +23,7 @@ import { type CellPoint, type EditorShip, fromWire } from "./fleet-editor";
 const props = defineProps<{ controller: MatchController }>();
 // Computed: Play again keeps this board and hands it the next match's controller.
 const header = computed(() => props.controller.source.header);
-const names = computed(() => seatLabels(header.value));
+const names = computed(() => matchSeatNames(header.value));
 const toasts = useToastStore();
 const sending = ref(false);
 

@@ -4,14 +4,14 @@ import { computed, ref } from "vue";
 import type { MatchController } from "@/match/match-controller";
 import { TicTacToeEndReason, TicTacToeMark } from "@/proto/minigames/v2/tictactoe_pb";
 import { useToastStore } from "@/stores/toasts";
-import { seatLabels } from "@/util/players";
+import { matchSeatNames } from "@/games/seat-names";
 
 import MarkIcon from "./MarkIcon.vue";
 
 const props = defineProps<{ controller: MatchController }>();
 /** Below this a cell is too small to hit with a finger: the board scrolls instead. */
 const MIN_CELL_PX = 28;
-const names = seatLabels(props.controller.source.header);
+const names = matchSeatNames(props.controller.source.header);
 const toasts = useToastStore();
 const sending = ref(false);
 

@@ -10,7 +10,7 @@ import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import type { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
 import { WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 import { prefersReducedMotion } from "@/render/reduced-motion";
-import { seatLabels } from "@/util/players";
+import { matchSeatNames } from "@/games/seat-names";
 import { asSentence } from "@/util/sentence";
 
 import { formatDay } from "./daily";
@@ -37,7 +37,7 @@ const isPlaying = computed(() => view.value?.phase === WordHuntPhase.GUESSING);
 const header = props.controller.source.header;
 /** Two or more seats take turns on this board. */
 const isGroup = header.seats.length > 1;
-const names = seatLabels(header);
+const names = matchSeatNames(header);
 const myTurn = computed(
   () => props.controller.mySlot !== null && view.value?.turnSlot === props.controller.mySlot,
 );

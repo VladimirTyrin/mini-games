@@ -4,12 +4,12 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { MatchController } from "@/match/match-controller";
 import { type CheckersPiece, CheckersEndReason, CheckersSide } from "@/proto/minigames/v2/checkers_pb";
 import { useToastStore } from "@/stores/toasts";
-import { seatLabels } from "@/util/players";
+import { matchSeatNames } from "@/games/seat-names";
 
 import { canStopHere, choosePath } from "./path-choice";
 
 const props = defineProps<{ controller: MatchController }>();
-const names = seatLabels(props.controller.source.header);
+const names = matchSeatNames(props.controller.source.header);
 const toasts = useToastStore();
 const sending = ref(false);
 /** The squares picked so far: the moving piece, then each landing. */

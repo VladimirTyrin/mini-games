@@ -12,6 +12,7 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import InviteFriends from "@/components/InviteFriends.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
+import { botName, botNumbers } from "@/games/seat-names";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
@@ -224,11 +225,11 @@ function kick(): void {
             :bot="!!seat.botKind"
           />
           <span class="flex-1 truncate">
-            {{ seat.occupant ? labelOf(seat.occupant) : "" }}
+            <template v-if="seat.botKind">{{
+              botName(plugin, seat.botKind, botNumbers(state.seats)[index] ?? 0)
+            }}</template>
+            <template v-else>{{ seat.occupant ? labelOf(seat.occupant) : "" }}</template>
             <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> (you)</span>
-            <span v-if="seat.botKind" class="text-xs text-gray-400"
-              >({{ plugin.botLabel(seat.botKind) }})</span
-            >
             <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300"> host</span>
             <span v-if="seat.connectionLost" class="text-xs text-rose-300"> reconnecting…</span>
           </span>
