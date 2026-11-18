@@ -27,7 +27,6 @@ const lobby = useLobbyStore();
 const prefs = usePrefsStore();
 const catalog = gameCatalog();
 
-const creating = ref(false);
 const gameId = ref(gamePlugins[0]?.id ?? "snake");
 const settings = ref(defaultSettings(gameId.value));
 const lobbyName = ref("");
@@ -67,7 +66,6 @@ function openCurrent(): void {
 async function create(): Promise<void> {
   prefs.rememberSettings(gameId.value, settings.value);
   await lobby.create(lobbyName.value, settings.value, maxSeats.value).catch(() => undefined);
-  creating.value = false;
 }
 
 const phaseLabel: Record<number, string> = {
@@ -122,18 +120,7 @@ const phaseLabel: Record<number, string> = {
           </span>
           <span class="ml-auto text-gray-400" aria-hidden="true">›</span>
         </RouterLink>
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm uppercase tracking-wide text-gray-400">Lobbies</h2>
-          <div class="flex gap-2">
-            <button
-              v-if="!lobby.current"
-              class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm font-semibold whitespace-nowrap lg:hidden"
-              @click="creating = !creating"
-            >
-              + New lobby
-            </button>
-          </div>
-        </div>
+        <h2 class="order-2 text-sm uppercase tracking-wide text-gray-400 lg:order-none">Lobbies</h2>
         <ul class="order-2 space-y-2 lg:order-none">
           <li
             v-for="summary in lobby.lobbies"
@@ -187,8 +174,8 @@ const phaseLabel: Record<number, string> = {
             No lobbies yet — create one!
           </li>
         </ul>
-        <!-- Its usual height when the screen has room; with the New lobby form open on a phone it
-             gives way, down to the input and a couple of lines, rather than make the screen scroll. -->
+        <!-- Its usual height when the screen has room; on a phone short of room it gives way, down
+             to the input and a couple of lines, rather than make the screen scroll. -->
         <ChatPanel
           class="order-2 max-h-[17rem] min-h-24 flex-1 basis-0 lg:order-none lg:basis-auto"
           shrinks-to-fit
@@ -196,12 +183,10 @@ const phaseLabel: Record<number, string> = {
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
         />
       </div>
-      <!-- On a phone the form opens under "+ New lobby" and above the list; on a wide screen it
-           stands beside the list, settings and all. -->
+      <!-- Always there: on a phone above the list, on a wide screen beside it with every setting open. -->
       <section
         v-if="plugin && !lobby.current"
         class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4 lg:order-none"
-        :class="creating ? '' : 'hidden lg:block'"
       >
         <!-- The games as on the home screen: two per row, low tiles on a phone, with the tagline
              where there is room. -->
