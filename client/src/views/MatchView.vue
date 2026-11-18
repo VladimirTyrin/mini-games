@@ -177,11 +177,6 @@ function onBeforeUnload(event: BeforeUnloadEvent): void {
 window.addEventListener("beforeunload", onBeforeUnload);
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
-// Thinking over a move (or waiting for the opponent's) must not let the screen go dark.
-const keepsScreenOn = computed(() => isRunning() && !pausedByPlayer.value);
-watch(keepsScreenOn, (keepScreenOn) => void setKeepScreenOn(keepScreenOn), { immediate: true });
-onBeforeUnmount(() => void setKeepScreenOn(false));
-
 async function leave(): Promise<void> {
   confirmingLeave.value = false;
   const kind = controller.value?.source.kind;
@@ -202,13 +197,17 @@ const controllerKey = ref(0);
 watch(controller, () => {
   controllerKey.value += 1;
 });
+// The replay's own state is not reactive: its progress events copy what the view needs.
+const replayPlaying = ref(false);
 watch(
   () => match.replay,
   (replay, _, onCleanup) => {
+    replayPlaying.value = replay?.isPlaying ?? false;
     if (!replay) return;
     let speed = replay.speed;
     onCleanup(
       replay.onProgress(() => {
+        replayPlaying.value = replay.isPlaying;
         if (replay.speed === speed) return;
         speed = replay.speed;
         boardKey.value += 1;
@@ -217,6 +216,12 @@ watch(
   },
   { immediate: true },
 );
+
+// Thinking over a move (or waiting for the opponent's) must not let the screen go dark, nor
+// watching a replay play; a paused or finished one may.
+const keepsScreenOn = computed(() => (isRunning() && !pausedByPlayer.value) || replayPlaying.value);
+watch(keepsScreenOn, (keepScreenOn) => void setKeepScreenOn(keepScreenOn), { immediate: true });
+onBeforeUnmount(() => void setKeepScreenOn(false));
 
 function again(): void {
   const current = controller.value;
