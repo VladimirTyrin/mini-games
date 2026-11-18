@@ -90,7 +90,7 @@ const phaseLabel: Record<number, string> = {
     <div
       v-else
       class="flex flex-col gap-4 lg:grid lg:items-start lg:gap-6"
-      :class="lobby.current ? '' : 'lg:grid-cols-[minmax(0,1fr)_28rem]'"
+      :class="lobby.current ? '' : 'lg:grid-cols-[minmax(0,1fr)_34rem] xl:grid-cols-[minmax(0,1fr)_40rem]'"
     >
       <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
         <!-- Reachable while in a lobby (from Home, or back from Friends): one lobby at a time, so
@@ -120,9 +120,6 @@ const phaseLabel: Record<number, string> = {
         <div class="flex items-center justify-between">
           <h2 class="text-sm uppercase tracking-wide text-gray-400">Lobbies</h2>
           <div class="flex gap-2">
-            <button class="min-h-10 rounded bg-panel px-3 py-2 text-sm" @click="lobby.refresh()">
-              Refresh
-            </button>
             <button
               v-if="!lobby.current"
               class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm font-semibold whitespace-nowrap lg:hidden"
@@ -199,28 +196,37 @@ const phaseLabel: Record<number, string> = {
         :class="creating ? '' : 'hidden lg:block'"
       >
         <h2 class="font-semibold">New lobby</h2>
-        <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Game">
+        <!-- The games as on the home screen: two per row, low tiles on a phone, with the tagline
+             where there is room. -->
+        <div class="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" aria-label="Game">
           <button
             v-for="candidate in gamePlugins"
             :key="candidate.id"
+            type="button"
             role="radio"
             :aria-checked="candidate.id === gameId"
-            class="h-11 rounded-full border px-4 text-sm"
+            class="flex items-center gap-2 rounded-xl p-2 text-left sm:gap-3 sm:p-3"
             :class="
               candidate.id === gameId
-                ? 'border-emerald-400 bg-emerald-600/25 text-white'
-                : 'border-white/10 bg-panel-raised text-gray-200'
+                ? 'bg-emerald-600/20 ring-2 ring-emerald-400'
+                : 'bg-panel-raised hover:bg-white/10'
             "
             @click="gameId = candidate.id"
           >
-            <GameIcon :plugin="candidate" class="size-6 text-base" /> {{ candidate.title }}
+            <GameIcon :plugin="candidate" class="size-8 shrink-0 text-xl sm:size-10 sm:text-2xl" />
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold leading-tight sm:text-base">{{
+                candidate.title
+              }}</span>
+              <span class="hidden text-xs leading-snug text-gray-400 sm:block">{{ candidate.tagline }}</span>
+            </span>
           </button>
         </div>
         <div class="flex items-center gap-3 border-b border-white/5 pb-3">
-          <p class="min-w-0 flex-1 font-medium leading-tight">{{ plugin.tagline }}</p>
+          <p class="min-w-0 flex-1 font-medium leading-tight sm:hidden">{{ plugin.tagline }}</p>
           <button
             type="button"
-            class="shrink-0 text-sm whitespace-nowrap text-emerald-300 hover:text-emerald-200"
+            class="ml-auto shrink-0 text-sm whitespace-nowrap text-emerald-300 hover:text-emerald-200"
             @click="helpOpen = true"
           >
             How to play
