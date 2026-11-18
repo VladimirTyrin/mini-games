@@ -264,7 +264,7 @@ fn malformed_bot_kinds_are_rejected() {
         Err(WireError::Missing("bot_kind"))
     );
     assert_eq!(
-        Snake::bot_kind_from_wire(&snake_kind(3)),
+        Snake::bot_kind_from_wire(&snake_kind(4)),
         Err(WireError::UnknownEnumValue("bot_kind"))
     );
     let other_game = proto::BotKind {

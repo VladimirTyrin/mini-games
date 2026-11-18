@@ -137,6 +137,7 @@ impl WireBots for Snake {
         match proto::SnakeBotKind::try_from(kind) {
             Ok(proto::SnakeBotKind::Efficient) => Ok(BotKind::Efficient),
             Ok(proto::SnakeBotKind::Random) => Ok(BotKind::Random),
+            Ok(proto::SnakeBotKind::Careful) => Ok(BotKind::Careful),
             Ok(proto::SnakeBotKind::Unspecified) => Err(WireError::Missing("bot_kind")),
             Err(_) => Err(WireError::UnknownEnumValue("bot_kind")),
         }
@@ -146,6 +147,7 @@ impl WireBots for Snake {
         let kind = match kind {
             BotKind::Efficient => proto::SnakeBotKind::Efficient,
             BotKind::Random => proto::SnakeBotKind::Random,
+            BotKind::Careful => proto::SnakeBotKind::Careful,
         };
         proto::BotKind {
             game: Some(proto::bot_kind::Game::Snake(kind.into())),

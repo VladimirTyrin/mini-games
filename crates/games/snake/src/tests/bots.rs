@@ -130,3 +130,120 @@ fn bot_commands_are_always_accepted() {
         game.step();
     }
 }
+
+#[test]
+fn careful_keeps_off_a_cell_another_head_may_enter() {
+    let mut game = game(Death, 2);
+    arrange(
+        &mut game,
+        &[
+            (line(point(5, 10), Left, 3), Right),
+            // Its head right below the cell ahead of ours: it may go up into it.
+            (line(point(6, 11), Down, 3), Up),
+        ],
+    );
+    put_food(&mut game, point(7, 10));
+    assert_eq!(
+        decide(BotKind::Efficient, &game, 1),
+        None,
+        "efficient goes for the food"
+    );
+    // Down is where the other head may turn too; up is clear.
+    assert_eq!(decide(BotKind::Careful, &game, 1), Some(Command::Turn(Up)));
+}
+
+#[test]
+fn careful_does_not_go_into_a_pocket_shorter_than_itself() {
+    let mut game = game(Death, 2);
+    arrange(
+        &mut game,
+        &[
+            (line(point(5, 5), Left, 6), Right),
+            // A U of the other body around (6, 5) and (7, 5), its head at the top going up.
+            (
+                vec![
+                    point(6, 4),
+                    point(7, 4),
+                    point(8, 4),
+                    point(8, 5),
+                    point(8, 6),
+                    point(7, 6),
+                    point(6, 6),
+                ],
+                Up,
+            ),
+        ],
+    );
+    put_food(&mut game, point(7, 5));
+    assert_eq!(
+        decide(BotKind::Efficient, &game, 1),
+        None,
+        "efficient goes for the food"
+    );
+    // Up is next to the other head; down leads into open field.
+    assert_eq!(
+        decide(BotKind::Careful, &game, 1),
+        Some(Command::Turn(Down))
+    );
+}
+
+/// Two bots on a small field until one is left (or 2000 steps): the surviving slot, if any.
+fn duel(first: BotKind, second: BotKind, seed: u64) -> Option<Slot> {
+    let settings = <crate::Settings as mg_core::GameSettings>::parse(crate::RawSettings {
+        max_food_count: 3,
+        ..field_settings(12, 12, Death, DeadSnakeBehavior::StayOnField)
+    })
+    .unwrap();
+    let bots = [(Slot::new(0), first), (Slot::new(1), second)]
+        .into_iter()
+        .map(|(slot, kind)| mg_core::BotSeat {
+            slot,
+            bot: Snake::make_bot(kind),
+            budget_nodes: Snake::default_bot_budget(kind),
+        })
+        .collect();
+    let mut authority =
+        mg_core::Authority::<Snake>::new(&settings, &[PlayerSpec::BOT; 2], seed, bots).unwrap();
+    for _ in 0..2000 {
+        authority.run_bots();
+        authority.seal_frame();
+        if authority.game().status().is_finished() {
+            break;
+        }
+    }
+    assert_eq!(authority.rejected_bot_commands(), 0);
+    authority
+        .game()
+        .end
+        .as_ref()
+        .and_then(|end| end.winners.first().copied())
+}
+
+#[test]
+fn careful_outlives_efficient_most_of_the_time() {
+    let mut careful = 0;
+    let mut efficient = 0;
+    for seed in 0..40 {
+        // Seats alternate, so where a snake starts does not decide it.
+        let (careful_slot, winner) = if seed % 2 == 0 {
+            (
+                Slot::new(0),
+                duel(BotKind::Careful, BotKind::Efficient, seed),
+            )
+        } else {
+            (
+                Slot::new(1),
+                duel(BotKind::Efficient, BotKind::Careful, seed),
+            )
+        };
+        match winner {
+            Some(slot) if slot == careful_slot => careful += 1,
+            Some(_) => efficient += 1,
+            None => {}
+        }
+    }
+    assert!(
+        careful > 2 * efficient,
+        "careful {careful}, efficient {efficient}"
+    );
+}

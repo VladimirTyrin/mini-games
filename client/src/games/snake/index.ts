@@ -31,7 +31,14 @@ export const snakePlugin: GamePlugin = {
   },
   botLabel(kind) {
     if (kind.game.case !== "snake") return "Bot";
-    return kind.game.value === SnakeBotKind.RANDOM ? "Random bot" : "Efficient bot";
+    switch (kind.game.value) {
+      case SnakeBotKind.RANDOM:
+        return "Random bot";
+      case SnakeBotKind.CAREFUL:
+        return "Careful bot";
+      default:
+        return "Efficient bot";
+    }
   },
   controls: {
     keyboard: "Arrow keys or WASD to turn",

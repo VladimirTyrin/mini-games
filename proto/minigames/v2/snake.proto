@@ -43,6 +43,8 @@ enum SnakeBotKind {
   SNAKE_BOT_KIND_UNSPECIFIED = 0;
   SNAKE_BOT_KIND_EFFICIENT = 1;
   SNAKE_BOT_KIND_RANDOM = 2;
+  // Efficient, keeping off cells another head may enter and out of pockets too small.
+  SNAKE_BOT_KIND_CAREFUL = 3;
 }
 
 // Ranges are enforced by the game: sizes 10..=100, max food 1..=50, spawn chance 1..=1000 per

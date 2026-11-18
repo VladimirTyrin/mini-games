@@ -25,7 +25,8 @@ average length: ... ticks
 ```
 
 - `--bots` lists one built-in bot per seat in slot order (names: the game's bot kinds, e.g.
-  `minimax`, `random` for TicTacToe, `efficient`, `random` for Snake).
+  `minimax`, `random` for TicTacToe, `efficient`, `random`, `careful` for Snake: Careful also keeps
+  off cells another head may enter and out of pockets shorter than itself).
 - Results depend only on `--seed`: game `i` uses a seed derived from the base seed and `i`, so
   `--threads N` changes speed, not results.
 - `--settings-json` takes protobuf JSON of `GameSettings`; the default is the game's own
