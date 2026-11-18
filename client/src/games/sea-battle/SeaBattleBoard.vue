@@ -167,15 +167,15 @@ async function fire(cell: CellPoint): Promise<void> {
   <div v-if="view" class="flex w-full flex-col items-center gap-2">
     <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">{{ status }}</p>
     <FleetEditor v-if="needsFleet" :controller="controller" :seconds-left="secondsLeft" />
-    <!-- Stacked on a phone; side by side on a wide screen held sideways (a tablet, a desktop), where
-         both seas grow with the screen's height. The rows above the seas have one height there, so
+    <!-- Stacked on a phone, the player's own sea smaller; side by side and equal on a wide screen
+         held sideways (a tablet, a desktop), where both grow with the screen's height. The rows above the seas have one height there, so
          the seas line up. -->
     <div
       v-else
-      class="flex w-full flex-col items-center gap-3 sm:landscape:flex-row sm:landscape:items-start sm:landscape:justify-center"
+      class="flex w-full flex-col items-center gap-3 sm:landscape:flex-row sm:landscape:items-start sm:landscape:justify-center sm:landscape:gap-6"
     >
       <section
-        class="flex w-[min(92vw,42dvh,560px)] flex-col gap-1 sm:landscape:w-[min(56vw,calc(100dvh-13rem),680px)]"
+        class="flex w-[min(92vw,42dvh,560px)] flex-col gap-1 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
       >
         <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->
         <div
@@ -203,7 +203,7 @@ async function fire(cell: CellPoint): Promise<void> {
         />
       </section>
       <section
-        class="flex w-[min(72vw,34dvh,420px)] flex-col gap-1 sm:landscape:w-[min(38vw,calc(100dvh-13rem),520px)]"
+        class="flex w-[min(72vw,34dvh,420px)] flex-col gap-1 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
       >
         <span
           class="text-sm text-gray-300 [overflow-wrap:anywhere] sm:landscape:flex sm:landscape:min-h-7 sm:landscape:items-end"
