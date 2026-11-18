@@ -28,6 +28,21 @@ async function boot(): Promise<void> {
   const code = links.takeFriendCodeFromAddress();
   if (code) openFriendLink(code);
   await links.onFriendLinkOpened(openFriendLink);
+  // A replay file opened with the app (Android: Open with, Share; a computer: the installed app).
+  const [{ onReplayFileOpened }, { useMatchStore: matchStore }, { useToastStore }] = await Promise.all([
+    import("./platform/incoming-replays"),
+    import("./stores/match"),
+    import("./stores/toasts"),
+  ]);
+  await onReplayFileOpened((bytes) => {
+    const match = matchStore(pinia);
+    // A match being played is not dropped for a replay: it can wait.
+    if (match.isPlaying && match.controller?.source.kind !== "replay") {
+      useToastStore(pinia).show("Leave the match first to watch the replay");
+      return;
+    }
+    match.startReplay(bytes);
+  });
   if (!__NATIVE_APP__) {
     // Offline support; new versions are applied outside matches (see web-updates.ts).
     const [{ registerSW }, { startWebUpdates }, { useMatchStore }] = await Promise.all([

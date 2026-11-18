@@ -31,6 +31,51 @@
                 <data android:scheme="https" android:host="braintvsminigames.xyz" android:pathPrefix="/f/" />
             </intent-filter>
 
+            <!-- Replay files (.mgreplay) open in the app: "Open with" and Share (IncomingReplay copies
+                 them). Senders do not know the type and send application/octet-stream or none, so
+                 the file name tells a replay; the dots in pathPattern are escaped, and the extra
+                 patterns reach names with more dots in them. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-mgreplay" />
+                <data android:pathPattern=".*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\..*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.mgreplay" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\..*\\.mgreplay" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.mgreplay" />
+            </intent-filter>
+            <!-- A file whose sender knows it as a replay, whatever its name. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/x-mgreplay" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-mgreplay" />
+            </intent-filter>
+
         </activity>
 
         <provider

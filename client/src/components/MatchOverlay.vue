@@ -99,7 +99,7 @@ const canPlayAgain = computed(
 
 const headline = computed(() => {
   const outcome = result.value;
-  if (aborted.value) return "Match aborted";
+  if (aborted.value) return isReplay ? "Replay ends here" : "Match aborted";
   if (!outcome) return "Game over";
   switch (outcome.kind) {
     case OutcomeKind.WINNER:
@@ -148,7 +148,11 @@ async function voteDrop(slot: number): Promise<void> {
           <h2 class="text-xl font-bold">{{ headline }}</h2>
           <p v-if="endReason && !aborted" class="text-sm text-gray-300">{{ endReason }}</p>
           <p v-if="aborted" class="text-sm text-gray-300">
-            The server stopped this match. No replay is kept.
+            {{
+              isReplay
+                ? "The match goes no further in this file: it was saved before the end."
+                : "The server stopped this match. No replay is kept."
+            }}
           </p>
         </div>
         <button

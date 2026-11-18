@@ -38,6 +38,20 @@ listing alone (game and time from the file name, else the file's modification ti
 copied in or deleted outside the app show up correctly. Tap to watch; Share opens the system
 share sheet; Delete asks first.
 
+**Opening a replay file from elsewhere.** A `.mgreplay` file received in a messenger or found in
+a file manager opens in the app: the app is offered under "Open with" and in the Share sheet.
+Senders rarely know the type (most say `application/octet-stream`, some nothing), so the intent
+filters in `AndroidManifest.xml` match the file name's `.mgreplay` ending, or the type
+`application/x-mgreplay`; Share takes any `application/octet-stream`, and a file that is not a
+replay is refused with a message. `IncomingReplay.java` copies the file into the app's cache at
+once (the sender's permission lasts only for that intent; at most 8 MiB) and turns the intent
+into `minigames-replay://open?file=NAME`, which `platform/incoming-replays.ts` reads through the
+Filesystem plugin, at start (`getLaunchUrl`) and while running (`appUrlOpen`). A match being
+played is not dropped for it: the app says to leave it first.
+
+The installed web app on a computer (Chrome, Edge) handles `.mgreplay` the same way through the
+manifest's `file_handlers` and `launchQueue`; a browser tab and phones' web apps cannot.
+
 ## Signing
 
 Release and debug keystores live in the gitignored `.keys/` folder at the repository root, each
