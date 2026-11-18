@@ -73,10 +73,14 @@ message SubmitSecretCommand {
 }
 
 // To one seat only: what it may see of the game's secret (its own fleet). Sent after the seat's
-// accepted private command and after every catch-up of that seat.
+// accepted private command and after every catch-up of that seat. Spectators of a game that shows
+// them every seat's secret (Sea Battle) get one per seat, with `slot`, on joining, after a
+// catch-up and whenever one changes.
 message MatchSeatSecret {
   string match_id = 1;
   GameSeatSecret secret = 2;
+  // Whose secret, for spectators; absent when it is the receiving seat's own.
+  optional uint32 slot = 3;
 }
 
 // Client's local hash differed from the authority; the server answers with MatchCatchUp.

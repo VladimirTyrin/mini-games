@@ -115,6 +115,14 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
         None
     }
 
+    /// Whether spectators get every seat's [`Game::seat_secret`] while the game runs (Sea
+    /// Battle: both fleets, like a broadcast). Off by default: a secret such as a hand of cards
+    /// must stay with its seat, and a player watching their own match from a second account
+    /// would see the others'.
+    fn shows_seat_secrets_to_spectators(&self) -> bool {
+        false
+    }
+
     fn apply_world(&mut self, event: &Self::WorldEvent) -> Result<(), CommandError>;
 
     /// One tick of a real-time game. Not called for turn-based games or after the game ended.

@@ -29,6 +29,8 @@ export interface MatchSourceEvents {
   rate: number;
   /** What this seat may see of the game's secret (its own fleet), whenever it changes. */
   seatSecret: GameSeatSecret;
+  /** A seat's secret for spectators, in games that show it to them (Sea Battle's fleets). */
+  spectatorSecret: { readonly slot: number; readonly secret: GameSeatSecret };
 }
 
 export type MatchSourceKind =

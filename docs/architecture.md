@@ -54,7 +54,9 @@ clients replay and hash.
 - A seat may add to the secret with a **private command** (its fleet: `Authority::submit_secret`,
   `SubmitSecretCommand` on the wire). It is never put in a frame. The seat gets back what it
   may see of the secret (`Game::seat_secret`, pushed as `MatchSeatSecret` to that seat only,
-  again after each of its catch-ups).
+  again after each of its catch-ups). A game may show every seat's to spectators
+  (`Game::shows_seat_secrets_to_spectators`, Sea Battle): they get one `MatchSeatSecret` per seat,
+  with `slot`.
 - While the game awaits a private command (`Game::awaits_secret`), built-in bots send theirs when
   a frame is sealed (network bots cannot yet; see tech_debt.md). The server gives people `MatchHeader.secret_setup_ms` and then submits the game's
   default for them (`Game::default_secret_command`, a random fleet).

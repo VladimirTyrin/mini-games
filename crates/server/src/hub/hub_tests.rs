@@ -601,7 +601,7 @@ fn has_event(
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_fleet_reaches_only_its_own_seat_and_the_others_learn_it_is_placed() {
+async fn a_fleet_reaches_its_own_seat_and_spectators_while_the_other_seat_learns_it_is_placed() {
     let hub = start_hub();
     let SeaBattleTable {
         mut host,
@@ -619,17 +619,23 @@ async fn a_fleet_reaches_only_its_own_seat_and_the_others_learn_it_is_placed() {
     };
     assert_eq!(own.ships.len(), 10);
 
-    for other in [&mut player, &mut observer] {
-        other
-            .expect(|message| {
-                assert!(seat_secret(message).is_none(), "another seat's fleet was sent");
-                has_event(message, |event| {
-                    matches!(event, proto::sea_battle_world_event::Event::FleetPlaced(placed) if placed.slot == 0)
-                })
-                .then_some(())
+    player
+        .expect(|message| {
+            assert!(seat_secret(message).is_none(), "another seat's fleet was sent");
+            has_event(message, |event| {
+                matches!(event, proto::sea_battle_world_event::Event::FleetPlaced(placed) if placed.slot == 0)
             })
-            .await;
-    }
+            .then_some(())
+        })
+        .await;
+    // Spectators watch both fleets, told whose each is.
+    let shown = observer
+        .expect(|message| match &message.message {
+            Some(proto::server_message::Message::SeatSecret(secret)) => Some(secret.clone()),
+            _ => None,
+        })
+        .await;
+    assert_eq!(shown.slot, Some(0));
 
     let again = host.request(place_fleet(&match_id)).await;
     assert!(

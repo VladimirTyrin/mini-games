@@ -73,6 +73,13 @@ impl<G: WireGame> DynAuthority for AuthorityAdapter<G> {
             .map(|secret| G::seat_secret_to_wire(&secret))
     }
 
+    fn spectator_seat_secret(&self, slot: Slot) -> Option<proto::GameSeatSecret> {
+        if !self.authority.game().shows_seat_secrets_to_spectators() {
+            return None;
+        }
+        self.seat_secret(slot)
+    }
+
     fn drop_player(&mut self, slot: Slot) {
         self.authority.drop_player(slot);
     }

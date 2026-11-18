@@ -61,8 +61,11 @@ export class OnlineMatchSource implements MatchSource {
           this.events.emit("resumed", { countdownMs: resumed.countdownMs });
       }),
       session.on("seatSecret", (seatSecret) => {
-        if (seatSecret.matchId === this.matchId && seatSecret.secret)
-          this.events.emit("seatSecret", seatSecret.secret);
+        if (seatSecret.matchId !== this.matchId || !seatSecret.secret) return;
+        // A slot says it is some seat's secret for spectators, not this seat's own.
+        if (seatSecret.slot !== undefined)
+          this.events.emit("spectatorSecret", { slot: seatSecret.slot, secret: seatSecret.secret });
+        else this.events.emit("seatSecret", seatSecret.secret);
       }),
       session.on("ended", (ended) => {
         if (ended.matchId !== this.matchId) return;

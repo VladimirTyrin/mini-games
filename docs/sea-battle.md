@@ -12,7 +12,11 @@ Two seats, classic rules only:
 ## Hidden fleets
 
 The fleets are the authority's secret (`HiddenFleets`, see architecture.md, "Secrets"). No
-client, bot or observer has the other fleet while the game runs.
+player or bot has the other fleet while the game runs. Spectators do see both, like a broadcast
+(`Game::shows_seat_secrets_to_spectators`): the server sends them each seat's fleet as a
+`MatchSeatSecret` with `slot`, on joining, after a catch-up and whenever one is placed. The price,
+accepted on purpose: a player who watches their own match from a second account sees the other
+fleet.
 
 1. **Placing.** A seat sends its fleet as a private command (`SubmitSecretCommand`). The
    authority checks it (`Fleet::parse`), keeps it, and the frame says only `FleetPlaced(slot)`.

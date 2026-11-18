@@ -38,6 +38,11 @@ pub trait DynAuthority: Send + std::fmt::Debug {
     fn seat_secret(&self, _slot: Slot) -> Option<proto::GameSeatSecret> {
         None
     }
+    /// `slot`'s secret for spectators, in games that show it to them
+    /// (`mg_core::Game::shows_seat_secrets_to_spectators`).
+    fn spectator_seat_secret(&self, _slot: Slot) -> Option<proto::GameSeatSecret> {
+        None
+    }
     fn drop_player(&mut self, slot: Slot);
     fn run_bots(&mut self);
     fn is_waiting_for_bot(&self) -> bool;

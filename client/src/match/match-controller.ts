@@ -55,6 +55,8 @@ export class MatchController {
   readonly incompatible = shallowRef(false);
   /** What this player's seat may see of the game's secret (its own fleet); `null` until sent. */
   readonly seatSecret: ShallowRef<GameSeatSecret | null> = shallowRef(null);
+  /** Every seat's secret, by slot, for a spectator of a game that shows them (Sea Battle). */
+  readonly spectatorSecrets: ShallowRef<ReadonlyMap<number, GameSeatSecret>> = shallowRef(new Map());
   /** The game's own tick; 0 for turn-based games. */
   readonly gameTickMs: number;
   /** Replays may play faster or slower than the game; 1 everywhere else. */
@@ -93,6 +95,9 @@ export class MatchController {
         this.paused.value = false;
         this.pauses.value = [];
         this.resumeAt.value = countdownMs > 0 ? performance.now() + countdownMs : null;
+      }),
+      source.on("spectatorSecret", ({ slot, secret }) => {
+        this.spectatorSecrets.value = new Map([...this.spectatorSecrets.value, [slot, secret]]);
       }),
       source.on("seatSecret", (secret) => {
         this.seatSecret.value = secret;

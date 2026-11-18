@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { GameSeatSecretSchema } from "@/proto/minigames/v2/game_pb";
 import { MatchCatchUpSchema, MatchHeaderSchema, TickFrameSchema } from "@/proto/minigames/v2/match_pb";
 import { Emitter } from "@/net/emitter";
 
@@ -78,6 +79,21 @@ describe("MatchController", () => {
   beforeEach(() => {
     core.framesReplay = true;
     core.catchUpsReplay = true;
+  });
+
+  it("keeps every seat's secret a spectator is shown, apart from the seat's own", () => {
+    const source = new FakeSource();
+    const controller = new MatchController(source);
+    const fleet = (ships: number) =>
+      create(GameSeatSecretSchema, {
+        game: { case: "seaBattle", value: { ships: Array.from({ length: ships }, () => ({})) } },
+      });
+
+    source.events.emit("spectatorSecret", { slot: 0, secret: fleet(1) });
+    source.events.emit("spectatorSecret", { slot: 1, secret: fleet(2) });
+
+    expect([...controller.spectatorSecrets.value.keys()]).toEqual([0, 1]);
+    expect(controller.seatSecret.value).toBeNull();
   });
 
   it("holds the board while the player's own pause lasts, though it names no seat", () => {

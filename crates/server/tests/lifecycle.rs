@@ -782,3 +782,48 @@ async fn sharing_a_replay_is_answered_even_when_the_host_moved_on_meanwhile() {
         other => panic!("unexpected reply {other:?}"),
     }
 }
+
+fn sea_battle() -> proto::GameSettings {
+    proto::GameSettings {
+        game: Some(proto::game_settings::Game::SeaBattle(
+            proto::SeaBattleSettings {},
+        )),
+    }
+}
+
+#[tokio::test]
+async fn spectators_of_sea_battle_see_both_fleets_while_it_is_played() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    create_lobby(&mut host, sea_battle(), 2).await;
+    expect_ok(
+        host.request(Request::SwitchToObserver(proto::SwitchToObserver {}))
+            .await,
+    );
+    for _ in 0..2 {
+        expect_ok(
+            host.request(Request::AddBot(proto::AddBot {
+                bot_kind: Some(proto::BotKind {
+                    game: Some(proto::bot_kind::Game::SeaBattle(
+                        proto::SeaBattleBotKind::Easy as i32,
+                    )),
+                }),
+            }))
+            .await,
+        );
+    }
+    start(&mut host).await;
+
+    let mut fleets_seen = std::collections::BTreeSet::new();
+    while fleets_seen.len() < 2 {
+        let secret = host
+            .expect(|m| match &m.message {
+                Some(Reply::SeatSecret(secret)) => Some(secret.clone()),
+                _ => None,
+            })
+            .await;
+        assert!(secret.secret.is_some());
+        fleets_seen.insert(secret.slot.expect("a spectator is told whose fleet it is"));
+    }
+    assert_eq!(fleets_seen.into_iter().collect::<Vec<_>>(), [0, 1]);
+}

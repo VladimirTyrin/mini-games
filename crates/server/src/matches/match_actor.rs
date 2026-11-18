@@ -71,6 +71,8 @@ pub(crate) struct MatchActor {
     /// A turn-based bot is thinking on the blocking pool; its move comes back on `bot_moves`.
     bot_thinking: bool,
     bot_move_min: Duration,
+    /// Each seat's secret as spectators last got it (games that show it to them).
+    spectator_secrets: Vec<Option<proto::GameSeatSecret>>,
     /// Set when the actor runs.
     bot_moves: Option<BotMoveSender>,
     /// Cancelled when the actor is gone, so a bot still thinking for an ended match stops at once
@@ -121,6 +123,7 @@ impl MatchActor {
             bot_cpu: setup.bot_cpu,
             bot_thinking: false,
             bot_move_min: setup.timing.bot_move_min,
+            spectator_secrets: Vec::new(),
             bot_moves: None,
             bot_cancel: CancelOnDrop::new(CancelToken::new()),
             secret_deadline: (!secret_setup.is_zero()).then(|| Instant::now() + secret_setup),
@@ -238,8 +241,9 @@ impl MatchActor {
                 if let Some(outbound) = self.outbound_of(&session).cloned() {
                     outbound.send_encoded(self.catch_up());
                 }
-                if let Some(slot) = self.slot_of(&session) {
-                    self.send_seat_secret(slot);
+                match self.slot_of(&session) {
+                    Some(slot) => self.send_seat_secret(slot),
+                    None => self.send_spectator_secrets(&session),
                 }
             }
         }
@@ -312,6 +316,7 @@ impl MatchActor {
             Ok(()) => {
                 outbound.send(&codec::reply(request_id, Message::Ack(proto::Ack {})));
                 self.send_seat_secret(slot);
+                self.sync_spectator_secrets();
                 // What the others may learn of it (the fleet is placed) goes out now in a
                 // turn-based game; a real-time one sends it with the next tick, as sealing now
                 // would step the game between two ticks.
@@ -337,12 +342,68 @@ impl MatchActor {
         let message = codec::push(Message::SeatSecret(proto::MatchSeatSecret {
             match_id: self.match_id.to_string(),
             secret: Some(secret),
+            slot: None,
         }));
         for participant in self.participants.iter().filter(|p| p.slot == Some(slot)) {
             if let Some(outbound) = &participant.outbound {
                 outbound.send(&message);
             }
         }
+    }
+
+    fn spectator_secret_message(
+        &self,
+        slot: usize,
+        secret: &proto::GameSeatSecret,
+    ) -> proto::ServerMessage {
+        codec::push(Message::SeatSecret(proto::MatchSeatSecret {
+            match_id: self.match_id.to_string(),
+            secret: Some(secret.clone()),
+            slot: u32::try_from(slot).ok(),
+        }))
+    }
+
+    /// Every seat's secret to one spectator that joined or caught up (games that show them).
+    fn send_spectator_secrets(&self, session: &SessionId) {
+        let Some(outbound) = self.outbound_of(session) else {
+            return;
+        };
+        for (slot, secret) in self.spectator_secrets.iter().enumerate() {
+            if let Some(secret) = secret {
+                outbound.send(&self.spectator_secret_message(slot, secret));
+            }
+        }
+    }
+
+    /// Sends spectators the seats' secrets that changed (a fleet placed, by a person, by a bot as
+    /// a frame is sealed, or by the time limit). Nothing for games that keep them to the seat.
+    fn sync_spectator_secrets(&mut self) {
+        let Some(authority) = self.authority.as_ref() else {
+            return;
+        };
+        let current: Vec<Option<proto::GameSeatSecret>> = (0..self.header.seats.len())
+            .map(|slot| {
+                u8::try_from(slot)
+                    .ok()
+                    .and_then(|slot| authority.spectator_seat_secret(Slot::new(slot)))
+            })
+            .collect();
+        if current == self.spectator_secrets {
+            return;
+        }
+        for (slot, secret) in current.iter().enumerate() {
+            let Some(secret) = secret else { continue };
+            if self.spectator_secrets.get(slot).and_then(Option::as_ref) == Some(secret) {
+                continue;
+            }
+            let message = codec::encode(&self.spectator_secret_message(slot, secret));
+            for participant in self.participants.iter().filter(|p| p.slot.is_none()) {
+                if let Some(outbound) = &participant.outbound {
+                    outbound.send_encoded(message.clone());
+                }
+            }
+        }
+        self.spectator_secrets = current;
     }
 
     /// The time for private commands is up: people who sent none get the game's choice.
@@ -373,6 +434,7 @@ impl MatchActor {
         for slot in settled {
             self.send_seat_secret(slot);
         }
+        self.sync_spectator_secrets();
         // As in `submit_secret`: a real-time game sends it with the next tick.
         if self.clock == Clock::TurnBased {
             self.seal_and_broadcast();
@@ -503,8 +565,9 @@ impl MatchActor {
         participant.outbound = Some(outbound.clone());
         let slot = participant.slot;
         outbound.send_encoded(self.catch_up());
-        if let Some(slot) = slot {
-            self.send_seat_secret(slot);
+        match slot {
+            Some(slot) => self.send_seat_secret(slot),
+            None => self.send_spectator_secrets(session),
         }
         if let Some(slot) = slot
             && self.budgets.is_disconnected(slot)
@@ -671,6 +734,8 @@ impl MatchActor {
         };
         let frame = authority.seal_frame();
         self.broadcast(&codec::push(Message::Frame(frame)));
+        // Sealing settles the bots' private commands (their fleets).
+        self.sync_spectator_secrets();
     }
 
     fn broadcast(&self, message: &proto::ServerMessage) {

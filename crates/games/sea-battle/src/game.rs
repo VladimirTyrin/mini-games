@@ -341,6 +341,10 @@ impl Game for SeaBattle {
         secret.fleet(slot).cloned()
     }
 
+    fn shows_seat_secrets_to_spectators(&self) -> bool {
+        true
+    }
+
     fn view(&self, _viewer: Viewer) -> View {
         View {
             phase: self.phase,

@@ -76,6 +76,9 @@ function fleetOf(slot: number): EditorShip[] {
   const revealed = view.value?.revealed[slot]?.ships ?? [];
   if (revealed.length > 0) return revealed.map(fromWire);
   if (slot === mySlot.value && ownFleet.value) return ownFleet.value;
+  // A spectator sees both fleets while the game runs.
+  const spectated = props.controller.spectatorSecrets.value.get(slot)?.game;
+  if (spectated?.case === "seaBattle") return spectated.value.ships.map(fromWire);
   return (replayFleets.value[slot]?.ships ?? []).map(fromWire);
 }
 
