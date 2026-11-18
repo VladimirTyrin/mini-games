@@ -70,15 +70,19 @@ export const useMatchStore = defineStore("match", () => {
         player: {
           kind: seat.bot ? IdentityKind.BUILT_IN_BOT : IdentityKind.GUEST,
           id: seat.bot ? `bot-${slot}` : "you",
-          displayName: seat.bot ? `Bot ${slot}` : playerName || "You",
+          // Bots count from 1 whether or not the person here holds a seat.
+          displayName: seat.bot
+            ? `Bot ${seats.slice(0, slot + 1).filter((earlier) => earlier.bot).length}`
+            : playerName || "You",
           // The signed-in player's picture, so boards that show avatars show theirs offline too.
           avatarUrl: seat.bot ? "" : (connection.identity?.avatarUrl ?? ""),
         },
         botKind: seat.bot ?? undefined,
       })),
     });
+    // No seat of one's own: watching bots play.
     const mySlot = seats.findIndex((seat) => seat.bot === null);
-    run(new LocalMatchSource(header, Math.max(0, mySlot)));
+    run(new LocalMatchSource(header, mySlot < 0 ? null : mySlot));
   }
 
   function startOnline(header: MatchHeader): MatchController | null {

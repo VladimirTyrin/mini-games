@@ -97,6 +97,24 @@ describe("LocalMatchSource", () => {
     expect(countdowns).toEqual([0]);
   });
 
+  it("watching bots, takes no commands and passes on the seats' secrets it is shown", async () => {
+    const match = new LocalMatchSource(
+      create(MatchHeaderSchema, { matchId: "local", seats: [{}, {}] }),
+      null,
+    );
+    const worker = FakeWorker.last;
+    if (!worker) throw new Error("no worker");
+    const shown: number[] = [];
+    match.on("spectatorSecret", ({ slot }) => shown.push(slot));
+    match.start();
+
+    await expect(match.submit({ game: { case: "snake", value: {} } })).rejects.toThrow("you are watching");
+    worker.reply({ type: "spectatorSecret", slot: 1, secret: new Uint8Array() });
+
+    expect(worker.posted).toEqual(["start"]);
+    expect(shown).toEqual([1]);
+  });
+
   it("settles what waits on a worker that broke down", async () => {
     const { match, worker } = source();
     const ended: unknown[] = [];

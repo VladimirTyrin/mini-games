@@ -61,6 +61,16 @@ impl LocalHost {
             .unwrap_or_default()
     }
 
+    /// Encoded `GameSeatSecret` of `slot` for a spectator, in games that show it to them
+    /// (`Game::shows_seat_secrets_to_spectators`); empty otherwise.
+    #[wasm_bindgen(js_name = spectatorSeatSecret)]
+    pub fn spectator_seat_secret(&self, slot: u8) -> Vec<u8> {
+        self.authority
+            .spectator_seat_secret(Slot::new(slot))
+            .map(|secret| secret.encode_to_vec())
+            .unwrap_or_default()
+    }
+
     #[wasm_bindgen(js_name = dropPlayer)]
     pub fn drop_player(&mut self, slot: u8) {
         self.authority.drop_player(Slot::new(slot));

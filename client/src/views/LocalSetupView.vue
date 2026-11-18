@@ -37,7 +37,12 @@ watch(settings, (picked) => {
   if (plugin && picked) prefs.rememberSettings(props.gameId, picked);
 });
 
-const seats = computed<LocalSeat[]>(() => [{ bot: null }, ...bots.value.map((bot) => ({ bot }))]);
+/** Watching: no seat for the person here, the bots play alone. */
+const watching = ref(false);
+const seats = computed<LocalSeat[]>(() => [
+  ...(watching.value ? [] : [{ bot: null }]),
+  ...bots.value.map((bot) => ({ bot })),
+]);
 const seatCountOk = computed(() => !!info && seats.value.length >= info.minPlayers);
 
 function start(): void {
@@ -87,6 +92,7 @@ function start(): void {
     <OpponentsCard
       v-if="availableBots.length"
       v-model="bots"
+      v-model:watching="watching"
       :plugin="plugin"
       :available="availableBots"
       :min-players="info.minPlayers"

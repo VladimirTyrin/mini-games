@@ -20,6 +20,9 @@ let paused = false;
  */
 const BOT_MOVE_MIN_MS = 700;
 let botMove: ReturnType<typeof setTimeout> | null = null;
+/** Watching: the seats' secrets as last sent, so only changes go out. */
+let watchedSeats = 0;
+let sentSpectatorSecrets: string[] = [];
 
 function post(message: FromWorker, transfer: Transferable[] = []): void {
   self.postMessage(message, transfer);
@@ -29,9 +32,21 @@ function sealAndPost(): void {
   if (!host) return;
   const frame = host.sealFrame();
   post({ type: "frame", frame }, [frame.buffer]);
+  postSpectatorSecrets();
   if (host.isFinished()) {
     stopTicker();
     post({ type: "ended" });
+  }
+}
+
+/** A spectator sees the seats' secrets the game shows (both fleets), sent as they change. */
+function postSpectatorSecrets(): void {
+  for (let slot = 0; slot < watchedSeats && host; slot++) {
+    const secret = host.spectatorSeatSecret(slot);
+    const key = secret.join(",");
+    if (secret.length === 0 || sentSpectatorSecrets[slot] === key) continue;
+    sentSpectatorSecrets[slot] = key;
+    post({ type: "spectatorSecret", slot, secret }, [secret.buffer]);
   }
 }
 
@@ -70,6 +85,8 @@ async function handle(message: ToWorker): Promise<void> {
     case "start": {
       await init({ module_or_path: wasmUrl });
       host = new LocalHost(message.header, message.seedHigh, message.seedLow);
+      watchedSeats = message.watchedSeats;
+      sentSpectatorSecrets = [];
       sealAndPost();
       const tickMs = host.tickMs();
       if (tickMs > 0) startTicker(tickMs);

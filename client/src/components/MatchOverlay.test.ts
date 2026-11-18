@@ -50,6 +50,12 @@ const buttons = (controller: MatchController) => {
 describe("MatchOverlay", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  it("offers Play again to someone watching bots on this device", () => {
+    expect(buttons(endedMatch("snake", { mySlot: null })).some((text) => text.startsWith("Play again"))).toBe(
+      true,
+    );
+  });
+
   it("offers Play again to the lobby's host watching a table of bots", () => {
     const host = create(IdentitySchema, { kind: IdentityKind.GUEST, id: "host", displayName: "Host" });
     useConnectionStore().identity = host;
@@ -76,10 +82,16 @@ describe("MatchOverlay", () => {
     expect(playAgainRequests("stackAttack", "Enter")).toBe(1);
   });
 
-  it("offers Play again neither to an observer nor after an aborted match", () => {
+  it("offers Play again neither to an observer of people online nor after an aborted match", () => {
+    const peopleOnline = {
+      kind: "online",
+      header: { settings: { game: { case: "tictactoe" } }, seats: [{}, {}] },
+    };
     expect(buttons(endedMatch("tictactoe")).some((text) => text.startsWith("Play again"))).toBe(true);
     expect(
-      buttons(endedMatch("tictactoe", { mySlot: null })).some((text) => text.startsWith("Play again")),
+      buttons(endedMatch("tictactoe", { mySlot: null, source: peopleOnline })).some((text) =>
+        text.startsWith("Play again"),
+      ),
     ).toBe(false);
     expect(
       buttons(endedMatch("tictactoe", { aborted: shallowRef(true) })).some((text) =>

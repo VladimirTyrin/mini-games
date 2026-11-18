@@ -48,7 +48,8 @@ export class LocalMatchSource implements MatchSource {
 
   constructor(
     readonly header: MatchHeader,
-    readonly mySlot: number,
+    /** `null`: the person here watches a table of bots. */
+    readonly mySlot: number | null,
   ) {
     this.worker = new Worker(new URL("./local-authority.worker.ts", import.meta.url), { type: "module" });
     this.worker.onmessage = (event: MessageEvent<FromWorker>) => this.onMessage(event.data);
@@ -75,28 +76,33 @@ export class LocalMatchSource implements MatchSource {
       header: toBinary(MatchHeaderSchema, this.header),
       seedHigh: seed[0] ?? 0,
       seedLow: seed[1] ?? 0,
+      watchedSeats: this.mySlot === null ? this.header.seats.length : 0,
     });
   }
 
   submit(command: GameCommandInit): Promise<void> {
     if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
     if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    const slot = this.mySlot;
+    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameCommandSchema, create(GameCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
       this.pending.set(requestId, { resolve: () => resolve(), reject });
-      this.send({ type: "submit", requestId, slot: this.mySlot, command: bytes });
+      this.send({ type: "submit", requestId, slot, command: bytes });
     });
   }
 
   submitSecret(command: GameSecretCommandInit): Promise<void> {
     if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
     if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    const slot = this.mySlot;
+    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameSecretCommandSchema, create(GameSecretCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
       this.pending.set(requestId, { resolve: () => resolve(), reject });
-      this.send({ type: "submitSecret", requestId, slot: this.mySlot, command: bytes });
+      this.send({ type: "submitSecret", requestId, slot, command: bytes });
     });
   }
 
@@ -189,6 +195,12 @@ export class LocalMatchSource implements MatchSource {
         break;
       case "seatSecret":
         this.events.emit("seatSecret", fromBinary(GameSeatSecretSchema, message.secret));
+        break;
+      case "spectatorSecret":
+        this.events.emit("spectatorSecret", {
+          slot: message.slot,
+          secret: fromBinary(GameSeatSecretSchema, message.secret),
+        });
         break;
       case "rejected": {
         const pending = this.pending.get(message.requestId);

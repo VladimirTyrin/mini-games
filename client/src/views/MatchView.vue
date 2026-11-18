@@ -327,7 +327,9 @@ function again(): void {
       />
     </div>
     <ReplayBar v-if="match.replay" :replay="match.replay" />
-    <p v-if="plugin" class="text-center text-xs text-gray-500">{{ controlsHintFor(plugin) }}</p>
+    <p v-if="plugin && controller.mySlot !== null" class="text-center text-xs text-gray-500">
+      {{ controlsHintFor(plugin) }}
+    </p>
     <ChatPanel
       v-if="isOnline && lobby.current"
       :messages="lobby.lobbyChat"

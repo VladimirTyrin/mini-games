@@ -85,12 +85,15 @@ const hostsBotsOnlyMatch = computed(
     props.controller.source.header.seats.every((seat) => seat.botKind !== undefined) &&
     sameIdentity(lobby.current?.host, connection.identity),
 );
+/** Watching bots on this device: nobody else to ask, the same table plays again. */
+const watchesLocally = props.controller.source.kind === "local" && props.controller.mySlot === null;
 /**
- * A replay can always be watched again. A match is played again by its players, or by the host
- * watching a table of bots, and only after a real end: an aborted one left nothing to repeat.
+ * A replay can always be watched again. A match is played again by its players, or by whoever
+ * watches a table of bots (the lobby's host online), and only after a real end: an aborted one
+ * left nothing to repeat.
  */
 const canPlayAgain = computed(
-  () => isReplay || ((mySlot.value !== null || hostsBotsOnlyMatch.value) && !aborted.value),
+  () => isReplay || ((mySlot.value !== null || hostsBotsOnlyMatch.value || watchesLocally) && !aborted.value),
 );
 
 const headline = computed(() => {

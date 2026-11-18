@@ -6,8 +6,12 @@ import type { GamePlugin } from "@/games/game-plugin";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { useConnectionStore } from "@/stores/connection";
 
-/** Bot opponents of a local match; the person on this device always holds the first seat. */
+/**
+ * The bots of a local match. The person on this device holds the first seat, unless watching:
+ * then the bots play alone.
+ */
 const bots = defineModel<BotKind[]>({ required: true });
+const watching = defineModel<boolean>("watching", { default: false });
 const props = defineProps<{
   plugin: GamePlugin;
   available: readonly BotKind[];
@@ -26,7 +30,7 @@ const me = computed(() => {
   };
 });
 
-const players = computed(() => 1 + bots.value.length);
+const players = computed(() => (watching.value ? 0 : 1) + bots.value.length);
 const canAdd = computed(() => props.available.length > 0 && players.value < props.maxPlayers);
 const canRemove = computed(() => players.value > props.minPlayers);
 const hasChoice = computed(() => props.available.length > 1);
@@ -39,6 +43,17 @@ function add(): void {
 function replace(index: number, event: Event): void {
   const kind = props.available[(event.target as HTMLSelectElement).selectedIndex];
   if (kind) bots.value = bots.value.map((bot, position) => (position === index ? kind : bot));
+}
+
+/** Watching needs bots enough to play: at least the game's minimum, and one. */
+function toggleWatching(): void {
+  // The model reads the parent's value until it comes back: decide on the new one.
+  const watchingNow = !watching.value;
+  watching.value = watchingNow;
+  if (!watchingNow) return;
+  const first = props.available[0];
+  const missing = Math.min(props.maxPlayers, Math.max(1, props.minPlayers)) - bots.value.length;
+  if (first && missing > 0) bots.value = [...bots.value, ...Array<BotKind>(missing).fill(first)];
 }
 
 function remove(index: number): void {
@@ -54,14 +69,35 @@ function remove(index: number): void {
         <span v-if="!bots.length" class="rounded-full bg-sky-500/20 px-2 py-0.5 font-medium text-sky-200">
           Solo
         </span>
+        <span
+          v-else-if="watching"
+          class="rounded-full bg-violet-500/20 px-2 py-0.5 font-medium text-violet-200"
+        >
+          Bots only
+        </span>
         <span class="tabular-nums text-gray-400">{{ players }} / {{ maxPlayers }} players</span>
       </div>
     </header>
-    <div class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 px-3">
-      <Avatar :url="me.avatarUrl" :name="me.name" :player-id="me.playerId || undefined" />
-      <span class="min-w-0 flex-1 truncate">
-        {{ me.name }} <span class="text-sm text-gray-400">(you)</span>
+    <div class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 pr-1.5 pl-3">
+      <Avatar
+        :url="me.avatarUrl"
+        :name="me.name"
+        :player-id="me.playerId || undefined"
+        :class="watching ? 'opacity-50' : ''"
+      />
+      <span class="min-w-0 flex-1 truncate" :class="watching ? 'text-gray-400' : ''">
+        {{ me.name }}
+        <span class="text-sm text-gray-400">{{ watching ? "(you, watching)" : "(you)" }}</span>
       </span>
+      <button
+        v-if="available.length"
+        type="button"
+        class="min-h-9 shrink-0 rounded-lg px-3 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
+        :aria-pressed="watching"
+        @click="toggleWatching"
+      >
+        {{ watching ? "Join" : "Just watch" }}
+      </button>
     </div>
     <div v-for="(bot, index) in bots" :key="index" class="flex items-center gap-2">
       <label

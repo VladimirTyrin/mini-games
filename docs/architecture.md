@@ -24,7 +24,9 @@
 
 Every match has exactly one **authority**: the server for online games, the in-browser
 `LocalHost` (Web Worker) for games without other humans, a test harness or the arena
-elsewhere. It owns the only `CoreRng` (seeded from a CSPRNG, never sent anywhere).
+elsewhere. It owns the only `CoreRng` (seeded from a CSPRNG, never sent anywhere). A local match
+may seat bots only ("Just watch" on the setup screen): the person there watches, as a spectator
+online does (`mySlot` is `null`, the worker sends the seats' secrets the game shows to spectators).
 
 Per frame (= one tick of a real-time game, or one accepted move of a turn-based one) the
 authority:
