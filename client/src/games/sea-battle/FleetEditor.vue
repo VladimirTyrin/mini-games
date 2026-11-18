@@ -103,7 +103,7 @@ async function send(onFailure: "toast" | "quiet"): Promise<void> {
 
 <template>
   <div class="flex w-full flex-col items-center gap-3">
-    <div :style="{ width: 'min(92vw, 54vh, 440px)' }">
+    <div :style="{ width: 'min(92vw, 54dvh, 560px)' }">
       <SeaGrid label="Your fleet" :ships="ships" :tappable="tappable" :hints="hints" @tap="tap" />
     </div>
     <div class="flex flex-wrap justify-center gap-1.5" aria-label="Ships to place">

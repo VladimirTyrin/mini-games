@@ -167,10 +167,20 @@ async function fire(cell: CellPoint): Promise<void> {
   <div v-if="view" class="flex w-full flex-col items-center gap-2">
     <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">{{ status }}</p>
     <FleetEditor v-if="needsFleet" :controller="controller" :seconds-left="secondsLeft" />
-    <div v-else class="flex w-full flex-col items-center gap-3 sm:flex-row sm:items-start sm:justify-center">
-      <section class="flex flex-col gap-1" :style="{ width: 'min(92vw, 42vh, 440px)' }">
+    <!-- Stacked on a phone; side by side on a wide screen held sideways (a tablet, a desktop), where
+         both seas grow with the screen's height. The rows above the seas have one height there, so
+         the seas line up. -->
+    <div
+      v-else
+      class="flex w-full flex-col items-center gap-3 sm:landscape:flex-row sm:landscape:items-start sm:landscape:justify-center"
+    >
+      <section
+        class="flex w-[min(92vw,42dvh,560px)] flex-col gap-1 sm:landscape:w-[min(56vw,calc(100dvh-13rem),680px)]"
+      >
         <!-- A long name pushes the ships afloat onto a line of their own rather than being cut. -->
-        <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-gray-300">
+        <div
+          class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm text-gray-300 sm:landscape:min-h-7 sm:landscape:items-end"
+        >
           <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
           <span class="flex shrink-0 flex-wrap gap-1" aria-label="Ships afloat">
             <ShipPip
@@ -192,8 +202,13 @@ async function fire(cell: CellPoint): Promise<void> {
           @tap="fire"
         />
       </section>
-      <section class="flex flex-col gap-1" :style="{ width: 'min(72vw, 34vh, 360px)' }">
-        <span class="text-sm text-gray-300 [overflow-wrap:anywhere]">{{ seaLabel(homeSlot) }}</span>
+      <section
+        class="flex w-[min(72vw,34dvh,420px)] flex-col gap-1 sm:landscape:w-[min(38vw,calc(100dvh-13rem),520px)]"
+      >
+        <span
+          class="text-sm text-gray-300 [overflow-wrap:anywhere] sm:landscape:flex sm:landscape:min-h-7 sm:landscape:items-end"
+          >{{ seaLabel(homeSlot) }}</span
+        >
         <SeaGrid
           :label="seaLabel(homeSlot)"
           :marks="view.waters[homeSlot]?.marks ?? []"
