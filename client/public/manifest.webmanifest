@@ -26,9 +26,7 @@
     {
       "action": "./",
       "accept": {
-        "application/x-mgreplay": [
-          ".mgreplay"
-        ]
+        "application/x-mgreplay": [".mgreplay"]
       },
       "launch_type": "single-client"
     }
