@@ -21,14 +21,5 @@
       "sizes": "any",
       "type": "image/svg+xml"
     }
-  ],
-  "file_handlers": [
-    {
-      "action": "./",
-      "accept": {
-        "application/x-mgreplay": [".mgreplay"]
-      },
-      "launch_type": "single-client"
-    }
   ]
 }

@@ -28,7 +28,7 @@ async function boot(): Promise<void> {
   const code = links.takeFriendCodeFromAddress();
   if (code) openFriendLink(code);
   await links.onFriendLinkOpened(openFriendLink);
-  // A replay file opened with the app (Android: Open with, Share; a computer: the installed app).
+  // A replay file opened with the Android app (Open with, Share).
   const [{ onReplayFileOpened }, { useMatchStore: matchStore }, { useToastStore }] = await Promise.all([
     import("./platform/incoming-replays"),
     import("./stores/match"),

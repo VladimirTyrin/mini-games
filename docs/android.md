@@ -49,8 +49,8 @@ into `minigames-replay://open?file=NAME`, which `platform/incoming-replays.ts` r
 Filesystem plugin, at start (`getLaunchUrl`) and while running (`appUrlOpen`). A match being
 played is not dropped for it: the app says to leave it first.
 
-The installed web app on a computer (Chrome, Edge) handles `.mgreplay` the same way through the
-manifest's `file_handlers` and `launchQueue`; a browser tab and phones' web apps cannot.
+The web app does not take replay files: a browser tab cannot, and an installed one on a computer
+could (the manifest's `file_handlers`) but was left out for now.
 
 ## Signing
 
