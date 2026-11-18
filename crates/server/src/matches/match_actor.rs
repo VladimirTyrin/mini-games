@@ -70,6 +70,7 @@ pub(crate) struct MatchActor {
     bot_cpu: Arc<Semaphore>,
     /// A turn-based bot is thinking on the blocking pool; its move comes back on `bot_moves`.
     bot_thinking: bool,
+    bot_move_min: Duration,
     /// Set when the actor runs.
     bot_moves: Option<BotMoveSender>,
     /// Cancelled when the actor is gone, so a bot still thinking for an ended match stops at once
@@ -119,6 +120,7 @@ impl MatchActor {
             hub: setup.hub,
             bot_cpu: setup.bot_cpu,
             bot_thinking: false,
+            bot_move_min: setup.timing.bot_move_min,
             bot_moves: None,
             bot_cancel: CancelOnDrop::new(CancelToken::new()),
             secret_deadline: (!secret_setup.is_zero()).then(|| Instant::now() + secret_setup),
@@ -408,16 +410,23 @@ impl MatchActor {
         let bot_cpu = self.bot_cpu.clone();
         let match_id = self.match_id.clone();
         let cancel = self.bot_cancel.token().clone();
+        let earliest_move = tokio::time::Instant::now() + self.bot_move_min;
         tokio::spawn(async move {
             let permit = bot_cpu.acquire_owned().await;
             if cancel.is_cancelled() {
                 return;
             }
+            let thinking_cancel = cancel.clone();
             let decided = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                turn.think(&cancel)
+                turn.think(&thinking_cancel)
             })
             .await;
+            // A quick decision waits for the rest of the minimum, so people can follow it.
+            tokio::time::sleep_until(earliest_move).await;
+            if cancel.is_cancelled() {
+                return;
+            }
             if bot_moves.send(decided).is_err() {
                 tracing::debug!(%match_id, "match over before its bot moved");
             }

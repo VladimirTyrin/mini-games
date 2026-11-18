@@ -25,6 +25,9 @@ pub struct Timing {
     /// Games where each seat first sends a private command (Sea Battle's fleet): how long people
     /// have for it before the game chooses one for them.
     pub secret_setup: Duration,
+    /// A turn-based bot's move is played no sooner than this after its turn began, however fast
+    /// it decided: a table of bots, or a bot answering at once, would be too fast to follow.
+    pub bot_move_min: Duration,
 }
 
 impl Default for Timing {
@@ -41,6 +44,7 @@ impl Default for Timing {
             housekeeping_every: Duration::from_secs(60),
             invite_lifetime: Duration::from_secs(90),
             secret_setup: Duration::from_secs(90),
+            bot_move_min: Duration::from_millis(700),
         }
     }
 }

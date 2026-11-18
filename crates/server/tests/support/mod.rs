@@ -49,6 +49,8 @@ impl TestServer {
         let address = listener.local_addr().unwrap();
         let mut config = <Config as clap::Parser>::parse_from(["mini_games_server"]);
         config.listen = address;
+        // Bots move at once in tests; the minimum move time has its own test.
+        config.timing.bot_move_min = std::time::Duration::ZERO;
         configure(&mut config);
         let (shutdown, stopped) = oneshot::channel::<()>();
         tokio::spawn(async move {

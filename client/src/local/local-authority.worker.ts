@@ -13,6 +13,13 @@ declare const self: DedicatedWorkerGlobalScope;
 let host: LocalHost | null = null;
 let ticker: ReturnType<typeof setInterval> | null = null;
 let paused = false;
+/**
+ * A turn-based bot moves no sooner than this after its turn began, however fast it decided: a
+ * bot answering at once, or bots playing each other, would be too fast to follow. The server
+ * waits as long (`Timing::bot_move_min`).
+ */
+const BOT_MOVE_MIN_MS = 700;
+let botMove: ReturnType<typeof setTimeout> | null = null;
 
 function post(message: FromWorker, transfer: Transferable[] = []): void {
   self.postMessage(message, transfer);
@@ -28,11 +35,20 @@ function sealAndPost(): void {
   }
 }
 
+function botIsOnTurn(): boolean {
+  return host !== null && !paused && !host.isFinished() && host.isWaitingForBot();
+}
+
 function driveBots(): void {
-  while (host && !paused && !host.isFinished() && host.isWaitingForBot()) {
-    host.runBots();
+  if (botMove !== null || !botIsOnTurn()) return;
+  botMove = setTimeout(() => {
+    botMove = null;
+    // Paused or stopped meanwhile: a resume drives the bots again.
+    if (!botIsOnTurn()) return;
+    host?.runBots();
     sealAndPost();
-  }
+    driveBots();
+  }, BOT_MOVE_MIN_MS);
 }
 
 function startTicker(tickMs: number): void {
@@ -123,6 +139,7 @@ async function handle(message: ToWorker): Promise<void> {
       break;
     case "stop":
       stopTicker();
+      if (botMove !== null) clearTimeout(botMove);
       host?.free();
       host = null;
       self.close();

@@ -417,3 +417,96 @@ async fn a_player_who_left_play_pauses_nobody_when_their_connection_drops() {
     );
     handle.control(MatchControl::Stop);
 }
+
+/// A turn-based match whose bot decides at once; the actor reports when it plays the move.
+#[derive(Debug)]
+struct QuickBotAuthority {
+    played: mpsc::UnboundedSender<tokio::time::Instant>,
+    moved: bool,
+}
+
+struct QuickTurn;
+
+impl DynBotTurn for QuickTurn {
+    fn think(self: Box<Self>, _cancel: &CancelToken) -> DynBotDecision {
+        DynBotDecision::new(())
+    }
+}
+
+impl DynAuthority for QuickBotAuthority {
+    fn kind(&self) -> GameKind {
+        GameKind::ALL[0]
+    }
+    fn clock(&self) -> Clock {
+        Clock::TurnBased
+    }
+    fn submit(&mut self, _slot: Slot, _command: &proto::GameCommand) -> Result<(), SubmitError> {
+        Ok(())
+    }
+    fn drop_player(&mut self, _slot: Slot) {}
+    fn run_bots(&mut self) {}
+    fn is_waiting_for_bot(&self) -> bool {
+        !self.moved
+    }
+    fn begin_bot_turn(&mut self) -> Option<Box<dyn DynBotTurn>> {
+        (!self.moved).then(|| Box::new(QuickTurn) as _)
+    }
+    fn finish_bot_turn(&mut self, _decision: DynBotDecision) {
+        self.moved = true;
+        self.played.send(tokio::time::Instant::now()).ok();
+    }
+    fn has_pending_inputs(&self) -> bool {
+        false
+    }
+    fn seal_frame(&mut self) -> proto::TickFrame {
+        proto::TickFrame::default()
+    }
+    fn awaiting(&self) -> Awaiting {
+        Awaiting::Turn(Slot::new(0))
+    }
+    fn status(&self) -> Status {
+        Status::InProgress
+    }
+    fn next_tick(&self) -> Tick {
+        Tick::new(0)
+    }
+    fn compact_log(&self) -> &[proto::TickFrame] {
+        &[]
+    }
+}
+
+#[tokio::test]
+async fn a_bot_that_decides_at_once_still_takes_the_minimum_time_to_move() {
+    let bot_move_min = Duration::from_millis(60);
+    let (played, mut moves) = mpsc::unbounded_channel();
+    let (hub_sender, _hub_commands) = mpsc::unbounded_channel();
+    let match_id = MatchId::random();
+    let (handle, inbox) = MatchHandle::channel(match_id.clone(), Limits::MATCH_REQUEST_QUEUE);
+    let started = tokio::time::Instant::now();
+    MatchActor::new(MatchSetup {
+        lobby: LobbyId::random(),
+        match_id,
+        header: proto::MatchHeader::default(),
+        authority: Box::new(QuickBotAuthority {
+            played,
+            moved: false,
+        }),
+        participants: Vec::new(),
+        hub: HubHandle::new(hub_sender),
+        bot_cpu: Arc::new(Semaphore::new(1)),
+        timing: Timing {
+            bot_move_min,
+            ..Timing::default()
+        },
+    })
+    .spawn(inbox);
+
+    let played_at = moves.recv().await.expect("the bot moves");
+    // A lower bound only: the real clock can be late, never early.
+    assert!(
+        played_at - started >= bot_move_min,
+        "{:?}",
+        played_at - started
+    );
+    handle.control(MatchControl::Stop);
+}
