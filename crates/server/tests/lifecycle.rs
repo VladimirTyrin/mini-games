@@ -111,7 +111,7 @@ async fn a_pause_lists_only_the_seats_still_away_after_one_returns() {
 }
 
 #[tokio::test]
-async fn an_exhausted_disconnect_budget_drops_the_seat() {
+async fn an_exhausted_disconnect_budget_drops_the_seat_of_a_real_time_match() {
     let server = TestServer::start_with(|config| {
         config.timing = quick_timing();
         config.timing.disconnect_budget = Duration::from_millis(100);
@@ -119,10 +119,12 @@ async fn an_exhausted_disconnect_budget_drops_the_seat() {
     .await;
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
-    start_two_player_tictactoe(&mut host, &mut guest).await;
+    let lobby = create_lobby(&mut host, snake_settings(), 2).await;
+    join_ready(&mut guest, &lobby.lobby_id).await;
+    start(&mut host).await;
     drop(guest);
     let pause = host.expect(paused).await;
-    assert!(pause.budget_left_ms <= 100);
+    assert!(pause.budget_left_ms.is_some_and(|left| left <= 100));
     host.expect(drops_slot(1)).await;
 }
 
@@ -146,7 +148,7 @@ async fn a_lobby_seat_is_freed_when_the_resume_grace_runs_out() {
 }
 
 #[tokio::test]
-async fn a_seat_disconnected_before_the_start_pauses_the_new_match() {
+async fn a_seat_disconnected_before_the_start_is_waited_for_on_its_turn() {
     let server = TestServer::start_with(|config| config.timing = quick_timing()).await;
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
@@ -155,11 +157,42 @@ async fn a_seat_disconnected_before_the_start_pauses_the_new_match() {
     drop(guest);
     host.expect(seat_lost("Guest", true)).await;
     let match_id = start(&mut host).await.match_id;
+    // The host goes first and may; then the match waits for the guest.
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
     assert_eq!(host.expect(paused).await.slot, 1);
     expect_error(
-        host.request(place(&match_id, 0, 0)).await,
+        host.request(place(&match_id, 1, 1)).await,
         proto::ErrorCode::CommandRejected,
     );
+}
+
+#[tokio::test]
+async fn a_match_everyone_stays_away_from_ends_without_a_result() {
+    let server = TestServer::start_with(|config| {
+        config.timing = quick_timing();
+        config.timing.everyone_away_timeout = Duration::from_millis(100);
+    })
+    .await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    let mut watcher = server.guest("Watcher").await.client;
+    let lobby = create_lobby(&mut host, tictactoe_settings(3, 3), 0).await;
+    join_ready(&mut guest, &lobby.lobby_id).await;
+    expect_ok(
+        watcher
+            .request(Request::JoinLobby(proto::JoinLobby {
+                lobby_id: lobby.lobby_id.clone(),
+                as_observer: true,
+            }))
+            .await,
+    );
+    let match_id = start(&mut host).await.match_id;
+    drop(host);
+    drop(guest);
+
+    let ended = watcher.expect(match_ended).await;
+    assert_eq!(ended.match_id, match_id);
+    assert_eq!(ended.result, None);
 }
 
 #[tokio::test]

@@ -1,6 +1,6 @@
 use crate::ids::{LobbyId, MatchId};
 
-/// A match actor died without a result (panic or lost authority).
+/// A match actor ended without a result (panic, lost authority, or every player away).
 #[derive(Debug)]
 pub(crate) struct MatchAborted {
     pub lobby: LobbyId,

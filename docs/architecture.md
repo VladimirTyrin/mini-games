@@ -92,7 +92,7 @@ Actors, no shared locks:
   it, so a long search never stops another match's clock. A turn-based bot thinks on a copy of the game (`Authority::begin_bot_turn`) while the
   actor goes on answering; its move is played when it comes back, but no sooner than 700 ms
   after its turn began (`Timing::bot_move_min`; the local worker waits as long), so a table of
-  bots can be watched, unless the match moved on meanwhile (then it thinks again), handles SC2-style pauses (60 s budget per seat, drop vote after 20 s, 3 s countdown).
+  bots can be watched, unless the match moved on meanwhile (then it thinks again), handles SC2-style pauses (real-time: 60 s budget per seat, drop vote after 20 s, 3 s countdown; turn-based: waits only on the away seat's turn, without a limit, drop vote after 3 min; see protocol.md).
 
 - **Social actor** (one task): friends, friend links, push targets and invitations, kept in a
   SQLite database (`MG_DATABASE`, migrated at start by `PRAGMA user_version`; a database written

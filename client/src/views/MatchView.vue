@@ -11,7 +11,9 @@ import MatchOverlay from "@/components/MatchOverlay.vue";
 import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
+import { matchSeatNames } from "@/games/seat-names";
 import { LocalMatchSource } from "@/local/local-match-source";
+import { awaySlots } from "@/match/away-seats";
 import { hasSeenHelp } from "@/platform/help-seen";
 import { setKeepScreenOn } from "@/platform/keep-awake";
 import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
@@ -29,6 +31,24 @@ const toasts = useToastStore();
 const controller = computed(() => match.controller);
 const plugin = computed(() => pluginBySettings(controller.value?.source.header.settings?.game.case));
 const isOnline = computed(() => controller.value?.source.kind === "online");
+
+/** "Guest is away": play goes on until their turn, when the pause shows them instead. */
+const awayNotice = computed(() => {
+  const current = controller.value;
+  if (!current || current.source.kind !== "online") return null;
+  const slots = awaySlots(
+    current.source.header,
+    lobby.current?.seats ?? [],
+    new Set(current.pauses.value.map((pause) => pause.slot)),
+    current.droppedSlots.value,
+  );
+  if (slots.length === 0) return null;
+  const names = matchSeatNames(current.source.header);
+  const who = slots.map((slot) => names[slot] ?? "A player").join(", ");
+  return slots.length === 1
+    ? `${who} is away: play goes on until their turn`
+    : `${who} are away: play goes on until their turns`;
+});
 const endReason = computed(() => {
   const view = controller.value?.current.value?.view;
   return view ? (plugin.value?.describeEnd?.(view) ?? null) : null;
@@ -273,6 +293,9 @@ function again(): void {
     v-if="controller"
     class="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 p-3 xl:max-w-6xl 2xl:max-w-7xl"
   >
+    <p v-if="awayNotice" class="text-center text-xs text-gray-400">
+      <span class="mr-1 inline-block size-2 rounded-full bg-gray-500 align-middle" />{{ awayNotice }}
+    </p>
     <div class="relative flex min-h-0 flex-1 flex-col">
       <component
         :is="plugin.Board"

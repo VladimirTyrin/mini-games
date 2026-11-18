@@ -105,7 +105,15 @@ server → Ended(MatchResult, final_tick)
 client → RequestReplay(match_id)            → ReplayData(bytes)
 ```
 
-- A seated player whose connection is gone when the match starts pauses it right away.
+- Whom a match waits for when a seated player's connection is gone (also when it is already
+  gone at the start):
+  - a real-time game pauses at once. Each seat has a budget of 60 s per match (`budget_left_ms`);
+    when it is spent the seat is dropped. The others may vote to drop it after 20 s.
+  - a turn-based game goes on while that seat is not on turn (the lobby shows it as
+    `connection_lost`, and the app says the player is away). Once the turn is theirs the match
+    pauses and waits without a limit (`budget_left_ms` absent). The others may vote to drop the
+    seat after 3 min of that wait; it starts again when the player comes back and leaves again.
+  - when every human seat is away for an hour, the match ends without a result.
 - A seat that was dropped (left, voted out, budget spent) is out for good: it may still watch,
   its commands get `COMMAND_REJECTED`, and its disconnects no longer pause the match.
 - `Paused.pauses` lists every seat the match waits for and replaces the previous list (when one
@@ -114,8 +122,8 @@ client → RequestReplay(match_id)            → ReplayData(bytes)
   older clients); `resume_countdown_ms` is non-zero while the resume countdown runs. Only
   real-time games count down (3 s) when the last missing player is back; turn-based ones go on at
   once (`countdown_ms` 0).
-- `Ended` without `result` means the server aborted the match (internal error): there is no
-  replay and the lobby returns to `OPEN`.
+- `Ended` without `result` means the server aborted the match (internal error, or every player
+  stayed away): there is no replay and the lobby returns to `OPEN`.
 - Submits, catch-ups and drop votes may be answered `RATE_LIMITED` when the match is too busy
   to queue them.
 

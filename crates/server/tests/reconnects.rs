@@ -48,12 +48,10 @@ fn someone_lost(message: &proto::ServerMessage) -> Option<()> {
 }
 
 #[tokio::test]
-async fn a_bot_on_turn_moves_as_soon_as_a_turn_based_match_resumes() {
+async fn a_bot_on_turn_plays_on_while_a_player_not_on_turn_is_away() {
     let server = TestServer::start_with(|config| config.timing = quick_timing()).await;
     let mut host = server.guest("Host").await.client;
-    let guest = server.guest("Guest").await;
-    let token = guest.welcome.resume_token.clone();
-    let mut guest = guest.client;
+    let mut guest = server.guest("Guest").await.client;
     let lobby = create_lobby(&mut host, word_hunt_bot_first(), 3).await;
     expect_ok(
         host.request(Request::AddBot(proto::AddBot {
@@ -69,10 +67,6 @@ async fn a_bot_on_turn_moves_as_soon_as_a_turn_based_match_resumes() {
     drop(guest);
     host.expect(someone_lost).await;
     start(&mut host).await;
-    host.expect(paused).await;
-
-    let mut back = server.client().await;
-    back.hello_guest("Guest", &token).await.unwrap();
 
     host.expect(bot_moved).await;
 }
@@ -125,7 +119,7 @@ async fn a_device_that_was_away_cannot_take_its_session_back() {
 async fn a_player_back_after_the_match_ended_learns_the_result() {
     let server = TestServer::start_with(|config| {
         config.timing = quick_timing();
-        config.timing.drop_vote_after = Duration::ZERO;
+        config.timing.turn_drop_vote_after = Duration::ZERO;
     })
     .await;
     let mut host = server.guest("Host").await.client;
@@ -134,6 +128,7 @@ async fn a_player_back_after_the_match_ended_learns_the_result() {
     let mut guest = guest.client;
     let match_id = start_two_player_tictactoe(&mut host, &mut guest).await;
     drop(guest);
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
     host.expect(paused).await;
     expect_ok(
         host.request(Request::VoteDropPlayer(proto::VoteDropPlayer {

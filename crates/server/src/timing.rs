@@ -10,10 +10,16 @@ pub struct Timing {
     pub idle_timeout: Duration,
     /// How long a disconnected session keeps its lobby seat.
     pub resume_grace: Duration,
-    /// Per seat and match: how long the match waits for a disconnected human in total.
+    /// Real-time games, per seat and match: how long the match waits for a disconnected human
+    /// in total.
     pub disconnect_budget: Duration,
-    /// Other players may vote to drop a disconnected seat after this long.
+    /// Real-time games: other players may vote to drop a disconnected seat after this long.
     pub drop_vote_after: Duration,
+    /// Turn-based games wait for a disconnected human without a limit, and only on their turn;
+    /// the others may vote to drop the seat once one such wait has lasted this long.
+    pub turn_drop_vote_after: Duration,
+    /// A match in which every human seat is disconnected ends without a result after this long.
+    pub everyone_away_timeout: Duration,
     pub resume_countdown: Duration,
     /// Lobby list pushes are coalesced over this window.
     pub lobby_list_coalesce: Duration,
@@ -38,6 +44,8 @@ impl Default for Timing {
             resume_grace: Duration::from_secs(60),
             disconnect_budget: Duration::from_secs(60),
             drop_vote_after: Duration::from_secs(20),
+            turn_drop_vote_after: Duration::from_secs(3 * 60),
+            everyone_away_timeout: Duration::from_secs(60 * 60),
             resume_countdown: Duration::from_secs(3),
             lobby_list_coalesce: Duration::from_millis(250),
             idle_lobby_timeout: Duration::from_secs(60 * 60),

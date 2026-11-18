@@ -65,11 +65,17 @@ const showsKeyHint = !prefersTouch();
 const pauses = computed(() => props.controller.pauses.value);
 const aborted = computed(() => props.controller.aborted.value);
 const secondsUntil = (at: number) => Math.max(0, Math.ceil((at - now.value) / 1000));
-const canVoteDrop = (pause: SeatPause) =>
+/** A player still in the match, other than the one waited for, has a say on going on without them. */
+const mayVoteOn = (pause: SeatPause) =>
   props.controller.mySlot !== null &&
   !props.controller.droppedSlots.value.has(props.controller.mySlot) &&
-  props.controller.mySlot !== pause.slot &&
-  pause.dropVoteAt <= now.value;
+  props.controller.mySlot !== pause.slot;
+const canVoteDrop = (pause: SeatPause) => mayVoteOn(pause) && pause.dropVoteAt <= now.value;
+/** "2:45" */
+const minutesUntil = (at: number) => {
+  const seconds = secondsUntil(at);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+};
 const countdown = computed(() => {
   const at = props.controller.resumeAt.value;
   return at && at > now.value ? Math.ceil((at - now.value) / 1000) : null;
@@ -203,9 +209,18 @@ async function voteDrop(slot: number): Promise<void> {
       <template v-if="pauses.length > 0">
         <h2 class="text-xl font-semibold">Paused</h2>
         <div v-for="pause in pauses" :key="pause.slot" class="space-y-2">
-          <p class="text-sm text-gray-300">
+          <p v-if="pause.budgetEndsAt === null" class="text-sm text-gray-300">
+            {{ seatName(pause.slot) }} lost connection. It's their turn: waiting for them to come back.
+          </p>
+          <p v-else class="text-sm text-gray-300">
             {{ seatName(pause.slot) }} lost connection. Waiting up to
             {{ secondsUntil(pause.budgetEndsAt) }} s.
+          </p>
+          <p
+            v-if="pause.budgetEndsAt === null && mayVoteOn(pause) && !canVoteDrop(pause)"
+            class="text-xs text-gray-400"
+          >
+            You can go on without them in {{ minutesUntil(pause.dropVoteAt) }}.
           </p>
           <button
             v-if="canVoteDrop(pause)"

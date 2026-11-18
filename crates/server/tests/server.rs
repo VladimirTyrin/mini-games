@@ -237,6 +237,8 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
     let mut guest = guest.client;
     let match_id = start_two_player_tictactoe(&mut host, &mut guest).await;
     drop(guest);
+    // The host is on turn: a seat away holds back nobody until the turn is theirs.
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
 
     let paused = host
         .expect(|m| match &m.message {
@@ -245,10 +247,18 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
         })
         .await;
     assert_eq!(paused.slot, 1);
-    assert!(paused.budget_left_ms > 0);
+    assert_eq!(
+        paused.budget_left_ms, None,
+        "a turn-based match waits without a limit"
+    );
+    assert!(paused.drop_vote_in_ms > 60_000);
     expect_error(
-        host.request(place(&match_id, 0, 0)).await,
-        proto::ErrorCode::CommandRejected,
+        host.request(Request::VoteDropPlayer(proto::VoteDropPlayer {
+            match_id: match_id.clone(),
+            slot: 1,
+        }))
+        .await,
+        proto::ErrorCode::WrongPhase,
     );
 
     let mut back = server.client().await;
@@ -272,7 +282,7 @@ async fn disconnect_pauses_and_resume_token_restores_the_seat() {
         .await;
     // A turn-based game needs no countdown to get ready: play goes on at once.
     assert_eq!(resumed.countdown_ms, 0);
-    expect_ok(host.request(place(&match_id, 0, 0)).await);
+    expect_ok(back.request(place(&match_id, 1, 1)).await);
 }
 
 #[tokio::test]

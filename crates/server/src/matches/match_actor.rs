@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::Utf8Bytes;
-use mg_core::{CancelToken, Clock, OutcomeKind, Slot, Status, Tick};
+use mg_core::{Awaiting, CancelToken, Clock, OutcomeKind, Slot, Status, Tick};
 use mg_protocol::proto::server_message::Message;
 use mg_protocol::{REPLAY_FORMAT_VERSION, proto, slot_from_wire};
 use mg_registry::{DynAuthority, DynBotDecision, SubmitError};
@@ -57,7 +57,14 @@ pub(crate) struct MatchActor {
     participants: Vec<Participant>,
     /// Seats out of play (left, voted out, budget spent). They never pause the match again.
     dropped: BTreeSet<Slot>,
+    /// The waits for disconnected seats: every one of them in a real-time game, only the one on
+    /// turn in a turn-based game (see [`Self::update_waiting`]).
     budgets: DisconnectBudgets,
+    /// Since when every human seat in play is disconnected.
+    everyone_away_since: Option<Instant>,
+    everyone_away_timeout: Duration,
+    /// Everyone stayed away too long: the match ends without a result.
+    abandoned: bool,
     state: RunState,
     /// Zero in turn-based games: a pause there holds back nobody's reflexes, so play goes on at
     /// once when the last player is back.
@@ -108,10 +115,19 @@ impl MatchActor {
             authority: Some(setup.authority),
             participants: setup.participants,
             dropped: BTreeSet::new(),
-            budgets: DisconnectBudgets::new(
-                setup.timing.disconnect_budget,
-                setup.timing.drop_vote_after,
-            ),
+            // Waiting holds back everyone's reflexes in a real-time game, so it is budgeted; in a
+            // turn-based one it holds back only the next move, and the others decide by vote.
+            budgets: if clock.is_realtime() {
+                DisconnectBudgets::new(
+                    Some(setup.timing.disconnect_budget),
+                    setup.timing.drop_vote_after,
+                )
+            } else {
+                DisconnectBudgets::new(None, setup.timing.turn_drop_vote_after)
+            },
+            everyone_away_since: None,
+            everyone_away_timeout: setup.timing.everyone_away_timeout,
+            abandoned: false,
             state: RunState::Running,
             resume_countdown: if clock.is_realtime() {
                 setup.timing.resume_countdown
@@ -143,6 +159,9 @@ impl MatchActor {
                 Ok(MatchExit::Aborted) => {
                     tracing::error!(%lobby, %match_id, "match lost its authority; aborting");
                 }
+                Ok(MatchExit::Abandoned) => {
+                    tracing::info!(%lobby, %match_id, "every player stayed away; match abandoned");
+                }
                 Err(error) => {
                     tracing::error!(%lobby, %match_id, %error, "match actor failed; aborting");
                 }
@@ -157,7 +176,9 @@ impl MatchActor {
         self.broadcast(&codec::push(Message::MatchStarted(self.header.clone())));
         // Setup frame: initial randomness (first player, dealt board, spawned tiles).
         self.seal_and_broadcast();
-        self.pause_for_absent_seats();
+        // Seats whose connection is already gone when the match starts are waited for as if they
+        // had just lost it.
+        self.update_waiting();
         if self.clock == Clock::TurnBased {
             self.drive_bots();
         }
@@ -169,7 +190,7 @@ impl MatchActor {
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
         ticker.tick().await;
 
-        while !self.is_finished() {
+        while !self.is_finished() && !self.abandoned {
             let deadline = self.next_deadline();
             let ticking = self.clock.is_realtime() && self.state == RunState::Running;
             tokio::select! {
@@ -190,6 +211,9 @@ impl MatchActor {
         }
         if self.authority.is_none() {
             return MatchExit::Aborted;
+        }
+        if self.abandoned {
+            return MatchExit::Abandoned;
         }
         self.finish();
         MatchExit::Finished
@@ -538,26 +562,6 @@ impl MatchActor {
         }
     }
 
-    /// Seated humans whose connection is already gone when the match starts are treated as
-    /// detached, so the match waits for them (with their budget) instead of running without
-    /// them.
-    fn pause_for_absent_seats(&mut self) {
-        let now = Instant::now();
-        let absent: Vec<Slot> = self
-            .participants
-            .iter()
-            .filter(|p| p.outbound.is_none())
-            .filter_map(|p| p.slot)
-            .collect();
-        for slot in &absent {
-            self.budgets.disconnect(*slot, now);
-        }
-        if let Some(first) = absent.first() {
-            self.state = RunState::Paused;
-            self.broadcast_pause(*first, now);
-        }
-    }
-
     async fn attach(&mut self, session: &SessionId, outbound: Outbound) {
         let Some(participant) = self.participants.iter_mut().find(|p| &p.session == session) else {
             return;
@@ -569,11 +573,8 @@ impl MatchActor {
             Some(slot) => self.send_seat_secret(slot),
             None => self.send_spectator_secrets(session),
         }
-        if let Some(slot) = slot
-            && self.budgets.is_disconnected(slot)
-        {
-            self.budgets.reconnect(slot, Instant::now());
-            self.after_reconnect();
+        if slot.is_some() {
+            self.update_waiting();
             // A turn-based game goes on at once when the last player is back (no countdown
             // whose end would do it): a bot on turn must move now, or nobody can.
             if self.clock == Clock::TurnBased {
@@ -587,18 +588,79 @@ impl MatchActor {
             return;
         };
         participant.outbound = None;
-        let Some(slot) = participant.slot else { return };
-        let has_left_play = self
-            .authority
-            .as_ref()
-            .is_some_and(|authority| authority.has_left_play(slot));
-        if self.is_finished() || self.dropped.contains(&slot) || has_left_play {
+        if participant.slot.is_some() {
+            self.update_waiting();
+        }
+    }
+
+    /// Settles whom the match waits for, after anything that may change it (a seat lost or back,
+    /// dropped, a move passing the turn): in a real-time game every seated human who is away, in
+    /// a turn-based game only one the game itself waits on (on turn), so the others play on
+    /// meanwhile. Starts and ends those waits, and pauses or resumes the match to match.
+    fn update_waiting(&mut self) {
+        if self.is_finished() {
             return;
         }
         let now = Instant::now();
-        self.budgets.disconnect(slot, now);
-        self.state = RunState::Paused;
-        self.broadcast_pause(slot, now);
+        let in_play: Vec<&Participant> = self
+            .participants
+            .iter()
+            .filter(|p| p.slot.is_some_and(|slot| self.is_in_play(slot)))
+            .collect();
+        let away: Vec<Slot> = in_play
+            .iter()
+            .filter(|p| p.outbound.is_none())
+            .filter_map(|p| p.slot)
+            .collect();
+        let everyone_away = !away.is_empty() && away.len() == in_play.len();
+        self.everyone_away_since = everyone_away.then(|| self.everyone_away_since.unwrap_or(now));
+        let waited: BTreeSet<Slot> = away
+            .into_iter()
+            .filter(|&slot| self.waits_for(slot))
+            .collect();
+        let newly_waited: Vec<Slot> = waited
+            .iter()
+            .copied()
+            .filter(|&slot| !self.budgets.is_disconnected(slot))
+            .collect();
+        let no_longer_waited: Vec<Slot> = self
+            .budgets
+            .disconnected()
+            .filter(|slot| !waited.contains(slot))
+            .collect();
+        for &slot in &newly_waited {
+            self.budgets.disconnect(slot, now);
+        }
+        for &slot in &no_longer_waited {
+            self.budgets.reconnect(slot, now);
+        }
+        if let Some(&first) = newly_waited.first() {
+            self.state = RunState::Paused;
+            self.broadcast_pause(first, now);
+        } else if !no_longer_waited.is_empty() {
+            self.after_reconnect();
+        }
+    }
+
+    /// Not dropped and not out of the game by its own rules.
+    fn is_in_play(&self, slot: Slot) -> bool {
+        !self.dropped.contains(&slot)
+            && self
+                .authority
+                .as_ref()
+                .is_some_and(|authority| !authority.has_left_play(slot))
+    }
+
+    /// Whether play stops while `slot` is away.
+    fn waits_for(&self, slot: Slot) -> bool {
+        match self.clock {
+            Clock::Realtime { .. } => true,
+            Clock::TurnBased => match self.authority.as_ref().map(|a| a.awaiting()) {
+                Some(Awaiting::Turn(on_turn)) => on_turn == slot,
+                Some(Awaiting::Simultaneous) => true,
+                Some(Awaiting::Nobody) | None => false,
+            },
+        }
     }
 
     async fn leave(&mut self, session: &SessionId) {
@@ -644,8 +706,6 @@ impl MatchActor {
         if !self.dropped.insert(slot) {
             return;
         }
-        let was_disconnected = self.budgets.is_disconnected(slot);
-        self.budgets.forget(slot, Instant::now());
         if let Some(authority) = self.authority.as_mut() {
             authority.drop_player(slot);
         }
@@ -655,9 +715,7 @@ impl MatchActor {
         if self.clock == Clock::TurnBased || self.is_finished() {
             self.seal_and_broadcast();
         }
-        if was_disconnected {
-            self.after_reconnect();
-        }
+        self.update_waiting();
         if self.clock == Clock::TurnBased {
             self.drive_bots();
         }
@@ -689,11 +747,25 @@ impl MatchActor {
             RunState::Paused => self.budgets.next_exhaustion(Instant::now()),
             RunState::Running => None,
         };
-        run_state.into_iter().chain(self.secret_deadline).min()
+        let everyone_away_until = self
+            .everyone_away_since
+            .map(|since| since + self.everyone_away_timeout);
+        run_state
+            .into_iter()
+            .chain(self.secret_deadline)
+            .chain(everyone_away_until)
+            .min()
     }
 
     async fn on_deadline(&mut self) {
         let now = Instant::now();
+        if self
+            .everyone_away_since
+            .is_some_and(|since| since + self.everyone_away_timeout <= now)
+        {
+            self.abandoned = true;
+            return;
+        }
         if self.secret_deadline.is_some_and(|deadline| deadline <= now) {
             self.secret_deadline = None;
             self.settle_late_secrets();
@@ -736,6 +808,10 @@ impl MatchActor {
         self.broadcast(&codec::push(Message::Frame(frame)));
         // Sealing settles the bots' private commands (their fleets).
         self.sync_spectator_secrets();
+        // The turn may have passed to someone away, or from them.
+        if self.clock == Clock::TurnBased {
+            self.update_waiting();
+        }
     }
 
     fn broadcast(&self, message: &proto::ServerMessage) {
@@ -765,7 +841,7 @@ impl MatchActor {
     fn pause_info(&self, slot: Slot, now: Instant) -> proto::MatchPause {
         proto::MatchPause {
             slot: u32::from(slot.get()),
-            budget_left_ms: millis(self.budgets.budget_left(slot, now)),
+            budget_left_ms: self.budgets.budget_left(slot, now).map(millis),
             drop_vote_in_ms: millis(self.budgets.drop_vote_in(slot, now)),
         }
     }

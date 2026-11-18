@@ -669,8 +669,8 @@ async fn people_out_of_time_get_a_random_fleet_and_the_battle_starts() {
     .await;
 }
 
-/// The time to place runs on while the match waits for someone who lost the connection: they
-/// get a random fleet like anyone, and see it once back.
+/// The time to place runs on for someone who lost the connection (nobody waits for them while
+/// fleets are placed): they get a random fleet like anyone, and see it once back.
 #[tokio::test(start_paused = true)]
 async fn a_seat_away_when_time_runs_out_gets_a_random_fleet_and_sees_it_when_back() {
     let hub = start_hub_with(Timing {
@@ -688,12 +688,7 @@ async fn a_seat_away_when_time_runs_out_gets_a_random_fleet_and_sees_it_when_bac
         session: player.session.clone(),
         connection: player.id,
     });
-    host.expect(|message| match &message.message {
-        Some(Reply::Paused(_)) => Some(()),
-        _ => None,
-    })
-    .await;
-    // A fleet needs nobody else: it is taken while the match waits for the other seat.
+    // A fleet needs nobody else: it is taken while the other seat is away.
     assert!(matches!(
         host.request(place_fleet(&match_id)).await,
         Reply::Ack(_)

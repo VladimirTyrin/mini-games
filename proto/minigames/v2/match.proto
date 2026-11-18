@@ -97,8 +97,9 @@ message RequestCatchUp {
 // Game frozen while a human seat is disconnected.
 message MatchPause {
   uint32 slot = 1;
-  // Remaining disconnect budget of that seat for this match.
-  uint32 budget_left_ms = 2;
+  // Remaining disconnect budget of that seat for this match. Absent when the match waits without
+  // a limit (turn-based games): only the others' vote ends the wait.
+  optional uint32 budget_left_ms = 2;
   // Other players may vote to drop the seat after this many milliseconds (0 = already allowed).
   uint32 drop_vote_in_ms = 3;
 }

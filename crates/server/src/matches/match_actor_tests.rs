@@ -349,8 +349,9 @@ impl DynAuthority for OneSeatGaveUpAuthority {
     fn seal_frame(&mut self) -> proto::TickFrame {
         proto::TickFrame::default()
     }
+    /// Seat 1, so losing it pauses the match; the seat that gave up is never on turn.
     fn awaiting(&self) -> Awaiting {
-        Awaiting::Turn(Slot::new(0))
+        Awaiting::Turn(Slot::new(1))
     }
     fn status(&self) -> Status {
         Status::InProgress

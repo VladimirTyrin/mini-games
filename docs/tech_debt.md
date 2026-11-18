@@ -38,7 +38,8 @@ catch-up.
 ## Pause in online real-time games
 
 **Now.** A local real-time match (against bots) can be paused; an online one pauses only when a
-seated player disconnects (budget per seat, drop vote; see [protocol.md](protocol.md)).
+seated player disconnects (a turn-based one only on that player's turn; see
+[protocol.md](protocol.md)).
 
 **Wanted.** A player pausing an online real-time match on purpose.
 

@@ -7,4 +7,6 @@ pub(crate) enum MatchExit {
     Stopped,
     /// The authority was lost (a bot task panicked): there is no result.
     Aborted,
+    /// Every human stayed away too long: there is no result.
+    Abandoned,
 }
