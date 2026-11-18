@@ -51,8 +51,8 @@ watch(
   <section class="flex min-h-0 flex-col rounded-xl bg-panel">
     <ol
       ref="list"
-      class="min-h-24 flex-1 space-y-1 overflow-y-auto p-3 text-sm"
-      :class="growsToFill ? '' : 'max-h-56'"
+      class="flex-1 space-y-1 overflow-y-auto p-3 text-sm"
+      :class="growsToFill ? 'min-h-10' : 'max-h-56 min-h-24'"
     >
       <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
         <Avatar

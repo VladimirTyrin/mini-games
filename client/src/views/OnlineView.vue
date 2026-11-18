@@ -178,13 +178,14 @@ const phaseLabel: Record<number, string> = {
               </button>
             </template>
           </li>
-          <li v-if="!lobby.lobbies.length" class="rounded-xl bg-panel p-6 text-center text-gray-400">
+          <li v-if="!lobby.lobbies.length" class="rounded-xl bg-panel p-4 text-center text-gray-400">
             No lobbies yet — create one!
           </li>
         </ul>
-        <!-- The chat takes what the screen has left, at least a few lines. -->
+        <!-- The chat takes what the screen has left, down to the input and a couple of lines: a
+             phone's system bars and the Friends row must not make the screen scroll. -->
         <ChatPanel
-          class="order-2 min-h-36 flex-1 lg:order-none"
+          class="order-2 min-h-24 flex-1 lg:order-none"
           grows-to-fill
           :messages="lobby.lobbyListChat"
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
