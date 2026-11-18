@@ -255,13 +255,20 @@ const phaseLabel: Record<number, string> = {
             @validity="problem = $event"
           />
         </div>
-        <button
-          class="h-12 w-full rounded-xl bg-emerald-600 font-semibold hover:bg-emerald-500 disabled:opacity-50"
-          :disabled="!!problem"
-          @click="create"
+        <!-- Pinned to the bottom of the screen while the settings run past it, as Play is on a
+             game's setup screen: Create must not need a scroll. The fade shows more beneath. -->
+        <div
+          class="sticky z-10 -mx-3 -mb-3 rounded-b-2xl bg-linear-to-t from-panel from-70% to-transparent px-3 pt-3 pb-3 sm:-mx-4 sm:-mb-4 sm:px-4 sm:pb-4"
+          style="bottom: env(safe-area-inset-bottom)"
         >
-          Create lobby
-        </button>
+          <button
+            class="h-12 w-full rounded-xl bg-emerald-600 font-semibold shadow-lg shadow-black/40 hover:bg-emerald-500 disabled:opacity-50"
+            :disabled="!!problem"
+            @click="create"
+          >
+            Create lobby
+          </button>
+        </div>
       </section>
     </div>
   </main>
