@@ -69,35 +69,15 @@ function remove(index: number): void {
         <span v-if="!bots.length" class="rounded-full bg-sky-500/20 px-2 py-0.5 font-medium text-sky-200">
           Solo
         </span>
-        <span
-          v-else-if="watching"
-          class="rounded-full bg-violet-500/20 px-2 py-0.5 font-medium text-violet-200"
-        >
-          Bots only
-        </span>
         <span class="tabular-nums text-gray-400">{{ players }} / {{ maxPlayers }} players</span>
       </div>
     </header>
-    <div class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 pr-1.5 pl-3">
-      <Avatar
-        :url="me.avatarUrl"
-        :name="me.name"
-        :player-id="me.playerId || undefined"
-        :class="watching ? 'opacity-50' : ''"
-      />
-      <span class="min-w-0 flex-1 truncate" :class="watching ? 'text-gray-400' : ''">
-        {{ me.name }}
-        <span class="text-sm text-gray-400">{{ watching ? "(you, watching)" : "(you)" }}</span>
+    <!-- As in a lobby: a spectator holds no seat in the list, and is named under it. -->
+    <div v-if="!watching" class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 px-3">
+      <Avatar :url="me.avatarUrl" :name="me.name" :player-id="me.playerId || undefined" />
+      <span class="min-w-0 flex-1 truncate">
+        {{ me.name }} <span class="text-sm text-gray-400">(you)</span>
       </span>
-      <button
-        v-if="available.length"
-        type="button"
-        class="min-h-9 shrink-0 rounded-lg px-3 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
-        :aria-pressed="watching"
-        @click="toggleWatching"
-      >
-        {{ watching ? "Join" : "Just watch" }}
-      </button>
     </div>
     <div v-for="(bot, index) in bots" :key="index" class="flex items-center gap-2">
       <label
@@ -143,6 +123,17 @@ function remove(index: number): void {
       @click="add"
     >
       + Add opponent
+    </button>
+    <p v-if="watching" class="pt-1 text-xs text-gray-400">
+      Watching: {{ me.name }} <span class="text-sky-300">(you)</span>
+    </p>
+    <button
+      v-if="available.length"
+      type="button"
+      class="min-h-10 rounded bg-panel-raised px-4 py-2 text-sm whitespace-nowrap"
+      @click="toggleWatching"
+    >
+      {{ watching ? "Take a seat" : "Watch instead" }}
     </button>
   </section>
 </template>

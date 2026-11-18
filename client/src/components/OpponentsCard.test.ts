@@ -29,16 +29,17 @@ describe("OpponentsCard", () => {
 
     await wrapper
       .findAll("button")
-      .find((button) => button.text() === "Just watch")
+      .find((button) => button.text() === "Watch instead")
       ?.trigger("click");
     await flushPromises();
 
     expect(wrapper.props("watching")).toBe(true);
     expect(wrapper.props("modelValue")).toHaveLength(2);
     expect(wrapper.text()).toContain("2 / 4 players");
+    expect(wrapper.text()).toContain("Watching:");
     await wrapper
       .findAll("button")
-      .find((button) => button.text() === "Join")
+      .find((button) => button.text() === "Take a seat")
       ?.trigger("click");
     await flushPromises();
     expect(wrapper.props("watching")).toBe(false);
