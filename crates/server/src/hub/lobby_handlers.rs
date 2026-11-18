@@ -677,6 +677,12 @@ impl Hub {
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
             return;
         };
+        // A table of bots has nobody to vote: its host, watching, starts the next match.
+        let may_vote = lobby
+            .seats
+            .iter()
+            .any(|seat| seat.session() == Some(session))
+            || (lobby.seated_humans().next().is_none() && &lobby.host == session);
         let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase else {
             return self.reject(
                 session,
@@ -685,11 +691,7 @@ impl Hub {
                 "no finished match to replay",
             );
         };
-        if lobby
-            .seats
-            .iter()
-            .all(|seat| seat.session() != Some(session))
-        {
+        if !may_vote {
             return self.reject(
                 session,
                 request_id,

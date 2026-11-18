@@ -80,7 +80,8 @@ REPLAY (shared replay)`.
 - `LobbyList` pushes to clients outside lobbies are coalesced (up to 250 ms) and sent only
   when a summary changed (seats, observers, phase, settings, name, host).
 - `POST_MATCH` carries `last_match_id`, `last_result` and `play_again_votes`. When every seated
-  human voted the next match starts; if it cannot (e.g. too few players), members get an
+  human voted the next match starts; at a table of bots only, the host (watching) votes alone
+  and starts it. If it cannot (e.g. too few players), members get an
   `ERROR_CODE_INVALID_SETTINGS` push and the votes are cleared. Any change to who sits or to
   the settings (a player leaves, steps aside to watch or joins, a bot is added, the host edits
   the settings) clears the votes too: the next match would not be the one voted for (a Word Hunt

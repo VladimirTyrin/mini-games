@@ -7,7 +7,9 @@ import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
 import type { SeatPause } from "@/match/seat-pause";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
-import { seatLabels } from "@/util/players";
+import { useConnectionStore } from "@/stores/connection";
+import { useLobbyStore } from "@/stores/lobby";
+import { sameIdentity, seatLabels } from "@/util/players";
 
 const props = defineProps<{
   controller: MatchController;
@@ -74,11 +76,22 @@ const countdown = computed(() => {
 const result = computed(() => props.controller.result.value);
 const ended = computed(() => props.controller.ended.value && revealed.value);
 const mySlot = computed(() => props.controller.mySlot);
+const lobby = useLobbyStore();
+const connection = useConnectionStore();
+/** A table of bots online, watched by its lobby's host: the server takes the host's vote then. */
+const hostsBotsOnlyMatch = computed(
+  () =>
+    props.controller.source.kind === "online" &&
+    props.controller.source.header.seats.every((seat) => seat.botKind !== undefined) &&
+    sameIdentity(lobby.current?.host, connection.identity),
+);
 /**
- * A replay can always be watched again. A match is played again only by its players (observers
- * have no seat to vote with) and only after a real end: an aborted one left nothing to repeat.
+ * A replay can always be watched again. A match is played again by its players, or by the host
+ * watching a table of bots, and only after a real end: an aborted one left nothing to repeat.
  */
-const canPlayAgain = computed(() => isReplay || (mySlot.value !== null && !aborted.value));
+const canPlayAgain = computed(
+  () => isReplay || ((mySlot.value !== null || hostsBotsOnlyMatch.value) && !aborted.value),
+);
 
 const headline = computed(() => {
   const outcome = result.value;

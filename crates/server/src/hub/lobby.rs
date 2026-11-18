@@ -72,13 +72,17 @@ impl Lobby {
         }
     }
 
-    /// Every seated human voted to play again (and at least one is seated).
+    /// Every seated human voted to play again; with bots only, the host did.
     pub(super) fn everyone_voted_to_play_again(&self) -> bool {
         let LobbyPhase::PostMatch { play_again_votes } = &self.phase else {
             return false;
         };
         let mut humans = self.seated_humans().peekable();
-        humans.peek().is_some() && humans.all(|human| play_again_votes.contains(human))
+        if humans.peek().is_none() {
+            // Bots only: the host's vote is the one there is.
+            return play_again_votes.contains(&self.host);
+        }
+        humans.all(|human| play_again_votes.contains(human))
     }
 
     pub(super) fn reset_ready(&mut self) {

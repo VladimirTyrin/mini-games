@@ -1,8 +1,14 @@
+import { create } from "@bufbuild/protobuf";
 import { mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shallowRef } from "vue";
 
 import type { MatchController } from "@/match/match-controller";
+import { IdentityKind, IdentitySchema } from "@/proto/minigames/v2/identity_pb";
+import { LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
+import { useConnectionStore } from "@/stores/connection";
+import { useLobbyStore } from "@/stores/lobby";
 
 import MatchOverlay from "./MatchOverlay.vue";
 
@@ -34,7 +40,32 @@ function playAgainRequests(game: string, key: string): number {
   return requests;
 }
 
+const buttons = (controller: MatchController) => {
+  const wrapper = mount(MatchOverlay, { props: { controller } });
+  const texts = wrapper.findAll("button").map((button) => button.text());
+  wrapper.unmount();
+  return texts;
+};
+
 describe("MatchOverlay", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("offers Play again to the lobby's host watching a table of bots", () => {
+    const host = create(IdentitySchema, { kind: IdentityKind.GUEST, id: "host", displayName: "Host" });
+    useConnectionStore().identity = host;
+    useLobbyStore().current = create(LobbyStateSchema, { lobbyId: "lobby", host });
+    const botsOnly = {
+      kind: "online",
+      header: { settings: { game: { case: "snake" } }, seats: [{ botKind: {} }, { botKind: {} }] },
+    };
+
+    expect(
+      buttons(endedMatch("snake", { mySlot: null, source: botsOnly })).some((text) =>
+        text.startsWith("Play again"),
+      ),
+    ).toBe(true);
+  });
+
   it("starts the next match with Enter or Space", () => {
     expect(playAgainRequests("puzzle2048", "Enter")).toBe(1);
     expect(playAgainRequests("puzzle2048", " ")).toBe(1);
@@ -46,13 +77,6 @@ describe("MatchOverlay", () => {
   });
 
   it("offers Play again neither to an observer nor after an aborted match", () => {
-    const buttons = (controller: MatchController) => {
-      const wrapper = mount(MatchOverlay, { props: { controller } });
-      const texts = wrapper.findAll("button").map((button) => button.text());
-      wrapper.unmount();
-      return texts;
-    };
-
     expect(buttons(endedMatch("tictactoe")).some((text) => text.startsWith("Play again"))).toBe(true);
     expect(
       buttons(endedMatch("tictactoe", { mySlot: null })).some((text) => text.startsWith("Play again")),

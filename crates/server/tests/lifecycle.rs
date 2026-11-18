@@ -827,3 +827,36 @@ async fn spectators_of_sea_battle_see_both_fleets_while_it_is_played() {
     }
     assert_eq!(fleets_seen.into_iter().collect::<Vec<_>>(), [0, 1]);
 }
+
+#[tokio::test]
+async fn the_host_watching_a_table_of_bots_starts_the_next_match() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    create_lobby(&mut host, tictactoe_settings(3, 3), 2).await;
+    expect_ok(
+        host.request(Request::SwitchToObserver(proto::SwitchToObserver {}))
+            .await,
+    );
+    for _ in 0..2 {
+        expect_ok(
+            host.request(Request::AddBot(proto::AddBot {
+                bot_kind: Some(proto::BotKind {
+                    game: Some(proto::bot_kind::Game::Tictactoe(
+                        proto::TicTacToeBotKind::Minimax as i32,
+                    )),
+                }),
+            }))
+            .await,
+        );
+    }
+    let first = start(&mut host).await;
+    host.expect(post_match).await;
+
+    expect_ok(
+        host.request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+            .await,
+    );
+
+    let next = host.expect(match_started).await;
+    assert_ne!(next.match_id, first.match_id);
+}
