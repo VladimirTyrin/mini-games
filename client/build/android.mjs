@@ -1,6 +1,8 @@
 // Builds the Android app: the web bundle in its Android flavour, `cap sync`, then Gradle.
 //   node build/android.mjs sync              web bundle + cap sync only
 //   node build/android.mjs apk [debug|release]
+//   node build/android.mjs bundle            only the over-the-air bundle (web-<build>.zip and
+//                                            web.json in android/dist), for deploy.sh --web-only
 // Signing comes from ../.keys/<variant>-signing.properties locally or from MG_ANDROID_* env vars
 // in CI (see android/app/build.gradle). A release build also writes to android/dist/ what
 // deploy.sh publishes for the app's update check (docs/android.md, "Updates"):
@@ -18,8 +20,8 @@ import { nativeFingerprint } from "./native-fingerprint.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [command = "apk", variant = "release"] = process.argv.slice(2);
-if (!["sync", "apk"].includes(command) || !["debug", "release"].includes(variant)) {
-  console.error("usage: node build/android.mjs sync | apk [debug|release]");
+if (!["sync", "apk", "bundle"].includes(command) || !["debug", "release"].includes(variant)) {
+  console.error("usage: node build/android.mjs sync | apk [debug|release] | bundle");
   process.exit(2);
 }
 
@@ -90,9 +92,19 @@ const env = {
 node("build/generate-proto.mjs", [], { cwd: root });
 node("build/build-wasm.mjs", [], { cwd: root });
 node("node_modules/vite/bin/vite.js", ["build"], { cwd: root, env });
+const android = resolve(root, "android");
+const dist = resolve(android, "dist");
+const cargo = readFileSync(resolve(root, "../Cargo.toml"), "utf-8");
+const version = /\[workspace\.package\][^[]*?version\s*=\s*"([^"]+)"/s.exec(cargo)?.[1] ?? "0.0.0";
+const versionName = `${version} (${build})`;
+if (command === "bundle") {
+  // Installed apps keep their shell: only the bundle goes out, naming the shell it needs.
+  mkdirSync(dist, { recursive: true });
+  writeWebBundle(dist, build, versionName, fingerprint);
+  process.exit(0);
+}
 node("node_modules/@capacitor/cli/bin/capacitor", ["sync", "android"], { cwd: root });
 if (command === "apk") {
-  const android = resolve(root, "android");
   const task = variant === "release" ? "assembleRelease" : "assembleDebug";
   if (process.platform === "win32") {
     run("cmd.exe", ["/d", "/c", resolve(android, "gradlew.bat"), task, "--no-daemon"], { cwd: android, env });
@@ -100,15 +112,11 @@ if (command === "apk") {
     run("./gradlew", [task, "--no-daemon"], { cwd: android, env });
   }
   if (variant === "release") {
-    const cargo = readFileSync(resolve(root, "../Cargo.toml"), "utf-8");
-    const version = /\[workspace\.package\][^[]*?version\s*=\s*"([^"]+)"/s.exec(cargo)?.[1] ?? "0.0.0";
-    const dist = resolve(android, "dist");
     mkdirSync(dist, { recursive: true });
     copyFileSync(
       resolve(android, "app/build/outputs/apk/release/app-release.apk"),
       resolve(dist, "mini-games.apk"),
     );
-    const versionName = `${version} (${build})`;
     writeFileSync(
       resolve(dist, "android.json"),
       `${JSON.stringify({ build, versionName, apk: "mini-games.apk" }, null, 2)}\n`,

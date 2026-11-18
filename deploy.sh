@@ -2,6 +2,7 @@
 # Deploys the server + web client to a Linux host over SSH.
 #
 #   ./deploy.sh                                   # production: server, web, APK and OTA bundle
+#   ./deploy.sh --web-only                        # the site and the app's OTA bundle, ~30 s
 #   ./deploy.sh --no-apk                          # server and web only
 #   ./deploy.sh --host root@1.2.3.4 --mode http   # any host by IP, no TLS
 #
@@ -14,6 +15,11 @@
 #   --domain D      domain for tls / server_name (default braintvsminigames.xyz)
 #   --email E       ACME account email for tls (default admin@<domain>)
 #   --no-apk        do not build or publish the Android app
+#   --web-only      only the web client: the site and the over-the-air bundle for the app. No
+#                   server build or restart (running matches go on), no APK. Refused when
+#                   anything the server runs (crates, proto, Cargo files, deploy/) changed since
+#                   the build the host serves, or when the app's native shell changed: those
+#                   need the whole deploy
 #   --apk FILE      publish this prebuilt APK instead of building one, with what
 #                   build/android.mjs put next to it for the app's update check: android.json,
 #                   and web.json + web-<build>.zip (over-the-air web bundle; 3 newest kept)
@@ -49,6 +55,7 @@ APK=""
 BUILD_APK=true
 ALLOW_VERSION_MISMATCH=false
 DRAIN_SECONDS=180
+WEB_ONLY=false
 
 die() { echo "error: $*" >&2; exit 1; }
 # The "build" number of a JSON document on stdin (android.json, web.json, version.json).
@@ -67,7 +74,8 @@ while [[ $# -gt 0 ]]; do
         --no-apk) BUILD_APK=false; shift ;;
         --drain-seconds) DRAIN_SECONDS="$2"; shift 2 ;;
         --no-drain) DRAIN_SECONDS=0; shift ;;
-        -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+        --web-only) WEB_ONLY=true; BUILD_APK=false; shift ;;
+        -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -87,6 +95,10 @@ if [[ "$MODE" == "tls" ]]; then
     EMAIL="${EMAIL:-admin@${DOMAIN}}"
 fi
 if [[ "$MODE" == "http" ]]; then SERVER_NAME="_"; else SERVER_NAME="$DOMAIN"; fi
+if [[ "$MODE" == "tls" ]]; then PUBLIC_URL="https://${DOMAIN}"; else PUBLIC_URL="http://${HOST#*@}"; fi
+if [[ "$WEB_ONLY" == true ]]; then
+    [[ -z "$APK" && "$SKIP_BUILD" == false && "$ALLOW_VERSION_MISMATCH" == false ]]         || die "--web-only builds and publishes the web client alone: no --apk, --skip-build or --allow-version-mismatch"
+fi
 
 BUILD="$(git -C "$SCRIPT_DIR" rev-list --count HEAD)" || die "cannot count commits for the build number"
 COMMIT="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
@@ -94,6 +106,26 @@ BUILD_BINARY="${SCRIPT_DIR}/target/${TARGET}/release/${BINARY_NAME}"
 WEB_DIST="${SCRIPT_DIR}/client/dist"
 echo "==> Build ${BUILD} (commit ${COMMIT})"
 [[ -z "$(git -C "$SCRIPT_DIR" status --porcelain)" ]]     || echo "warning: uncommitted changes are deployed as build ${BUILD} (${COMMIT})" >&2
+
+# The web client plays by the same rules as the server (the WASM core, the protocol): it may go
+# out alone only while nothing the server runs differs from the build the host serves.
+if [[ "$WEB_ONLY" == true ]]; then
+    SERVED_SERVER="$(curl -fsS "${PUBLIC_URL}/version")" || die "cannot read the server's build at ${PUBLIC_URL}/version"
+    SERVER_BUILD="${SERVED_SERVER##*+}"
+    [[ "$SERVER_BUILD" =~ ^[0-9]+$ ]] || die "the server reports no build number (${SERVED_SERVER}): run ./deploy.sh"
+    SERVER_COMMIT=""
+    while read -r commit; do
+        count="$(git -C "$SCRIPT_DIR" rev-list --count "$commit")"
+        if (( count == SERVER_BUILD )); then SERVER_COMMIT="$commit"; break; fi
+        (( count < SERVER_BUILD )) && break
+    done < <(git -C "$SCRIPT_DIR" rev-list --first-parent HEAD)
+    [[ -n "$SERVER_COMMIT" ]]         || die "the server runs build ${SERVER_BUILD}, which is not an earlier build of this branch: run ./deploy.sh"
+    # Against the working tree, so uncommitted changes count too.
+    SERVER_SIDE_CHANGES="$(git -C "$SCRIPT_DIR" diff --name-only "$SERVER_COMMIT" -- crates proto Cargo.toml Cargo.lock deploy deploy.sh)"
+    [[ -z "$SERVER_SIDE_CHANGES" ]]         || die "changed since the server's build ${SERVER_BUILD}, so the server must go out too (run ./deploy.sh): $(echo "$SERVER_SIDE_CHANGES" | head -n 5 | tr '
+' ' ')"
+    echo "==> Web only: the server stays build ${SERVER_BUILD} ($(git -C "$SCRIPT_DIR" rev-parse --short "$SERVER_COMMIT")), nothing it runs changed since"
+fi
 
 if [[ "$BUILD_APK" == true ]]; then
     # First: it builds the web bundle for the app into client/dist, which the web build replaces.
@@ -120,23 +152,41 @@ if [[ -n "$APK" ]]; then
     done
 fi
 
+if [[ "$WEB_ONLY" == true ]]; then
+    # First, like the APK: its web build goes to client/dist, which the site's build replaces.
+    echo "==> Building the app's over-the-air web bundle"
+    (
+        cd "${SCRIPT_DIR}/client"
+        [[ -d node_modules ]] || npm ci
+        MG_BUILD_NUMBER="$BUILD" MG_COMMIT="$COMMIT" npm run android:bundle
+    )
+    APK_DIR="${SCRIPT_DIR}/client/android/dist"
+    # Apps install a bundle only into the shell it names; a changed shell needs a new APK.
+    BUNDLE_SHELL="$(grep -o '"nativeFingerprint": *"[^"]*"' "${APK_DIR}/web.json" | grep -o '"[^"]*"$' || true)"
+    PUBLISHED_SHELL="$(curl -fsS "${PUBLIC_URL}/downloads/web.json" | grep -o '"nativeFingerprint": *"[^"]*"' | grep -o '"[^"]*"$' || true)"
+    [[ -n "$BUNDLE_SHELL" && "$BUNDLE_SHELL" == "$PUBLISHED_SHELL" ]]         || die "the Android app's native shell changed (${PUBLISHED_SHELL:-none published} -> ${BUNDLE_SHELL:-?}): run ./deploy.sh to publish a new APK"
+fi
+
 if [[ "$SKIP_BUILD" == false ]]; then
     echo "==> Building web client"
     (
         cd "${SCRIPT_DIR}/client"
         [[ -d node_modules ]] || npm ci
-        # The WASM core and protocol code are generated, not in git: build them from this commit.
-        npm run generate
+        # The WASM core and protocol code are generated, not in git: build them from this commit
+        # (the over-the-air bundle just did).
+        [[ "$WEB_ONLY" == true ]] || npm run generate
         # No VITE_SERVER_URL: the page served by this host talks to the same host (/ws).
         MG_BUILD_NUMBER="$BUILD" MG_COMMIT="$COMMIT" npm run build
     )
-    echo "==> Building server (${TARGET})"
-    rustup target list --installed | grep -qx "${TARGET}" || rustup target add "${TARGET}"
-    # zig provides the musl C toolchain that ring (TLS for Google key fetches) needs.
-    MG_BUILD_NUMBER="$BUILD" cargo zigbuild --release --target "${TARGET}" -p mg-server
+    if [[ "$WEB_ONLY" == false ]]; then
+        echo "==> Building server (${TARGET})"
+        rustup target list --installed | grep -qx "${TARGET}" || rustup target add "${TARGET}"
+        # zig provides the musl C toolchain that ring (TLS for Google key fetches) needs.
+        MG_BUILD_NUMBER="$BUILD" cargo zigbuild --release --target "${TARGET}" -p mg-server
+    fi
 fi
 
-[[ -f "$BUILD_BINARY" ]] || die "binary not found: $BUILD_BINARY"
+[[ "$WEB_ONLY" == true || -f "$BUILD_BINARY" ]] || die "binary not found: $BUILD_BINARY"
 [[ -f "$WEB_DIST/index.html" ]] || die "web build not found: $WEB_DIST"
 WEB_BUILD="$(json_build < "$WEB_DIST/version.json" 2>/dev/null || true)"
 [[ "$WEB_BUILD" == "$BUILD" ]] \
@@ -171,9 +221,51 @@ if (( ${#FCM_ACCOUNTS[@]} == 1 )); then
     unset FCM_ACCOUNT_BASE64
 fi
 
+# The over-the-air web bundle: the zip first, web.json (which names it) last. Older zips stay for
+# apps that read the previous web.json moments ago; the 3 newest are kept.
+publish_web_bundle() {
+    local WEB_INFO="${APK_DIR}/web.json" WEB_ZIP
+    [[ -f "$WEB_INFO" ]] || return 0
+    WEB_ZIP="$(sed -n 's/^ *"zip": *"\(web-[0-9]*\.zip\)".*/\1/p' "$WEB_INFO")"
+    [[ -n "$WEB_ZIP" && -f "${APK_DIR}/${WEB_ZIP}" ]] || die "web.json names no zip next to it: $WEB_INFO"
+    scp -q "${APK_DIR}/${WEB_ZIP}" "${HOST}:${REMOTE_DIR}/downloads/${WEB_ZIP}.new"
+    ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/${WEB_ZIP}.new && mv ${REMOTE_DIR}/downloads/${WEB_ZIP}.new ${REMOTE_DIR}/downloads/${WEB_ZIP}"
+    scp -q "$WEB_INFO" "${HOST}:${REMOTE_DIR}/downloads/web.json.new"
+    ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/web.json.new && mv ${REMOTE_DIR}/downloads/web.json.new ${REMOTE_DIR}/downloads/web.json"
+    ssh "$HOST" "cd ${REMOTE_DIR}/downloads && ls -1 web-*.zip | sort -t- -k2 -n | head -n -3 | xargs -r rm -f --"
+}
+
+MISMATCHES=()
+check_build() { # name, served build, expected build
+    if [[ "$2" == "$3" ]]; then echo "    ok  $1: build $2"; else MISMATCHES+=("$1 is build ${2:-?}, expected $3"); fi
+}
+fail_on_mismatches() {
+    if (( ${#MISMATCHES[@]} )); then
+        printf 'error: %s
+' "${MISMATCHES[@]}" >&2
+        die "${HOST} does not serve one build: see above"
+    fi
+}
+
 echo "==> Uploading to ${HOST}"
 ssh "$HOST" "mkdir -p ${REMOTE_DIR}/web.new ${REMOTE_DIR}/downloads /var/www/certbot && rm -rf ${REMOTE_DIR}/web.new/*"
 tar -C "$WEB_DIST" -czf - . | ssh "$HOST" "tar --no-same-owner -xzf - -C ${REMOTE_DIR}/web.new"
+
+if [[ "$WEB_ONLY" == true ]]; then
+    publish_web_bundle
+    # nginx serves web/ from disk: swapping the directory is the whole release. The server and
+    # its matches are not touched.
+    echo "==> Switching the site to build ${BUILD}"
+    ssh "$HOST" "cd ${REMOTE_DIR} && rm -rf web.old && if [ -d web ]; then mv web web.old; fi && mv web.new web && chmod -R a+rX web && rm -rf web.old"
+    echo "==> Checking what ${HOST} serves"
+    check_build "web ${PUBLIC_URL}/version.json" "$(curl -fsS "${PUBLIC_URL}/version.json" | json_build)" "$BUILD"
+    check_build "${PUBLIC_URL}/downloads/web.json" "$(curl -fsS "${PUBLIC_URL}/downloads/web.json" | json_build)" "$BUILD"
+    SERVED_SERVER="$(curl -fsS "${PUBLIC_URL}/version" || true)"
+    check_build "server ${PUBLIC_URL}/version, unchanged" "${SERVED_SERVER##*+}" "$SERVER_BUILD"
+    fail_on_mismatches
+    echo "==> Deployed the web client, build ${BUILD} (${COMMIT}), to ${HOST}; the server stays build ${SERVER_BUILD}"
+    exit 0
+fi
 scp -q "$BUILD_BINARY" "${HOST}:${REMOTE_DIR}/${BINARY_NAME}.new"
 if [[ -n "$APK" ]]; then
     scp -q "$APK" "${HOST}:${REMOTE_DIR}/downloads/mini-games.apk.new"
@@ -184,18 +276,7 @@ if [[ -n "$APK" ]]; then
         scp -q "$APK_INFO" "${HOST}:${REMOTE_DIR}/downloads/android.json.new"
         ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/android.json.new && mv ${REMOTE_DIR}/downloads/android.json.new ${REMOTE_DIR}/downloads/android.json"
     fi
-    # The over-the-air web bundle: the zip first, web.json (which names it) last. Older zips stay
-    # for apps that read the previous web.json moments ago; the 3 newest are kept.
-    WEB_INFO="${APK_DIR}/web.json"
-    if [[ -f "$WEB_INFO" ]]; then
-        WEB_ZIP="$(sed -n 's/^ *"zip": *"\(web-[0-9]*\.zip\)".*/\1/p' "$WEB_INFO")"
-        [[ -n "$WEB_ZIP" && -f "${APK_DIR}/${WEB_ZIP}" ]] || die "web.json names no zip next to it: $WEB_INFO"
-        scp -q "${APK_DIR}/${WEB_ZIP}" "${HOST}:${REMOTE_DIR}/downloads/${WEB_ZIP}.new"
-        ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/${WEB_ZIP}.new && mv ${REMOTE_DIR}/downloads/${WEB_ZIP}.new ${REMOTE_DIR}/downloads/${WEB_ZIP}"
-        scp -q "$WEB_INFO" "${HOST}:${REMOTE_DIR}/downloads/web.json.new"
-        ssh "$HOST" "chmod 644 ${REMOTE_DIR}/downloads/web.json.new && mv ${REMOTE_DIR}/downloads/web.json.new ${REMOTE_DIR}/downloads/web.json"
-        ssh "$HOST" "cd ${REMOTE_DIR}/downloads && ls -1 web-*.zip | sort -t- -k2 -n | head -n -3 | xargs -r rm -f --"
-    fi
+    publish_web_bundle
 fi
 scp -q "${SCRIPT_DIR}/deploy/${SERVICE_NAME}.service" "${HOST}:/etc/systemd/system/${SERVICE_NAME}.service"
 scp -q "${SCRIPT_DIR}/deploy/nginx-locations.conf" "${SCRIPT_DIR}/deploy/nginx-ws.conf" "${STAGE}"/site-*.conf "${HOST}:/tmp/"
@@ -338,11 +419,6 @@ rm -rf "${REMOTE_DIR}/web.old"
 REMOTE
 
 echo "==> Checking that ${HOST} serves build ${BUILD} everywhere"
-if [[ "$MODE" == "tls" ]]; then PUBLIC_URL="https://${DOMAIN}"; else PUBLIC_URL="http://${HOST#*@}"; fi
-MISMATCHES=()
-check_build() { # name, served build, expected build
-    if [[ "$2" == "$3" ]]; then echo "    ok  $1: build $2"; else MISMATCHES+=("$1 is build ${2:-?}, expected $3"); fi
-}
 SERVED_SERVER="$(curl -fsS "${PUBLIC_URL}/version" || true)"
 check_build "server ${PUBLIC_URL}/version (${SERVED_SERVER:-unreachable})" "${SERVED_SERVER##*+}" "$BUILD"
 check_build "web ${PUBLIC_URL}/version.json" "$(curl -fsS "${PUBLIC_URL}/version.json" | json_build)" "$BUILD"
@@ -355,9 +431,6 @@ if [[ -n "$APK" ]]; then
         check_build "${PUBLIC_URL}/downloads/${info}" "$(curl -fsS "${PUBLIC_URL}/downloads/${info}" | json_build)" "$expected"
     done
 fi
-if (( ${#MISMATCHES[@]} )); then
-    printf 'error: %s\n' "${MISMATCHES[@]}" >&2
-    die "${HOST} does not serve one build: see above"
-fi
+fail_on_mismatches
 
 echo "==> Deployed build ${BUILD} (${COMMIT}) to ${HOST} (${MODE})"

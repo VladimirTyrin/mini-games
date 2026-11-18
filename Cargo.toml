@@ -37,14 +37,17 @@ print_stderr = "warn"
 unused_dependencies = "deny"
 unused_workspace_dependencies = "deny"
 
+# The server and the native tools. Thin LTO links in a fraction of fat LTO's time (every deploy
+# builds the server) for a speed difference the server's load never shows.
 [profile.release]
-lto = "fat"
-codegen-units = 1
+lto = "thin"
 strip = true
 
-# Browser bundle: optimise the WASM core for size.
+# Browser bundle: optimise the WASM core for size, which whole-program LTO still helps.
 [profile.wasm-release]
 inherits = "release"
+lto = "fat"
+codegen-units = 1
 opt-level = "s"
 panic = "abort"
 # wasm-bindgen reads the target-features section; wasm-opt strips symbols afterwards.

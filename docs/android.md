@@ -99,7 +99,9 @@ packages in `package-lock.json`. `build/android.mjs` bakes it into the Android w
 `./deploy.sh` builds them and uploads all four to `/downloads/`:
 the APK before `android.json`, the zip before `web.json`, so a published file never names one
 that is not there yet. The server keeps the 3 newest `web-*.zip`. The APK files must be of the
-build being deployed (see [deploy.md](deploy.md)).
+build being deployed (see [deploy.md](deploy.md)). `npm run android:bundle` writes only the zip
+and `web.json`, without Gradle: `./deploy.sh --web-only` publishes those, and `android.json` keeps
+naming the APK already out.
 
 **The check.** On start, after the server address changes and on Settings → "Check for
 updates", the app reads `web.json` and `android.json` from its server

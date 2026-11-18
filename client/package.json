@@ -18,7 +18,8 @@
     "typecheck": "vue-tsc --noEmit",
     "android:sync": "node build/android.mjs sync",
     "android:apk": "node build/android.mjs apk release",
-    "android:apk:debug": "node build/android.mjs apk debug"
+    "android:apk:debug": "node build/android.mjs apk debug",
+    "android:bundle": "node build/android.mjs bundle"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.17.0",

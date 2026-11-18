@@ -19,7 +19,9 @@ Known gaps left for later: `docs/tech_debt.md`.
   `bots/`, `tests/` (see `docs/adding-a-game.md`).
 - `proto/` — wire contract (protobuf; JSON mapping on the WebSocket, binary in replay files).
 - `client/` — Vue 3 + Pinia + Tailwind; `client/android` — Capacitor app.
-- `deploy.sh`, `deploy/` — production deploy (`./deploy.sh`, see `docs/deploy.md`).
+- `deploy.sh`, `deploy/` — production deploy (`./deploy.sh`, see `docs/deploy.md`). Deploy right
+  after pushing, CI runs alongside; `./deploy.sh --web-only` releases a client-only change in
+  well under a minute (it refuses when the server or the app's native shell would have to change).
 
 ## Commands
 

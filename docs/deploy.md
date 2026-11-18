@@ -6,6 +6,31 @@ SSH (nginx in front, TLS via certbot by default): the Android app and its over-t
 `./deploy.sh --help` lists the options; `--no-apk` leaves the app out, `--apk FILE` publishes a
 prebuilt one.
 
+## When to deploy
+
+Right after the push, without waiting for CI: run the checks of AGENTS.md ("Commands", and the
+client's lint, typecheck and tests) before pushing, and the deploy's own build stops on a failing
+web build or size budget. CI runs alongside; a red run is fixed with the next commit.
+
+## Web only
+
+`./deploy.sh --web-only` releases the web client alone, in well under a minute: the site and the
+app's over-the-air bundle. The server is neither built nor restarted, so running matches go on.
+It builds `npm run android:bundle` (the bundle without Gradle) and the site, uploads both, swaps
+the site's directory on the host and checks `/version.json` and `/downloads/web.json`.
+
+The web client plays by the server's rules (the WASM core, the protocol), so the script refuses
+and asks for the whole deploy when:
+- anything the server runs changed since the build the host serves: `crates/`, `proto/`, the
+  Cargo files, `deploy/` or `deploy.sh`, committed or not. The host's build comes from `/version`,
+  its commit from the build number (the commit count, on the first-parent line of `HEAD`);
+- the app's native shell changed (`nativeFingerprint` of the new bundle differs from the
+  published `web.json`): installed apps take a bundle only into the shell it names, so the
+  change needs a new APK.
+
+After a web-only release the server reports an older build than `/version.json`; the next whole
+deploy brings them together again.
+
 The toolchain paths of the machine that deploys (JDK and Android SDK for the app, zig for the
 musl server) go to `deploy.local.env` next to the script, which it sources; it is not in git,
 `deploy.local.env.example` shows the variables.
