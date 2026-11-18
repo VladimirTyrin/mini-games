@@ -509,8 +509,8 @@ const DEAD_EYES: readonly CellPosition[] = [
 ];
 const DEAD_EYE_SIZE = 0.09;
 const DEAD_EYE_CROSS = "#111827";
-const TONGUE = "#f472b6";
-const TONGUE_OUTLINE = "#831843";
+const TONGUE = "#c9708f";
+const TONGUE_OUTLINE = "#5b1a32";
 
 /** Turns the context to the head: origin on it, x along its heading, one unit per cell. */
 function inHeadFrame(

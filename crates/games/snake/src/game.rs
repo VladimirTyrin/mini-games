@@ -7,7 +7,7 @@ use crate::io::{Command, WorldEvent};
 use crate::model::{CellContent, Direction, Field, Grid, Point, SeatState, StepCount};
 use crate::rules::{DeathReason, GameEnd, start_body};
 use crate::settings::{DeadSnakeBehavior, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, Settings};
-use crate::view::{SnakeView, View};
+use crate::view::{SnakeView, View, crashes};
 
 /// Multiplayer real-time Snake; all heads move at once every tick.
 #[derive(Clone, Debug)]
@@ -261,6 +261,7 @@ impl Game for Snake {
                 Viewer::Spectator => None,
             },
             end: self.end.clone(),
+            crashes: crashes(self.field, &self.seats),
         }
     }
 

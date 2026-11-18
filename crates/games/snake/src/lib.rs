@@ -29,7 +29,7 @@ pub use settings::{
     DeadSnakeBehavior, FieldSize, FoodCount, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, RawSettings,
     Settings, TickIntervalMs, WallCollisionMode,
 };
-pub use view::{SnakeView, View};
+pub use view::{Crash, CrashPoint, SnakeView, View};
 
 #[cfg(test)]
 mod tests;

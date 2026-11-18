@@ -3,7 +3,7 @@ use mg_core::Slot;
 use crate::model::{Point, StepCount};
 use crate::rules::GameEnd;
 use crate::settings::{DeadSnakeBehavior, WallCollisionMode};
-use crate::view::SnakeView;
+use crate::view::{Crash, SnakeView};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct View {
@@ -21,4 +21,6 @@ pub struct View {
     /// The viewer's own seat.
     pub you: Option<Slot>,
     pub end: Option<GameEnd>,
+    /// Where dead snakes crashed, ordered by place.
+    pub crashes: Vec<Crash>,
 }

@@ -1,6 +1,7 @@
 mod bots;
 mod commands;
 mod conformance_impl;
+mod crashes;
 mod end;
 mod food;
 mod movement;

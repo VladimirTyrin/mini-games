@@ -113,6 +113,16 @@ impl WireGame for Snake {
                 food: view.food.iter().copied().map(point_to_wire).collect(),
                 you: view.you.map(slot_to_wire),
                 end: view.end.as_ref().map(game_end_to_wire),
+                crashes: view
+                    .crashes
+                    .iter()
+                    .map(|crash| proto::SnakeCrash {
+                        x2: crash.at.x2,
+                        y2: crash.at.y2,
+                        slots: crash.slots.iter().copied().map(slot_to_wire).collect(),
+                        head_on: crash.head_on,
+                    })
+                    .collect(),
             })),
         }
     }

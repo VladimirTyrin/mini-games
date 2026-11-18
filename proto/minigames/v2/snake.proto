@@ -96,6 +96,19 @@ message SnakeView {
   optional uint32 you = 10;
   // Unset while the match runs.
   SnakeGameEnd end = 11;
+  // Where dead snakes crashed, worked out by the rules for showing it.
+  repeated SnakeCrash crashes = 12;
+}
+
+// A crash point in half cells, so a cell's centre and the edge between two cells are both whole:
+// cell x spans 2x..2x+2 with its centre at 2x+1.
+message SnakeCrash {
+  uint32 x2 = 1;
+  uint32 y2 = 2;
+  // The snakes that crashed there.
+  repeated uint32 slots = 3;
+  // Two or more met there: heads into one cell, or into each other.
+  bool head_on = 4;
 }
 
 message SnakeSeatView {
