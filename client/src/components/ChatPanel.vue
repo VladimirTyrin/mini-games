@@ -9,12 +9,13 @@ import { playerLabels, sameIdentity } from "@/util/players";
 
 /**
  * `players`: who is shown elsewhere on screen (lobby members), so chat labels match theirs.
- * `growsToFill`: the panel takes the height its parent leaves (a flex column) instead of a few lines.
+ * `shrinksToFit`: in a flex column short of room the panel gives way, down to its input and a
+ * couple of lines; otherwise it keeps its usual height.
  */
 const props = defineProps<{
   messages: ChatMessage[];
   players?: readonly (Identity | undefined)[];
-  growsToFill?: boolean;
+  shrinksToFit?: boolean;
 }>();
 const emit = defineEmits<{ send: [text: string] }>();
 const text = ref("");
@@ -52,7 +53,7 @@ watch(
     <ol
       ref="list"
       class="flex-1 space-y-1 overflow-y-auto p-3 text-sm"
-      :class="growsToFill ? 'min-h-10' : 'max-h-56 min-h-24'"
+      :class="shrinksToFit ? 'max-h-56 min-h-10' : 'max-h-56 min-h-24'"
     >
       <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
         <Avatar

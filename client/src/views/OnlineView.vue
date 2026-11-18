@@ -182,11 +182,11 @@ const phaseLabel: Record<number, string> = {
             No lobbies yet — create one!
           </li>
         </ul>
-        <!-- The chat takes what the screen has left, down to the input and a couple of lines: a
-             phone's system bars and the Friends row must not make the screen scroll. -->
+        <!-- Its usual height when the screen has room; with the New lobby form open on a phone it
+             gives way, down to the input and a couple of lines, rather than make the screen scroll. -->
         <ChatPanel
-          class="order-2 min-h-24 flex-1 lg:order-none"
-          grows-to-fill
+          class="order-2 max-h-[17rem] min-h-24 flex-1 basis-0 lg:order-none lg:basis-auto"
+          shrinks-to-fit
           :messages="lobby.lobbyListChat"
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
         />
