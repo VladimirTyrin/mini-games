@@ -8,7 +8,11 @@ use crate::model::{CellContent, Direction, Point, SeatState};
 /// Efficient, minding the other snakes: of the safe steps it keeps off cells another head may
 /// enter next tick (a head-on crash kills both) and out of pockets too small for its own length,
 /// and among what is left heads for the nearest food. When every step is risky it takes the
-/// least bad one. Without food it keeps to the safest, roomiest way, straight on when tied.
+/// least bad one. Without food it keeps to the safest, roomiest way.
+///
+/// Ties are broken at random. Going straight on instead made two careful snakes abreast with
+/// the food between them mirror each other forever: the cell beside the food is next to both
+/// heads, so neither took it, and both went on round the field.
 #[derive(Debug)]
 pub(crate) struct CarefulBot;
 
@@ -27,14 +31,15 @@ impl Bot<Snake> for CarefulBot {
         &mut self,
         game: &Snake,
         me: Slot,
-        _rng: &mut CoreRng,
+        rng: &mut CoreRng,
         budget: &mut Budget,
     ) -> Option<Command> {
         let seat = idle_seat(game, me)?;
         let head = seat.head()?;
         let contested = cells_other_heads_may_enter(game, me);
         let length = seat.body.len();
-        let mut best: Option<(StepRating, Direction)> = None;
+        let mut best_rating: Option<StepRating> = None;
+        let mut best_directions: Vec<Direction> = Vec::new();
         for direction in candidate_directions(seat) {
             if !budget.spend(1) || !is_safe(game, me, seat, direction) {
                 continue;
@@ -55,12 +60,16 @@ impl Bot<Snake> for CarefulBot {
                 room,
                 food_closeness: -i64::from(nearest_food),
             };
-            // Ties keep the earlier candidate: straight on first.
-            if best.is_none_or(|(best_rating, _)| rating > best_rating) {
-                best = Some((rating, direction));
+            if best_rating.is_none_or(|best| rating > best) {
+                best_rating = Some(rating);
+                best_directions.clear();
+            }
+            if best_rating == Some(rating) {
+                best_directions.push(direction);
             }
         }
-        best.and_then(|(_, direction)| turn_towards(seat, direction))
+        rng.pick(&best_directions)
+            .and_then(|&direction| turn_towards(seat, direction))
     }
 }
 

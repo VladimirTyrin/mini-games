@@ -247,3 +247,48 @@ fn careful_outlives_efficient_most_of_the_time() {
         "careful {careful}, efficient {efficient}"
     );
 }
+
+/// Two careful snakes side by side, one cell apart, the only food in the column between them:
+/// the cell beside the food is next to both heads, so each kept off it and, preferring straight
+/// on when tied, both went round the wrapping field forever.
+#[test]
+fn careful_snakes_abreast_do_not_circle_round_their_food_forever() {
+    for seed in 0..50 {
+        let ticks = ticks_until_abreast_careful_snakes_eat(seed);
+        assert!(
+            ticks.is_some(),
+            "seed {seed}: nobody took the food in 400 ticks"
+        );
+    }
+}
+
+fn ticks_until_abreast_careful_snakes_eat(seed: u64) -> Option<u32> {
+    let mut game = game(WrapAround, 2);
+    arrange(
+        &mut game,
+        &[
+            (line(point(9, 10), Down, 5), Up),
+            (line(point(11, 10), Down, 5), Up),
+        ],
+    );
+    put_food(&mut game, point(10, 0));
+    let mut bots = [
+        Snake::make_bot(BotKind::Careful),
+        Snake::make_bot(BotKind::Careful),
+    ];
+    let mut rngs = [CoreRng::new(2 * seed), CoreRng::new(2 * seed + 1)];
+    for tick in 0..400 {
+        if game.food.is_empty() {
+            return Some(tick);
+        }
+        for ((slot, bot), rng) in Slot::all(2).zip(bots.iter_mut()).zip(rngs.iter_mut()) {
+            let mut budget = Budget::new(Snake::default_bot_budget(BotKind::Careful));
+            if let Some(command) = bot.decide(&game, slot, rng, &mut budget) {
+                game.apply_command(slot, &command).unwrap();
+            }
+        }
+        game.step();
+        assert!(game.is_running(), "seed {seed}: a snake crashed");
+    }
+    None
+}
