@@ -36,7 +36,10 @@ const editingSettings = ref(false);
 const helpOpen = ref(false);
 const settingsSummary = computed(() => {
   const facts = plugin.value?.describeSettings(settings.value, minSeats.value) ?? [];
-  return facts.length > 0 ? facts.join(" · ") : "Standard settings";
+  // The name sits with the folded settings: the summary keeps it in sight.
+  const name = lobbyName.value.trim();
+  const summary = facts.length > 0 ? facts.join(" · ") : "Standard settings";
+  return name ? `“${name}” · ${summary}` : summary;
 });
 // Settings that no longer pass (a remembered value the game now refuses) need fixing first.
 watch(problem, (current) => {
@@ -224,13 +227,6 @@ const phaseLabel: Record<number, string> = {
             How to play
           </button>
         </div>
-        <input
-          v-model="lobbyName"
-          maxlength="48"
-          placeholder="Lobby name (optional)"
-          aria-label="Lobby name"
-          class="h-11 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
-        />
         <div class="flex items-center gap-3 rounded-xl bg-panel-raised px-3 py-2 lg:hidden">
           <p class="min-w-0 flex-1 text-sm text-gray-300">{{ settingsSummary }}</p>
           <button
@@ -243,7 +239,14 @@ const phaseLabel: Record<number, string> = {
           </button>
         </div>
         <!-- Kept mounted while hidden: it reports whether the settings pass. -->
-        <div :class="editingSettings ? '' : 'hidden lg:block'">
+        <div class="space-y-3" :class="editingSettings ? '' : 'hidden lg:block'">
+          <input
+            v-model="lobbyName"
+            maxlength="48"
+            placeholder="Lobby name (optional)"
+            aria-label="Lobby name"
+            class="h-11 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
+          />
           <SettingsEditor
             v-model="settings"
             :plugin="plugin"
