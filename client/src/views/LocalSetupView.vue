@@ -62,6 +62,18 @@ function start(): void {
         <div class="min-w-0">
           <h2 class="font-semibold leading-tight">{{ plugin.tagline }}</h2>
           <p class="mt-1 text-xs leading-snug text-gray-400">{{ controlsHintFor(plugin) }}</p>
+          <button
+            type="button"
+            class="mt-2 inline-flex min-h-9 items-center gap-2 rounded-full bg-emerald-600/15 px-3 text-sm font-medium whitespace-nowrap text-emerald-300 ring-1 ring-emerald-500/40 hover:bg-emerald-600/25"
+            @click="helpOpen = true"
+          >
+            <span
+              class="flex size-5 items-center justify-center rounded-full bg-emerald-500/25 text-xs font-bold"
+              aria-hidden="true"
+              >?</span
+            >
+            How to play
+          </button>
         </div>
       </header>
       <SettingsEditor
