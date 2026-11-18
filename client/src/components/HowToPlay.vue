@@ -5,6 +5,7 @@ import GameIcon from "@/components/GameIcon.vue";
 import { type GamePlugin, controlsHintFor } from "@/games/game-plugin";
 import { useBackHandler } from "@/platform/back-navigation";
 import { markHelpSeen } from "@/platform/help-seen";
+import { usePageScrollLock } from "@/util/scroll-lock";
 
 const props = defineProps<{ plugin: GamePlugin }>();
 const emit = defineEmits<{ close: [] }>();
@@ -15,6 +16,7 @@ function close(): void {
 
 useBackHandler(close);
 markHelpSeen(props.plugin.id);
+usePageScrollLock();
 
 function onKey(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
@@ -29,14 +31,14 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, { capture: tr
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex items-end justify-center bg-gray-950/60 sm:items-center sm:p-4"
+    class="fixed inset-0 z-50 flex touch-none items-end justify-center overscroll-none bg-gray-950/60 sm:items-center sm:p-4"
     role="dialog"
     aria-modal="true"
     :aria-label="`How to play ${props.plugin.title}`"
     @click.self="close"
   >
     <div
-      class="flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-2xl bg-panel shadow-xl ring-1 ring-white/10 sm:rounded-2xl"
+      class="flex max-h-[92svh] touch-auto w-full max-w-lg flex-col rounded-t-2xl bg-panel shadow-xl ring-1 ring-white/10 sm:rounded-2xl"
     >
       <header class="flex items-center gap-3 border-b border-white/5 px-4 py-3">
         <GameIcon :plugin="props.plugin" class="size-8 text-xl" />
@@ -50,7 +52,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, { capture: tr
           ✕
         </button>
       </header>
-      <div class="how-to-play min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div class="how-to-play min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
         <component :is="props.plugin.Help" />
         <h3>Controls</h3>
         <p>{{ controlsHintFor(props.plugin) }}</p>
