@@ -78,6 +78,10 @@ export function drawSnakeScene(
   context.save();
   context.translate(layout.originX, layout.originY);
   drawGround(frame);
+  const crashes = crashesOf(scene.view, scene.previous);
+  // Under the snakes, so a dead one's face shows over its star; not clipped to the field, as a
+  // crash into a wall is on its edge.
+  for (const crash of crashes) drawCrash(frame, crash, "star");
   context.save();
   context.beginPath();
   context.rect(0, 0, fieldWidthPx, fieldHeightPx);
@@ -86,8 +90,7 @@ export function drawSnakeScene(
   for (const seat of drawingOrder(scene.view)) drawSnake(frame, seat);
   context.restore();
   drawBorder(frame, fieldWidthPx, fieldHeightPx);
-  // Over the border: a crash into a wall happens on it.
-  for (const crash of crashesOf(scene.view, scene.previous)) drawCrash(frame, crash);
+  for (const crash of crashes) drawCrash(frame, crash, "burst");
   context.restore();
 }
 
@@ -199,7 +202,9 @@ function drawSnake(frame: Frame, seat: SnakeSeatView): void {
     context.save();
     context.translate(shift.x * frame.cellSize, shift.y * frame.cellSize);
     drawBody(frame, line, color);
+    if (!seat.alive) drawDeadTongue(frame, path);
     drawHead(frame, path, color);
+    if (!seat.alive) drawDeadEyes(frame, path, color);
     context.restore();
   }
   if (seat.alive && seat.slot === scene.view.you) drawYouRing(frame, path.points[0]);
@@ -426,10 +431,10 @@ function crashOpacity(crash: Crash, scene: SnakeScene): number {
 }
 
 /**
- * Where snakes crashed: a burst in the tick it happens, then a star that stays with the dead
- * snakes, larger where two of them met head-on.
+ * Where snakes crashed: a star that stays with the dead snakes, larger where two of them met
+ * head-on, and over everything a burst in the tick it happens.
  */
-function drawCrash(frame: Frame, crash: Crash): void {
+function drawCrash(frame: Frame, crash: Crash, layer: "star" | "burst"): void {
   const { context, cellSize, scene, field } = frame;
   const opacity = crashOpacity(crash, scene);
   if (opacity <= 0) return;
@@ -447,8 +452,8 @@ function drawCrash(frame: Frame, crash: Crash): void {
     context.save();
     context.globalAlpha = opacity;
     context.translate(position.x * cellSize, position.y * cellSize);
-    if (crash.fresh && scene.progress < 1) drawBurst(context, size, scene.progress);
-    drawStar(context, size * grow, Math.max(1, cellSize * 0.06));
+    if (layer === "star") drawStar(context, size * grow, Math.max(1, cellSize * 0.06));
+    else if (crash.fresh && scene.progress < 1) drawBurst(context, size, scene.progress);
     context.restore();
   }
 }
@@ -494,4 +499,77 @@ function drawStar(context: CanvasRenderingContext2D, radius: number, outline: nu
   context.arc(0, 0, radius * 0.28, 0, Math.PI * 2);
   context.fillStyle = CRASH_CORE;
   context.fill();
+}
+
+// A dead snake's face, in head-local units of a cell (facing right, centred on the head): where
+// the head sprite has its eyes and its snout.
+const DEAD_EYES: readonly CellPosition[] = [
+  { x: 0.1, y: -0.18 },
+  { x: 0.1, y: 0.17 },
+];
+const DEAD_EYE_SIZE = 0.09;
+const DEAD_EYE_CROSS = "#111827";
+const TONGUE = "#f472b6";
+const TONGUE_OUTLINE = "#831843";
+
+/** Turns the context to the head: origin on it, x along its heading, one unit per cell. */
+function inHeadFrame(
+  frame: Frame,
+  path: SnakeBodyPath,
+  draw: (context: CanvasRenderingContext2D) => void,
+): void {
+  const head = path.points[0];
+  if (!head) return;
+  const { context, cellSize } = frame;
+  context.save();
+  context.translate(head.x * cellSize, head.y * cellSize);
+  context.rotate(path.heading);
+  context.scale(cellSize, cellSize);
+  draw(context);
+  context.restore();
+}
+
+/**
+ * Lolls out of the corner of the mouth, to the side: in front of the head sits the crash's star.
+ * Drawn before the head, so its root hides under it.
+ */
+function drawDeadTongue(frame: Frame, path: SnakeBodyPath): void {
+  inHeadFrame(frame, path, (context) => {
+    context.translate(0.3, 0.12);
+    context.rotate(1.05);
+    context.beginPath();
+    context.roundRect(0, -0.12, 0.56, 0.24, 0.12);
+    context.fillStyle = TONGUE;
+    context.fill();
+    context.lineWidth = 0.03;
+    context.strokeStyle = TONGUE_OUTLINE;
+    context.stroke();
+    context.beginPath();
+    context.moveTo(0.18, 0);
+    context.lineTo(0.42, 0);
+    context.lineWidth = 0.025;
+    context.lineCap = "round";
+    context.stroke();
+  });
+}
+
+/** Crosses over the eyes, which are painted over in the head's colour first. */
+function drawDeadEyes(frame: Frame, path: SnakeBodyPath, color: RgbColor): void {
+  inHeadFrame(frame, path, (context) => {
+    for (const eye of DEAD_EYES) {
+      context.beginPath();
+      context.arc(eye.x, eye.y, DEAD_EYE_SIZE * 1.15, 0, Math.PI * 2);
+      context.fillStyle = cssColor(color);
+      context.fill();
+      context.beginPath();
+      context.moveTo(eye.x - DEAD_EYE_SIZE, eye.y - DEAD_EYE_SIZE);
+      context.lineTo(eye.x + DEAD_EYE_SIZE, eye.y + DEAD_EYE_SIZE);
+      context.moveTo(eye.x + DEAD_EYE_SIZE, eye.y - DEAD_EYE_SIZE);
+      context.lineTo(eye.x - DEAD_EYE_SIZE, eye.y + DEAD_EYE_SIZE);
+      context.lineWidth = 0.045;
+      context.lineCap = "round";
+      context.strokeStyle = DEAD_EYE_CROSS;
+      context.stroke();
+    }
+  });
 }
