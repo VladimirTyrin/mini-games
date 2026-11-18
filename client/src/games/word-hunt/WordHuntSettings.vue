@@ -23,12 +23,14 @@ const UNLIMITED_OPTION = { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimite
 /** With opponents: turns on one word; the word of the day is for playing alone. */
 const isGroup = computed(() => form.seats.value > 1);
 const modeOptions = computed(() => (isGroup.value ? [UNLIMITED_OPTION] : [DAILY_OPTION, UNLIMITED_OPTION]));
+/** Who the first seat is: the person here, the first bot of a table being watched, the host. */
+const FIRST_SEAT = { local: "Me", watching: "Bot 1", online: "Host" } as const;
 const firstTurnOptions = computed(() => {
-  const local = form.audience.value === "local";
+  const first = FIRST_SEAT[form.audience.value];
   return [
     { value: WordHuntFirstTurn.RANDOM, label: "Random" },
-    { value: WordHuntFirstTurn.HOST_FIRST, label: local ? "Me first" : "Host first" },
-    { value: WordHuntFirstTurn.HOST_LAST, label: local ? "Me last" : "Host last" },
+    { value: WordHuntFirstTurn.HOST_FIRST, label: `${first} first` },
+    { value: WordHuntFirstTurn.HOST_LAST, label: `${first} last` },
   ];
 });
 const offOnOptions = [

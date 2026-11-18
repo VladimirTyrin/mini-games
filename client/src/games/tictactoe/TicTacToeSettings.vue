@@ -4,7 +4,7 @@ import { computed } from "vue";
 import ChipsField from "@/components/form/ChipsField.vue";
 import { matchingPresetKey } from "@/components/form/presets";
 import SegmentedField from "@/components/form/SegmentedField.vue";
-import { useGameSettingsForm } from "@/components/form/settings-form";
+import { TWO_SEAT_NAMES, useGameSettingsForm } from "@/components/form/settings-form";
 import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { TicTacToeFirstPlayerMode } from "@/proto/minigames/v2/tictactoe_pb";
@@ -17,12 +17,11 @@ const { value, audience } = form;
 
 const sizePresets = computed(() => form.acceptedPresets(boardPresets));
 
-// Locally seat 0 is always the person holding the device and seat 1 the opponent.
 const firstPlayerOptions = computed(() => {
-  const local = audience.value === "local";
+  const [first, second] = TWO_SEAT_NAMES[audience.value];
   return [
-    { value: TicTacToeFirstPlayerMode.HOST, label: local ? "You" : "Host" },
-    { value: TicTacToeFirstPlayerMode.GUEST, label: local ? "Opponent" : "Guest" },
+    { value: TicTacToeFirstPlayerMode.HOST, label: first },
+    { value: TicTacToeFirstPlayerMode.GUEST, label: second },
     { value: TicTacToeFirstPlayerMode.RANDOM, label: "Random" },
   ];
 });

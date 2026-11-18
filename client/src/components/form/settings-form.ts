@@ -7,7 +7,18 @@ import { type SettingRange, type SettingsProblem, settingsProblem } from "@/wasm
 import type { Preset } from "./presets";
 
 /** Who reads the form: wording differs (a local "You" is the online "Host"). */
-export type SettingsAudience = "local" | "online";
+/**
+ * Who the settings are for, which names the seats: `local` (seat 0 is the person here, seat 1 the
+ * opponent), `watching` (a local table of bots, Bot 1 and Bot 2) or `online` (host and guest).
+ */
+export type SettingsAudience = "local" | "watching" | "online";
+
+/** The names of a two-seat game's first and second seat, for settings that pick one of them. */
+export const TWO_SEAT_NAMES: Readonly<Record<SettingsAudience, readonly [string, string]>> = {
+  local: ["You", "Opponent"],
+  watching: ["Bot 1", "Bot 2"],
+  online: ["Host", "Guest"],
+};
 
 export interface SettingsFormState {
   problem: SettingsProblem | null;

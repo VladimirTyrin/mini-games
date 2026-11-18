@@ -85,7 +85,7 @@ function start(): void {
         v-model="settings"
         :plugin="plugin"
         :seats="seats.length"
-        audience="local"
+        :audience="watching ? 'watching' : 'local'"
         @validity="problem = $event"
       />
     </section>
