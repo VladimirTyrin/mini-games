@@ -12,6 +12,7 @@ use super::hub_handle::HubHandle;
 use super::lobby::Lobby;
 use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
+use super::match_series::MatchSeries;
 use super::request_cooldowns::RequestCooldowns;
 use super::session::{Session, SessionConnection};
 use crate::authenticated::Authenticated;
@@ -565,6 +566,7 @@ impl Hub {
                 .map(|finished| finished.match_id.to_string())
                 .unwrap_or_default(),
             last_result: last_match.map(|finished| finished.result.clone()),
+            series: lobby.series.as_ref().and_then(MatchSeries::to_wire),
         }
     }
 

@@ -4,9 +4,11 @@ import { computed, shallowRef, watch } from "vue";
 
 import type { BotKind, GameSettings } from "@/proto/minigames/v2/game_pb";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
+import type { MatchSeries } from "@/proto/minigames/v2/lobby_pb";
 import { type MatchHeader, MatchHeaderSchema } from "@/proto/minigames/v2/match_pb";
 import { LocalMatchSource } from "@/local/local-match-source";
 import { MatchController } from "@/match/match-controller";
+import { seriesWithResult } from "@/match/match-series";
 import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
@@ -26,6 +28,9 @@ export interface LocalSeat {
   bot: BotKind | null;
 }
 
+/** Play again on this device goes on with the series of the same table; any other start begins one. */
+export type LocalSeries = "new" | "continued";
+
 /** The match on screen (online, local or replay) and its controller. */
 export const useMatchStore = defineStore("match", () => {
   const connection = useConnectionStore();
@@ -33,6 +38,8 @@ export const useMatchStore = defineStore("match", () => {
   const toasts = useToastStore();
   const controller = shallowRef<MatchController | null>(null);
   const replay = shallowRef<ReplayMatchSource | null>(null);
+  /** The score of local matches played again at the same table (online, the lobby keeps it). */
+  const localSeries = shallowRef<MatchSeries | null>(null);
 
   /** An online match on screen that has not ended: leaving the lobby would drop the seat. */
   const isInOnlineMatch = computed(
@@ -57,7 +64,13 @@ export const useMatchStore = defineStore("match", () => {
   }
 
   /** Offline match: you plus built-in bots, authority in a Web Worker. */
-  function startLocal(picked: GameSettings, seats: LocalSeat[], playerName: string): void {
+  function startLocal(
+    picked: GameSettings,
+    seats: LocalSeat[],
+    playerName: string,
+    series: LocalSeries = "new",
+  ): void {
+    if (series === "new") localSeries.value = null;
     const settings = pluginBySettings(picked.game.case)?.settingsForNewMatch?.(picked) ?? picked;
     const header = create(MatchHeaderSchema, {
       matchId: "local",
@@ -84,6 +97,32 @@ export const useMatchStore = defineStore("match", () => {
     const mySlot = seats.findIndex((seat) => seat.bot === null);
     run(new LocalMatchSource(header, mySlot < 0 ? null : mySlot));
   }
+
+  // A local match counts in its series once it ends, and once only: its result may be set twice
+  // (from the rules, then from the authority's end).
+  const counted = new WeakSet<MatchController>();
+  watch(
+    () => {
+      const current = controller.value;
+      return current?.source instanceof LocalMatchSource && current.ended.value ? current : null;
+    },
+    (ended) => {
+      const result = ended?.result.value;
+      if (!ended || !result || counted.has(ended)) return;
+      counted.add(ended);
+      localSeries.value = seriesWithResult(localSeries.value, ended.source.header.seats.length, result);
+    },
+  );
+
+  /** The score of the series the match on screen belongs to, once it has ended. */
+  const series = computed((): MatchSeries | null => {
+    const source = controller.value?.source;
+    if (source instanceof LocalMatchSource) return localSeries.value;
+    // The lobby counts the match a moment after it ends: until then its series is the one before.
+    if (source instanceof OnlineMatchSource && lobby.current?.lastMatchId === source.header.matchId)
+      return lobby.current.series ?? null;
+    return null;
+  });
 
   function startOnline(header: MatchHeader): MatchController | null {
     const session = connection.session;
@@ -216,6 +255,7 @@ export const useMatchStore = defineStore("match", () => {
   return {
     controller,
     replay,
+    series,
     isPlaying,
     isInOnlineMatch,
     holdsUpdates,

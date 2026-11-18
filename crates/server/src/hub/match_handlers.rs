@@ -11,6 +11,7 @@ use super::hub::Hub;
 use super::hub_command::HubCommand;
 use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
+use super::match_series::MatchSeries;
 use super::replay_check_error::ReplayCheckError;
 use super::replay_upload::ReplayUpload;
 use super::shared_replay::SharedReplay;
@@ -131,6 +132,8 @@ impl Hub {
         if let Some(lobby) = self.lobbies.get_mut(lobby_id) {
             lobby.phase = LobbyPhase::InMatch(handle);
             lobby.reset_ready();
+            let seats = lobby.seats.len();
+            lobby.series.get_or_insert_with(|| MatchSeries::new(seats));
         }
         self.broadcast_lobby_state(lobby_id);
         self.lobby_list_changed();
@@ -232,6 +235,10 @@ impl Hub {
         lobby.phase = LobbyPhase::PostMatch {
             play_again_votes: BTreeSet::new(),
         };
+        // Gone if the seating changed during the match: its slots are not the seats any more.
+        if let Some(series) = &mut lobby.series {
+            series.record(&finished.result);
+        }
         lobby.store_replay(StoredReplay {
             match_id: finished.match_id.clone(),
             replay_data_json: finished.replay_data_json,

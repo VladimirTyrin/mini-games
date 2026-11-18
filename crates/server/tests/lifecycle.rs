@@ -277,6 +277,63 @@ async fn post_match_reports_the_result_and_everyone_voting_starts_the_next_match
 }
 
 #[tokio::test]
+async fn matches_played_again_add_up_in_a_series_until_the_players_change() {
+    let server = TestServer::start().await;
+    let mut host = server.guest("Host").await.client;
+    let mut guest = server.guest("Guest").await.client;
+    play_tictactoe_to_the_end(&mut host, &mut guest).await;
+    let first = host.expect(post_match).await;
+    assert_eq!(
+        first.series,
+        Some(proto::MatchSeries {
+            wins: vec![1, 0],
+            draws: 0,
+        })
+    );
+
+    for voter in [&mut host, &mut guest] {
+        expect_ok(
+            voter
+                .request(Request::VotePlayAgain(proto::VotePlayAgain {}))
+                .await,
+        );
+    }
+    let match_id = host.expect(match_started).await.match_id;
+    // The host moves first again; this time the guest fills the middle column.
+    for (host_move, guest_move) in [((0, 0), (1, 0)), ((0, 2), (1, 1)), ((2, 0), (1, 2))] {
+        expect_ok(
+            host.request(place(&match_id, host_move.0, host_move.1))
+                .await,
+        );
+        expect_ok(
+            guest
+                .request(place(&match_id, guest_move.0, guest_move.1))
+                .await,
+        );
+    }
+    let second = host
+        .expect(|m| post_match(m).filter(|state| state.last_match_id == match_id))
+        .await;
+    assert_eq!(
+        second.series,
+        Some(proto::MatchSeries {
+            wins: vec![1, 1],
+            draws: 0,
+        })
+    );
+
+    expect_ok(
+        guest
+            .request(Request::LeaveLobby(proto::LeaveLobby {}))
+            .await,
+    );
+    let alone = host
+        .expect(|m| post_match(m).filter(|state| state.seats.len() == 1))
+        .await;
+    assert_eq!(alone.series, None, "other players, another series");
+}
+
+#[tokio::test]
 async fn a_player_leaving_after_a_match_asks_the_others_to_vote_again() {
     let server = TestServer::start().await;
     let mut host = server.guest("Host").await.client;

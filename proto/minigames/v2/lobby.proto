@@ -52,6 +52,17 @@ message LobbyState {
   // Set in LOBBY_PHASE_POST_MATCH: the match that just finished (its replay can be requested).
   string last_match_id = 10;
   MatchResult last_result = 11;
+  // Absent until a match of the current players ends with a winner or a draw.
+  MatchSeries series = 12;
+}
+
+// The score of the matches the same players played in a row at this table (Play again, or the
+// host starting again). Any change to who sits where (someone joins, leaves, steps aside to
+// watch, a bot is added or removed) starts a new series; a change of settings does not.
+message MatchSeries {
+  // Matches won, indexed by seat (= slot).
+  repeated uint32 wins = 1;
+  uint32 draws = 2;
 }
 
 message ListLobbies {}

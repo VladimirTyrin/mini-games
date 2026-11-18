@@ -1,4 +1,4 @@
-use mg_core::PlayerSpec;
+use mg_core::{PlayerSpec, ScoreKind};
 use mg_protocol::proto;
 use mg_registry::{GameKind, bot_kinds, create_mirror};
 use prost::Message;
@@ -24,13 +24,17 @@ pub fn game_catalog_json() -> String {
         .map(|kind| {
             let info = kind.info();
             format!(
-                r#"{{"id":"{}","name":"{}","minPlayers":{},"maxPlayers":{},"hasBots":{},"cooperative":{},"botKindCount":{}}}"#,
+                r#"{{"id":"{}","name":"{}","minPlayers":{},"maxPlayers":{},"hasBots":{},"cooperative":{},"scores":"{}","botKindCount":{}}}"#,
                 info.id,
                 info.name,
                 info.min_players,
                 info.max_players,
                 info.has_bots,
                 info.cooperative,
+                match info.scores {
+                    ScoreKind::Points => "points",
+                    ScoreKind::WinFlag => "winFlag",
+                },
                 bot_kinds(kind).len()
             )
         })

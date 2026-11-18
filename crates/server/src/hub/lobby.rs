@@ -7,6 +7,7 @@ use tokio::time::Instant;
 use super::finished_match::FinishedMatch;
 use super::lobby_phase::LobbyPhase;
 use super::lobby_seat::LobbySeat;
+use super::match_series::MatchSeries;
 use super::stored_replay::StoredReplay;
 use crate::ids::{LobbyId, SessionId};
 use crate::limits::Limits;
@@ -28,6 +29,8 @@ pub(super) struct Lobby {
     pub replays: VecDeque<StoredReplay>,
     pub last_match: Option<FinishedMatch>,
     pub next_bot_number: u32,
+    /// The score of the current players, from the start of their first match together.
+    pub series: Option<MatchSeries>,
 }
 
 impl Lobby {
@@ -62,7 +65,15 @@ impl Lobby {
         {
             let seat = self.seats.remove(index);
             self.seats.insert(0, seat);
+            // The series keeps wins by seat.
+            self.series = None;
         }
+    }
+
+    /// Someone took, left or was given a seat: the votes and the series were for other players.
+    pub(super) fn seating_changed(&mut self) {
+        self.forget_play_again_votes();
+        self.series = None;
     }
 
     /// The next match would not be the one voted for (other settings or players): vote again.

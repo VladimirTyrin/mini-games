@@ -70,6 +70,7 @@ impl Game for Race {
         max_players: 2,
         has_bots: true,
         cooperative: false,
+        scores: ScoreKind::Points,
     };
 
     fn new(settings: &RaceSettings, players: &[PlayerSpec]) -> Result<Self, SetupError> {

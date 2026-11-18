@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    ScoreKind, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, MAX_QUEUED_COMMANDS, WorldEvent};
@@ -77,6 +77,7 @@ impl Game for StackAttack {
         max_players: MAX_SEATS,
         has_bots: false,
         cooperative: true,
+        scores: ScoreKind::Points,
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {

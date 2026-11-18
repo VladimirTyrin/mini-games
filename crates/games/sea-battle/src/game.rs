@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    ScoreKind, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, SecretCommand, WorldEvent};
@@ -143,6 +143,7 @@ impl Game for SeaBattle {
         max_players: 2,
         has_bots: true,
         cooperative: false,
+        scores: ScoreKind::WinFlag,
     };
 
     fn new(_settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {

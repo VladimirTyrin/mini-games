@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    ScoreKind, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
@@ -199,6 +199,7 @@ impl Game for NumbersMatch {
         max_players: 1,
         has_bots: false,
         cooperative: true,
+        scores: ScoreKind::WinFlag,
     };
 
     fn new(settings: &Settings, players: &[PlayerSpec]) -> Result<Self, SetupError> {

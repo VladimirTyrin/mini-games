@@ -263,6 +263,7 @@ function again(): void {
     header.settings,
     header.seats.map((seat) => ({ bot: seat.botKind ?? null })),
     header.seats.find((seat) => !seat.botKind)?.player?.displayName ?? "You",
+    "continued",
   );
 }
 </script>
@@ -349,6 +350,7 @@ function again(): void {
         :key="controllerKey"
         :controller="controller"
         :end-reason="endReason"
+        :series="match.series"
         @leave="leave"
         @replay="match.saveReplay(plugin?.title ?? 'Match')"
         @again="again"

@@ -8,6 +8,7 @@ mod lobby_handlers;
 mod lobby_phase;
 mod lobby_seat;
 mod match_handlers;
+mod match_series;
 mod replay_check_error;
 mod replay_upload;
 mod request_cooldowns;

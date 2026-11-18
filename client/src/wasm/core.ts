@@ -40,6 +40,8 @@ export interface GameInfo {
   maxPlayers: number;
   hasBots: boolean;
   cooperative: boolean;
+  /** What a competitive match's scores measure: points of the game's own, or just who won. */
+  scores: "points" | "winFlag";
 }
 
 let loading: Promise<void> | null = null;

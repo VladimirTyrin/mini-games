@@ -5,17 +5,22 @@ import { pluginBySettings } from "@/games";
 import { prefersTouch } from "@/input/prefers-touch";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
+import { hasCounted } from "@/match/match-series";
 import type { SeatPause } from "@/match/seat-pause";
+import type { MatchSeries } from "@/proto/minigames/v2/lobby_pb";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
 import { sameIdentity } from "@/util/players";
+import { gameCatalog } from "@/wasm/core";
 import { matchSeatNames } from "@/games/seat-names";
 
 const props = defineProps<{
   controller: MatchController;
   /** Why the match ended, from the game ("Crushed by a falling crate"). */
   endReason?: string | null;
+  /** The score of the matches played again at this table, this one included. */
+  series?: MatchSeries | null;
 }>();
 const emit = defineEmits<{ leave: []; replay: []; again: [] }>();
 
@@ -120,6 +125,15 @@ const headline = computed(() => {
   }
 });
 
+/** Wins of the series, once a match of it counted (never alone, never in a cooperative game). */
+const shownSeries = computed(() => (hasCounted(props.series) ? props.series : null));
+/** Points of the game's own are worth a column beside the wins; a mere 1 for the winner is not. */
+const showsMatchScores = computed(() => {
+  if (!shownSeries.value) return true;
+  const gameId = pluginBySettings(props.controller.source.header.settings?.game.case)?.id;
+  return gameCatalog().find((game) => game.id === gameId)?.scores !== "winFlag";
+});
+
 const labels = computed(() => matchSeatNames(props.controller.source.header));
 const seatName = (slot: number) => labels.value[slot] ?? `Player ${slot + 1}`;
 
@@ -170,12 +184,23 @@ async function voteDrop(slot: number): Promise<void> {
         </button>
       </div>
       <ul v-if="result" class="space-y-1 text-sm">
-        <li v-for="(score, slot) in result.scores" :key="slot" class="flex justify-between">
-          <span>
+        <li v-if="shownSeries" class="flex gap-4 text-xs text-gray-400">
+          <span class="flex-1" />
+          <span v-if="showsMatchScores">Score</span>
+          <span class="min-w-8 text-right">Wins</span>
+        </li>
+        <li v-for="(score, slot) in result.scores" :key="slot" class="flex gap-4">
+          <span class="min-w-0 flex-1 break-words">
             {{ seatName(slot) }}
             <span v-if="slot === mySlot" class="text-xs text-sky-300">(you)</span>
           </span>
-          <span class="font-mono">{{ score }}</span>
+          <span v-if="showsMatchScores" class="font-mono">{{ score }}</span>
+          <span v-if="shownSeries" class="min-w-8 text-right font-mono font-semibold">{{
+            shownSeries.wins[slot] ?? 0
+          }}</span>
+        </li>
+        <li v-if="shownSeries && shownSeries.draws > 0" class="text-xs text-gray-400">
+          Draws: {{ shownSeries.draws }}
         </li>
       </ul>
       <!-- No wrapping inside a button: on a narrow phone the row wraps instead. -->

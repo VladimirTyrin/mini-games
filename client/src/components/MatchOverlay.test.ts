@@ -6,15 +6,51 @@ import { shallowRef } from "vue";
 
 import type { MatchController } from "@/match/match-controller";
 import { IdentityKind, IdentitySchema } from "@/proto/minigames/v2/identity_pb";
-import { LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
+import { LobbyStateSchema, MatchSeriesSchema } from "@/proto/minigames/v2/lobby_pb";
+import { MatchResultSchema, OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useLobbyStore } from "@/stores/lobby";
 
 import MatchOverlay from "./MatchOverlay.vue";
 
 vi.mock("@/games", () => ({
-  pluginBySettings: (game: string | undefined) => (game === "stackAttack" ? { playsWithSpace: true } : {}),
+  pluginBySettings: (game: string | undefined) => ({
+    id: game,
+    playsWithSpace: game === "stackAttack" || undefined,
+  }),
 }));
+vi.mock("@/wasm/core", () => ({
+  gameCatalog: () => [
+    { id: "tictactoe", scores: "winFlag" },
+    { id: "snake", scores: "points" },
+  ],
+}));
+
+/** Two players, the second won this match: the rows of the result, cells split by "|". */
+function resultRows(game: string, scores: bigint[]): string[] {
+  const controller = endedMatch(game, {
+    result: shallowRef(create(MatchResultSchema, { kind: OutcomeKind.WINNER, winnerSlots: [1], scores })),
+    source: {
+      kind: "local",
+      header: {
+        settings: { game: { case: game } },
+        seats: [
+          { slot: 0, player: { id: "ann", displayName: "Ann" } },
+          { slot: 1, player: { id: "bob", displayName: "Bob" } },
+        ],
+      },
+    },
+  });
+  const series = create(MatchSeriesSchema, { wins: [2, 3], draws: 1 });
+  const wrapper = mount(MatchOverlay, { props: { controller, series } });
+  const cell = (element: Element) => (element.textContent ?? "").trim().replace(/\s+/g, " ");
+  const rows = wrapper.findAll("li").map((row) => {
+    const cells = Array.from(row.element.children).map(cell).filter(Boolean);
+    return cells.length > 0 ? cells.join(" | ") : cell(row.element);
+  });
+  wrapper.unmount();
+  return rows;
+}
 
 /** A controller whose match has ended with its result on screen. */
 function endedMatch(game: string, changes: Partial<Record<string, unknown>> = {}): MatchController {
@@ -70,6 +106,19 @@ describe("MatchOverlay", () => {
         text.startsWith("Play again"),
       ),
     ).toBe(true);
+  });
+
+  it("shows the wins of the series instead of a 1 for the winner", () => {
+    expect(resultRows("tictactoe", [0n, 1n])).toEqual(["Wins", "Ann (you) | 2", "Bob | 3", "Draws: 1"]);
+  });
+
+  it("shows the wins of the series beside points of the game's own", () => {
+    expect(resultRows("snake", [7n, 12n])).toEqual([
+      "Score | Wins",
+      "Ann (you) | 7 | 2",
+      "Bob | 12 | 3",
+      "Draws: 1",
+    ]);
   });
 
   it("starts the next match with Enter or Space", () => {

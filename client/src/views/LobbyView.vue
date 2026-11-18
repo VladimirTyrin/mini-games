@@ -13,6 +13,7 @@ import InviteFriends from "@/components/InviteFriends.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
 import { botName, botNumbers } from "@/games/seat-names";
+import { hasCounted } from "@/match/match-series";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
@@ -94,6 +95,11 @@ async function saveSettings(): Promise<void> {
 }
 
 /** Nobody else is here: play locally instead (no ping, works offline). */
+/** The score of the matches these players played in a row here. */
+const series = computed(() => {
+  const current = state.value?.series;
+  return hasCounted(current) ? current : null;
+});
 const iVotedToPlayAgain = computed(() => state.value?.playAgainVotes.some((voter) => isMe(voter)) ?? false);
 const startsLocally = computed(() => humanSeats.value === 1 && (state.value?.observers.length ?? 0) === 0);
 /** The server refuses new matches while it waits to restart; a local one does not need it. */
@@ -211,7 +217,10 @@ function kick(): void {
       </section>
 
       <section class="space-y-2 rounded-xl bg-panel p-4">
-        <h2 class="text-sm text-gray-400">Players {{ state.seats.length }}/{{ state.maxSeats }}</h2>
+        <h2 class="text-sm text-gray-400">
+          Players {{ state.seats.length }}/{{ state.maxSeats }}
+          <template v-if="series?.draws"> · Draws: {{ series.draws }}</template>
+        </h2>
         <div
           v-for="(seat, index) in state.seats"
           :key="index"
@@ -232,6 +241,9 @@ function kick(): void {
             <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> (you)</span>
             <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300"> host</span>
             <span v-if="seat.connectionLost" class="text-xs text-rose-300"> reconnecting…</span>
+          </span>
+          <span v-if="series" class="text-xs whitespace-nowrap text-gray-300">
+            {{ series.wins[index] ?? 0 }} {{ series.wins[index] === 1 ? "win" : "wins" }}
           </span>
           <button
             v-if="canBefriend(seat.occupant)"

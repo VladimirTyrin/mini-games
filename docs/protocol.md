@@ -86,6 +86,12 @@ REPLAY (shared replay)`.
   the settings (a player leaves, steps aside to watch or joins, a bot is added, the host edits
   the settings) clears the votes too: the next match would not be the one voted for (a Word Hunt
   group left with one player would even be a game alone), so everyone votes again.
+- `series` is the score of the matches the same players played in a row (Play again, or the host
+  starting again): wins by seat and draws, absent until a match ended with a winner or a draw
+  (solo and cooperative games have none). Any change to who sits where starts a new series; a
+  change of settings does not. The result screen shows the wins (in place of a game's 1-for-the-
+  winner scores, beside points of its own: `GameInfo.scores`), the lobby shows them by seat.
+  Local matches played again on a device keep the same score in the app.
 - Lobbies outside a match close after an hour without activity (`LOBBY_CLOSED_REASON_INACTIVE`);
   chat counts as activity.
 

@@ -2,12 +2,18 @@ import { create } from "@bufbuild/protobuf";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { MatchController } from "@/match/match-controller";
 import type { MatchSource } from "@/match/match-source";
 import { FakeSocket } from "@/net/testing/fake-socket";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
+import { MatchResultSchema, OutcomeKind } from "@/proto/minigames/v2/match_pb";
 import { ErrorCode, ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
 
 import { LobbyClosedReason, LobbyStateSchema } from "@/proto/minigames/v2/lobby_pb";
+
+import { nextTick } from "vue";
+
+import { BotKindSchema, GameSettingsSchema } from "@/proto/minigames/v2/game_pb";
 
 import { useConnectionStore } from "./connection";
 import { useLobbyStore } from "./lobby";
@@ -56,12 +62,21 @@ vi.mock("@/match/replay-match-source", () => ({
     leave(): void {}
   },
 }));
+vi.mock("@/local/local-match-source", () => ({
+  LocalMatchSource: class {
+    readonly kind = "local";
+    constructor(readonly header: unknown) {}
+    start(): void {}
+    leave(): void {}
+  },
+}));
 vi.mock("@/match/match-controller", async () => {
   const { shallowRef } = await import("vue");
   return {
     MatchController: class {
       readonly incompatible = shallowRef(false);
       readonly ended = shallowRef(false);
+      readonly result = shallowRef(null);
       constructor(readonly source: unknown) {}
       applyCatchUp(): void {}
       dispose(): void {}
@@ -232,5 +247,34 @@ describe("match store", () => {
     if (match.controller) match.controller.incompatible.value = true;
 
     expect(match.holdsUpdates).toBe(false);
+  });
+
+  describe("local series", () => {
+    const bot = create(BotKindSchema, { game: { case: "snake", value: 1 } });
+    const twoBots = [{ bot }, { bot }];
+    const settings = create(GameSettingsSchema, { game: { case: "snake", value: {} } });
+
+    /** Ends the local match on screen in a draw, its result set twice as the controller does. */
+    async function endInADraw(): Promise<void> {
+      const current = useMatchStore().controller as MatchController;
+      const draw = () => create(MatchResultSchema, { kind: OutcomeKind.DRAW });
+      current.result.value = draw();
+      await nextTick();
+      current.result.value = draw();
+      current.ended.value = true;
+      await nextTick();
+    }
+
+    it("counts each match played again once", async () => {
+      const match = useMatchStore();
+      match.startLocal(settings, twoBots, "Sam");
+      await endInADraw();
+      match.startLocal(settings, twoBots, "Sam", "continued");
+      await endInADraw();
+      expect(match.series?.draws).toBe(2);
+
+      match.startLocal(settings, twoBots, "Sam");
+      expect(match.series).toBeNull();
+    });
   });
 });

@@ -160,6 +160,7 @@ impl Hub {
             last_activity: Instant::now(),
             replays: VecDeque::new(),
             last_match: None,
+            series: None,
             next_bot_number: 1,
         };
         self.lobbies.insert(lobby_id.clone(), lobby);
@@ -216,7 +217,7 @@ impl Hub {
                     "the lobby is full",
                 );
             }
-            lobby.forget_play_again_votes();
+            lobby.seating_changed();
             lobby.seats.push(LobbySeat::Human {
                 session: session.clone(),
                 ready: false,
@@ -281,7 +282,7 @@ impl Hub {
         // Fewer players is another match (Word Hunt alone is even another mode): the others
         // vote again, knowing who is left, instead of their old votes starting it silently.
         if left_a_seat {
-            lobby.forget_play_again_votes();
+            lobby.seating_changed();
         }
         let next_host = lobby
             .seated_humans()
@@ -456,7 +457,7 @@ impl Hub {
             display_name: format!("Bot {number}"),
             avatar_url: String::new(),
         };
-        lobby.forget_play_again_votes();
+        lobby.seating_changed();
         lobby.seats.push(LobbySeat::Bot {
             kind: bot_kind,
             identity,
@@ -489,7 +490,7 @@ impl Hub {
                 "only bot seats can be removed; kick players instead",
             );
         }
-        lobby.forget_play_again_votes();
+        lobby.seating_changed();
         lobby.seats.remove(index);
         self.ack(session, request_id);
         self.after_lobby_change(&lobby_id);
@@ -582,7 +583,7 @@ impl Hub {
         }
         lobby.seats.remove(index);
         lobby.observers.push(session.clone());
-        lobby.forget_play_again_votes();
+        lobby.seating_changed();
         self.ack(session, request_id);
         self.after_lobby_change(&lobby_id);
     }
@@ -619,7 +620,7 @@ impl Hub {
             return self.reject(session, request_id, ErrorCode::LobbyFull, "no free seat");
         }
         lobby.observers.retain(|o| o != session);
-        lobby.forget_play_again_votes();
+        lobby.seating_changed();
         lobby.seats.push(LobbySeat::Human {
             session: session.clone(),
             ready: false,
