@@ -20,3 +20,4 @@ Thumbs.db
 
 # Machine-specific deploy toolchain paths (see deploy.local.env.example)
 /deploy.local.env
+/screens-out/

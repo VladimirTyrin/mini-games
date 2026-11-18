@@ -45,6 +45,25 @@ Zero warnings: clippy and rustc warnings fail CI.
   crates outside tests).
 - Every game passes `mg_core::conformance::run_all` and pins a `scripted_hash` golden value.
 
+## Screens
+
+We want to look good on every screen size: not the same everywhere, but good everywhere. A layout
+may depend on the screen's shape (portrait, landscape, nearly square), not only on its width. On
+small screens give up secondary interface (Stack Attack's stats, say) to make the game field
+larger; on big screens use the room instead of leaving it empty.
+
+Check every UI change at least on these (CSS pixels, in the browser pane's viewport):
+
+| Screen | Viewport |
+|---|---|
+| Small phone (iPhone SE) | 375×667, and 320×568 for the oldest |
+| Google Pixel 10a | about 412×915, also held sideways |
+| iPad 2018 (9.7") | 768×1024 and 1024×768 |
+| New laptop, 2K 16" (scaled 150%) | about 1707×1067, and its half (a window beside another): 853×1067 |
+| 4K 27–31" monitor (scaled 150%) | 2560×1440, and its half: 1280×1440 |
+
+No text may be clipped, ellipsized or spill out of its control, and nothing may scroll sideways.
+
 ## Coding rules
 
 - **Comments only where they add something**: non-obvious contracts, synchronization and ordering
