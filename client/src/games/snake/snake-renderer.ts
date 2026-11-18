@@ -32,12 +32,8 @@ export interface BoardLayout {
 const GROUND_LIGHT = "#1d3527";
 const GROUND_DARK = "#192e22";
 const BORDER_COLOR = "#3f8a5a";
-/**
- * The ring that points out the viewer's snake fades over the first seconds of a match to a faint
- * ring that stays: with ten snakes (and neighbouring colours) the colour alone is not enough.
- */
-const YOU_RING_MS = 3_000;
-const YOU_RING_RESTING_ALPHA = 0.35;
+/** The ring that points out the viewer's snake at the start fades out within these first ms. */
+const YOU_RING_MS = 5_000;
 const FOOD_COLOR = "#ef4444";
 const YOU_RING_COLOR = "rgb(255 255 255 / 0.85)";
 
@@ -387,7 +383,8 @@ function drawYouRing(frame: Frame, head: CellPosition | undefined): void {
   if (!head) return;
   const { context, cellSize, scene } = frame;
   const elapsedMs = (Number(scene.view.tick) - 1 + scene.progress) * scene.view.tickIntervalMs;
-  const visibility = Math.max(YOU_RING_RESTING_ALPHA, 1 - elapsedMs / YOU_RING_MS);
+  const visibility = 1 - elapsedMs / YOU_RING_MS;
+  if (visibility <= 0) return;
   context.globalAlpha *= Math.min(1, visibility);
   context.strokeStyle = YOU_RING_COLOR;
   context.lineWidth = Math.max(1.5, cellSize * 0.08);
