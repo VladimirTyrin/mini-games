@@ -1,4 +1,4 @@
-import { parseReplayFileName, REPLAY_FILE_EXTENSION } from "./replay-file-name";
+import { parseReplayFileName, REPLAY_FILE_EXTENSION, type ReplayOrigin } from "./replay-file-name";
 
 /** One entry of the app's replay folder, as the "Saved replays" screen lists it. */
 export interface SavedReplay {
@@ -8,6 +8,8 @@ export interface SavedReplay {
   /** Match start from the file name, else the file's modification time. */
   playedAt: Date;
   sizeBytes: number;
+  /** A file with a foreign name counts as saved: it may well be the player's own, renamed. */
+  origin: ReplayOrigin;
 }
 
 /** The part of a directory listing entry (Capacitor's `FileInfo`) the list needs. */
@@ -30,6 +32,7 @@ export function savedReplaysNewestFirst(files: readonly StoredFileInfo[]): Saved
         gameTitle: parts?.gameTitle ?? null,
         playedAt: parts?.startedAt ?? new Date(file.mtime),
         sizeBytes: file.size,
+        origin: parts?.origin ?? "saved",
       };
     })
     .sort(

@@ -49,6 +49,20 @@ export async function readSavedReplay(fileName: string): Promise<Uint8Array> {
   return typeof data === "string" ? fromBase64(data) : new Uint8Array(await data.arrayBuffer());
 }
 
+/**
+ * Whether the folder already holds these very bytes, under any name: a local match's header has
+ * no start time, so an imported copy of one is named after the moment of import and the name
+ * alone would let the same file pile up. Only files of the same size are read.
+ */
+export async function isAlreadySaved(bytes: Uint8Array): Promise<boolean> {
+  for (const replay of await listSavedReplays()) {
+    if (replay.sizeBytes !== bytes.length) continue;
+    const saved = await readSavedReplay(replay.fileName);
+    if (saved.every((byte, index) => byte === bytes[index])) return true;
+  }
+  return false;
+}
+
 export async function shareSavedReplay(fileName: string): Promise<ShareOutcome> {
   const [{ Filesystem, directory }, { Share }] = await Promise.all([
     replayFolder(),

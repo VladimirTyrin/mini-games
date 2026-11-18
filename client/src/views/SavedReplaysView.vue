@@ -88,7 +88,9 @@ onMounted(refresh);
             <span class="min-w-0">
               <span class="block truncate font-semibold">{{ replay.gameTitle ?? replay.fileName }}</span>
               <span class="block text-sm text-gray-400">
-                {{ playedAtText(replay) }} · {{ formatFileSize(replay.sizeBytes) }}
+                {{ playedAtText(replay) }}
+                <template v-if="replay.origin === 'imported'"> · Imported</template>
+                · {{ formatFileSize(replay.sizeBytes) }}
               </span>
             </span>
           </button>

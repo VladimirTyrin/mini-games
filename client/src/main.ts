@@ -41,7 +41,7 @@ async function boot(): Promise<void> {
       useToastStore(pinia).show("Leave the match first to watch the replay");
       return;
     }
-    match.startReplay(bytes);
+    void match.importReplay(bytes);
   });
   if (!__NATIVE_APP__) {
     // Offline support; new versions are applied outside matches (see web-updates.ts).

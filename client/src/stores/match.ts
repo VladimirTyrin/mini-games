@@ -12,7 +12,7 @@ import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
 import { pluginBySettings } from "@/games";
 import { downloadInBrowser } from "@/platform/download";
-import { saveReplayFile } from "@/platform/saved-replays";
+import { isAlreadySaved, saveReplayFile } from "@/platform/saved-replays";
 import { replayFileNameForMatch } from "@/replays/replay-file-name";
 
 import { useConnectionStore } from "./connection";
@@ -92,14 +92,35 @@ export const useMatchStore = defineStore("match", () => {
     return run(new OnlineMatchSource(session, header, seat ? seat.slot : null));
   }
 
-  function startReplay(bytes: Uint8Array): void {
+  function startReplay(bytes: Uint8Array): ReplayMatchSource | null {
     try {
       const source = new ReplayMatchSource(bytes);
       // After `run`: it closes the previous match first, which forgets the replay.
       run(source);
       replay.value = source;
+      return source;
     } catch (error) {
       toasts.error(`Cannot open the replay: ${errorMessage(error)}`);
+      return null;
+    }
+  }
+
+  /**
+   * A replay file opened from outside the app (Open with, Share): it plays, and a copy marked as
+   * imported joins the saved replays, so it is there to watch again (once: a file already there,
+   * imported before or the player's own, is not copied).
+   */
+  async function importReplay(bytes: Uint8Array): Promise<void> {
+    const source = startReplay(bytes);
+    // The literal (see env.d.ts), so the web build drops the app's file storage.
+    if (!source || !__NATIVE_APP__) return;
+    const gameTitle = pluginBySettings(source.header.settings?.game.case)?.title ?? "Replay";
+    try {
+      if (await isAlreadySaved(bytes)) return;
+      await saveReplayFile(bytes, replayFileNameForMatch(source.header, gameTitle, "imported"));
+      toasts.show("Replay added to Saved replays", "success");
+    } catch (error) {
+      toasts.error(`Cannot add the replay to Saved replays: ${errorMessage(error)}`);
     }
   }
 
@@ -120,7 +141,7 @@ export const useMatchStore = defineStore("match", () => {
         toasts.error("This match has no replay");
         return;
       }
-      const fileName = replayFileNameForMatch(source.header, gameTitle);
+      const fileName = replayFileNameForMatch(source.header, gameTitle, "saved");
       // The literal (see env.d.ts), so the web build drops the app's file storage.
       if (__NATIVE_APP__) {
         await saveReplayFile(bytes, fileName);
@@ -203,5 +224,6 @@ export const useMatchStore = defineStore("match", () => {
     startReplay,
     close,
     saveReplay,
+    importReplay,
   };
 });

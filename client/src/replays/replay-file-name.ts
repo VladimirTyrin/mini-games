@@ -2,20 +2,29 @@ import type { MatchHeader } from "@/proto/minigames/v2/match_pb";
 
 export const REPLAY_FILE_EXTENSION = ".mgreplay";
 
-/** What a replay's file name says: "Snake 2026-11-16 14-05-33 3f9a1c.mgreplay". */
+/** Saved from a match played or watched here, or opened from a file got elsewhere. */
+export type ReplayOrigin = "saved" | "imported";
+
+/**
+ * What a replay's file name says: "Snake 2026-11-16 14-05-33 3f9a1c.mgreplay", an imported one
+ * "Snake 2026-11-16 14-05-33 3f9a1c imported.mgreplay".
+ */
 export interface ReplayFileNameParts {
   gameTitle: string;
   /** Local wall-clock time the match started, to the second. */
   startedAt: Date;
   /** Start of the match id ("local" for offline matches); with the time it keeps names unique. */
   matchTag: string;
+  origin: ReplayOrigin;
 }
 
 // Characters that Android, Windows or a share target may refuse in a file name.
 const UNSAFE_CHARACTERS = /[\\/:*?"<>|\p{Cc}]/gu;
 const MATCH_TAG_LENGTH = 6;
 const FILE_NAME_PATTERN =
-  /^(?<title>.+) (?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2}) (?<hours>\d{2})-(?<minutes>\d{2})-(?<seconds>\d{2}) (?<tag>[a-z0-9]+)\.mgreplay$/i;
+  /^(?<title>.+) (?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2}) (?<hours>\d{2})-(?<minutes>\d{2})-(?<seconds>\d{2}) (?<tag>[a-z0-9]+)(?<imported> imported)?\.mgreplay$/i;
+
+const IMPORTED_MARK = " imported";
 
 const twoDigits = (value: number) => String(value).padStart(2, "0");
 
@@ -33,19 +42,21 @@ export function buildReplayFileName(parts: ReplayFileNameParts): string {
   const at = parts.startedAt;
   const date = `${at.getFullYear()}-${twoDigits(at.getMonth() + 1)}-${twoDigits(at.getDate())}`;
   const time = `${twoDigits(at.getHours())}-${twoDigits(at.getMinutes())}-${twoDigits(at.getSeconds())}`;
-  return `${title} ${date} ${time} ${replayMatchTag(parts.matchTag)}${REPLAY_FILE_EXTENSION}`;
+  const mark = parts.origin === "imported" ? IMPORTED_MARK : "";
+  return `${title} ${date} ${time} ${replayMatchTag(parts.matchTag)}${mark}${REPLAY_FILE_EXTENSION}`;
 }
 
 /**
- * Named after the match, not the moment of saving: saving the same match twice overwrites one
- * file instead of piling up copies.
+ * Named after the match, not the moment of saving: saving (or importing) the same match twice
+ * overwrites one file instead of piling up copies.
  */
-export function replayFileNameForMatch(header: MatchHeader, gameTitle: string): string {
+export function replayFileNameForMatch(header: MatchHeader, gameTitle: string, origin: ReplayOrigin): string {
   const startedAtMs = Number(header.startedAtUnixMs);
   return buildReplayFileName({
     gameTitle,
     startedAt: new Date(startedAtMs > 0 ? startedAtMs : Date.now()),
     matchTag: header.matchId,
+    origin,
   });
 }
 
@@ -68,5 +79,6 @@ export function parseReplayFileName(fileName: string): ReplayFileNameParts | nul
     gameTitle: groups.title,
     startedAt: new Date(year, month - 1, day, hours, minutes, seconds),
     matchTag: groups.tag.toLowerCase(),
+    origin: groups.imported ? "imported" : "saved",
   };
 }

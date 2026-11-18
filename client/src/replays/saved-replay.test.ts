@@ -21,7 +21,19 @@ describe("savedReplaysNewestFirst", () => {
       gameTitle: "2048",
       playedAt: new Date(2026, 10, 16, 14, 5, 33),
       sizeBytes: 2048,
+      origin: "saved",
     });
+  });
+
+  it("tells imported replays from saved ones", () => {
+    const list = savedReplaysNewestFirst([
+      file("Snake 2026-11-16 08-00-00 3f9a1c imported.mgreplay"),
+      file("from-a-friend.mgreplay"),
+    ]);
+    expect(list.map((replay) => [replay.gameTitle, replay.origin])).toEqual([
+      ["Snake", "imported"],
+      [null, "saved"],
+    ]);
   });
 
   it("keeps files with foreign names, dated by their modification time", () => {

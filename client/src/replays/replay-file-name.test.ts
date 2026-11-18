@@ -14,16 +14,16 @@ const startedAt = new Date(2026, 10, 16, 14, 5, 33);
 
 describe("buildReplayFileName", () => {
   it("names the game, the local start time and the match", () => {
-    expect(buildReplayFileName({ gameTitle: "Snake", startedAt, matchTag: "3F9A-1c2d-77" })).toBe(
-      "Snake 2026-11-16 14-05-33 3f9a1c.mgreplay",
-    );
+    expect(
+      buildReplayFileName({ gameTitle: "Snake", startedAt, matchTag: "3F9A-1c2d-77", origin: "saved" }),
+    ).toBe("Snake 2026-11-16 14-05-33 3f9a1c.mgreplay");
   });
 
   it("drops characters file systems refuse and never leaves the title empty", () => {
-    expect(buildReplayFileName({ gameTitle: 'a/b:c*"?', startedAt, matchTag: "local" })).toBe(
-      "abc 2026-11-16 14-05-33 local.mgreplay",
-    );
-    expect(buildReplayFileName({ gameTitle: " / ", startedAt, matchTag: "" })).toBe(
+    expect(
+      buildReplayFileName({ gameTitle: 'a/b:c*"?', startedAt, matchTag: "local", origin: "saved" }),
+    ).toBe("abc 2026-11-16 14-05-33 local.mgreplay");
+    expect(buildReplayFileName({ gameTitle: " / ", startedAt, matchTag: "", origin: "saved" })).toBe(
       "Replay 2026-11-16 14-05-33 match.mgreplay",
     );
   });
@@ -33,10 +33,18 @@ describe("buildReplayFileName", () => {
       matchId: "0d5e2b7c-aaaa",
       startedAtUnixMs: BigInt(startedAt.getTime()),
     });
-    expect(replayFileNameForMatch(header, "Tic-Tac-Toe")).toBe(
+    expect(replayFileNameForMatch(header, "Tic-Tac-Toe", "saved")).toBe(
       "Tic-Tac-Toe 2026-11-16 14-05-33 0d5e2b.mgreplay",
     );
-    expect(replayFileNameForMatch(header, "Tic-Tac-Toe")).toBe(replayFileNameForMatch(header, "Tic-Tac-Toe"));
+    expect(replayFileNameForMatch(header, "Tic-Tac-Toe", "saved")).toBe(
+      replayFileNameForMatch(header, "Tic-Tac-Toe", "saved"),
+    );
+  });
+
+  it("marks an imported replay, apart from a saved one of the same match", () => {
+    expect(
+      buildReplayFileName({ gameTitle: "Snake", startedAt, matchTag: "3f9a1c", origin: "imported" }),
+    ).toBe("Snake 2026-11-16 14-05-33 3f9a1c imported.mgreplay");
   });
 });
 
@@ -50,8 +58,10 @@ describe("replayMatchTag", () => {
 describe("parseReplayFileName", () => {
   it("reads back what buildReplayFileName wrote", () => {
     for (const gameTitle of ["Snake", "Stack Attack", "Tic-Tac-Toe", "2048"]) {
-      const parts = { gameTitle, startedAt, matchTag: "3f9a1c" };
-      expect(parseReplayFileName(buildReplayFileName(parts))).toEqual(parts);
+      for (const origin of ["saved", "imported"] as const) {
+        const parts = { gameTitle, startedAt, matchTag: "3f9a1c", origin };
+        expect(parseReplayFileName(buildReplayFileName(parts))).toEqual(parts);
+      }
     }
   });
 

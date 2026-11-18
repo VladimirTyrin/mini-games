@@ -47,7 +47,9 @@ replay is refused with a message. `IncomingReplay.java` copies the file into the
 once (the sender's permission lasts only for that intent; at most 8 MiB) and turns the intent
 into `minigames-replay://open?file=NAME`, which `platform/incoming-replays.ts` reads through the
 Filesystem plugin, at start (`getLaunchUrl`) and while running (`appUrlOpen`). A match being
-played is not dropped for it: the app says to leave it first.
+played is not dropped for it: the app says to leave it first. An opened file also joins Saved
+replays, named like a saved one with " imported" before the extension (shown as "Imported" in the
+list), unless the folder already holds the same bytes.
 
 The web app does not take replay files: a browser tab cannot, and an installed one on a computer
 could (the manifest's `file_handlers`) but was left out for now.
