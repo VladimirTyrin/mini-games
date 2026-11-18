@@ -4,6 +4,8 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
+import HowToPlay from "@/components/HowToPlay.vue";
+import HowToPlayButton from "@/components/HowToPlayButton.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
@@ -29,6 +31,7 @@ const prefs = usePrefsStore();
 
 const state = computed(() => lobby.current);
 const plugin = computed(() => pluginBySettings(state.value?.settings?.game.case));
+const helpOpen = ref(false);
 const facts = computed(() =>
   plugin.value && state.value?.settings
     ? plugin.value.describeSettings(state.value.settings, state.value.seats.length)
@@ -141,7 +144,10 @@ function kick(): void {
 </script>
 
 <template>
-  <AppHeader :title="state?.name ?? 'Lobby'" :back="requestLeave" />
+  <AppHeader :title="state?.name ?? 'Lobby'" :back="requestLeave">
+    <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
+  </AppHeader>
+  <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
   <ConfirmDialog
     v-if="confirmingLeave"
     title="Leave the lobby?"

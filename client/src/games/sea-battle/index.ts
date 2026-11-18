@@ -2,6 +2,7 @@ import type { GamePlugin } from "../game-plugin";
 import { SeaBattleBotKind, SeaBattlePhase } from "@/proto/minigames/v2/sea_battle_pb";
 
 import Board from "./SeaBattleBoard.vue";
+import Help from "./SeaBattleHelp.vue";
 import SeaBattleIcon from "./SeaBattleIcon.vue";
 import SettingsForm from "./SeaBattleSettings.vue";
 
@@ -20,6 +21,7 @@ export const seaBattlePlugin: GamePlugin = {
   tagline: "Find and sink the hidden fleet",
   SettingsForm,
   Board,
+  Help,
   describeSettings: () => ["classic rules"],
   botLabel(kind) {
     return kind.game.case === "seaBattle" ? (BOT_LABELS[kind.game.value] ?? "Bot") : "Bot";

@@ -3,6 +3,7 @@ import { TicTacToeBotKind, TicTacToeFirstPlayerMode } from "@/proto/minigames/v2
 
 import { narrowScreenSettings } from "./board-presets";
 import Board from "./TicTacToeBoard.vue";
+import Help from "./TicTacToeHelp.vue";
 import SettingsForm from "./TicTacToeSettings.vue";
 import TicTacToeIcon from "./TicTacToeIcon.vue";
 
@@ -26,6 +27,7 @@ export const tictactoePlugin: GamePlugin = {
   tagline: "N in a row on a big board",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings) {
     if (settings.game.case !== "tictactoe") return [];
     const value = settings.game.value;

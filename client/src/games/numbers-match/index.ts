@@ -2,6 +2,7 @@ import type { GamePlugin } from "../game-plugin";
 
 import { hintModeLabel } from "./hint-mode-options";
 import Board from "./NumbersMatchBoard.vue";
+import Help from "./NumbersMatchHelp.vue";
 import SettingsForm from "./NumbersMatchSettings.vue";
 import NumbersMatchIcon from "./NumbersMatchIcon.vue";
 
@@ -14,6 +15,8 @@ export const numbersMatchPlugin: GamePlugin = {
   tagline: "Pair equal numbers or tens",
   SettingsForm,
   Board,
+  Help,
+  opensHelpFirstTime: true,
   describeSettings(settings) {
     if (settings.game.case !== "numbersMatch") return [];
     const value = settings.game.value;

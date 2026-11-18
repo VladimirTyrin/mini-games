@@ -1,6 +1,7 @@
 import type { GamePlugin } from "../game-plugin";
 
 import Board from "./Puzzle2048Board.vue";
+import Help from "./Puzzle2048Help.vue";
 import SettingsForm from "./Puzzle2048Settings.vue";
 import Puzzle2048Icon from "./Puzzle2048Icon.vue";
 
@@ -13,6 +14,7 @@ export const puzzle2048Plugin: GamePlugin = {
   tagline: "Slide and merge tiles to reach the target",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings) {
     if (settings.game.case !== "puzzle2048") return [];
     const value = settings.game.value;

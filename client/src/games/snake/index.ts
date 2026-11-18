@@ -2,6 +2,7 @@ import type { GamePlugin } from "../game-plugin";
 import { SnakeBotKind, SnakeDeadSnakeBehavior, SnakeWallCollisionMode } from "@/proto/minigames/v2/snake_pb";
 
 import Board from "./SnakeBoard.vue";
+import Help from "./SnakeHelp.vue";
 import SettingsForm from "./SnakeSettings.vue";
 import SnakeIcon from "./SnakeIcon.vue";
 import { snakeSpeedName } from "./speeds";
@@ -15,6 +16,7 @@ export const snakePlugin: GamePlugin = {
   tagline: "Classic snake, up to 10 players",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings) {
     if (settings.game.case !== "snake") return [];
     const value = settings.game.value;

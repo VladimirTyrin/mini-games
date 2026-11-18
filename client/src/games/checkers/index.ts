@@ -7,6 +7,7 @@ import {
 } from "@/proto/minigames/v2/checkers_pb";
 
 import Board from "./CheckersBoard.vue";
+import Help from "./CheckersHelp.vue";
 import CheckersIcon from "./CheckersIcon.vue";
 import SettingsForm from "./CheckersSettings.vue";
 
@@ -55,6 +56,7 @@ export const checkersPlugin: GamePlugin = {
   tagline: "Russian draughts with flying kings",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings) {
     if (settings.game.case !== "checkers") return [];
     const { whitePlayer, captureRule } = settings.game.value;

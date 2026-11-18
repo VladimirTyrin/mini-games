@@ -29,8 +29,11 @@ interface Pending {
 }
 
 /** Match against bots (or alone) with the authority in a Web Worker: no server, no network. */
-/** `hidden`: the tab or app is in the background; `player`: the player paused. */
-export type PauseReason = "hidden" | "player";
+/**
+ * `hidden`: the tab or app is in the background; `player`: the player paused; `help`: the player
+ * is reading how to play.
+ */
+export type PauseReason = "hidden" | "player" | "help";
 
 export class LocalMatchSource implements MatchSource {
   readonly kind = "local";

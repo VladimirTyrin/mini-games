@@ -28,6 +28,10 @@ export interface GamePlugin {
   tagline: string;
   SettingsForm: Component;
   Board: Component;
+  /** "How to play": the goal and the rules, no props; the controls are added from `controls`. */
+  Help: Component;
+  /** The help opens by itself before the first match on this device (a game that needs it). */
+  opensHelpFirstTime?: true;
   /**
    * Short human-readable facts for lobby cards, e.g. "15×15", "5 in a row". `seats`: taken seats
    * when known (a lobby), so facts that only apply alone or in a group fit.

@@ -10,6 +10,7 @@ import type { GamePlugin } from "../game-plugin";
 
 import { localDayNumber } from "./daily";
 import Board from "./WordHuntBoard.vue";
+import Help from "./WordHuntHelp.vue";
 import WordHuntIcon from "./WordHuntIcon.vue";
 import SettingsForm from "./WordHuntSettings.vue";
 
@@ -22,6 +23,7 @@ export const wordHuntPlugin: GamePlugin = {
   tagline: "Guess the word: Russian or English",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings, seats) {
     if (settings.game.case !== "wordHunt") return [];
     const value = settings.game.value;

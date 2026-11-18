@@ -64,6 +64,8 @@ Check every UI change at least on these, in CSS pixels (what the browser sees: a
 | 4K 27–31" monitor, scaled 150% | 2560×1440, and its half: 1280×1440 |
 
 No text may be clipped, ellipsized or spill out of its control, and nothing may scroll sideways.
+One exception: screens other than a game itself (home, setup, lobby, online, settings) need not
+work on a phone held sideways. Dialogs over a game (How to play, the result) still do.
 
 ## Coding rules
 

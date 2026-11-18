@@ -4,6 +4,8 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import AppHeader from "@/components/AppHeader.vue";
+import HowToPlay from "@/components/HowToPlay.vue";
+import HowToPlayButton from "@/components/HowToPlayButton.vue";
 import OpponentsCard from "@/components/OpponentsCard.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginById } from "@/games";
@@ -27,6 +29,7 @@ const settings = ref(plugin ? initialSettings(plugin, prefs.lastSettings(props.g
 const availableBots: BotKind[] = info?.hasBots ? botKinds(props.gameId) : [];
 const bots = ref<BotKind[]>(availableBots[0] && info && info.minPlayers > 1 ? [availableBots[0]] : []);
 const problem = ref<SettingsProblem | null>(null);
+const helpOpen = ref(false);
 
 // Remembered as they change, not only on Play: leaving the screen (or an app update reloading
 // it) keeps what the player picked.
@@ -45,7 +48,10 @@ function start(): void {
 </script>
 
 <template>
-  <AppHeader :title="plugin?.title ?? 'Unknown game'" back="/" />
+  <AppHeader :title="plugin?.title ?? 'Unknown game'" back="/">
+    <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
+  </AppHeader>
+  <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
   <main
     v-if="plugin && info && settings"
     class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4 max-[359px]:p-3"

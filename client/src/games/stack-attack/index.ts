@@ -1,6 +1,7 @@
 import type { GamePlugin } from "../game-plugin";
 
 import Board from "./StackAttackBoard.vue";
+import Help from "./StackAttackHelp.vue";
 import SettingsForm from "./StackAttackSettings.vue";
 import { describeStackAttackEnd } from "./end-reason";
 import StackAttackIcon from "./StackAttackIcon.vue";
@@ -14,6 +15,7 @@ export const stackAttackPlugin: GamePlugin = {
   tagline: "Co-op: survive the falling crates",
   SettingsForm,
   Board,
+  Help,
   describeSettings(settings) {
     if (settings.game.case !== "stackAttack") return [];
     const value = settings.game.value;

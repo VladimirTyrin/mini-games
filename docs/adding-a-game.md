@@ -132,8 +132,13 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 
 ## 5. UI (`client/src/games/<game>`)
 
-- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controls` (a keyboard and a touch hint), and
-  optionally `describeEnd` (why the match ended, shown with the result).
+- `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controls` (a keyboard and a touch hint),
+  `Help` and optionally `describeEnd` (why the match ended, shown with the result).
+- `<Game>Help.vue` — "How to play": the goal and rules as `h3` sections with `p`/`ul` (the
+  `HowToPlay` sheet styles them and adds the controls). It opens from the "?" in the header on
+  the setup screen, in the lobby and in a match; a local real-time match pauses meanwhile. A game
+  whose rules are not obvious sets `opensHelpFirstTime` (Numbers Match): the help then opens by
+  itself before the first match on the device.
 - Settings form — rows from `components/form` (`StepperField`, `SegmentedField`, `ChipsField`
   presets, `MoreOptions`) through `useGameSettingsForm`: immutable updates, **no hardcoded
   limits** (`form.field('<wire name>')` binds the core's bounds and its error to a row; presets

@@ -5,11 +5,14 @@ import { onBeforeRouteLeave, useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import HowToPlay from "@/components/HowToPlay.vue";
+import HowToPlayButton from "@/components/HowToPlayButton.vue";
 import MatchOverlay from "@/components/MatchOverlay.vue";
 import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { LocalMatchSource } from "@/local/local-match-source";
+import { hasSeenHelp } from "@/platform/help-seen";
 import { setKeepScreenOn } from "@/platform/keep-awake";
 import { ChatScope } from "@/proto/minigames/v2/lobby_pb";
 import { useAppUpdateStore } from "@/stores/app-update";
@@ -100,6 +103,27 @@ function setPausedByPlayer(paused: boolean): void {
 watch(controller, () => {
   pausedByPlayer.value = false;
 });
+
+// A local real-time game holds while the player reads how to play.
+const helpOpen = ref(false);
+watch(helpOpen, (open) => {
+  const source = controller.value?.source;
+  if (source instanceof LocalMatchSource && canPause.value) {
+    source.setPaused("help", open, resumeCountdownMs());
+  }
+});
+// A game that needs it explains itself before the first match on this device.
+watch(
+  controller,
+  (current) => {
+    helpOpen.value =
+      !!current &&
+      current.source.kind !== "replay" &&
+      plugin.value?.opensHelpFirstTime === true &&
+      !hasSeenHelp(plugin.value.id);
+  },
+  { immediate: true },
+);
 function onPauseKey(event: KeyboardEvent): void {
   if (event.key !== "Escape" || !canPause.value || confirmingLeave.value) return;
   event.preventDefault();
@@ -220,6 +244,7 @@ function again(): void {
 
 <template>
   <AppHeader :title="plugin?.title ?? 'Match'" :back="requestLeave">
+    <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
     <button
       v-if="canPause && !pausedByPlayer"
       type="button"
@@ -229,6 +254,7 @@ function again(): void {
       ⏸ Pause
     </button>
   </AppHeader>
+  <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
   <ConfirmDialog
     v-if="confirmingLeave"
     title="Leave the match?"
