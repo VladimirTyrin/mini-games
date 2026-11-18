@@ -85,14 +85,14 @@ const phaseLabel: Record<number, string> = {
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
-  <main class="mx-auto w-full max-w-3xl flex-1 space-y-4 p-4 lg:max-w-6xl">
+  <main class="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 lg:max-w-6xl">
     <SignInPanel v-if="!connection.isSignedIn" />
     <div
       v-else
-      class="flex flex-col gap-4 lg:grid lg:items-start lg:gap-6"
+      class="flex flex-1 flex-col gap-3 lg:grid lg:items-start lg:gap-6"
       :class="lobby.current ? '' : 'lg:grid-cols-[minmax(0,1fr)_34rem] xl:grid-cols-[minmax(0,1fr)_40rem]'"
     >
-      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4">
+      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4 lg:self-stretch">
         <!-- Reachable while in a lobby (from Home, or back from Friends): one lobby at a time, so
            the way on is back into it. -->
         <button
@@ -182,8 +182,10 @@ const phaseLabel: Record<number, string> = {
             No lobbies yet — create one!
           </li>
         </ul>
+        <!-- The chat takes what the screen has left, at least a few lines. -->
         <ChatPanel
-          class="order-2 lg:order-none"
+          class="order-2 min-h-36 flex-1 lg:order-none"
+          grows-to-fill
           :messages="lobby.lobbyListChat"
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
         />
@@ -192,10 +194,9 @@ const phaseLabel: Record<number, string> = {
            stands beside the list, settings and all. -->
       <section
         v-if="plugin && !lobby.current"
-        class="order-1 space-y-3 rounded-2xl bg-panel p-4 lg:order-none"
+        class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4 lg:order-none"
         :class="creating ? '' : 'hidden lg:block'"
       >
-        <h2 class="font-semibold">New lobby</h2>
         <!-- The games as on the home screen: two per row, low tiles on a phone, with the tagline
              where there is room. -->
         <div class="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" aria-label="Game">
@@ -205,7 +206,7 @@ const phaseLabel: Record<number, string> = {
             type="button"
             role="radio"
             :aria-checked="candidate.id === gameId"
-            class="flex items-center gap-2 rounded-xl p-2 text-left sm:gap-3 sm:p-3"
+            class="flex items-center gap-2 rounded-xl p-1.5 text-left sm:gap-3 sm:p-3"
             :class="
               candidate.id === gameId
                 ? 'bg-emerald-600/20 ring-2 ring-emerald-400'
@@ -213,7 +214,7 @@ const phaseLabel: Record<number, string> = {
             "
             @click="gameId = candidate.id"
           >
-            <GameIcon :plugin="candidate" class="size-8 shrink-0 text-xl sm:size-10 sm:text-2xl" />
+            <GameIcon :plugin="candidate" class="size-7 shrink-0 text-lg sm:size-10 sm:text-2xl" />
             <span class="min-w-0">
               <span class="block text-sm font-semibold leading-tight sm:text-base">{{
                 candidate.title
@@ -222,7 +223,7 @@ const phaseLabel: Record<number, string> = {
             </span>
           </button>
         </div>
-        <div class="flex items-center gap-3 border-b border-white/5 pb-3">
+        <div class="flex items-center gap-3 border-b border-white/5 pb-2 sm:pb-3">
           <p class="min-w-0 flex-1 font-medium leading-tight sm:hidden">{{ plugin.tagline }}</p>
           <button
             type="button"
@@ -237,7 +238,7 @@ const phaseLabel: Record<number, string> = {
           maxlength="48"
           placeholder="Lobby name (optional)"
           aria-label="Lobby name"
-          class="h-12 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
+          class="h-11 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
         />
         <div class="flex items-center gap-3 rounded-xl bg-panel-raised px-3 py-2 lg:hidden">
           <p class="min-w-0 flex-1 text-sm text-gray-300">{{ settingsSummary }}</p>

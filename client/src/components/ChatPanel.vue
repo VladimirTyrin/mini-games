@@ -7,8 +7,15 @@ import type { ChatMessage } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { playerLabels, sameIdentity } from "@/util/players";
 
-/** `players`: who is shown elsewhere on screen (lobby members), so chat labels match theirs. */
-const props = defineProps<{ messages: ChatMessage[]; players?: readonly (Identity | undefined)[] }>();
+/**
+ * `players`: who is shown elsewhere on screen (lobby members), so chat labels match theirs.
+ * `growsToFill`: the panel takes the height its parent leaves (a flex column) instead of a few lines.
+ */
+const props = defineProps<{
+  messages: ChatMessage[];
+  players?: readonly (Identity | undefined)[];
+  growsToFill?: boolean;
+}>();
 const emit = defineEmits<{ send: [text: string] }>();
 const text = ref("");
 const list = ref<HTMLElement | null>(null);
@@ -42,7 +49,11 @@ watch(
 
 <template>
   <section class="flex min-h-0 flex-col rounded-xl bg-panel">
-    <ol ref="list" class="max-h-56 min-h-24 flex-1 space-y-1 overflow-y-auto p-3 text-sm">
+    <ol
+      ref="list"
+      class="min-h-24 flex-1 space-y-1 overflow-y-auto p-3 text-sm"
+      :class="growsToFill ? '' : 'max-h-56'"
+    >
       <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
         <Avatar
           v-if="message.sender"
