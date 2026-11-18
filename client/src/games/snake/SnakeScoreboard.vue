@@ -3,6 +3,7 @@ import { computed } from "vue";
 
 import { SnakeDeathReason, type SnakeView } from "@/proto/minigames/v2/snake_pb";
 
+import { crashesOf } from "./snake-crash";
 import { DEAD_SNAKE_COLOR, cssColor, snakeColor } from "./snake-palette";
 
 const props = defineProps<{ view: SnakeView; seatNames: readonly string[]; status: string }>();
@@ -14,6 +15,10 @@ const DEATH_NOTES: Partial<Record<SnakeDeathReason, string>> = {
   [SnakeDeathReason.PLAYER_DISCONNECTED]: "left",
 };
 
+const headOnSlots = computed(
+  () => new Set(crashesOf(props.view, null).flatMap((crash) => (crash.headOn ? crash.slots : []))),
+);
+
 const entries = computed(() =>
   [...props.view.snakes]
     .sort((first, second) => second.score - first.score || first.slot - second.slot)
@@ -24,7 +29,11 @@ const entries = computed(() =>
       isYou: seat.slot === props.view.you,
       isWinner: props.view.end?.winnerSlots.includes(seat.slot) ?? false,
       alive: seat.alive,
-      deathNote: seat.alive ? "" : (DEATH_NOTES[seat.deathReason] ?? "out"),
+      deathNote: seat.alive
+        ? ""
+        : headOnSlots.value.has(seat.slot)
+          ? "crashed head-on"
+          : (DEATH_NOTES[seat.deathReason] ?? "out"),
       score: seat.score,
       color: cssColor(seat.alive ? snakeColor(seat.slot) : DEAD_SNAKE_COLOR),
     })),

@@ -9,6 +9,7 @@ import type { CanvasSize } from "@/render/use-canvas";
 import { type CellPosition, type FieldSize, type GridCell, sameCell, wrappedCopies } from "./snake-geometry";
 import { DEAD_SNAKE_COLOR, type RgbColor, cssColor, snakeColor, tintedBySprite } from "./snake-palette";
 import { type CentrelinePoint, sampleCentreline } from "./snake-centreline";
+import { type Crash, crashesOf } from "./snake-crash";
 import { type SnakeBodyPath, snakeBodyPath } from "./snake-path";
 import type { SnakeSpriteSheet } from "./snake-sprite-sheet";
 import { TUBE } from "./snake-sprites";
@@ -36,6 +37,12 @@ const BORDER_COLOR = "#3f8a5a";
 const YOU_RING_MS = 5_000;
 const FOOD_COLOR = "#ef4444";
 const YOU_RING_COLOR = "rgb(255 255 255 / 0.85)";
+/** A snake flashes this colour in the tick it crashes, then turns grey. */
+const CRASH_FLASH: RgbColor = { red: 248, green: 72, blue: 72 };
+const CRASH_FILL = "#ef4444";
+const CRASH_OUTLINE = "#450a0a";
+const CRASH_CORE = "#fde68a";
+const CRASH_BURST = "#fbbf24";
 
 /** Largest whole-pixel cells that fit, centred. */
 export function fitField(canvas: CanvasSize, field: FieldSize): BoardLayout {
@@ -79,6 +86,8 @@ export function drawSnakeScene(
   for (const seat of drawingOrder(scene.view)) drawSnake(frame, seat);
   context.restore();
   drawBorder(frame, fieldWidthPx, fieldHeightPx);
+  // Over the border: a crash into a wall happens on it.
+  for (const crash of crashesOf(scene.view, scene.previous)) drawCrash(frame, crash);
   context.restore();
 }
 
@@ -175,7 +184,11 @@ function drawSnake(frame: Frame, seat: SnakeSeatView): void {
   const previousBody = seat.alive && previousSeat ? previousSeat.body : null;
   const path = snakeBodyPath(seat.body, seat.direction, previousBody, field, scene.progress);
   if (!path) return;
-  const color = seat.alive ? snakeColor(seat.slot) : DEAD_SNAKE_COLOR;
+  const color = seat.alive
+    ? snakeColor(seat.slot)
+    : previousSeat?.alive
+      ? mixed(CRASH_FLASH, DEAD_SNAKE_COLOR, scene.progress)
+      : DEAD_SNAKE_COLOR;
   // Sampled once: the copies across a wrap-around border are the same line, shifted.
   const line = sampleCentreline(path.points);
   context.save();
@@ -393,4 +406,92 @@ function drawYouRing(frame: Frame, head: CellPosition | undefined): void {
     context.arc((copy.x + 0.5) * cellSize, (copy.y + 0.5) * cellSize, cellSize * 0.72, 0, Math.PI * 2);
     context.stroke();
   }
+}
+
+function mixed(from: RgbColor, to: RgbColor, amount: number): RgbColor {
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * amount);
+  return { red: mix(from.red, to.red), green: mix(from.green, to.green), blue: mix(from.blue, to.blue) };
+}
+
+/** A crash shows as long as one of its snakes does (all of them at the end of the match). */
+function crashOpacity(crash: Crash, scene: SnakeScene): number {
+  if (crash.fresh) return 1;
+  return Math.max(
+    0,
+    ...crash.slots.map((slot) => {
+      const seat = scene.view.snakes[slot];
+      return seat ? snakeOpacity(seat, scene.previous?.snakes[slot], scene) : 0;
+    }),
+  );
+}
+
+/**
+ * Where snakes crashed: a burst in the tick it happens, then a star that stays with the dead
+ * snakes, larger where two of them met head-on.
+ */
+function drawCrash(frame: Frame, crash: Crash): void {
+  const { context, cellSize, scene, field } = frame;
+  const opacity = crashOpacity(crash, scene);
+  if (opacity <= 0) return;
+  const size = (crash.headOn ? 0.62 : 0.46) * cellSize;
+  // The star pops in over the first half of the tick, the burst runs over the whole of it.
+  const grow = crash.fresh ? Math.max(0, easeOutBack(Math.min(1, scene.progress * 2))) : 1;
+  const positions =
+    scene.view.wallCollisionMode === SnakeWallCollisionMode.WRAP_AROUND
+      ? wrappedCopies({ x: crash.at.x - 0.5, y: crash.at.y - 0.5 }, field).map((copy) => ({
+          x: copy.x + 0.5,
+          y: copy.y + 0.5,
+        }))
+      : [crash.at];
+  for (const position of positions) {
+    context.save();
+    context.globalAlpha = opacity;
+    context.translate(position.x * cellSize, position.y * cellSize);
+    if (crash.fresh && scene.progress < 1) drawBurst(context, size, scene.progress);
+    drawStar(context, size * grow, Math.max(1, cellSize * 0.06));
+    context.restore();
+  }
+}
+
+function drawBurst(context: CanvasRenderingContext2D, size: number, progress: number): void {
+  const reach = size * (1 + 1.8 * (1 - (1 - progress) ** 3));
+  context.save();
+  context.globalAlpha *= 1 - progress;
+  context.strokeStyle = CRASH_BURST;
+  context.lineWidth = Math.max(1.5, size * 0.14);
+  context.lineCap = "round";
+  context.beginPath();
+  context.arc(0, 0, reach, 0, Math.PI * 2);
+  context.stroke();
+  for (let ray = 0; ray < 8; ray++) {
+    const angle = (ray / 8) * Math.PI * 2 + Math.PI / 8;
+    context.moveTo(Math.cos(angle) * reach * 0.55, Math.sin(angle) * reach * 0.55);
+    context.lineTo(Math.cos(angle) * reach * 0.9, Math.sin(angle) * reach * 0.9);
+  }
+  context.stroke();
+  context.restore();
+}
+
+function drawStar(context: CanvasRenderingContext2D, radius: number, outline: number): void {
+  if (radius <= 0) return;
+  const points = 8;
+  context.beginPath();
+  for (let vertex = 0; vertex < points * 2; vertex++) {
+    const reach = vertex % 2 === 0 ? radius : radius * 0.48;
+    const angle = (vertex / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+    const x = Math.cos(angle) * reach;
+    const y = Math.sin(angle) * reach;
+    if (vertex === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
+  }
+  context.closePath();
+  context.fillStyle = CRASH_FILL;
+  context.fill();
+  context.lineWidth = outline;
+  context.strokeStyle = CRASH_OUTLINE;
+  context.stroke();
+  context.beginPath();
+  context.arc(0, 0, radius * 0.28, 0, Math.PI * 2);
+  context.fillStyle = CRASH_CORE;
+  context.fill();
 }
