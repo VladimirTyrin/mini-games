@@ -194,7 +194,9 @@ async function voteDrop(slot: number): Promise<void> {
         <li v-for="(score, slot) in result.scores" :key="slot" class="flex gap-4">
           <span class="min-w-0 flex-1 break-words">
             {{ seatName(slot) }}
-            <span v-if="slot === mySlot" class="text-xs text-sky-300">({{ t.common.you }})</span>
+            <span v-if="slot === mySlot && seatName(slot) !== t.common.youName" class="text-xs text-sky-300"
+              >({{ t.common.you }})</span
+            >
           </span>
           <span v-if="showsMatchScores" class="font-mono">{{ score }}</span>
           <span v-if="shownSeries" class="min-w-8 text-right font-mono font-semibold">{{

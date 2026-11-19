@@ -151,7 +151,22 @@ export function launchChrome({ chromePath, port }) {
  * Opens a fresh tab at the visit's size and language, plays the scenario's steps and hands the
  * tab to `inspect` (a check or a screenshot). Each visit is its own tab: nothing carries over.
  */
-export async function visit(chrome, url, { scenario, size, lang }, inspect) {
+/** A visit that takes longer is stuck (a page that reloaded under an awaited step): it fails and is retried. */
+const VISIT_TIMEOUT_MS = 90_000;
+
+export async function visit(chrome, url, planned, inspect) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer in ${VISIT_TIMEOUT_MS / 1000} s`)), VISIT_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([visitOnce(chrome, url, planned, inspect), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function visitOnce(chrome, url, { scenario, size, lang }, inspect) {
   const tab = await chrome.openTab();
   try {
     await tab.send("Emulation.setDeviceMetricsOverride", {

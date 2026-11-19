@@ -116,7 +116,7 @@ function resetServer(): void {
       <form class="flex gap-2" @submit.prevent="saveServer">
         <input
           v-model="serverInput"
-          class="flex-1 rounded bg-panel-raised px-3 py-2 text-sm"
+          class="min-w-0 flex-1 rounded bg-panel-raised px-3 py-2 text-sm"
           autocapitalize="off"
           spellcheck="false"
         />
