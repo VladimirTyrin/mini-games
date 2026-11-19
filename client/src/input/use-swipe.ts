@@ -1,8 +1,8 @@
 import { onBeforeUnmount, type Ref, watch } from "vue";
 
-export type SwipeDirection = "up" | "down" | "left" | "right";
+import { type SwipeDirection, SwipeGesture, type SwipeMode } from "./swipe-gesture";
 
-const MIN_DISTANCE_PX = 24;
+export type { SwipeDirection, SwipeMode } from "./swipe-gesture";
 
 /**
  * Swipe and tap gestures on an element. Sets `touch-action: none` so the browser never scrolls
@@ -11,30 +11,39 @@ const MIN_DISTANCE_PX = 24;
 export function useSwipe(
   element: Ref<HTMLElement | null>,
   handlers: { swipe?: (direction: SwipeDirection) => void; tap?: (event: PointerEvent) => void },
+  mode: SwipeMode = "on-release",
 ): void {
-  let start: { x: number; y: number; id: number } | null = null;
+  const gesture = new SwipeGesture(mode);
+  let fingerId: number | null = null;
 
   const down = (event: PointerEvent) => {
-    start = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    fingerId = event.pointerId;
+    gesture.down({ x: event.clientX, y: event.clientY });
+    // A drag that leaves the board keeps steering instead of being lost at its edge.
+    if (mode === "while-dragging") (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  };
+  const move = (event: PointerEvent) => {
+    if (event.pointerId !== fingerId) return;
+    const direction = gesture.moved({ x: event.clientX, y: event.clientY });
+    if (direction) handlers.swipe?.(direction);
   };
   const up = (event: PointerEvent) => {
-    if (!start || start.id !== event.pointerId) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    start = null;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < MIN_DISTANCE_PX) {
-      handlers.tap?.(event);
-      return;
-    }
-    if (Math.abs(dx) > Math.abs(dy)) handlers.swipe?.(dx > 0 ? "right" : "left");
-    else handlers.swipe?.(dy > 0 ? "down" : "up");
+    if (event.pointerId !== fingerId) return;
+    fingerId = null;
+    const outcome = gesture.up({ x: event.clientX, y: event.clientY });
+    if (outcome.kind === "swipe") handlers.swipe?.(outcome.direction);
+    else if (outcome.kind === "tap") handlers.tap?.(event);
   };
-  const cancel = () => (start = null);
+  const cancel = () => {
+    fingerId = null;
+    gesture.cancel();
+  };
 
   let attached: HTMLElement | null = null;
   const detach = () => {
     if (!attached) return;
     attached.removeEventListener("pointerdown", down);
+    attached.removeEventListener("pointermove", move);
     attached.removeEventListener("pointerup", up);
     attached.removeEventListener("pointercancel", cancel);
     attached = null;
@@ -46,6 +55,7 @@ export function useSwipe(
       if (!target) return;
       target.style.touchAction = "none";
       target.addEventListener("pointerdown", down);
+      target.addEventListener("pointermove", move);
       target.addEventListener("pointerup", up);
       target.addEventListener("pointercancel", cancel);
       attached = target;

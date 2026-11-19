@@ -106,7 +106,9 @@ useGameKeys((key) => {
   turn(direction);
   return true;
 });
-useSwipe(container, { swipe: (direction) => turn(SWIPE_DIRECTIONS[direction]) });
+// Steering by swipe must be as quick as the arrows: a turn fires mid-drag, and one drawn stroke
+// may turn several times.
+useSwipe(container, { swipe: (direction) => turn(SWIPE_DIRECTIONS[direction]) }, "while-dragging");
 </script>
 
 <template>
