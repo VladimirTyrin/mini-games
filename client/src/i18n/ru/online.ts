@@ -7,7 +7,12 @@ export const online: Messages["online"] = {
   youAreIn: (lobbyName: string) => `Ты в лобби «${lobbyName}»`,
   open: "Открыть",
   friends: "Друзья",
-  newFriendRequests: (count: number) => `${count} ${pluralRu(count, "новая", "новые", "новых")}`,
+  friendRequestCount: (count: number) => `${count} ${pluralRu(count, "заявка", "заявки", "заявок")}`,
+  friendRequestCountLabel: (count: number) =>
+    `${count} ${pluralRu(count, "заявка", "заявки", "заявок")} в друзья`,
+  manageFriends: "Управление",
+  addFriends: "Добавить друзей",
+  noFriendsYet: "Друзей пока нет. Отправь кому-нибудь ссылку, чтобы играть вместе.",
   lobbies: "Лобби",
   lobbySeats: (taken: number, max: number) => `Игроков: ${taken}/${max}`,
   lobbyWatchers: (count: number) => `зрителей: ${count}`,

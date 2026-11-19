@@ -14,6 +14,7 @@ import {
   InviteAnswer,
   InviteState,
   type InviteUpdate,
+  Presence,
 } from "@/proto/minigames/v2/social_pb";
 import { t } from "@/i18n";
 import { canNotifyWithoutAsking, pushAvailability, registerForPush } from "@/platform/push-notifications";
@@ -74,6 +75,15 @@ export const useFriendsStore = defineStore("friends", () => {
       ]),
   );
   const incomingRequestCount = computed(() => list.value?.incomingRequests.length ?? 0);
+  /** Playing first, then online, then the rest; by name within each. */
+  const sortedFriends = computed(() => {
+    const rank: Partial<Record<Presence, number>> = { [Presence.PLAYING]: 0, [Presence.ONLINE]: 1 };
+    return [...(list.value?.friends ?? [])].sort(
+      (a, b) =>
+        (rank[a.presence] ?? 2) - (rank[b.presence] ?? 2) ||
+        (a.identity?.displayName ?? "").localeCompare(b.identity?.displayName ?? ""),
+    );
+  });
 
   let detach: (() => void)[] = [];
   watch(
@@ -317,6 +327,7 @@ export const useFriendsStore = defineStore("friends", () => {
     friendAccounts,
     requestedAccounts,
     incomingRequestCount,
+    sortedFriends,
     refresh,
     registerPush,
     askForNotificationsOnce,

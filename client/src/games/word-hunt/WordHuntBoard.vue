@@ -188,7 +188,8 @@ useGameKeys(
       erase();
       return true;
     }
-    const letter = letterForKey(settings.value.language, key, event.code);
+    // What the key types, in the player's layout (`key` is its place).
+    const letter = letterForKey(settings.value.language, event.key, event.code);
     if (letter === null) return false;
     type(letter);
     return true;

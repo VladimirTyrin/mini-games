@@ -29,7 +29,6 @@ export const stackAttackPlugin: GamePlugin = {
   },
   // Stack Attack has no built-in bot kinds.
   botLabel: () => t.common.bot,
-  playsWithSpace: true,
   controls: {
     get keyboard() {
       return t.games.stackAttack.controls.keyboard;

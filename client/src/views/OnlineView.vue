@@ -6,6 +6,7 @@ import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
+import FriendsPanel from "@/components/FriendsPanel.vue";
 import HowToPlay from "@/components/HowToPlay.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
@@ -123,24 +124,26 @@ function phaseLabel(phase: LobbyPhase): string {
           }}</span>
           <span class="shrink-0">{{ `${t.online.open} ›` }}</span>
         </button>
+        <!-- A phone has no room for the list: a way to the Friends screen instead. -->
         <RouterLink
           v-if="friends.hasAccount"
           to="/friends"
-          class="flex min-h-12 items-center gap-2 rounded-xl bg-panel px-4 font-semibold"
+          class="flex min-h-12 items-center gap-2 rounded-xl bg-panel px-4 font-semibold lg:hidden"
         >
           {{ t.online.friends }}
           <span
             v-if="friends.incomingRequestCount"
             class="rounded-full bg-rose-600 px-2 text-xs font-semibold"
           >
-            {{ t.online.newFriendRequests(friends.incomingRequestCount) }}
+            {{ t.online.friendRequestCount(friends.incomingRequestCount) }}
           </span>
           <span class="ml-auto text-gray-400" aria-hidden="true">{{ "›" }}</span>
         </RouterLink>
         <h2 class="order-2 text-sm uppercase tracking-wide text-gray-400 lg:order-none">
           {{ t.online.lobbies }}
         </h2>
-        <ul class="order-2 space-y-2 lg:order-none">
+        <!-- On a wide screen it scrolls within its own height: the friends and the chat stay in sight. -->
+        <ul class="order-2 space-y-2 lg:order-none lg:max-h-[min(24rem,34vh)] lg:overflow-y-auto">
           <li
             v-for="summary in lobby.lobbies"
             :key="summary.lobbyId"
@@ -196,6 +199,7 @@ function phaseLabel(phase: LobbyPhase): string {
             {{ t.online.noLobbies }}
           </li>
         </ul>
+        <FriendsPanel v-if="friends.hasAccount" class="hidden lg:flex" />
         <!-- Its usual height when the screen has room; on a phone short of room it gives way, down
              to the input and a couple of lines, rather than make the screen scroll. -->
         <ChatPanel

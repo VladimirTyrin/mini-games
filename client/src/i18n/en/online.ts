@@ -6,7 +6,13 @@ export const online = {
   youAreIn: (lobbyName: string) => `You are in ${lobbyName}`,
   open: "Open",
   friends: "Friends",
-  newFriendRequests: (count: number) => `${count} new`,
+  friendRequestCount: (count: number) => `${count} ${pluralEn(count, "request", "requests")}`,
+  /** The count read on its own, out of the Friends heading's sight. */
+  friendRequestCountLabel: (count: number) =>
+    `${count} ${pluralEn(count, "friend request", "friend requests")}`,
+  manageFriends: "Manage",
+  addFriends: "Add friends",
+  noFriendsYet: "No friends yet. Send someone a friend link to play together.",
   lobbies: "Lobbies",
   lobbySeats: (taken: number, max: number) => `${taken}/${max} ${pluralEn(max, "player", "players")}`,
   lobbyWatchers: (count: number) => `${count} watching`,

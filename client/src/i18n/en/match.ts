@@ -9,6 +9,10 @@ export const match = {
   pause: "Pause",
   paused: "Paused",
   resume: "Resume",
+  /** The pause button on a computer, its key on it. */
+  pauseWithKey: "Pause (F9)",
+  pauseKey: "F9",
+  spaceKey: "Space",
   leaveTitle: "Leave the match?",
   leaveOnline: "The others will play on without you, and your seat may be dropped.",
   leaveLocal: "This game will be lost.",
@@ -61,7 +65,6 @@ export const match = {
     play: "Play",
     pause: "Pause",
     speed: "Speed",
-    spaceKey: "Space",
     keysHint: "Space play/pause · ← → step · R restart · − + speed",
     cannotOpen: (reason: string) => `Cannot open the replay: ${reason}`,
     noReplay: "This match has no replay",

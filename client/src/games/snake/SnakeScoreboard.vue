@@ -65,7 +65,10 @@ const entries = computed(() =>
         <span class="min-w-0 flex-1 truncate" :class="entry.alive ? 'text-gray-100' : 'text-gray-500'">
           <span v-if="entry.isWinner" :aria-label="t.games.snake.scoreboard.winner">{{ WINNER_MARK }} </span>
           <span :class="entry.alive ? '' : 'line-through'">{{ entry.name }}</span>
-          <span v-if="entry.isYou" class="text-xs text-gray-400"> {{ t.games.snake.scoreboard.you }}</span>
+          <!-- Offline the player is called "You" when they gave no name: no "(you)" after it. -->
+          <span v-if="entry.isYou && entry.name !== t.common.youName" class="ml-1 text-xs text-gray-400">{{
+            t.games.snake.scoreboard.you
+          }}</span>
           <span v-if="entry.deathNote" class="text-xs text-rose-300/80"> · {{ entry.deathNote }}</span>
         </span>
         <span class="font-mono font-semibold" :class="entry.alive ? 'text-emerald-300' : 'text-gray-500'">

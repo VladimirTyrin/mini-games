@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive } from "vue";
 
+import PauseButton from "@/components/PauseButton.vue";
 import { t } from "@/i18n";
 
 import type { WorkerAction } from "./worker-input-pacer";
@@ -62,6 +63,8 @@ const buttons = computed((): readonly { action: WorkerAction; label: string; sym
         {{ button.symbol }}
       </button>
     </div>
+    <!-- In the gap between walking and jumping, where neither thumb rests. -->
+    <PauseButton class="size-14 shrink-0" />
     <button
       type="button"
       :aria-label="t.games.stackAttack.board.jump"

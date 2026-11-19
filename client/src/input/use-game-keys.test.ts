@@ -49,4 +49,15 @@ describe("useGameKeys", () => {
 
     expect(board.keys).toEqual(["a"]);
   });
+
+  it("names a letter key by its place, so WASD work under a Russian layout too", () => {
+    const board = mountBoard();
+    unmount = board.unmount;
+    // W under a Russian layout types «ц»; Escape has no letter place and keeps its name.
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ц", code: "KeyW", bubbles: true }));
+    document.body.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }),
+    );
+    expect(board.keys).toEqual(["w", "Escape"]);
+  });
 });

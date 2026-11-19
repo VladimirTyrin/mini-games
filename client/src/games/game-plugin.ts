@@ -15,7 +15,8 @@ export type SettingsCase = NonNullable<GameSettings["game"]["case"]>;
  *   `useGameSettingsForm` (limits and errors from the core).
  * - `Board` — props `{ controller: MatchController }`; renders `controller.current` (and
  *   interpolates from `controller.previous` for real-time games) and calls
- *   `controller.submit(...)` for input.
+ *   `controller.submit(...)` for input. F9 is not a game key: it pauses a local real-time
+ *   match (`MatchView`), as Escape does there.
  */
 export interface GamePlugin {
   /** Core game id (`GameInfo.id`). */
@@ -45,8 +46,6 @@ export interface GamePlugin {
   botLabel(kind: BotKind): string;
   /** How to play, shown under the board and on the setup screen; see `controlsHintFor`. */
   controls: ControlsHint;
-  /** Space is a game key (Stack Attack's jump): it must not start the next match at the end. */
-  playsWithSpace?: true;
   /**
    * Starting settings when none are remembered, from the core's defaults (Word Hunt's word list
    * in the interface's language). Applied before `narrowScreenSettings`.

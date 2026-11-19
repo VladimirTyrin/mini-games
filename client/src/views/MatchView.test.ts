@@ -1,9 +1,11 @@
-import { flushPromises, shallowMount } from "@vue/test-utils";
+import { create } from "@bufbuild/protobuf";
+import { type VueWrapper, flushPromises, shallowMount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import type { ReplayMatchSource } from "@/match/replay-match-source";
+import { GameSettingsSchema } from "@/proto/minigames/v2/game_pb";
 import { useMatchStore } from "@/stores/match";
 
 import MatchView from "./MatchView.vue";
@@ -43,6 +45,19 @@ vi.mock("@/match/replay-match-source", () => ({
     }
   },
 }));
+/** The player's own pauses of a local match, as they reach the source. */
+const playerPauses = vi.hoisted(() => [] as string[]);
+vi.mock("@/local/local-match-source", () => ({
+  LocalMatchSource: class {
+    readonly kind = "local";
+    constructor(readonly header: unknown) {}
+    start(): void {}
+    leave(): void {}
+    setPaused(reason: string, paused: boolean, countdownMs = 0): void {
+      if (reason === "player") playerPauses.push(paused ? "paused" : `resumed in ${countdownMs} ms`);
+    }
+  },
+}));
 vi.mock("@/match/match-controller", async () => {
   const { shallowRef } = await import("vue");
   return {
@@ -50,8 +65,11 @@ vi.mock("@/match/match-controller", async () => {
       readonly incompatible = shallowRef(false);
       readonly ended = shallowRef(false);
       readonly current = shallowRef(null);
-      readonly gameTickMs = 0;
-      constructor(readonly source: unknown) {}
+      constructor(readonly source: { kind: string }) {}
+      /** Local matches here are real-time ones (pausable), replays turn-based. */
+      get gameTickMs(): number {
+        return this.source.kind === "local" ? 100 : 0;
+      }
       applyCatchUp(): void {}
       dispose(): void {}
     },
@@ -73,9 +91,30 @@ async function watchingReplay(): Promise<ReplayMatchSource> {
   return replay;
 }
 
+async function playingLocally(): Promise<VueWrapper> {
+  useMatchStore().startLocal(
+    create(GameSettingsSchema, { game: { case: "snake", value: {} } }),
+    [{ bot: null }],
+    "Sam",
+  );
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/:any(.*)", component: MatchView }],
+  });
+  const view = shallowMount(MatchView, { global: { plugins: [router] }, attachTo: document.body });
+  await flushPromises();
+  return view;
+}
+
+async function press(key: string, target: Element = document.body): Promise<void> {
+  target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  await flushPromises();
+}
+
 describe("MatchView", () => {
   beforeEach(() => {
     screen.keptOn = false;
+    playerPauses.length = 0;
     setActivePinia(createPinia());
   });
 
@@ -92,5 +131,26 @@ describe("MatchView", () => {
     replay.play();
     await flushPromises();
     expect(screen.keptOn).toBe(true);
+  });
+
+  it("pauses a local real-time match with F9 and resumes it at once", async () => {
+    const view = await playingLocally();
+
+    await press("F9");
+    expect(view.text()).toContain("Paused");
+    await press("F9");
+
+    expect(playerPauses).toEqual(["paused", "resumed in 0 ms"]);
+    expect(view.text()).not.toContain("Paused");
+    view.unmount();
+  });
+
+  it("leaves Space to the game (Stack Attack jumps with it)", async () => {
+    const view = await playingLocally();
+
+    await press(" ");
+
+    expect(playerPauses).toEqual([]);
+    view.unmount();
   });
 });

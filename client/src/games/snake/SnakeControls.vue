@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PauseButton from "@/components/PauseButton.vue";
 import { t } from "@/i18n";
 import { SnakeDirection } from "@/proto/minigames/v2/snake_pb";
 
@@ -22,6 +23,8 @@ function press(direction: SnakeDirection, event: PointerEvent): void {
     class="grid select-none grid-cols-[repeat(3,4rem)] grid-rows-[repeat(2,4rem)] md:grid-cols-[repeat(3,4.5rem)] md:grid-rows-[repeat(2,4.5rem)] justify-center gap-2 pb-1"
     @contextmenu.prevent
   >
+    <!-- The empty corner above ◀, away from the arrows a thumb goes for. -->
+    <PauseButton class="col-start-1 row-start-1 size-12 self-start justify-self-start" />
     <button
       type="button"
       :aria-label="t.games.snake.board.up"

@@ -53,16 +53,13 @@ onBeforeUnmount(() => {
 });
 
 const isReplay = props.controller.source.kind === "replay";
-// Space is the replay bar's play key, and in some games a game key pressed again and again
-// (a jump), which would start a new match the moment the result shows.
-const spacePlaysAgain =
-  !isReplay && !pluginBySettings(props.controller.source.header.settings?.game.case)?.playsWithSpace;
 
-// Enter (or Space, see above) starts the next match once the result is up (keys held from the
-// game's last moment do not count: repeats are ignored).
+// Enter starts the next match once the result is up (keys held from the game's last moment do
+// not count: repeats are ignored). Not Space, in any game: Stack Attack jumps with it and a replay
+// plays with it, so one pressed as the game ends would start a new match by accident, and a key
+// that plays again in some games only would be one more thing to remember.
 useGameKeys((key) => {
-  const accepted = key === "Enter" || (key === " " && spacePlaysAgain);
-  if (!ended.value || resultFolded.value || !accepted || !canPlayAgain.value) return false;
+  if (!ended.value || resultFolded.value || key !== "Enter" || !canPlayAgain.value) return false;
   emit("again");
   return true;
 });

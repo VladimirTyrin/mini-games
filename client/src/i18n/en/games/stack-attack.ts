@@ -9,7 +9,8 @@ export const stackAttack = {
   controls: {
     keyboard:
       "Hold ←/→ or A/D to walk and push crates · Space, W or ↑ to jump · jump, then walk to climb a crate",
-    touch: "Hold ◀ ▶ to walk and push crates · Jump, then walk to climb a crate",
+    touch:
+      "Hold ◀ ▶ to walk and push crates · Jump, then walk to climb a crate · Tap with two fingers to pause",
   },
   endReasons: {
     workersCrushed: "Crushed by a falling crate",

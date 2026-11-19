@@ -14,7 +14,7 @@ export const snake = {
   },
   controls: {
     keyboard: "Arrow keys or WASD to turn",
-    touch: "Swipe on the field or tap the arrows to turn",
+    touch: "Swipe on the field or tap the arrows to turn · Tap with two fingers to pause",
   },
   speeds: {
     slow: "Slow",

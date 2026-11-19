@@ -23,6 +23,7 @@ import { StackAttackTransition } from "./stack-attack-transition";
 import { freeWalkTarget } from "./walk-target";
 import { WorkerAnimator } from "./worker-animator";
 import { type WorkerAction, WorkerInputPacer } from "./worker-input-pacer";
+import { workerActionFromKey } from "./worker-keys";
 
 const props = defineProps<{ controller: MatchController }>();
 
@@ -131,17 +132,6 @@ watch(
   { immediate: true },
 );
 
-const KEY_ACTIONS = new Map<string, WorkerAction>([
-  ["ArrowLeft", "left"],
-  ["a", "left"],
-  ["ArrowRight", "right"],
-  ["d", "right"],
-  ["ArrowUp", "jump"],
-  ["w", "jump"],
-  [" ", "jump"],
-]);
-const actionOfKey = (key: string) => KEY_ACTIONS.get(key.length === 1 ? key.toLowerCase() : key);
-
 function release(action: WorkerAction): void {
   if (action !== "jump") pacer.release(action);
 }
@@ -150,14 +140,14 @@ useGameKeys(
   (key) => {
     // Observers and replays: the keys belong to the replay bar.
     if (props.controller.mySlot === null) return false;
-    const action = actionOfKey(key);
+    const action = workerActionFromKey(key);
     if (!action) return false;
     pacer.press(action);
     return true;
   },
   {
     release: (key) => {
-      const action = actionOfKey(key);
+      const action = workerActionFromKey(key);
       if (action) release(action);
     },
     releaseAll: () => pacer.reset(),

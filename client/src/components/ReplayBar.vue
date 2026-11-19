@@ -112,7 +112,7 @@ const BUTTON =
       >
         {{ playing ? `❚❚ ${t.match.replay.pause}` : `▶ ${t.match.replay.play}` }}
         <kbd v-if="showsKeys" class="rounded bg-white/20 px-1 text-xs font-normal">{{
-          t.match.replay.spaceKey
+          t.match.spaceKey
         }}</kbd>
       </button>
       <button

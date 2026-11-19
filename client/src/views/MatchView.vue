@@ -13,6 +13,10 @@ import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { matchSeatNames } from "@/games/seat-names";
 import { t } from "@/i18n";
+import { prefersTouch } from "@/input/prefers-touch";
+import { useGameKeys } from "@/input/use-game-keys";
+import { useTwoFingerTap } from "@/input/use-two-finger-tap";
+import { providePauseControl } from "@/match/pause-control";
 import { LocalMatchSource } from "@/local/local-match-source";
 import { awaySlots } from "@/match/away-seats";
 import { hasSeenHelp } from "@/platform/help-seen";
@@ -89,15 +93,10 @@ watch(controller, (current) => {
   if (!current && !isLeavingOnPurpose) void router.replace(lobby.current ? "/lobby" : "/online");
 });
 
-/** The online countdown's length; turn-based games just wait for the next move. */
-function resumeCountdownMs(): number {
-  return (controller.value?.gameTickMs ?? 0) > 0 ? 3_000 : 0;
-}
-
 // A backgrounded tab or app must not let bots play on alone.
 function onVisibility(): void {
   const source = controller.value?.source;
-  if (source instanceof LocalMatchSource) source.setPaused("hidden", document.hidden, resumeCountdownMs());
+  if (source instanceof LocalMatchSource) source.setPaused("hidden", document.hidden);
 }
 document.addEventListener("visibilitychange", onVisibility);
 onBeforeUnmount(() => document.removeEventListener("visibilitychange", onVisibility));
@@ -114,8 +113,17 @@ function setPausedByPlayer(paused: boolean): void {
   const source = controller.value?.source;
   if (!(source instanceof LocalMatchSource)) return;
   pausedByPlayer.value = paused;
-  source.setPaused("player", paused, resumeCountdownMs());
+  // At once, no countdown: alone (or with bots) there is nobody to warn, unlike online.
+  source.setPaused("player", paused);
 }
+function togglePause(): void {
+  if (canPause.value) setPausedByPlayer(!pausedByPlayer.value);
+}
+// The board's own controls draw the pause where the thumb is (a touch screen).
+providePauseControl({ canPause, paused: pausedByPlayer, toggle: togglePause });
+// A tap with two fingers anywhere on the field pauses or resumes, without looking for a button.
+const boardArea = ref<HTMLElement | null>(null);
+useTwoFingerTap(boardArea, togglePause);
 // A new match (Play again) starts unpaused.
 watch(controller, () => {
   pausedByPlayer.value = false;
@@ -126,7 +134,7 @@ const helpOpen = ref(false);
 watch(helpOpen, (open) => {
   const source = controller.value?.source;
   if (source instanceof LocalMatchSource && canPause.value) {
-    source.setPaused("help", open, resumeCountdownMs());
+    source.setPaused("help", open);
   }
 });
 // A game that needs it explains itself before the first match on this device.
@@ -141,13 +149,15 @@ watch(
   },
   { immediate: true },
 );
-function onPauseKey(event: KeyboardEvent): void {
-  if (event.key !== "Escape" || !canPause.value || confirmingLeave.value) return;
-  event.preventDefault();
+// F9 or Escape does what the pause button does, then what Resume does (not Space: Stack Attack
+// jumps with it). A dialog on top keeps them (the help closes with Escape).
+useGameKeys((key) => {
+  if (key !== "F9" && key !== "Escape") return false;
+  if (!canPause.value || confirmingLeave.value || helpOpen.value) return false;
   setPausedByPlayer(!pausedByPlayer.value);
-}
-window.addEventListener("keydown", onPauseKey);
-onBeforeUnmount(() => window.removeEventListener("keydown", onPauseKey));
+  return true;
+});
+const showsKeyHint = !prefersTouch();
 
 /** A running match is easy to quit by accident (back gesture, header arrow): ask first. */
 const confirmingLeave = ref(false);
@@ -264,13 +274,15 @@ function again(): void {
 <template>
   <AppHeader :title="plugin?.title ?? t.match.title" :back="requestLeave">
     <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
+    <!-- Where a seated player has a board's touch controls, the pause is among them instead. -->
     <button
       v-if="canPause && !pausedByPlayer"
       type="button"
       class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
+      :class="controller?.mySlot !== null ? 'max-md:hidden pointer-coarse:hidden' : ''"
       @click="setPausedByPlayer(true)"
     >
-      {{ `⏸ ${t.match.pause}` }}
+      {{ `⏸ ${showsKeyHint ? t.match.pauseWithKey : t.match.pause}` }}
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
@@ -290,7 +302,7 @@ function again(): void {
     <p v-if="awayNotice" class="text-center text-xs text-gray-400">
       <span class="mr-1 inline-block size-2 rounded-full bg-gray-500 align-middle" />{{ awayNotice }}
     </p>
-    <div class="relative flex min-h-0 flex-1 flex-col">
+    <div ref="boardArea" class="relative flex min-h-0 flex-1 flex-col">
       <component
         :is="plugin.Board"
         v-if="plugin"
@@ -336,6 +348,9 @@ function again(): void {
             @click="setPausedByPlayer(false)"
           >
             {{ t.match.resume }}
+            <kbd v-if="showsKeyHint" class="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-xs font-normal">{{
+              t.match.pauseKey
+            }}</kbd>
           </button>
         </div>
       </div>

@@ -5,13 +5,13 @@ import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
-import PresenceDot from "@/components/PresenceDot.vue";
+import FriendRow from "@/components/FriendRow.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import { locale, t } from "@/i18n";
 import { friendLinkCode, friendLinkUrl, shareLink } from "@/platform/friend-links";
 import { canNotifyWithoutAsking, pushAvailability } from "@/platform/push-notifications";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
-import { FriendLinkKind, Presence } from "@/proto/minigames/v2/social_pb";
+import { FriendLinkKind } from "@/proto/minigames/v2/social_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useFriendsStore } from "@/stores/friends";
 import { usePrefsStore } from "@/stores/prefs";
@@ -41,16 +41,6 @@ const notificationHint = computed(() => {
     default:
       return t.friends.notificationsHint;
   }
-});
-
-/** Playing first, then online, then the rest; by name within each. */
-const sortedFriends = computed(() => {
-  const rank: Record<number, number> = { [Presence.PLAYING]: 0, [Presence.ONLINE]: 1 };
-  return [...(friends.list?.friends ?? [])].sort(
-    (a, b) =>
-      (rank[a.presence] ?? 2) - (rank[b.presence] ?? 2) ||
-      (a.identity?.displayName ?? "").localeCompare(b.identity?.displayName ?? ""),
-  );
 });
 
 onMounted(async () => {
@@ -194,24 +184,15 @@ function expiry(unixMs: bigint): string {
 
       <section class="space-y-2 rounded-xl bg-panel p-4">
         <h2 class="font-semibold">{{ t.friends.title }}</h2>
-        <p v-if="!sortedFriends.length" class="text-sm text-gray-400">
+        <p v-if="!friends.sortedFriends.length" class="text-sm text-gray-400">
           {{ t.friends.noFriendsYet(`+ ${t.lobby.addFriend}`) }}
         </p>
         <ul class="space-y-2">
-          <li v-for="friend in sortedFriends" :key="friend.identity?.id" class="flex items-center gap-2">
-            <Avatar
-              :url="friend.identity?.avatarUrl ?? ''"
-              :name="friend.identity?.displayName ?? ''"
-              :player-id="friend.identity?.id"
-            />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm">{{ friend.identity?.displayName }}</span>
-              <PresenceDot :presence="friend.presence" />
-            </span>
+          <FriendRow v-for="friend in friends.sortedFriends" :key="friend.identity?.id" :friend="friend">
             <button class="min-h-10 px-2 text-xs text-gray-400" @click="removing = friend.identity ?? null">
               {{ t.friends.remove }}
             </button>
-          </li>
+          </FriendRow>
         </ul>
         <template v-if="friends.list?.outgoingRequests.length">
           <h3 class="pt-2 text-xs uppercase tracking-wide text-gray-400">
