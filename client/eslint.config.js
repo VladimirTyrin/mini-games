@@ -21,6 +21,16 @@ export default tseslint.config(
       "vue/html-closing-bracket-newline": "off",
       "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/consistent-type-imports": "error",
+      // Every text a player reads comes from the dictionaries (src/i18n); symbols may stay.
+      "vue/no-bare-strings-in-template": [
+        "error",
+        {
+          allowlist: [
+            "(", ")", ",", ".", "&", "+", "-", "=", "*", "/", "#", "%", "!", "?", ":", "[", "]",
+            "{", "}", "<", ">", "·", "•", "‐", "–", "—", "−", "|", "×", "…", "✓", "✕", "→", "←",
+          ],
+        },
+      ],
     },
   },
 );
