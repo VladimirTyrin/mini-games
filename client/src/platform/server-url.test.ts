@@ -6,6 +6,8 @@ describe("normalizeServerUrl", () => {
   it.each([
     ["146.103.106.44", "ws://146.103.106.44/ws"],
     ["146.103.106.44:5000", "ws://146.103.106.44:5000/ws"],
+    ["braintvsminigames.xyz", "wss://braintvsminigames.xyz/ws"],
+    ["localhost:5000", "ws://localhost:5000/ws"],
     ["https://braintvsminigames.xyz", "wss://braintvsminigames.xyz/ws"],
     ["http://localhost:5000/", "ws://localhost:5000/ws"],
     ["wss://example.org/custom", "wss://example.org/custom"],

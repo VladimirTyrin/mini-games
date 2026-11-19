@@ -3,8 +3,10 @@ import type { Messages } from "../messages";
 export const settings: Messages["settings"] = {
   title: "Настройки",
   language: "Язык",
+  change: "Сменить",
   server: "Сервер",
-  serverHint: "Адрес игрового сервера, например braintvsminigames.xyz или 146.103.106.44.",
+  serverShown: (host: string) => `Сервер: ${host}`,
+  serverHint: "Адрес игрового сервера, например braintvsminigames.xyz или wss://braintvsminigames.xyz/ws.",
   resetToDefault: "Сбросить",
   serverSaved: "Сервер сохранён",
   notAServerAddress: "Это не похоже на адрес сервера",

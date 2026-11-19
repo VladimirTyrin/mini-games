@@ -1,8 +1,11 @@
 export const settings = {
   title: "Settings",
   language: "Language",
+  change: "Change",
   server: "Server",
-  serverHint: "Address of the game server, e.g. braintvsminigames.xyz or 146.103.106.44.",
+  /** The game server's address, shown folded: changing it is for testing another server. */
+  serverShown: (host: string) => `Server: ${host}`,
+  serverHint: "Address of the game server, e.g. braintvsminigames.xyz or wss://braintvsminigames.xyz/ws.",
   resetToDefault: "Reset to default",
   serverSaved: "Server saved",
   notAServerAddress: "That does not look like a server address",

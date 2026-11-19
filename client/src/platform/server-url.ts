@@ -9,11 +9,19 @@ export function defaultServerUrl(): string {
   return `${scheme}//${window.location.host}/ws`;
 }
 
-/** Accepts `host`, `host:port`, `http(s)://host` or a full ws(s) URL; returns a ws(s) URL. */
+/** A bare IP address or localhost: no certificate is issued for one, so it serves plain ws. */
+const PLAIN_HOST = /^(localhost|\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:]+\])(:\d+)?(\/|$)/i;
+
+/**
+ * Accepts `host`, `host:port`, `http(s)://host` or a full ws(s) URL; returns a ws(s) URL. A bare
+ * domain name means wss (a server under a name has a certificate and redirects plain http); a
+ * bare IP address or localhost means ws.
+ */
 export function normalizeServerUrl(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
-  const withScheme = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `ws://${trimmed}`;
+  const scheme = PLAIN_HOST.test(trimmed) ? "ws" : "wss";
+  const withScheme = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `${scheme}://${trimmed}`;
   let url: URL;
   try {
     url = new URL(withScheme);

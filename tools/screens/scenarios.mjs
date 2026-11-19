@@ -54,6 +54,12 @@ const GAMES = Object.keys(GAME_STARTS);
 export const SCENARIOS = [
   { id: "home", route: "/", steps: [wait(800)], reached: present("main") },
   { id: "settings", route: "/settings", steps: [wait(800)] },
+  {
+    id: "settings-open",
+    route: "/settings",
+    steps: [wait(800), click("change-language"), click("server-settings"), wait(300)],
+    reached: present("form input"),
+  },
   { id: "friends", route: "/friends", steps: [wait(800)] },
   {
     id: "sign-in",
