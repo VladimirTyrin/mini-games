@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { locale, t } from "@/i18n";
+import { formatTimeWithSeconds, t } from "@/i18n";
 import { pushAvailability } from "@/platform/push-notifications";
 import { TEST_PUSH_DELAY_SECONDS, useNotificationsStore } from "@/stores/notifications";
 import { formatOneDecimal } from "@/util/format-decimal";
@@ -14,11 +14,7 @@ function seconds(from: number, to: number): string {
 }
 
 function clockTime(at: number): string {
-  return new Date(at).toLocaleTimeString(locale.value, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatTimeWithSeconds(new Date(at));
 }
 
 /** Each step of the last test that the device could time. */

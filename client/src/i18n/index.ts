@@ -23,4 +23,4 @@ export type { Locale } from "./locale";
 export type { Messages } from "./messages";
 export { LOCALES, locale, setLocale, hasChosenLocale, onLocale } from "./locale";
 export { pluralEn, pluralRu } from "./plural";
-export { formatDate, formatDateTime, formatNumber } from "./format";
+export { formatDate, formatDateTime, formatNumber, formatTimeWithSeconds } from "./format";

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { locale, setLocale, t } from "@/i18n";
+import { formatDateTime, formatTimeWithSeconds, locale, setLocale, t } from "@/i18n";
 import { deviceLocale } from "@/i18n/locale";
 import { pluralRu } from "@/i18n/plural";
 
@@ -33,5 +33,11 @@ describe("i18n", () => {
       "победы",
       "побед",
     ]);
+  });
+
+  it("tells time on a 24-hour clock in English too", () => {
+    const afternoon = new Date(2026, 10, 19, 14, 5, 9);
+    expect(formatDateTime(afternoon)).toContain("14:05");
+    expect(formatTimeWithSeconds(afternoon)).toBe("14:05:09");
   });
 });
