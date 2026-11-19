@@ -38,7 +38,7 @@ jobs:
         run: |
           # Its output goes to a file: a background process holding the step's output open can
           # keep the step from finishing.
-          target/debug/mg-server --listen 127.0.0.1:5000 --static-dir client/dist > mg-server.log 2>&1 &
+          target/debug/mini_games_server --listen 127.0.0.1:5000 --static-dir client/dist > mg-server.log 2>&1 &
           for attempt in $(seq 1 50); do curl -sf http://127.0.0.1:5000/version > /dev/null && exit 0; sleep 0.2; done
           echo "::error::the server did not start"
           exit 1
