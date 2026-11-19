@@ -6,6 +6,7 @@ export const app: Messages["app"] = {
   leaveMatchToWatchReplay: "Чтобы посмотреть повтор, сначала выйди из матча",
   privacyPolicy: "Политика конфиденциальности",
   androidApp: "Android-приложение",
+  sourceCode: "Исходный код",
   download: "Скачать",
   notNow: "Не сейчас",
   units: {

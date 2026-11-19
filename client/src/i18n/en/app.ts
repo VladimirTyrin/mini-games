@@ -5,6 +5,7 @@ export const app = {
   leaveMatchToWatchReplay: "Leave the match first to watch the replay",
   privacyPolicy: "Privacy policy",
   androidApp: "Android app",
+  sourceCode: "Source code",
   download: "Download",
   notNow: "Not now",
   units: {

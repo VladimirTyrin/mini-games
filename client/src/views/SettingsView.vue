@@ -17,6 +17,7 @@ import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 import { useToastStore } from "@/stores/toasts";
 import { privacyPolicyUrl } from "@/util/privacy-policy";
+import { SOURCE_CODE_URL } from "@/util/source-code";
 
 const prefs = usePrefsStore();
 const connection = useConnectionStore();
@@ -222,6 +223,10 @@ function resetServer(): void {
     </p>
     <p class="text-center text-xs text-gray-500">
       <a :href="privacyPolicyUrl" class="underline hover:text-gray-300">{{ t.app.privacyPolicy }}</a>
+      ·
+      <a :href="SOURCE_CODE_URL" target="_blank" rel="noopener" class="underline hover:text-gray-300">{{
+        t.app.sourceCode
+      }}</a>
     </p>
   </main>
 </template>

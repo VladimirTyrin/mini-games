@@ -11,6 +11,7 @@ import { t } from "@/i18n";
 import { ANDROID_APK_URL } from "@/platform/android-app";
 import { useMatchStore } from "@/stores/match";
 import { privacyPolicyUrl } from "@/util/privacy-policy";
+import { SOURCE_CODE_URL } from "@/util/source-code";
 
 const router = useRouter();
 const match = useMatchStore();
@@ -90,6 +91,10 @@ const ICONS = { settings: "⚙", playOnline: "🌐", openReplay: "🎞", savedRe
         ·
         <a :href="ANDROID_APK_URL" class="underline hover:text-gray-300">{{ t.app.androidApp }}</a>
       </template>
+      ·
+      <a :href="SOURCE_CODE_URL" target="_blank" rel="noopener" class="underline hover:text-gray-300">{{
+        t.app.sourceCode
+      }}</a>
     </p>
   </main>
 </template>
