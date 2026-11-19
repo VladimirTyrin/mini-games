@@ -28,7 +28,7 @@ export const snake: Messages["games"]["snake"] = {
     speed: "Скорость",
     customSpeed: (tickIntervalMs) => `Своя (${tickIntervalMs} мс)`,
     walls: "Стены",
-    wallsHelp: "Сквозные: ушёл за край — вышел с другой стороны",
+    wallsHelp: "Сквозные: уйдёшь за край — выйдешь с другой стороны",
     wallsDeath: "Убивают",
     wallsWrap: "Сквозные",
     deadSnakes: "Мёртвые змейки",
@@ -46,7 +46,7 @@ export const snake: Messages["games"]["snake"] = {
   },
   board: {
     watching: "Ты зритель",
-    outWatching: "Ты выбыл — смотришь за остальными",
+    outWatching: "Ты вне игры — смотришь за остальными",
     up: "Вверх",
     left: "Влево",
     down: "Вниз",

@@ -41,7 +41,7 @@ import PairExample from "./PairExample.vue";
     />
     <PairExample v-bind="PAIR_EXAMPLES.notNeighbours" caption="Не соседи: 6 между ними ещё в игре" />
   </div>
-  <h3>Застрял?</h3>
+  <h3>Нужна помощь?</h3>
   <ul>
     <li>
       Кнопка «<b>{{ t.games.numbersMatch.board.refill }}</b

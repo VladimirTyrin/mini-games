@@ -56,7 +56,7 @@ export const refusals: Messages["refusals"] = {
     [WordHuntRefusal.ALREADY_TRIED]: "Это слово уже было",
     [WordHuntRefusal.MOVED_CORRECT_LETTER]: "Сложный режим: оставь зелёные буквы на своих местах",
     [WordHuntRefusal.DROPPED_FOUND_LETTER]: "Сложный режим: используй все найденные буквы",
-    [WordHuntRefusal.CANNOT_GIVE_UP]: "Сдаться может только тот, кто ещё угадывает",
+    [WordHuntRefusal.CANNOT_GIVE_UP]: "Сдаться можно, только пока угадываешь",
   },
   checkers: {
     [CheckersRefusal.UNSPECIFIED]: "Так нельзя",

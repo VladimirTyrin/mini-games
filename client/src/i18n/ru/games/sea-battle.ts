@@ -18,7 +18,7 @@ export const seaBattle: Messages["games"]["seaBattle"] = {
   },
   endReasons: {
     fleetSunk: "Весь флот потоплен",
-    gaveUpOrLeft: "Игрок сдался или вышел из игры",
+    gaveUpOrLeft: "Сдача или выход из игры",
   },
   columns: "АБВГДЕЖЗИК",
   ship: (length) => `${DECKS[length] ?? `${length}-палубный`} корабль`,
@@ -38,9 +38,9 @@ export const seaBattle: Messages["games"]["seaBattle"] = {
     opponentsShot: "Стреляет соперник",
     draw: "Ничья",
     playerWins: (name) => `Победа: ${name}`,
-    opponentLeftYouWin: "Соперник вне игры — ты выиграл",
-    youWin: "Ты выиграл",
-    youLose: "Ты проиграл",
+    opponentLeftYouWin: "Соперник вне игры — победа",
+    youWin: "Победа",
+    youLose: "Поражение",
   },
   fleetEditor: {
     shipsToPlace: "Корабли для расстановки",
@@ -53,6 +53,6 @@ export const seaBattle: Messages["games"]["seaBattle"] = {
   settings: {
     classicRules:
       "Классические правила: поле 10×10 и десять кораблей — один четырёхпалубный, два трёхпалубных, три двухпалубных, четыре однопалубных.",
-    noTouching: "Корабли не касаются друг друга, даже углами. Попал — стреляешь ещё раз.",
+    noTouching: "Корабли не касаются друг друга, даже углами. При попадании стреляешь ещё раз.",
   },
 };

@@ -15,7 +15,7 @@ Status: built on `feature/i18n`.
 | Server | Not localized. Errors carry their code, refusals and settings problems an enum value (per game) and numbers; the client words them. |
 | Push notifications | The server sends a text key and arguments. Android words them from the app's resources, Web Push in the service worker. |
 | Game names | Translated (table below). The app's own name stays "Mini Games". |
-| Russian tone | «ты», kept plain: "Твой ход", "Ты выиграл", but buttons as actions: "Войти через Google", "Играть снова". No exclamation-mark cheerfulness. |
+| Russian tone | «ты», kept plain: "Твой ход", "Победа", buttons as actions: "Войти через Google", "Играть снова". No exclamation-mark cheerfulness. No gendered forms about anyone: the app does not know a player's gender (a name is not one), so no past-tense verbs or short adjectives that agree with a person ("Ты выиграл", "Влад сдался", "готов"); nouns and present tense instead ("Победа", "Влад: сдача", "Вход выполнен: Влад"). |
 | Privacy policy | Two pages, English and Russian; the app links to the one in its language. |
 | Word Hunt | A new player's word list is in the interface language (`GamePlugin.defaultSettings`); once Word Hunt settings are remembered (after a first match), they win, the word list with them. |
 | Screen checks | `fit.mjs` finds clipped or overflowing text in both languages without screenshots: locally for the screens a change touches, in CI for all. Screenshots only to look at a layout. |

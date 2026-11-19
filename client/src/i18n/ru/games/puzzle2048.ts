@@ -17,7 +17,7 @@ export const puzzle2048: Messages["games"]["puzzle2048"] = {
     score: "Очки",
     moves: "Ходы",
     target: "Цель",
-    reachedTarget: (target) => `Ты собрал ${target}`,
+    reachedTarget: (target) => `Плитка ${target} собрана`,
     noMovesLeft: "Ходов нет",
     abandoned: "Игра прервана",
   },

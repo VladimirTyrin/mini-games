@@ -9,7 +9,7 @@ export const errors: Messages["errors"] = {
   notSignedIn: "Сначала войди",
   signInFailed: "Не удалось войти",
   guestsDisabled: "На этом сервере нельзя играть гостем — войди через Google",
-  signedInElsewhere: "Ты вошёл на другой вкладке или на другом устройстве",
+  signedInElsewhere: "Вход выполнен на другой вкладке или на другом устройстве",
   serverUpdating: "Сервер вот-вот перезапустится для обновления — попробуй через минуту",
   lobbyNotFound: "Этого лобби больше нет",
   lobbyFull: "В лобби нет мест",

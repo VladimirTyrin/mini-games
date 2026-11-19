@@ -24,9 +24,9 @@ export const checkers: Messages["games"]["checkers"] = {
   board: {
     draw: "Ничья",
     playerWins: (name) => `Победа: ${name}`,
-    opponentLeftYouWin: "Соперник вне игры — ты выиграл",
-    youWin: "Ты выиграл",
-    youLose: "Ты проиграл",
+    opponentLeftYouWin: "Соперник вне игры — победа",
+    youWin: "Победа",
+    youLose: "Поражение",
     choosingWhite: "Выбираем, кто играет белыми…",
     whiteToMove: (name) => `Ход белых: ${name}`,
     blackToMove: (name) => `Ход чёрных: ${name}`,

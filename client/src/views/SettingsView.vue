@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import androidAppQrUrl from "@/assets/android-app-qr.svg";
+import { prefersTouch } from "@/input/prefers-touch";
 import { ANDROID_APK_URL } from "@/platform/android-app";
 import { computed, onMounted, ref } from "vue";
 
@@ -23,6 +25,7 @@ const toasts = useToastStore();
 const serverInput = ref(prefs.serverUrl);
 /** Each language named in itself, so a player who cannot read the current one still finds theirs. */
 const LANGUAGE_NAMES: Record<Locale, string> = { en: "English", ru: "Русский" };
+const onTouchDevice = prefersTouch();
 const choosingLanguage = ref(false);
 const editingServer = ref(false);
 /** The server as a player recognizes it: its host, without the scheme and path. */
@@ -156,16 +159,29 @@ function resetServer(): void {
         </button>
       </div>
     </section>
-    <section v-if="!isNativeApp" class="flex items-center gap-3 rounded-xl bg-panel p-4">
-      <div class="min-w-0 flex-1">
-        <h2 class="font-semibold">{{ t.app.androidApp }}</h2>
-        <p class="text-xs text-gray-400">{{ t.settings.androidAppPitch }}</p>
+    <section v-if="!isNativeApp" class="space-y-3 rounded-xl bg-panel p-4">
+      <div class="flex items-center gap-3">
+        <div class="min-w-0 flex-1">
+          <h2 class="font-semibold">{{ t.app.androidApp }}</h2>
+          <p class="text-xs text-gray-400">{{ t.settings.androidAppPitch }}</p>
+        </div>
+        <a
+          :href="ANDROID_APK_URL"
+          class="rounded-lg border border-white/15 px-3 py-1.5 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
+          >{{ t.app.download }}</a
+        >
       </div>
-      <a
-        :href="ANDROID_APK_URL"
-        class="rounded-lg border border-white/15 px-3 py-1.5 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
-        >{{ t.app.download }}</a
-      >
+      <!-- On a computer the app is for the phone beside it: its camera reads the link here. -->
+      <div v-if="!onTouchDevice" class="flex items-center gap-4" data-testid="android-app-qr">
+        <img
+          :src="androidAppQrUrl"
+          :alt="t.settings.androidAppQrLabel"
+          class="size-32 shrink-0 rounded-md"
+          width="128"
+          height="128"
+        />
+        <p class="text-sm text-gray-300">{{ t.settings.androidAppQrHint }}</p>
+      </div>
     </section>
     <!-- Another server is for testing: folded, its address on the fold. -->
     <section class="rounded-xl bg-panel">

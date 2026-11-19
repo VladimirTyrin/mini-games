@@ -13,6 +13,8 @@ export const settings = {
   signedInAs: (name: string) => `Signed in as ${name}`,
   signOut: "Sign out",
   androidAppPitch: "Plays offline and updates itself.",
+  androidAppQrHint: "Point your phone's camera here to download it",
+  androidAppQrLabel: "QR code of the Android app's download link",
   version: (version: string) => `Version ${version}`,
   versionWithWebBuild: (version: string, webBuild: number) => `${version} (web ${webBuild})`,
   versionWithBuilds: (version: string, webBuild: number, appBuild: number) =>
