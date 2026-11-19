@@ -42,6 +42,22 @@ jobs:
           for attempt in $(seq 1 50); do curl -sf http://127.0.0.1:5000/version > /dev/null && exit 0; sleep 0.2; done
           echo "::error::the server did not start"
           exit 1
+      # The runner's system-ui is DejaVu Sans, wider than any phone's font: measure with Android's
+      # Roboto (close to iOS's SF and Windows' Segoe UI), or every tight label fails here alone.
+      - name: Fonts of a phone
+        run: |
+          sudo apt-get install -y -qq fonts-roboto > /dev/null
+          mkdir -p ~/.config/fontconfig
+          cat > ~/.config/fontconfig/fonts.conf <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <alias><family>system-ui</family><prefer><family>Roboto</family></prefer></alias>
+            <alias><family>sans-serif</family><prefer><family>Roboto</family></prefer></alias>
+          </fontconfig>
+          EOF
+          fc-cache -f > /dev/null
+          fc-match system-ui
       - name: Check that every text fits
         run: node tools/screens/fit.mjs --url http://127.0.0.1:5000 --chrome google-chrome --parallel 6 --require-server
       - name: Server log
