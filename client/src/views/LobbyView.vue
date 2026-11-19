@@ -350,6 +350,7 @@ function kick(): void {
       </section>
     </div>
     <ChatPanel
+      sizing="fills-column"
       :messages="lobby.lobbyChat"
       :players="lobby.members"
       @send="lobby.sendChat(ChatScope.LOBBY, $event)"

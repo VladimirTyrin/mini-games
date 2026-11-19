@@ -106,9 +106,11 @@ function phaseLabel(phase: LobbyPhase): string {
     <div
       v-else
       class="flex flex-1 flex-col gap-3 lg:grid lg:items-start lg:gap-6"
-      :class="lobby.current ? '' : 'lg:grid-cols-[minmax(0,1fr)_34rem] xl:grid-cols-[minmax(0,1fr)_40rem]'"
+      :class="lobby.current ? '' : 'lg:grid-cols-[34rem_minmax(0,1fr)] xl:grid-cols-[40rem_minmax(0,1fr)]'"
     >
-      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4 lg:self-stretch">
+      <!-- On a wide screen the lobbies, friends and chat stand on the right, where chat is in a
+           lobby too; creating a lobby on the left. -->
+      <div class="contents lg:order-2 lg:flex lg:min-w-0 lg:flex-col lg:gap-4 lg:self-stretch">
         <!-- Reachable while in a lobby (from Home, or back from Friends): one lobby at a time, so
            the way on is back into it. -->
         <button
@@ -198,16 +200,13 @@ function phaseLabel(phase: LobbyPhase): string {
              to the input and a couple of lines, rather than make the screen scroll. -->
         <ChatPanel
           class="order-2 max-h-[17rem] min-h-24 flex-1 basis-0 lg:order-none lg:basis-auto"
-          shrinks-to-fit
+          sizing="shrinks-to-fit"
           :messages="lobby.lobbyListChat"
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
         />
       </div>
       <!-- Always there: on a phone above the list, on a wide screen beside it with every setting open. -->
-      <section
-        v-if="plugin && !lobby.current"
-        class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4 lg:order-none"
-      >
+      <section v-if="plugin && !lobby.current" class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4">
         <!-- The games as on the home screen: two per row, low tiles on a phone, with the tagline
              where there is room. -->
         <div class="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" :aria-label="t.online.gamePicker">
