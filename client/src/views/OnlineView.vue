@@ -91,11 +91,13 @@ function phaseLabel(phase: LobbyPhase): string {
   <AppHeader :title="t.online.title" back="/">
     <!-- Where Settings stands on the home screen; Sign out lives in Settings, out of a stray tap's
          reach. -->
+    <!-- The gear alone on a phone: the title needs the room. -->
     <button
       class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
+      :aria-label="t.online.settings"
       @click="router.push('/settings')"
     >
-      {{ `⚙ ${t.online.settings}` }}
+      {{ "⚙" }} <span class="max-[399px]:hidden">{{ t.online.settings }}</span>
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
@@ -140,50 +142,53 @@ function phaseLabel(phase: LobbyPhase): string {
           <li
             v-for="summary in lobby.lobbies"
             :key="summary.lobbyId"
-            class="flex items-center gap-3 rounded-xl bg-panel p-3"
+            class="flex flex-wrap items-center gap-3 rounded-xl bg-panel p-3"
           >
             <GameIcon
               v-if="pluginBySettings(summary.settings?.game.case)"
               :plugin="pluginBySettings(summary.settings?.game.case)!"
               class="size-9 text-2xl"
             />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate font-semibold">{{ lobbyDisplayName(summary) }}</span>
+            <!-- Names wrap, and on a narrow phone the buttons go under the card's text. -->
+            <span class="min-w-[9rem] flex-1">
+              <span class="block font-semibold break-words">{{ lobbyDisplayName(summary) }}</span>
               <span v-if="summary.host" class="flex items-center gap-1 text-xs text-gray-300">
                 <Avatar
                   :url="summary.host.avatarUrl"
                   :name="summary.host.displayName"
                   :player-id="summary.host.id"
                 />
-                <span class="truncate">{{ summary.host.displayName }}</span>
+                <span class="min-w-0 break-words">{{ summary.host.displayName }}</span>
               </span>
               <span class="block text-xs text-gray-400">
                 {{ t.online.lobbySeats(summary.seatsTaken, summary.maxSeats) }} ·
                 {{ t.online.lobbyWatchers(summary.observers) }} · {{ phaseLabel(summary.phase) }}
               </span>
             </span>
-            <button
-              v-if="summary.lobbyId === lobby.current?.lobbyId"
-              class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
-              @click="openCurrent"
-            >
-              {{ t.online.open }}
-            </button>
-            <template v-else-if="!lobby.current">
+            <span class="ml-auto flex shrink-0 gap-2">
               <button
-                v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+                v-if="summary.lobbyId === lobby.current?.lobbyId"
                 class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
-                @click="lobby.join(summary.lobbyId, false)"
+                @click="openCurrent"
               >
-                {{ t.online.join }}
+                {{ t.online.open }}
               </button>
-              <button
-                class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
-                @click="lobby.join(summary.lobbyId, true)"
-              >
-                {{ t.online.watch }}
-              </button>
-            </template>
+              <template v-else-if="!lobby.current">
+                <button
+                  v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+                  class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
+                  @click="lobby.join(summary.lobbyId, false)"
+                >
+                  {{ t.online.join }}
+                </button>
+                <button
+                  class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
+                  @click="lobby.join(summary.lobbyId, true)"
+                >
+                  {{ t.online.watch }}
+                </button>
+              </template>
+            </span>
           </li>
           <li v-if="!lobby.lobbies.length" class="rounded-xl bg-panel p-4 text-center text-gray-400">
             {{ t.online.noLobbies }}
@@ -243,7 +248,7 @@ function phaseLabel(phase: LobbyPhase): string {
           <p class="min-w-0 flex-1 text-sm text-gray-300">{{ settingsSummary }}</p>
           <button
             type="button"
-            class="min-h-10 shrink-0 rounded-lg px-2 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
+            class="min-h-10 max-w-[45%] shrink-0 rounded-lg px-2 text-right text-sm text-emerald-300 hover:bg-white/5"
             :aria-expanded="editingSettings"
             @click="editingSettings = !editingSettings"
           >

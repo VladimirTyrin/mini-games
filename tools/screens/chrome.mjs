@@ -98,10 +98,9 @@ export function launchChrome({ chromePath, port }) {
     throw new Error(`Chrome DevTools did not answer on ${port}`);
   }
 
-  /** A fresh tab and a `send(method, params)` over its DevTools socket. */
-  async function openTab() {
-    const target = await devtools("/json/new?about:blank", "PUT");
-    const socket = new WebSocket(target.webSocketDebuggerUrl);
+  /** A `send(method, params)` over a DevTools socket. */
+  async function connect(socketUrl) {
+    const socket = new WebSocket(socketUrl);
     await new Promise((resolveOpen, reject) => {
       socket.onopen = resolveOpen;
       socket.onerror = reject;
@@ -123,11 +122,26 @@ export function launchChrome({ chromePath, port }) {
         pending.set(id, { resolveCall, reject });
         socket.send(JSON.stringify({ id, method, params }));
       });
+    return { send, close: () => socket.close() };
+  }
+
+  let browser = null;
+
+  /**
+   * A fresh tab in a browser context of its own: its own localStorage, so tabs in parallel
+   * neither share a language nor remember each other's settings.
+   */
+  async function openTab() {
+    browser ??= devtools("/json/version").then((version) => connect(version.webSocketDebuggerUrl));
+    const control = await browser;
+    const { browserContextId } = await control.send("Target.createBrowserContext");
+    const { targetId } = await control.send("Target.createTarget", { url: "about:blank", browserContextId });
+    const page = await connect(`ws://127.0.0.1:${port}/devtools/page/${targetId}`);
     const close = async () => {
-      socket.close();
-      await devtools(`/json/close/${target.id}`);
+      page.close();
+      await control.send("Target.disposeBrowserContext", { browserContextId });
     };
-    return { send, close };
+    return { send: page.send, close };
   }
 
   return { openTab, stop: () => chrome.kill() };

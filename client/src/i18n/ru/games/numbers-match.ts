@@ -15,7 +15,7 @@ export const numbersMatch: Messages["games"]["numbersMatch"] = {
   hintModes: {
     off: "Выкл",
     limited: "Лимит",
-    unlimited: "Без лимита",
+    unlimited: "Безлимит",
     unknown: "По умолчанию",
   },
   settings: {

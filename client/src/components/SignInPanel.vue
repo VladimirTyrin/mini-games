@@ -90,6 +90,7 @@ const isNativeApp = __NATIVE_APP__;
       <form v-if="info.guestsAllowed" class="flex gap-2" @submit.prevent="connection.signInAsGuest(name)">
         <input
           v-model="name"
+          data-testid="guest-name"
           maxlength="24"
           :placeholder="t.app.signIn.yourName"
           class="min-w-0 flex-1 rounded bg-panel-raised px-3 py-2"
@@ -97,6 +98,7 @@ const isNativeApp = __NATIVE_APP__;
         />
         <button
           class="shrink-0 rounded bg-emerald-600 px-4 py-2 font-semibold whitespace-nowrap"
+          data-testid="play-as-guest"
           :disabled="!name.trim() || busy"
         >
           {{ t.app.signIn.playAsGuest }}

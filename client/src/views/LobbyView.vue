@@ -242,7 +242,7 @@ function kick(): void {
             }}</template>
             <template v-else>{{ seat.occupant ? labelOf(seat.occupant) : "" }}</template>
             <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> ({{ t.common.you }})</span>
-            <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300">
+            <span v-if="sameIdentity(seat.occupant, state.host)" class="ml-1 text-xs text-amber-300">
               {{ t.lobby.host }}</span
             >
             <span v-if="seat.connectionLost" class="text-xs text-rose-300"> {{ t.lobby.reconnecting }}</span>

@@ -58,7 +58,8 @@ if (props.back) useBackHandler(goBack);
     >
       ←
     </button>
-    <h1 class="flex-1 truncate text-lg font-semibold">{{ title }}</h1>
+    <!-- A long title (a lobby's name, a Russian one) wraps rather than being cut. -->
+    <h1 class="min-w-0 flex-1 text-lg leading-tight font-semibold break-words">{{ title }}</h1>
     <slot />
     <span v-if="status" class="flex min-w-0 items-center gap-2 text-xs text-gray-400">
       <span class="h-2 w-2 shrink-0 rounded-full" :class="status.tone" />

@@ -17,6 +17,14 @@ const present = (selector) => `!!document.querySelector(${JSON.stringify(selecto
 const absent = (selector) => `!document.querySelector(${JSON.stringify(selector)})`;
 const freeCell = '[data-testid="tictactoe-cell"]:not(:disabled)';
 
+/** A guest's name typed as a player would (Vue listens to `input`), then Play as guest. */
+const signInAsGuest = [
+  waitFor('[data-testid="guest-name"]'),
+  `{ const field = document.querySelector('[data-testid="guest-name"]'); if (field) { field.value = "Alexandra"; field.dispatchEvent(new Event("input")); } }`,
+  wait(100),
+  click("play-as-guest"),
+];
+
 /** What a player does to get into each game's match. */
 const GAME_STARTS = {
   snake: [click("add-opponent"), click("add-opponent"), wait(200), play, wait(4500)],
@@ -48,10 +56,17 @@ export const SCENARIOS = [
   { id: "settings", route: "/settings", steps: [wait(800)] },
   { id: "friends", route: "/friends", steps: [wait(800)] },
   {
+    id: "sign-in",
+    route: "/online",
+    needsServer: true,
+    steps: [waitFor('[data-testid="guest-name"]'), wait(300)],
+    reached: present('[data-testid="guest-name"]'),
+  },
+  {
     id: "online",
     route: "/online",
     needsServer: true,
-    steps: [waitFor('[data-testid="create-lobby"]'), wait(500)],
+    steps: [...signInAsGuest, waitFor('[data-testid="create-lobby"]'), wait(500)],
     reached: present('[data-testid="create-lobby"]'),
   },
   {
@@ -59,6 +74,7 @@ export const SCENARIOS = [
     route: "/online",
     needsServer: true,
     steps: [
+      ...signInAsGuest,
       waitFor('[data-testid="create-lobby"]'),
       click("create-lobby"),
       waitFor('[data-testid="add-bot"]'),
@@ -67,7 +83,7 @@ export const SCENARIOS = [
       click("add-bot"),
       wait(800),
     ],
-    reached: absent('[data-testid="create-lobby"]'),
+    reached: present('[data-testid="add-bot"]'),
   },
   ...GAMES.map((game) => ({
     id: `setup-${game}`,
