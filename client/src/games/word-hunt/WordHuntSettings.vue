@@ -23,9 +23,16 @@ const languageOptions = computed(() => [
 /** With opponents: turns on one word; the word of the day is for playing alone. */
 const isGroup = computed(() => form.seats.value > 1);
 const modeOptions = computed(() => {
-  const unlimited = { value: WordHuntPuzzleMode.UNLIMITED, label: texts.value.unlimited };
+  const unlimited = {
+    value: WordHuntPuzzleMode.UNLIMITED,
+    label: texts.value.unlimited,
+    help: texts.value.unlimitedHelp,
+  };
   if (isGroup.value) return [unlimited];
-  return [{ value: WordHuntPuzzleMode.DAILY, label: texts.value.wordOfTheDay }, unlimited];
+  return [
+    { value: WordHuntPuzzleMode.DAILY, label: texts.value.wordOfTheDay, help: texts.value.wordOfTheDayHelp },
+    unlimited,
+  ];
 });
 const firstTurnOptions = computed(() => [
   { value: WordHuntFirstTurn.RANDOM, label: t.common.random },
@@ -91,7 +98,6 @@ onMounted(() => {
     <SegmentedField
       v-if="!isGroup"
       :label="texts.word"
-      :help="texts.wordHelp"
       stacked
       :options="modeOptions"
       :model-value="value.mode"

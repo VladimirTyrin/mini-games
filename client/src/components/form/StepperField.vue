@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 import { t } from "@/i18n";
 
@@ -27,6 +27,23 @@ function clamped(value: number): number {
 function stepBy(direction: 1 | -1): void {
   model.value = clamped(model.value + direction);
 }
+
+/**
+ * What is typed in the field. Applied on Enter or on leaving the field, not on every key: typing
+ * 15 goes through 1, which the limits would turn into the minimum at once.
+ */
+const draft = ref(String(model.value));
+watch(model, (value) => (draft.value = String(value)));
+
+function applyDraft(): void {
+  const typed = Number.parseInt(draft.value.trim(), 10);
+  // Not a number: the field shows the value it had.
+  if (Number.isNaN(typed)) draft.value = String(model.value);
+  else {
+    model.value = clamped(typed);
+    draft.value = String(model.value);
+  }
+}
 </script>
 
 <template>
@@ -41,13 +58,20 @@ function stepBy(direction: 1 | -1): void {
       >
         −
       </button>
-      <output
-        class="min-w-0 flex-1 text-center text-base font-semibold tabular-nums"
+      <input
+        v-model="draft"
+        type="text"
+        inputmode="numeric"
+        enterkeyhint="done"
+        autocomplete="off"
+        :aria-label="label"
+        class="w-0 min-w-0 flex-1 bg-transparent text-center text-base font-semibold tabular-nums outline-none focus:rounded focus:ring-1 focus:ring-emerald-500/60"
         :class="error ? 'text-rose-300' : 'text-gray-100'"
-        aria-live="polite"
-      >
-        {{ model }}
-      </output>
+        @change="applyDraft"
+        @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+        @keydown.up.prevent="stepBy(1)"
+        @keydown.down.prevent="stepBy(-1)"
+      />
       <button
         type="button"
         class="flex size-11 items-center justify-center rounded-lg text-xl text-gray-200 hover:bg-white/5"

@@ -45,7 +45,8 @@ export const wordHunt: Messages["games"]["wordHunt"] = {
   settings: {
     language: "Язык",
     word: "Слово",
-    wordHelp: "Слово дня у всех одно",
+    wordOfTheDayHelp: "Сегодня у всех одно и то же слово",
+    unlimitedHelp: "Каждый матч новое случайное слово",
     wordOfTheDay: "Слово дня",
     unlimited: "Случайное",
     letters: "Букв в слове",

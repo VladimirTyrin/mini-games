@@ -60,13 +60,21 @@ const foodPresets = computed(() =>
 );
 
 const wallOptions = computed(() => [
-  { value: SnakeWallCollisionMode.DEATH, label: text.value.wallsDeath },
-  { value: SnakeWallCollisionMode.WRAP_AROUND, label: text.value.wallsWrap },
+  { value: SnakeWallCollisionMode.DEATH, label: text.value.wallsDeath, help: text.value.wallsDeathHelp },
+  { value: SnakeWallCollisionMode.WRAP_AROUND, label: text.value.wallsWrap, help: text.value.wallsWrapHelp },
 ]);
 
 const deadSnakeOptions = computed(() => [
-  { value: SnakeDeadSnakeBehavior.DISAPPEAR, label: text.value.deadSnakesVanish },
-  { value: SnakeDeadSnakeBehavior.STAY_ON_FIELD, label: text.value.deadSnakesStay },
+  {
+    value: SnakeDeadSnakeBehavior.DISAPPEAR,
+    label: text.value.deadSnakesVanish,
+    help: text.value.deadSnakesVanishHelp,
+  },
+  {
+    value: SnakeDeadSnakeBehavior.STAY_ON_FIELD,
+    label: text.value.deadSnakesStay,
+    help: text.value.deadSnakesStayHelp,
+  },
 ]);
 </script>
 
@@ -104,7 +112,6 @@ const deadSnakeOptions = computed(() => [
     />
     <SegmentedField
       :label="text.walls"
-      :help="text.wallsHelp"
       :options="wallOptions"
       :model-value="value.wallCollisionMode"
       @update:model-value="form.update({ wallCollisionMode: $event })"
@@ -112,7 +119,6 @@ const deadSnakeOptions = computed(() => [
     <MoreOptions :has-problem="form.hasProblemIn(['max_food_count', 'food_spawn_permille'])">
       <SegmentedField
         :label="text.deadSnakes"
-        :help="text.deadSnakesHelp"
         :options="deadSnakeOptions"
         :model-value="value.deadSnakeBehavior"
         @update:model-value="form.update({ deadSnakeBehavior: $event })"

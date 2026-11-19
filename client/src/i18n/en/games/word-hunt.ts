@@ -45,7 +45,8 @@ export const wordHunt = {
   settings: {
     language: "Language",
     word: "Word",
-    wordHelp: "The word of the day is the same for everyone",
+    wordOfTheDayHelp: "The same word for everyone today",
+    unlimitedHelp: "A new random word every match",
     wordOfTheDay: "Word of the day",
     unlimited: "Unlimited",
     letters: "Letters",

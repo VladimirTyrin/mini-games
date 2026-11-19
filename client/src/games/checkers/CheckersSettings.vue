@@ -22,8 +22,12 @@ const whiteOptions = computed(() => {
 });
 
 const captureOptions = computed(() => [
-  { value: CheckersCaptureRule.TO_THE_END, label: texts.value.toTheEnd },
-  { value: CheckersCaptureRule.MAY_STOP, label: texts.value.mayStop },
+  {
+    value: CheckersCaptureRule.TO_THE_END,
+    label: texts.value.toTheEnd,
+    help: texts.value.capturesToTheEndHelp,
+  },
+  { value: CheckersCaptureRule.MAY_STOP, label: texts.value.mayStop, help: texts.value.capturesMayStopHelp },
 ]);
 </script>
 
@@ -39,7 +43,6 @@ const captureOptions = computed(() => [
     />
     <SegmentedField
       :label="texts.captures"
-      :help="texts.capturesHelp"
       stacked
       :options="captureOptions"
       :model-value="
