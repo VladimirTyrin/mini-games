@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { t } from "@/i18n";
 import type { MatchController } from "@/match/match-controller";
 import { type CheckersPiece, CheckersEndReason, CheckersSide } from "@/proto/minigames/v2/checkers_pb";
 import { useToastStore } from "@/stores/toasts";
@@ -202,9 +203,7 @@ function squareColor(cell: Cell): string {
   return "bg-[#8b5a3c]";
 }
 
-function sideName(side: CheckersSide | null): string {
-  return side === CheckersSide.BLACK ? "black" : "white";
-}
+const texts = computed(() => t.games.checkers.board);
 
 const status = computed(() => {
   const current = view.value;
@@ -212,18 +211,20 @@ const status = computed(() => {
   const watching = mySlot.value === null;
   if (current.end) {
     const winner = current.end.winnerSlot;
-    if (winner === undefined) return "Draw";
-    if (watching) return `${names[winner] ?? "A player"} wins`;
+    if (winner === undefined) return texts.value.draw;
+    if (watching) return texts.value.playerWins(names[winner] ?? t.match.aPlayer);
     if (current.end.reason === CheckersEndReason.OPPONENT_LEFT && winner === mySlot.value)
-      return "Opponent left — you win";
-    return winner === mySlot.value ? "You win!" : "You lose";
+      return texts.value.opponentLeftYouWin;
+    return winner === mySlot.value ? texts.value.youWin : texts.value.youLose;
   }
-  if (current.currentSlot === undefined) return "Choosing who plays white…";
+  if (current.currentSlot === undefined) return texts.value.choosingWhite;
   if (watching) {
-    const side = current.sideToMove === CheckersSide.BLACK ? "Black" : "White";
-    return `${side} to move: ${names[current.currentSlot] ?? "a player"}`;
+    const name = names[current.currentSlot] ?? texts.value.somePlayer;
+    return current.sideToMove === CheckersSide.BLACK
+      ? texts.value.blackToMove(name)
+      : texts.value.whiteToMove(name);
   }
-  return myTurn.value ? "Your turn" : "Opponent's turn";
+  return myTurn.value ? texts.value.yourTurn : texts.value.opponentsTurn;
 });
 </script>
 
@@ -231,9 +232,9 @@ const status = computed(() => {
   <div v-if="view" class="flex w-full flex-col items-center gap-2">
     <p class="text-center text-lg" :class="myTurn ? 'text-emerald-300' : 'text-gray-300'">
       {{ status }}
-      <span v-if="mySide !== null" class="whitespace-nowrap text-sm text-gray-400"
-        >(you play {{ sideName(mySide) }})</span
-      >
+      <span v-if="mySide !== null" class="whitespace-nowrap text-sm text-gray-400">{{
+        mySide === CheckersSide.BLACK ? texts.youPlayBlack : texts.youPlayWhite
+      }}</span>
     </p>
     <div
       class="relative aspect-square overflow-hidden rounded-md border-4 border-[#3f2a1d] shadow-lg"
@@ -292,7 +293,7 @@ const status = computed(() => {
               selection[0] === piece.square ? 'ring-2 ring-amber-300' : '',
             ]"
           >
-            <svg v-if="piece.king" viewBox="0 0 24 24" class="h-3/5 w-3/5" aria-label="king">
+            <svg v-if="piece.king" viewBox="0 0 24 24" class="h-3/5 w-3/5" :aria-label="texts.king">
               <path
                 d="M3 18 5 7l4.5 5L12 5l2.5 7L19 7l2 11z"
                 fill="#facc15"
@@ -316,11 +317,11 @@ const status = computed(() => {
       :disabled="sending"
       @click="submit(selection)"
     >
-      End the move here
+      {{ texts.endMoveHere }}
     </button>
-    <p v-else-if="mustCapture" class="text-sm text-amber-300">You must capture</p>
+    <p v-else-if="mustCapture" class="text-sm text-amber-300">{{ texts.mustCapture }}</p>
     <p v-else-if="view.kingMoves > 0 && !view.end" class="text-sm text-gray-400">
-      Kings only: {{ view.kingMoves }} of {{ view.kingMovesForDraw }} moves to a draw
+      {{ texts.kingMovesToDraw(view.kingMoves, view.kingMovesForDraw) }}
     </p>
   </div>
 </template>

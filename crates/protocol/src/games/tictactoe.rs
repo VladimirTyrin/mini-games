@@ -1,6 +1,6 @@
 use mg_tictactoe::{
-    BotKind, Command, FirstPlayerMode, GameEnd, Mark, PLAYERS, Point, RawSettings, TicTacToe, View,
-    WinningLine, WorldEvent,
+    BotKind, Command, FirstPlayerMode, GameEnd, Mark, PLAYERS, Point, RawSettings, Refusal,
+    TicTacToe, View, WinningLine, WorldEvent,
 };
 
 use crate::frame_codec::{slot_from_wire, slot_to_wire};
@@ -8,6 +8,7 @@ use crate::proto;
 use crate::proto::{TicTacToeBotKind, TicTacToeEndReason, TicTacToeFirstPlayerMode, TicTacToeMark};
 use crate::wire_error::WireError;
 use crate::wire_game::{WireBots, WireGame};
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for TicTacToe {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -194,6 +195,25 @@ fn winning_line_to_wire(line: WinningLine) -> proto::TicTacToeWinningLine {
         mark: mark_to_wire(line.mark).into(),
         start: Some(point_to_wire(line.start)),
         end: Some(point_to_wire(line.end)),
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::CellTaken => proto::TicTacToeRefusal::CellTaken,
+            Refusal::FirstPlayerAlreadyKnown | Refusal::NoSuchSeat | Refusal::CellOutsideBoard => {
+                return malformed_refusal();
+            }
+        };
+        proto::refusal::Reason::Tictactoe(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::TicTacToeRefusal::try_from(value).ok()? {
+            proto::TicTacToeRefusal::Unspecified => return None,
+            proto::TicTacToeRefusal::CellTaken => Refusal::CellTaken,
+        })
     }
 }
 

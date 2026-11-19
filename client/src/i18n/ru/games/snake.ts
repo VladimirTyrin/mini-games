@@ -1,0 +1,68 @@
+import type { Messages } from "../../messages";
+
+export const snake: Messages["games"]["snake"] = {
+  title: "Змейка",
+  tagline: "Классическая змейка, до 10 игроков",
+  facts: {
+    wrapAround: "сквозные стены",
+    wallsKill: "стены убивают",
+    deadSnakesStay: "мёртвые остаются",
+    deadSnakesVanish: "мёртвые исчезают",
+  },
+  bots: {
+    random: "Случайный бот",
+    careful: "Осторожный бот",
+    efficient: "Жадный бот",
+  },
+  controls: {
+    keyboard: "Стрелки или WASD — поворот",
+    touch: "Проведи по полю или нажимай стрелки, чтобы повернуть · Тап двумя пальцами — пауза",
+  },
+  speeds: {
+    slow: "Медленно",
+    normal: "Обычно",
+    fast: "Быстро",
+  },
+  customSpeed: (tickIntervalMs) => `${tickIntervalMs} мс на шаг`,
+  settings: {
+    speed: "Скорость",
+    customSpeed: (tickIntervalMs) => `Своя (${tickIntervalMs} мс)`,
+    walls: "Стены",
+    wallsDeathHelp: "Змейка, врезавшаяся в стену, выбывает",
+    wallsWrapHelp: "Уходишь за край — появляешься с другой стороны",
+    wallsDeath: "Убивают",
+    wallsWrap: "Сквозные",
+    deadSnakes: "Мёртвые змейки",
+    deadSnakesVanishHelp: "Разбившаяся змейка исчезает с поля",
+    deadSnakesStayHelp: "Разбившиеся змейки остаются и загораживают путь",
+    deadSnakesVanish: "Исчезают",
+    deadSnakesStay: "Остаются",
+    foodOnField: "Еды на поле",
+    foodOnFieldHelp: "Сколько штук лежит одновременно",
+    foodAppears: "Еда появляется",
+    foodAppearsHelp: "Как скоро появляется новая",
+    foodInstantly: "Сразу",
+    foodOften: "Часто",
+    foodRarely: "Редко",
+    customFoodChance: (percent) => `Шанс ${percent}%`,
+  },
+  board: {
+    watching: "Ты зритель",
+    outWatching: "Ты вне игры — смотришь за остальными",
+    up: "Вверх",
+    left: "Влево",
+    down: "Вниз",
+    right: "Вправо",
+  },
+  scoreboard: {
+    winner: "победитель",
+    you: "(ты)",
+    // Short and without past-tense verbs: they follow any player's name.
+    hitWall: "в стену",
+    bitItself: "в свой хвост",
+    crashed: "в змейку",
+    crashedHeadOn: "лоб в лоб",
+    left: "вне игры",
+    out: "вне игры",
+  },
+};

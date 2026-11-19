@@ -1,5 +1,6 @@
 import { create, fromJsonString, toJsonString } from "@bufbuild/protobuf";
 
+import { t } from "@/i18n";
 import type { ServerInfo } from "@/proto/minigames/v2/auth_pb";
 import { ClientMessageSchema, ServerMessageSchema } from "@/proto/minigames/v2/protocol_pb";
 
@@ -17,7 +18,7 @@ export function probeServer(url: string): Promise<ServerInfo> {
     }
     const timer = setTimeout(() => {
       socket.close();
-      reject(new Error("the server does not answer"));
+      reject(new Error(t.app.signIn.serverDoesNotAnswer));
     }, PROBE_TIMEOUT_MS);
     socket.onopen = () => {
       const request = create(ClientMessageSchema, {
@@ -36,7 +37,7 @@ export function probeServer(url: string): Promise<ServerInfo> {
     };
     socket.onerror = () => {
       clearTimeout(timer);
-      reject(new Error("cannot reach the server"));
+      reject(new Error(t.app.signIn.cannotReachServer));
     };
   });
 }

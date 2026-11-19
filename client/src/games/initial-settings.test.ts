@@ -22,4 +22,16 @@ describe("initialSettings", () => {
     const foreign = create(GameSettingsSchema, { game: { case: "wordHunt", value: { wordLength: 5 } } });
     expect(initialSettings(snake, foreign).game.case).toBe("snake");
   });
+
+  it("lets the game adjust its defaults when nothing is remembered", () => {
+    const adjusting = {
+      ...snake,
+      defaultSettings: (defaults) =>
+        defaults.game.case === "snake"
+          ? { ...defaults, game: { case: "snake", value: { ...defaults.game.value, fieldWidth: 9 } } }
+          : defaults,
+    } as GamePlugin;
+    const started = initialSettings(adjusting, null);
+    expect(started.game.case === "snake" && started.game.value.fieldWidth).toBe(9);
+  });
 });

@@ -1,11 +1,11 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameInfo, Outcome, OutcomeKind, PlayerSpec,
-    SetupError, Slot, StateHasher, Status, Viewer,
+    ScoreKind, SetupError, Slot, StateHasher, Status, Viewer,
 };
 
 use crate::io::{Command, WorldEvent};
 use crate::model::Seats;
-use crate::rules::add_to_total;
+use crate::rules::{Refusal, add_to_total};
 use crate::settings::Settings;
 use crate::view::View;
 
@@ -31,6 +31,8 @@ impl Game for {{Pascal}} {
     type Command = Command;
     type WorldEvent = WorldEvent;
     type View = View;
+    type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "{{snake}}",
@@ -39,6 +41,7 @@ impl Game for {{Pascal}} {
         max_players: MAX_SEATS,
         has_bots: false,
         cooperative: false,
+        scores: ScoreKind::WinFlag,
     };
 
     /// The settings are already parsed; only what depends on the players is left to check.
@@ -54,7 +57,7 @@ impl Game for {{Pascal}} {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError<Refusal>> {
         if self.is_over() {
             return Err(CommandError::GameOver);
         }
@@ -80,10 +83,10 @@ impl Game for {{Pascal}} {
         rng.pick(&seats).map(|slot| WorldEvent::FirstPlayerChosen(*slot)).into_iter().collect()
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         let WorldEvent::FirstPlayerChosen(slot) = *event;
         if self.turn.is_some() || self.total > 0 || !self.seats.is_in_play(slot) {
-            return Err(CommandError::Illegal("the first player is already chosen"));
+            return Err(CommandError::Illegal(Refusal::FirstPlayerAlreadyChosen));
         }
         self.turn = Some(slot);
         Ok(())

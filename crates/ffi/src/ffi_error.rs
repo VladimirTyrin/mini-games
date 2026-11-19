@@ -1,4 +1,4 @@
-use mg_protocol::WireError;
+use mg_protocol::{WireError, proto};
 use mg_registry::{ApplyError, CreateError, ReplayError, SubmitError};
 
 use crate::status::MgStatus;
@@ -42,6 +42,14 @@ pub(crate) enum FfiError {
 }
 
 impl FfiError {
+    /// Why the game refused a command, for `mg_last_refusal`.
+    pub(crate) fn refusal(&self) -> Option<&proto::Refusal> {
+        match self {
+            Self::Submit(SubmitError::Rejected(rejection)) => Some(&rejection.refusal),
+            _ => None,
+        }
+    }
+
     pub(crate) fn status(&self) -> MgStatus {
         match self {
             Self::NullArgument(_) => MgStatus::NullArgument,

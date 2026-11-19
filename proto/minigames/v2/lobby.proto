@@ -18,6 +18,7 @@ enum LobbyPhase {
 
 message LobbySummary {
   string lobby_id = 1;
+  // The host's name for the lobby; empty when they gave none (a client names it then).
   string name = 2;
   GameSettings settings = 3;
   uint32 seats_taken = 4;
@@ -40,6 +41,7 @@ message LobbySeat {
 // incremental patches did in v1.
 message LobbyState {
   string lobby_id = 1;
+  // The host's name for the lobby; empty when they gave none (a client names it then).
   string name = 2;
   Identity host = 3;
   GameSettings settings = 4;

@@ -117,7 +117,8 @@ secret), never by display name, which may repeat.
 - `games/<id>/` — one plugin per game: settings form + board. Rules and limits come from the
   core; plugins only render and turn input into commands. A board that wants to know whether
   an action is allowed, or what it leads to, asks the rules instead of repeating them:
-  `controller.refusal(command)` (why the game would refuse it, in the rules' words, or `null`)
+  `controller.refusal(command)` (why the game would refuse it, as a `Refusal` the client words,
+  or `null`)
   and `controller.preview(command)` (refused / the game goes on / how it ends). Both run
   `Game::check_command` / `Game::preview_command` on the state on screen, which try the command
   on a copy; the conformance suite checks that the answer always matches applying it. The

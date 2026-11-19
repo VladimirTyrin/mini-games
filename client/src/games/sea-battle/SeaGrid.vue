@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
 import { SeaBattleCellMark } from "@/proto/minigames/v2/sea_battle_pb";
 
 import ShipSprite from "./ShipSprite.vue";
@@ -30,8 +31,6 @@ const props = withDefaults(
   },
 );
 const emit = defineEmits<{ tap: [cell: CellPoint] }>();
-
-const COLUMNS = "ABCDEFGHIJ";
 
 const cells = computed(() =>
   Array.from({ length: SIDE * SIDE }, (_, index) => ({
@@ -103,7 +102,7 @@ function shipStyle(ship: EditorShip): Record<string, string> {
         class="relative flex items-center justify-center border-[0.5px] border-sky-950/50 disabled:cursor-default disabled:opacity-100"
         :class="cellClass(cell)"
         :disabled="!tappable.has(cell.index)"
-        :aria-label="`${COLUMNS[cell.x]}${cell.y + 1}`"
+        :aria-label="`${t.games.seaBattle.columns[cell.x]}${cell.y + 1}`"
         @click="emit('tap', { x: cell.x, y: cell.y })"
       >
         <span

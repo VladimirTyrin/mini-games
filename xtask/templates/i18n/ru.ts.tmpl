@@ -1,0 +1,20 @@
+import type { Messages } from "../../messages";
+
+// The title is the English one until someone translates it.
+export const {{camel}}: Messages["games"]["{{camel}}"] = {
+  title: "{{Title}}",
+  tagline: "Набери цель первым",
+  target: (value) => `цель ${value}`,
+  controls: {
+    keyboard: "Нажми 1, 2 или 3",
+    touch: "Нажми +1, +2 или +3",
+  },
+  settings: {
+    target: "Цель",
+    targetHelp: "Сумма, на которой игра заканчивается",
+  },
+  board: {
+    yourMove: "Твой ход",
+    waiting: "Ждём…",
+  },
+};

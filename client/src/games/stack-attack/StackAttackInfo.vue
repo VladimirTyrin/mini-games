@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
 import { type StackAttackView, StackAttackWorkerStatus } from "@/proto/minigames/v2/stack_attack_pb";
 
+import { POINTS_PER_LINE } from "./points-per-line";
 import { workerColor } from "./worker-palette";
 
 const props = defineProps<{ view: StackAttackView; seatNames: readonly string[]; status: string }>();
 
-// Mirrors the rules' POINTS_PER_LINE (crates/games/stack-attack/src/rules/constants.rs).
-const POINTS_PER_LINE = 100;
-
-const STATUS_NOTES: Partial<Record<StackAttackWorkerStatus, string>> = {
-  [StackAttackWorkerStatus.CRUSHED]: "crushed",
-  [StackAttackWorkerStatus.LEFT]: "left",
-};
+function statusNoteOf(status: StackAttackWorkerStatus): string {
+  switch (status) {
+    case StackAttackWorkerStatus.CRUSHED:
+      return t.games.stackAttack.info.crushed;
+    case StackAttackWorkerStatus.LEFT:
+      return t.games.stackAttack.info.left;
+    default:
+      return "";
+  }
+}
 
 const survived = computed(() => {
   const seconds = Math.floor((Number(props.view.ticksSurvived) * props.view.tickMs) / 1000);
@@ -21,23 +26,25 @@ const survived = computed(() => {
 });
 
 const stats = computed(() => [
-  { label: "Score", value: String(props.view.score) },
-  { label: "Level", value: String(props.view.level) },
-  { label: "Lines", value: String(props.view.linesCleared) },
-  { label: "Pushed", value: String(props.view.boxesPushed) },
-  { label: "Time", value: survived.value },
+  { label: t.games.stackAttack.info.score, value: String(props.view.score) },
+  { label: t.games.stackAttack.info.level, value: String(props.view.level) },
+  { label: t.games.stackAttack.info.lines, value: String(props.view.linesCleared) },
+  // The one a phone narrower than 400 px gives up: five columns would not fit their labels.
+  { label: t.games.stackAttack.info.pushed, value: String(props.view.boxesPushed), secondary: true },
+  { label: t.games.stackAttack.info.time, value: survived.value },
 ]);
 
 const workers = computed(() =>
   props.view.workers.map((worker) => ({
     slot: worker.slot,
-    name: props.seatNames[worker.slot] ?? `Player ${worker.slot + 1}`,
+    name: props.seatNames[worker.slot] ?? t.match.player(worker.slot + 1),
     isYou: worker.slot === props.view.you,
     // A local player is often named "You" already: "You (you)" says it twice.
     showYouTag:
-      worker.slot === props.view.you && props.seatNames[worker.slot]?.trim().toLowerCase() !== "you",
+      worker.slot === props.view.you &&
+      props.seatNames[worker.slot]?.trim().toLowerCase() !== t.common.youName.toLowerCase(),
     alive: worker.status === StackAttackWorkerStatus.ALIVE,
-    note: STATUS_NOTES[worker.status] ?? "",
+    note: statusNoteOf(worker.status),
     color: workerColor(worker.slot),
   })),
 );
@@ -46,8 +53,15 @@ const workers = computed(() =>
 <template>
   <aside class="flex min-h-0 flex-col gap-2 rounded-lg bg-panel p-2 md:p-3">
     <p v-if="status" class="text-center text-sm text-gray-300">{{ status }}</p>
-    <dl class="grid grid-cols-5 gap-1 text-center landscape:grid-cols-2 landscape:text-left">
-      <div v-for="stat in stats" :key="stat.label" class="rounded bg-panel-raised px-1 py-1 landscape:px-2">
+    <dl
+      class="grid grid-cols-5 gap-1 text-center max-[399px]:grid-cols-4 landscape:grid-cols-2 landscape:text-left"
+    >
+      <div
+        v-for="stat in stats"
+        :key="stat.label"
+        class="rounded bg-panel-raised px-1 py-1 landscape:px-2"
+        :class="{ 'max-[399px]:hidden': stat.secondary }"
+      >
         <dt class="text-[0.65rem] uppercase tracking-wide text-gray-400">{{ stat.label }}</dt>
         <dd class="font-mono text-sm font-semibold text-emerald-300">{{ stat.value }}</dd>
       </div>
@@ -65,17 +79,18 @@ const workers = computed(() =>
         <span class="size-3 shrink-0 rounded-full" :style="{ backgroundColor: worker.color }" />
         <span class="min-w-0 flex-1 truncate">
           {{ worker.name }}
-          <span v-if="worker.showYouTag" class="text-xs text-gray-400"> (you)</span>
+          <span v-if="worker.showYouTag" class="text-xs text-gray-400">
+            {{ t.games.stackAttack.info.you }}</span
+          >
         </span>
         <span v-if="worker.note" class="text-xs text-rose-300">{{ worker.note }}</span>
       </li>
     </ul>
     <p class="text-center text-xs text-gray-400 landscape:text-left">
-      Push crates to fill a row: a full row clears for {{ POINTS_PER_LINE }} points. Don't get crushed or
-      walled into a pit, and keep the stack below the red line.
+      {{ t.games.stackAttack.info.howToScore(POINTS_PER_LINE) }}
     </p>
     <p class="text-center text-xs text-gray-400 landscape:text-left">
-      Jump into a falling crate to smash it before it lands.
+      {{ t.games.stackAttack.info.smash }}
     </p>
   </aside>
 </template>

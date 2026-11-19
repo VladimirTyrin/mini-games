@@ -3,6 +3,7 @@ import { computed } from "vue";
 
 import Avatar from "@/components/Avatar.vue";
 import type { GamePlugin } from "@/games/game-plugin";
+import { t } from "@/i18n";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { useConnectionStore } from "@/stores/connection";
 
@@ -64,19 +65,21 @@ function remove(index: number): void {
 <template>
   <section class="space-y-2 rounded-2xl bg-panel p-4">
     <header class="flex min-h-7 items-center justify-between gap-2">
-      <h2 class="font-semibold">Players</h2>
+      <h2 class="font-semibold">{{ t.match.opponents.title }}</h2>
       <div class="flex items-center gap-2 text-xs">
         <span v-if="!bots.length" class="rounded-full bg-sky-500/20 px-2 py-0.5 font-medium text-sky-200">
-          Solo
+          {{ t.match.opponents.solo }}
         </span>
-        <span class="tabular-nums text-gray-400">{{ players }} / {{ maxPlayers }} players</span>
+        <span class="tabular-nums text-gray-400">{{
+          t.match.opponents.playerCount(players, maxPlayers)
+        }}</span>
       </div>
     </header>
     <!-- As in a lobby: a spectator holds no seat in the list, and is named under it. -->
     <div v-if="!watching" class="flex h-12 items-center gap-3 rounded-lg bg-panel-raised/50 px-3">
       <Avatar :url="me.avatarUrl" :name="me.name" :player-id="me.playerId || undefined" />
       <span class="min-w-0 flex-1 truncate">
-        {{ me.name }} <span class="text-sm text-gray-400">(you)</span>
+        {{ me.name }} <span class="text-sm text-gray-400">({{ t.common.you }})</span>
       </span>
     </div>
     <div v-for="(bot, index) in bots" :key="index" class="flex items-center gap-2">
@@ -86,14 +89,14 @@ function remove(index: number): void {
       >
         <Avatar url="" :name="plugin.botLabel(bot)" bot />
         <span class="flex-1 truncate">{{ plugin.botLabel(bot) }}</span>
-        <span v-if="hasChoice" class="text-gray-400" aria-hidden="true">▾</span>
+        <span v-if="hasChoice" class="text-gray-400" aria-hidden="true">{{ "▾" }}</span>
         <!-- The native picker sits invisibly over the row: phones get their own wheel or sheet.
              Its list gets explicit colours: some browsers (the desktop app's) open it white
              despite the dark colour scheme. -->
         <select
           v-if="hasChoice"
           class="absolute inset-0 cursor-pointer bg-[#1f2937] text-[#f3f4f6] opacity-0"
-          :aria-label="`Opponent ${index + 1}`"
+          :aria-label="t.match.opponents.opponent(index + 1)"
           @change="replace(index, $event)"
         >
           <option
@@ -109,7 +112,7 @@ function remove(index: number): void {
       <button
         type="button"
         class="flex size-11 shrink-0 items-center justify-center rounded-lg text-lg text-gray-400 hover:bg-rose-500/15 hover:text-rose-300"
-        :aria-label="`Remove ${plugin.botLabel(bot)}`"
+        :aria-label="t.match.opponents.remove(plugin.botLabel(bot))"
         :disabled="!canRemove"
         @click="remove(index)"
       >
@@ -120,12 +123,13 @@ function remove(index: number): void {
       v-if="canAdd"
       type="button"
       class="flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/20 text-emerald-300 hover:border-emerald-400/60 hover:bg-emerald-500/5"
+      data-testid="add-opponent"
       @click="add"
     >
-      + Add opponent
+      + {{ t.match.opponents.add }}
     </button>
     <p v-if="watching" class="pt-1 text-xs text-gray-400">
-      Watching: {{ me.name }} <span class="text-sky-300">(you)</span>
+      {{ t.match.opponents.watching }} {{ me.name }} <span class="text-sky-300">({{ t.common.you }})</span>
     </p>
     <button
       v-if="available.length"
@@ -133,7 +137,7 @@ function remove(index: number): void {
       class="min-h-10 rounded bg-panel-raised px-4 py-2 text-sm whitespace-nowrap"
       @click="toggleWatching"
     >
-      {{ watching ? "Take a seat" : "Watch instead" }}
+      {{ watching ? t.match.takeSeat : t.match.watchInstead }}
     </button>
   </section>
 </template>

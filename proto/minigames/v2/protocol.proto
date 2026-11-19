@@ -6,6 +6,7 @@ import "minigames/v2/auth.proto";
 import "minigames/v2/lobby.proto";
 import "minigames/v2/match.proto";
 import "minigames/v2/push.proto";
+import "minigames/v2/refusal.proto";
 import "minigames/v2/replay.proto";
 import "minigames/v2/social.proto";
 
@@ -158,6 +159,12 @@ enum ErrorCode {
 
 message ErrorResponse {
   ErrorCode code = 1;
-  // Human-readable; never parse it.
+  // English, for logs, bots and the console; never parse it and never show it to a player: the
+  // client words the code, `refusal` or `setting_problem` in the player's language.
   string message = 2;
+  // With ERROR_CODE_COMMAND_REJECTED: why the command (or private command) was refused.
+  Refusal refusal = 3;
+  // With ERROR_CODE_INVALID_SETTINGS when one setting is at fault; absent when the problem is
+  // the whole request (an unknown game, a seat count the game does not support).
+  SettingProblem setting_problem = 4;
 }

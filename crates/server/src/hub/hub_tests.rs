@@ -638,9 +638,15 @@ async fn a_fleet_reaches_its_own_seat_and_spectators_while_the_other_seat_learns
     assert_eq!(shown.slot, Some(0));
 
     let again = host.request(place_fleet(&match_id)).await;
-    assert!(
-        matches!(&again, Reply::Error(error) if error.code == i32::from(proto::ErrorCode::CommandRejected)),
-        "{again:?}"
+    let Reply::Error(again) = again else {
+        panic!("placed twice: {again:?}");
+    };
+    assert_eq!(again.code, i32::from(proto::ErrorCode::CommandRejected));
+    assert_eq!(
+        again.refusal.and_then(|refusal| refusal.reason),
+        Some(proto::refusal::Reason::SeaBattle(
+            proto::SeaBattleRefusal::FleetAlreadyPlaced.into()
+        ))
     );
 }
 

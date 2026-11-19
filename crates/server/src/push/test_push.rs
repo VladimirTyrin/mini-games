@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use mg_core::Capped;
 
-use super::PushNotification;
+use super::{PushNotification, PushText};
 
 /// Seconds between the request and the test notification: time to close the app first.
 pub(crate) type TestPushDelay = Capped<0, 60>;
@@ -12,8 +12,8 @@ pub(crate) type TestPushDelay = Capped<0, 60>;
 /// long delivery took.
 pub(crate) fn test_notification(sent_at_unix_ms: i64) -> PushNotification {
     PushNotification {
-        title: "Mini Games".to_owned(),
-        body: "Test notification: tap to see how long it took.".to_owned(),
+        title: PushText::AppTitle,
+        body: PushText::Test,
         tag: "test".to_owned(),
         data: BTreeMap::from([
             ("kind", "test".to_owned()),

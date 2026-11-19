@@ -121,6 +121,10 @@ one (a token names the key it was issued for).
   catch-up's header and `mg_mirror_apply_catch_up`. Also replays (`mg_mirror_from_replay_file`,
   `mg_mirror_advance_to`).
 - Every call returns an `MgStatus`; `mg_last_error_message` explains a failure (per thread).
+  After `MG_STATUS_REJECTED`, `mg_last_refusal` gives the encoded `Refusal` (the value a server
+  sends in `ErrorResponse.refusal`), and `mg_refusal_english` turns any encoded `Refusal` into
+  its English, the same text as the server's `ErrorResponse.message` (which, for malformed
+  input, names what was wrong instead). In Rust, `mg_protocol::refusal_english` does the same.
   Results come in library-allocated `MgBuffer`s that the caller frees with `mg_buffer_free`.
   Handles are freed with `*_free`, are not thread-safe, and panics never cross the boundary.
 - `mg_abi_version` lets a caller refuse an incompatible library.

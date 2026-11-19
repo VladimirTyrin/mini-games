@@ -14,6 +14,13 @@ pub(super) enum SpawnError {
 }
 
 impl SpawnError {
+    pub(super) fn setting_problem(&self) -> Option<proto::SettingProblem> {
+        match self {
+            Self::Create(error) => error.setting_problem(),
+            Self::LobbyNotFound | Self::NotEnoughPlayers { .. } | Self::ServerUpdating => None,
+        }
+    }
+
     pub(super) fn code(&self) -> proto::ErrorCode {
         match self {
             Self::ServerUpdating => proto::ErrorCode::ServerUpdating,

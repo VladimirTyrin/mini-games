@@ -40,19 +40,16 @@ describe("LocalMatchSource", () => {
     vi.unstubAllGlobals();
   });
 
-  it("resumes a real-time game only after the countdown it announces", () => {
+  it("resumes at once, with no countdown", () => {
     const { match, worker } = source();
     const countdowns: number[] = [];
     match.on("resumed", ({ countdownMs }) => countdowns.push(countdownMs));
 
     match.setPaused("hidden", true);
-    match.setPaused("hidden", false, 3_000);
-    vi.advanceTimersByTime(2_999);
-    expect(worker.posted).toEqual(["pause"]);
-    vi.advanceTimersByTime(1);
+    match.setPaused("hidden", false);
 
     expect(worker.posted).toEqual(["pause", "resume"]);
-    expect(countdowns).toEqual([3_000]);
+    expect(countdowns).toEqual([0]);
   });
 
   it("stays paused by the player when the app comes back from the background", () => {
@@ -60,16 +57,14 @@ describe("LocalMatchSource", () => {
 
     match.setPaused("player", true);
     match.setPaused("hidden", true);
-    match.setPaused("hidden", false, 3_000);
-    vi.advanceTimersByTime(3_000);
+    match.setPaused("hidden", false);
     expect(worker.posted).toEqual(["pause"]);
 
-    match.setPaused("player", false, 3_000);
-    vi.advanceTimersByTime(3_000);
+    match.setPaused("player", false);
     expect(worker.posted).toEqual(["pause", "resume"]);
   });
 
-  it("takes no commands while paused or counting down to the restart", async () => {
+  it("takes no commands while paused", async () => {
     const { match, worker } = source();
     match.start();
     const turn = {
@@ -78,9 +73,7 @@ describe("LocalMatchSource", () => {
 
     match.setPaused("player", true);
     await expect(match.submit(turn)).rejects.toThrow("the game is paused");
-    match.setPaused("player", false, 3_000);
-    await expect(match.submit(turn)).rejects.toThrow("the game is paused");
-    vi.advanceTimersByTime(3_000);
+    match.setPaused("player", false);
     void match.submit(turn);
 
     expect(worker.posted).toEqual(["start", "pause", "resume", "submit"]);

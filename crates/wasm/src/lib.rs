@@ -14,6 +14,7 @@
 )]
 
 mod catalog;
+mod encoded_refusal;
 mod local_host;
 mod match_header;
 mod match_mirror;

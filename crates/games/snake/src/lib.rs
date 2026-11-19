@@ -24,7 +24,7 @@ pub use bots::BotKind;
 pub use game::Snake;
 pub use io::{Command, INPUT_BUFFER, WorldEvent};
 pub use model::{Direction, Point, Score, StepCount};
-pub use rules::{DeathReason, GameEnd, START_LENGTH};
+pub use rules::{DeathReason, GameEnd, Refusal, START_LENGTH};
 pub use settings::{
     DeadSnakeBehavior, FieldSize, FoodCount, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, RawSettings,
     Settings, TickIntervalMs, WallCollisionMode,

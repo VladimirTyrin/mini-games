@@ -1,13 +1,15 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use crate::awaiting::Awaiting;
 use crate::clock::Clock;
 use crate::command_error::CommandError;
+use crate::english_text::EnglishText;
 use crate::game_info::GameInfo;
 use crate::game_secret::{GameSecret, SeatSecret, SecretCommand};
 use crate::game_settings::GameSettings;
 use crate::hash::StateHasher;
 use crate::player_spec::PlayerSpec;
+use crate::protocol_misuse::ProtocolMisuse;
 use crate::rng::CoreRng;
 use crate::setup_error::SetupError;
 use crate::slot::Slot;
@@ -37,6 +39,12 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     /// nothing. Only turn-based games may hide something: a real-time game that a step ends
     /// would reveal its secret only in a frame after the last, which hosts do not seal.
     type Secret: GameSecret;
+    /// Why the game refuses a player's command ([`CommandError::Illegal`]): one variant per
+    /// reason a player can meet in the real UI, mirrored on the wire so clients word it.
+    /// It also names the input no honest client sends (a world event that does not fit), which
+    /// the wire carries as a generic "malformed". [`EnglishText`] (and `Display`) is English,
+    /// for logs and bot clients.
+    type Refusal: Copy + Debug + Eq + Display + EnglishText + Send + Sync + 'static;
 
     const INFO: GameInfo;
 
@@ -47,19 +55,31 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
     fn clock(&self) -> Clock;
 
     /// Validates and applies atomically.
-    fn apply_command(&mut self, slot: Slot, command: &Self::Command) -> Result<(), CommandError>;
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Self::Command,
+    ) -> Result<(), CommandError<Self::Refusal>>;
 
     /// What [`Game::apply_command`] would answer, without changing anything: a client asks before
     /// offering an action, so it never copies a rule. A refused command leaves no trace, so trying
     /// it on a copy gives exactly that answer; a game may override this with a cheaper check.
-    fn check_command(&self, slot: Slot, command: &Self::Command) -> Result<(), CommandError> {
+    fn check_command(
+        &self,
+        slot: Slot,
+        command: &Self::Command,
+    ) -> Result<(), CommandError<Self::Refusal>> {
         self.clone().apply_command(slot, command)
     }
 
     /// The state right after `command`, to show what an action leads to (whether giving up ends
     /// the game, and who wins then). Real-time games apply queued commands on the next step, so
     /// this shows the queue, not the step.
-    fn preview_command(&self, slot: Slot, command: &Self::Command) -> Result<Self, CommandError> {
+    fn preview_command(
+        &self,
+        slot: Slot,
+        command: &Self::Command,
+    ) -> Result<Self, CommandError<Self::Refusal>> {
         let mut next = self.clone();
         next.apply_command(slot, command)?;
         Ok(next)
@@ -96,8 +116,8 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
         _secret: &mut Self::Secret,
         _slot: Slot,
         _command: &SecretCommand<Self>,
-    ) -> Result<(), CommandError> {
-        Err(CommandError::Illegal("this game takes no private commands"))
+    ) -> Result<(), CommandError<Self::Refusal>> {
+        Err(CommandError::Malformed(ProtocolMisuse::NoSecretCommands))
     }
 
     /// The private command chosen for a seat that did not send one in time (a fleet placed at
@@ -123,7 +143,7 @@ pub trait Game: Sized + Clone + Send + Debug + 'static {
         false
     }
 
-    fn apply_world(&mut self, event: &Self::WorldEvent) -> Result<(), CommandError>;
+    fn apply_world(&mut self, event: &Self::WorldEvent) -> Result<(), CommandError<Self::Refusal>>;
 
     /// One tick of a real-time game. Not called for turn-based games or after the game ended.
     fn step(&mut self) {}

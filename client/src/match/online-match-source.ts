@@ -98,7 +98,7 @@ export class OnlineMatchSource implements MatchSource {
       });
     } catch (error) {
       if (error instanceof RequestError && error.code === ErrorCode.COMMAND_REJECTED) {
-        throw new CommandRejectedError(error.message, { cause: error });
+        throw new CommandRejectedError(error.refusal, error.message, { cause: error });
       }
       throw error;
     }
@@ -112,7 +112,7 @@ export class OnlineMatchSource implements MatchSource {
       });
     } catch (error) {
       if (error instanceof RequestError && error.code === ErrorCode.COMMAND_REJECTED) {
-        throw new CommandRejectedError(error.message, { cause: error });
+        throw new CommandRejectedError(error.refusal, error.message, { cause: error });
       }
       throw error;
     }

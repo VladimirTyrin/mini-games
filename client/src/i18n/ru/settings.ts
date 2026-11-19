@@ -1,0 +1,46 @@
+import type { Messages } from "../messages";
+
+export const settings: Messages["settings"] = {
+  title: "Настройки",
+  language: "Язык",
+  change: "Сменить",
+  server: "Сервер",
+  serverShown: (host: string) => `Сервер: ${host}`,
+  serverHint: "Адрес игрового сервера, например braintvsminigames.xyz или wss://braintvsminigames.xyz/ws.",
+  resetToDefault: "Сбросить",
+  serverSaved: "Сервер сохранён",
+  notAServerAddress: "Это не похоже на адрес сервера",
+  account: "Аккаунт",
+  signedInAs: (name: string) => `Вход выполнен: ${name}`,
+  signOut: "Выйти",
+  androidAppQrHint: "Наведи камеру телефона, чтобы скачать",
+  androidAppQrLabel: "QR-код ссылки на Android-приложение",
+  androidAppPitch: "Работает без сети и обновляется само.",
+  version: (version: string) => `Версия ${version}`,
+  versionWithWebBuild: (version: string, webBuild: number) => `${version} (веб ${webBuild})`,
+  versionWithBuilds: (version: string, webBuild: number, appBuild: number) =>
+    `${version} (веб ${webBuild}, приложение ${appBuild})`,
+  checkForUpdates: "Проверить обновления",
+  checkingForUpdates: "Проверяем обновления…",
+  upToDate: "Обновлений нет",
+  updateDownloaded: "Обновление скачано — оно применится, когда ты выйдешь из матча или лобби",
+  newAppVersion: "Вышла новая версия приложения — нажми «Скачать»",
+  updateCheckFailed: "Не удалось проверить обновления — сервер доступен?",
+  notifications: {
+    title: "Уведомления",
+    iphoneHint:
+      "На iPhone уведомления работают в приложении на экране «Домой»: нажми «Поделиться», затем «На экран „Домой“» и открой его оттуда.",
+    unsupported: "Этот браузер не умеет получать уведомления.",
+    blocked: "Уведомления для этого сайта заблокированы; разреши их в настройках браузера.",
+    testHint: (seconds: number) =>
+      `Тестовое уведомление придёт через ${seconds} с после нажатия: успеешь закрыть приложение или заблокировать телефон.`,
+    sendTest: "Отправить тест",
+    settingUp: "Настраиваем…",
+    arrivesAt: (time: string) => `Придёт около ${time}. Закрой приложение.`,
+    lastTestSentAt: (time: string) => `Последний тест (отправлен в ${time}):`,
+    delivered: (duration: string) => `Доставлено через ${duration} после отправки`,
+    tapped: (duration: string) => `Нажато через ${duration} после отправки`,
+    appReady: (duration: string) => `Приложение готово через ${duration} после нажатия`,
+    opened: (duration: string) => `Открыто через ${duration} после отправки`,
+  },
+};

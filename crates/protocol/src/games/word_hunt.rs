@@ -1,7 +1,7 @@
 use mg_core::GameSettings;
 use mg_word_hunt::{
     BotKind, Command, FirstTurn, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings,
-    ScoredGuess, View, WordHunt, WordLength, WorldEvent,
+    Refusal, ScoredGuess, View, WordHunt, WordLength, WorldEvent,
 };
 
 use crate::proto::{
@@ -9,6 +9,7 @@ use crate::proto::{
     word_hunt_world_event,
 };
 use crate::{WireBots, WireError, WireGame, proto, slot_from_wire, slot_to_wire};
+use crate::{WireRefusal, malformed_refusal};
 
 /// Longer than any word of any language (7 letters of at most 2 UTF-8 bytes each); a longer
 /// string is refused before the game copies it.
@@ -276,6 +277,43 @@ impl WireBots for WordHunt {
         proto::BotKind {
             game: Some(proto::bot_kind::Game::WordHunt(kind.into())),
         }
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::WordNotChosenYet => proto::WordHuntRefusal::WordNotChosenYet,
+            Refusal::LastGuessNotMarked => proto::WordHuntRefusal::LastGuessNotMarked,
+            Refusal::WrongLength => proto::WordHuntRefusal::WrongLength,
+            Refusal::NotALetter => proto::WordHuntRefusal::NotALetter,
+            Refusal::AlreadyTried => proto::WordHuntRefusal::AlreadyTried,
+            Refusal::MovedCorrectLetter => proto::WordHuntRefusal::MovedCorrectLetter,
+            Refusal::DroppedFoundLetter => proto::WordHuntRefusal::DroppedFoundLetter,
+            Refusal::CannotGiveUp => proto::WordHuntRefusal::CannotGiveUp,
+            Refusal::NoGuessPending
+            | Refusal::MarksFitNoGuess
+            | Refusal::WordAlreadyChosen
+            | Refusal::FirstPlayerAlreadyChosen
+            | Refusal::FirstPlayerAgainstSettings
+            | Refusal::WordRevealedEarly
+            | Refusal::RevealedWordInvalid => return malformed_refusal(),
+        };
+        proto::refusal::Reason::WordHunt(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::WordHuntRefusal::try_from(value).ok()? {
+            proto::WordHuntRefusal::Unspecified => return None,
+            proto::WordHuntRefusal::WordNotChosenYet => Refusal::WordNotChosenYet,
+            proto::WordHuntRefusal::LastGuessNotMarked => Refusal::LastGuessNotMarked,
+            proto::WordHuntRefusal::WrongLength => Refusal::WrongLength,
+            proto::WordHuntRefusal::NotALetter => Refusal::NotALetter,
+            proto::WordHuntRefusal::AlreadyTried => Refusal::AlreadyTried,
+            proto::WordHuntRefusal::MovedCorrectLetter => Refusal::MovedCorrectLetter,
+            proto::WordHuntRefusal::DroppedFoundLetter => Refusal::DroppedFoundLetter,
+            proto::WordHuntRefusal::CannotGiveUp => Refusal::CannotGiveUp,
+        })
     }
 }
 

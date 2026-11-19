@@ -15,10 +15,18 @@ It creates a game that already works end to end (a placeholder "reach the target
 |---|---|
 | `crates/games/connect-four/` | game crate: `Game` impl, settings, command, world event, view, tests |
 | `proto/minigames/v2/connect_four.proto` | `ConnectFourSettings/Command/WorldEvent/View` |
-| `crates/protocol/src/games/connect_four.rs` | `WireGame` mapping |
+| `crates/protocol/src/games/connect_four.rs` | `WireGame` and `WireRefusal` mapping |
 | `crates/registry/src/games.rs` | one line in the game list (all dispatch is generated from it) |
 | `proto/minigames/v2/game.proto` | one case in each envelope oneof |
-| `client/src/games/connect-four/` | plugin: settings form + board |
+| `proto/minigames/v2/refusal.proto` | one case in `Refusal` for the game's `ConnectFourRefusal` |
+| `crates/protocol/src/refusal_english.rs` (and its test) | the game's case of the English lookup |
+| `client/src/games/connect-four/` | plugin: settings form, board, `ConnectFourHelp.en.vue` / `.ru.vue` |
+| `client/src/i18n/{en,ru}/games/connect-four.ts` | the game's texts, registered in `i18n/{en,ru}/index.ts` |
+| `client/src/i18n/{en,ru}/refusals.ts`, `client/src/util/refusal-text.ts` | words for `ConnectFourRefusal` |
+| `client/push-texts.json` | the invitation's body, `push_invite_body_connect_four` |
+
+The Russian title, the push text's Russian game name and the help pages start as placeholders
+to rewrite (see [localization.md](localization.md)).
 
 Check that it runs before changing anything:
 
@@ -68,6 +76,22 @@ Replace the sample rules. Keep the shape:
     players. It may rely on the types: `FieldSize::to_u8()` is lossless, checked at compile time.
 - **Command** — what a seat can do. `apply_command` validates and applies atomically; a
   rejected command must not change state.
+- **Refusal** — `rules/refusal.rs`, `type Refusal = Refusal;`: why the game refuses a command
+  or a world event, returned as `CommandError::Illegal(Refusal::…)`. No rejection carries a
+  string. One variant per reason a player can meet in the real UI (`MustCapture`,
+  `AlreadyTried`): it travels to the client as an enum and the client words it in the player's
+  language. Then, grouped under a comment, the input no honest client or authority sends (a
+  world event that does not fit, a cell off the board, a seat that does not exist): those
+  travel as `COMMON_REFUSAL_MALFORMED` and clients show a generic "not allowed"; when in doubt,
+  give a reason a wire value. `impl EnglishText` gives each variant's English (logs, bot
+  clients, `mg_protocol::refusal_english`) and `Display` writes it. Common reasons are
+  `CommandError`'s own (`GameOver`, `NotYourTurn`, `NotPlaying`, `Busy`); the core's own
+  misuse is `CommandError::Malformed(ProtocolMisuse)`. A nested reason type
+  (Word Hunt's `WordError`) converts into `Refusal` with `From`, so the wording stays in one
+  place.
+  A setting rule a range cannot express uses a generic `mg_core::SettingRule` in
+  `SettingProblem::RuleBroken`; add a kind there (and to `SettingRule` in `refusal.proto`) if
+  none fits.
 - **WorldEvent** — every random outcome (dealt cards, spawned food, who starts). Produce them
   in `roll_world(&self, rng)`, apply them in `apply_world`. `apply_*` and `step` never see an
   RNG — the type system enforces it.
@@ -122,6 +146,14 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 
 - Prefix every message and enum with the game name (one shared package); enum zero values are
   `<GAME>_<ENUM>_UNSPECIFIED`. `cd client && npx buf lint ../proto` must pass.
+- The game's player-facing refusals have a mirror `enum <Game>Refusal` in its proto file and a
+  case in `Refusal` (`refusal.proto`). `impl WireRefusal for Refusal` in
+  `crates/protocol/src/games/<game>.rs` maps every variant with an exhaustive `match`, either to
+  its wire value or to `return malformed_refusal()`, so a new variant forces that choice; its
+  `refusal_from_wire` maps the wire values back (the English lookup and its test use it). The
+  server and the WASM core send it in `ErrorResponse.refusal` / `refusalOf`; the client's
+  dictionaries word each value. A game whose refusals are all malformed input (Stack Attack)
+  has no proto enum and no case in `Refusal`.
 - `*_from_wire` checks the shape (right game, required fields, known enum values) and returns
   `WireError`; it never clamps or panics. Settings come out as `RawSettings`: ranges and other
   game rules are the game's (`GameSettings::parse`, called by `mg_registry::parse_settings`).
@@ -133,12 +165,23 @@ the registry entry from `no_bots` to `bots`. A bot must return a legal move on i
 ## 5. UI (`client/src/games/<game>`)
 
 - `index.ts` — title, icon, tagline, `describeSettings`, `botLabel`, `controls` (a keyboard and a touch hint),
-  `Help` and optionally `describeEnd` (why the match ended, shown with the result).
-- `<Game>Help.vue` — "How to play": the goal and rules as `h3` sections with `p`/`ul` (the
-  `HowToPlay` sheet styles them and adds the controls). It opens from the "?" in the header on
-  the setup screen, in the lobby and in a match; a local real-time match pauses meanwhile. A game
-  whose rules are not obvious sets `opensHelpFirstTime` (Numbers Match): the help then opens by
-  itself before the first match on the device.
+  `Help` and optionally `describeEnd` (why the match ended, shown with the result). Every text
+  comes from the game's dictionary, `t.games.<game>` (getters for the plugin's own fields, so
+  they follow a language switch).
+- Texts — `client/src/i18n/en/games/<game>.ts` and `ru/games/<game>.ts`, added to `games` in
+  both `index.ts` under the plugin's `settingsCase`; the game's proto `<Game>Refusal`, if it has
+  one, gets a record in `en/refusals.ts` and `ru/refusals.ts` and a case in
+  `util/refusal-text.ts`. The scaffold's client files still carry English placeholders: move them
+  into the dictionary (the lint rule fails on text in a template).
+- `<Game>Help.en.vue` and `<Game>Help.ru.vue` — "How to play", one page per language
+  (`Help: { en: HelpEn, ru: HelpRu }`; a missing one does not compile): the goal and rules
+  written out whole as `h3` sections with `p`/`ul` (the `HowToPlay` sheet styles them and adds
+  the controls). Numbers come from the game's constants and names of buttons or settings from the
+  dictionary; the rest is plain text in the page (see [localization.md](localization.md)). It
+  opens from the "?" in the header on the setup screen, in the lobby and in a match; a local
+  real-time match pauses meanwhile. A game whose rules are not obvious sets
+  `opensHelpFirstTime` (Numbers Match): the help then opens by itself before the first match on
+  the device.
 - Settings form — rows from `components/form` (`StepperField`, `SegmentedField`, `ChipsField`
   presets, `MoreOptions`) through `useGameSettingsForm`: immutable updates, **no hardcoded
   limits** (`form.field('<wire name>')` binds the core's bounds and its error to a row; presets

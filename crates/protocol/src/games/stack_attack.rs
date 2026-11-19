@@ -1,6 +1,7 @@
 use mg_stack_attack::{
     CargoBox, Cell, Column, Command, Crane, CraneState, Direction, EndReason, GameEvent, PatternId,
-    RawSettings, Side, StackAttack, View, WorkerState, WorkerStatus, WorkerView, WorldEvent,
+    RawSettings, Refusal, Side, StackAttack, View, WorkerState, WorkerStatus, WorkerView,
+    WorldEvent,
 };
 
 use crate::proto;
@@ -9,6 +10,7 @@ use crate::proto::{stack_attack_command, stack_attack_event, stack_attack_world_
 use crate::slot_to_wire;
 use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for StackAttack {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -299,6 +301,19 @@ fn event_to_wire(event: &GameEvent) -> proto::StackAttackEvent {
         }
     };
     proto::StackAttackEvent { event: Some(event) }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        match self {
+            Refusal::NoCraneSpawnDue | Refusal::CraneTargetOutside => malformed_refusal(),
+        }
+    }
+
+    /// Stack Attack has no wire values of its own: its refusals all travel as malformed.
+    fn refusal_from_wire(_value: i32) -> Option<Self> {
+        None
+    }
 }
 
 #[cfg(test)]

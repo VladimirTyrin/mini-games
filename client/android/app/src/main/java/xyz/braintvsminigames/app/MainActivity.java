@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // The app's own plugins are registered before the bridge starts.
         registerPlugin(KeepAwakePlugin.class);
+        registerPlugin(AppLocalePlugin.class);
         // A replay file the app was started with: the bridge reads the intent as it starts.
         setIntent(IncomingReplay.rewrite(this, getIntent()));
         super.onCreate(savedInstanceState);

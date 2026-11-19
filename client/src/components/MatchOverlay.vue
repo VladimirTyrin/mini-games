@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 import { pluginBySettings } from "@/games";
+import { t } from "@/i18n";
 import { prefersTouch } from "@/input/prefers-touch";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
@@ -52,16 +53,13 @@ onBeforeUnmount(() => {
 });
 
 const isReplay = props.controller.source.kind === "replay";
-// Space is the replay bar's play key, and in some games a game key pressed again and again
-// (a jump), which would start a new match the moment the result shows.
-const spacePlaysAgain =
-  !isReplay && !pluginBySettings(props.controller.source.header.settings?.game.case)?.playsWithSpace;
 
-// Enter (or Space, see above) starts the next match once the result is up (keys held from the
-// game's last moment do not count: repeats are ignored).
+// Enter starts the next match once the result is up (keys held from the game's last moment do
+// not count: repeats are ignored). Not Space, in any game: Stack Attack jumps with it and a replay
+// plays with it, so one pressed as the game ends would start a new match by accident, and a key
+// that plays again in some games only would be one more thing to remember.
 useGameKeys((key) => {
-  const accepted = key === "Enter" || (key === " " && spacePlaysAgain);
-  if (!ended.value || resultFolded.value || !accepted || !canPlayAgain.value) return false;
+  if (!ended.value || resultFolded.value || key !== "Enter" || !canPlayAgain.value) return false;
   emit("again");
   return true;
 });
@@ -110,18 +108,19 @@ const canPlayAgain = computed(
 
 const headline = computed(() => {
   const outcome = result.value;
-  if (aborted.value) return isReplay ? "Replay ends here" : "Match aborted";
-  if (!outcome) return "Game over";
+  const texts = t.match.result;
+  if (aborted.value) return isReplay ? texts.replayEnds : texts.aborted;
+  if (!outcome) return texts.gameOver;
   switch (outcome.kind) {
     case OutcomeKind.WINNER:
-      if (mySlot.value === null) return "Game over";
-      return outcome.winnerSlots.includes(mySlot.value) ? "You win!" : "You lose";
+      if (mySlot.value === null) return texts.gameOver;
+      return outcome.winnerSlots.includes(mySlot.value) ? texts.youWin : texts.youLose;
     case OutcomeKind.DRAW:
-      return "Draw";
+      return texts.draw;
     case OutcomeKind.VICTORY:
-      return "Victory!";
+      return texts.victory;
     default:
-      return "Game over";
+      return texts.gameOver;
   }
 });
 
@@ -135,7 +134,7 @@ const showsMatchScores = computed(() => {
 });
 
 const labels = computed(() => matchSeatNames(props.controller.source.header));
-const seatName = (slot: number) => labels.value[slot] ?? `Player ${slot + 1}`;
+const seatName = (slot: number) => labels.value[slot] ?? t.match.player(slot + 1);
 
 const resultFolded = ref(false);
 watch(
@@ -151,13 +150,17 @@ async function voteDrop(slot: number): Promise<void> {
 <template>
   <!-- The result docks at the bottom without dimming the board, so the final position stays
        visible; it can be folded away entirely. -->
-  <div v-if="ended" class="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3">
+  <div
+    v-if="ended"
+    data-testid="match-result"
+    class="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center p-3"
+  >
     <button
       v-if="resultFolded"
       class="pointer-events-auto rounded-full bg-panel/95 px-4 py-2 text-sm font-semibold shadow-lg ring-1 ring-white/10"
       @click="resultFolded = false"
     >
-      {{ headline }} · show result ▴
+      {{ `${headline} · ${t.match.result.show} ▴` }}
     </button>
     <div
       v-else
@@ -168,31 +171,29 @@ async function voteDrop(slot: number): Promise<void> {
           <h2 class="text-xl font-bold">{{ headline }}</h2>
           <p v-if="endReason && !aborted" class="text-sm text-gray-300">{{ endReason }}</p>
           <p v-if="aborted" class="text-sm text-gray-300">
-            {{
-              isReplay
-                ? "The match goes no further in this file: it was saved before the end."
-                : "The server stopped this match. No replay is kept."
-            }}
+            {{ isReplay ? t.match.result.replaySavedBeforeEnd : t.match.result.stoppedByServer }}
           </p>
         </div>
         <button
           class="-m-1 rounded-lg px-2 py-1 text-sm text-gray-400 hover:bg-white/10"
-          aria-label="Hide the result to see the board"
+          :aria-label="t.match.result.hideLabel"
           @click="resultFolded = true"
         >
-          Hide ▾
+          {{ `${t.match.result.hide} ▾` }}
         </button>
       </div>
       <ul v-if="result" class="space-y-1 text-sm">
         <li v-if="shownSeries" class="flex gap-4 text-xs text-gray-400">
           <span class="flex-1" />
-          <span v-if="showsMatchScores">Score</span>
-          <span class="min-w-8 text-right">Wins</span>
+          <span v-if="showsMatchScores">{{ t.match.result.scoreColumn }}</span>
+          <span class="min-w-8 text-right">{{ t.match.result.winsColumn }}</span>
         </li>
         <li v-for="(score, slot) in result.scores" :key="slot" class="flex gap-4">
           <span class="min-w-0 flex-1 break-words">
             {{ seatName(slot) }}
-            <span v-if="slot === mySlot" class="text-xs text-sky-300">(you)</span>
+            <span v-if="slot === mySlot && seatName(slot) !== t.common.youName" class="text-xs text-sky-300"
+              >({{ t.common.you }})</span
+            >
           </span>
           <span v-if="showsMatchScores" class="font-mono">{{ score }}</span>
           <span v-if="shownSeries" class="min-w-8 text-right font-mono font-semibold">{{
@@ -200,7 +201,7 @@ async function voteDrop(slot: number): Promise<void> {
           }}</span>
         </li>
         <li v-if="shownSeries && shownSeries.draws > 0" class="text-xs text-gray-400">
-          Draws: {{ shownSeries.draws }}
+          {{ t.match.series.draws(shownSeries.draws) }}
         </li>
       </ul>
       <!-- No wrapping inside a button: on a narrow phone the row wraps instead. -->
@@ -210,19 +211,21 @@ async function voteDrop(slot: number): Promise<void> {
           class="min-h-11 flex-1 rounded-xl bg-emerald-600 px-4 py-2 font-semibold"
           @click="emit('again')"
         >
-          {{ isReplay ? "Watch again" : "Play again" }}
-          <kbd v-if="showsKeyHint" class="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-xs font-normal"
-            >Enter</kbd
-          >
+          {{ isReplay ? t.match.result.watchAgain : t.match.playAgain }}
+          <kbd v-if="showsKeyHint" class="ml-1.5 rounded bg-white/20 px-1.5 py-0.5 text-xs font-normal">{{
+            t.match.result.enterKey
+          }}</kbd>
         </button>
         <button
           v-if="!aborted && !isReplay"
           class="min-h-11 rounded-xl bg-panel-raised px-4 py-2"
           @click="emit('replay')"
         >
-          Save replay
+          {{ t.match.result.saveReplay }}
         </button>
-        <button class="min-h-11 rounded-xl bg-panel-raised px-4 py-2" @click="emit('leave')">Leave</button>
+        <button class="min-h-11 rounded-xl bg-panel-raised px-4 py-2" @click="emit('leave')">
+          {{ t.common.leave }}
+        </button>
       </div>
     </div>
   </div>
@@ -232,27 +235,26 @@ async function voteDrop(slot: number): Promise<void> {
   >
     <div class="w-full max-w-sm space-y-3 rounded-xl bg-panel p-5 text-center shadow-xl">
       <template v-if="pauses.length > 0">
-        <h2 class="text-xl font-semibold">Paused</h2>
+        <h2 class="text-xl font-semibold">{{ t.match.paused }}</h2>
         <div v-for="pause in pauses" :key="pause.slot" class="space-y-2">
           <p v-if="pause.budgetEndsAt === null" class="text-sm text-gray-300">
-            {{ seatName(pause.slot) }} lost connection. It's their turn: waiting for them to come back.
+            {{ t.match.seatPause.theirTurn(seatName(pause.slot)) }}
           </p>
           <p v-else class="text-sm text-gray-300">
-            {{ seatName(pause.slot) }} lost connection. Waiting up to
-            {{ secondsUntil(pause.budgetEndsAt) }} s.
+            {{ t.match.seatPause.waitingUpTo(seatName(pause.slot), secondsUntil(pause.budgetEndsAt)) }}
           </p>
           <p
             v-if="pause.budgetEndsAt === null && mayVoteOn(pause) && !canVoteDrop(pause)"
             class="text-xs text-gray-400"
           >
-            You can go on without them in {{ minutesUntil(pause.dropVoteAt) }}.
+            {{ t.match.seatPause.canGoOnIn(minutesUntil(pause.dropVoteAt)) }}
           </p>
           <button
             v-if="canVoteDrop(pause)"
             class="rounded bg-rose-700 px-4 py-2 text-sm"
             @click="voteDrop(pause.slot)"
           >
-            Continue without {{ seatName(pause.slot) }}
+            {{ t.match.seatPause.continueWithout(seatName(pause.slot)) }}
           </button>
         </div>
       </template>

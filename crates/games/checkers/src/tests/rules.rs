@@ -1,8 +1,8 @@
 use mg_core::{Awaiting, CommandError, Game, PlayerSpec, Slot};
 
 use crate::{
-    CaptureRule, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, Path, Rank, Settings,
-    Side, Square, WhitePlayer, WinReason, WorldEvent,
+    CaptureRule, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, Path, Rank, Refusal,
+    Settings, Side, Square, WhitePlayer, WinReason, WorldEvent,
 };
 
 const HOST: Slot = Slot::new(0);
@@ -73,7 +73,7 @@ fn capturing_is_compulsory() {
 
     let refused = game.apply_command(HOST, &mv(&["g3", "h4"]));
 
-    assert_eq!(refused, Err(CommandError::Illegal("you must capture")));
+    assert_eq!(refused, Err(CommandError::Illegal(Refusal::MustCapture)));
     assert_eq!(paths(&game), vec![path(&["c3", "e5"])]);
 }
 

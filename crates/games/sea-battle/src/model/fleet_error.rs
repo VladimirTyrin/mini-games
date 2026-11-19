@@ -1,3 +1,5 @@
+use crate::rules::Refusal;
+
 /// Why a set of ships is not a fleet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FleetError {
@@ -7,13 +9,11 @@ pub enum FleetError {
     ShipsTouch,
 }
 
-impl FleetError {
-    pub fn reason(self) -> &'static str {
-        match self {
-            FleetError::WrongShips => {
-                "a fleet is one ship of 4, two of 3, three of 2 and four of 1"
-            }
-            FleetError::ShipsTouch => "ships may not touch, not even at a corner",
+impl From<FleetError> for Refusal {
+    fn from(error: FleetError) -> Self {
+        match error {
+            FleetError::WrongShips => Refusal::WrongShips,
+            FleetError::ShipsTouch => Refusal::ShipsTouch,
         }
     }
 }

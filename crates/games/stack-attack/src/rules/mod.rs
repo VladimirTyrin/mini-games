@@ -1,5 +1,6 @@
 mod constants;
 mod end_reason;
+mod refusal;
 mod simulation;
 mod trap;
 
@@ -9,3 +10,4 @@ pub use constants::{
     POINTS_PER_LINE, TICK_MS, TICKS_PER_LEVEL, WORKER_HEIGHT, line_clear_points,
 };
 pub use end_reason::EndReason;
+pub use refusal::Refusal;

@@ -33,3 +33,9 @@ message {{Pascal}}View {
   optional uint32 current_slot = 4;
   optional uint32 winner_slot = 5;
 }
+
+// Why a move is refused. Carried in `Refusal`; the client words each value.
+enum {{Pascal}}Refusal {
+  {{SCREAMING}}_REFUSAL_UNSPECIFIED = 0;
+  {{SCREAMING}}_REFUSAL_AMOUNT_OUT_OF_RANGE = 1;
+}

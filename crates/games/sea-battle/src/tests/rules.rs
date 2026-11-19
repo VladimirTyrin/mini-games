@@ -4,7 +4,7 @@ use mg_core::{
 };
 
 use crate::{
-    BotKind, Cell, CellMark, Command, Fleet, FleetError, Orientation, Phase, SeaBattle,
+    BotKind, Cell, CellMark, Command, Fleet, FleetError, Orientation, Phase, Refusal, SeaBattle,
     SecretCommand, Settings, Ship, ShotOutcome, WorldEvent,
 };
 
@@ -62,7 +62,7 @@ fn shooter(authority: &Authority<SeaBattle>) -> Slot {
     authority.game().view(Viewer::Spectator).turn.unwrap()
 }
 
-fn fire(authority: &mut Authority<SeaBattle>, at: Cell) -> Result<(), CommandError> {
+fn fire(authority: &mut Authority<SeaBattle>, at: Cell) -> Result<(), CommandError<Refusal>> {
     let by = shooter(authority);
     authority.submit(by, Command::Fire(at))?;
     authority.seal_frame();
@@ -124,7 +124,7 @@ fn the_battle_starts_once_both_fleets_are_placed() {
     assert_eq!(view.ready, [true, false]);
     assert_eq!(
         authority.submit(FIRST, Command::Fire(cell(0, 0))),
-        Err(CommandError::Illegal("the battle has not started yet"))
+        Err(CommandError::Illegal(Refusal::BattleNotStarted))
     );
 
     authority
@@ -143,7 +143,7 @@ fn a_fleet_is_placed_once_and_must_be_legal() {
     touching[6] = ship(3, 3, 1, Horizontal);
     assert_eq!(
         authority.submit_secret(FIRST, &place(touching)),
-        Err(CommandError::Illegal(FleetError::ShipsTouch.reason()))
+        Err(CommandError::Illegal(Refusal::ShipsTouch))
     );
     authority
         .submit_secret(FIRST, &place(classic_ships()))
@@ -221,7 +221,7 @@ fn a_known_cell_and_a_shot_out_of_turn_are_refused() {
     fire(&mut authority, cell(0, 0)).unwrap();
     assert_eq!(
         fire(&mut authority, cell(0, 0)),
-        Err(CommandError::Illegal("that cell is known already"))
+        Err(CommandError::Illegal(Refusal::CellAlreadyKnown))
     );
 }
 
@@ -241,7 +241,7 @@ fn sinking_a_ship_clears_the_water_around_it() {
     assert_eq!(waters.afloat(), [3, 3, 2, 2, 2, 1, 1, 1, 1]);
     assert_eq!(
         fire(&mut authority, cell(4, 1)),
-        Err(CommandError::Illegal("that cell is known already"))
+        Err(CommandError::Illegal(Refusal::CellAlreadyKnown))
     );
 }
 

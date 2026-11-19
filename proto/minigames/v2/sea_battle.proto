@@ -156,3 +156,16 @@ message SeaBattleView {
   // By slot.
   repeated SeaBattleRevealedFleet revealed = 7;
 }
+
+// Why a shot or a fleet is refused. Carried in `Refusal`; the client words each value.
+enum SeaBattleRefusal {
+  SEA_BATTLE_REFUSAL_UNSPECIFIED = 0;
+  SEA_BATTLE_REFUSAL_BATTLE_NOT_STARTED = 1;
+  SEA_BATTLE_REFUSAL_LAST_SHOT_NOT_RESOLVED = 2;
+  SEA_BATTLE_REFUSAL_CELL_ALREADY_KNOWN = 3;
+  SEA_BATTLE_REFUSAL_FLEET_ALREADY_PLACED = 4;
+  // Not one ship of 4, two of 3, three of 2 and four of 1.
+  SEA_BATTLE_REFUSAL_WRONG_SHIPS = 5;
+  // Two ships share a cell, a side or a corner.
+  SEA_BATTLE_REFUSAL_SHIPS_TOUCH = 6;
+}

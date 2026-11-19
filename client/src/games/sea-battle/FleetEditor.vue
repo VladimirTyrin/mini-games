@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import { t } from "@/i18n";
 import type { MatchController } from "@/match/match-controller";
 import { useToastStore } from "@/stores/toasts";
 
@@ -25,6 +26,7 @@ const props = defineProps<{
   secondsLeft: number | null;
 }>();
 const toasts = useToastStore();
+const texts = computed(() => t.games.seaBattle.fleetEditor);
 
 /** The game's own random fleet: the rules, not the page, know what a fleet is. */
 function randomFleet(): EditorShip[] {
@@ -104,9 +106,15 @@ async function send(onFailure: "toast" | "quiet"): Promise<void> {
 <template>
   <div class="flex w-full flex-col items-center gap-3">
     <div :style="{ width: 'min(92vw, 54dvh, 560px)' }">
-      <SeaGrid label="Your fleet" :ships="ships" :tappable="tappable" :hints="hints" @tap="tap" />
+      <SeaGrid
+        :label="t.games.seaBattle.board.yourFleet"
+        :ships="ships"
+        :tappable="tappable"
+        :hints="hints"
+        @tap="tap"
+      />
     </div>
-    <div class="flex flex-wrap justify-center gap-1.5" aria-label="Ships to place">
+    <div class="flex flex-wrap justify-center gap-1.5" :aria-label="texts.shipsToPlace">
       <ShipPip
         v-for="(ship, index) in left"
         :key="index"
@@ -116,19 +124,18 @@ async function send(onFailure: "toast" | "quiet"): Promise<void> {
       />
     </div>
     <p v-if="room === 'full'" class="text-center text-sm text-amber-300">
-      No room left for the rest of the fleet: clear some decks
+      {{ texts.noRoom }}
     </p>
-    <p class="text-center text-sm text-gray-400">
-      Tap a light cell to add a deck; tap a ship to take one away
-    </p>
+    <p class="text-center text-sm text-gray-400">{{ texts.hint }}</p>
     <div class="flex gap-3">
       <button
         type="button"
         class="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-white/5"
         :disabled="sending"
+        data-testid="fleet-random"
         @click="shuffle"
       >
-        Random
+        {{ texts.random }}
       </button>
       <button
         type="button"
@@ -136,15 +143,16 @@ async function send(onFailure: "toast" | "quiet"): Promise<void> {
         :disabled="sending || filled.size === 0"
         @click="clear"
       >
-        Clear
+        {{ texts.clear }}
       </button>
       <button
         type="button"
         class="rounded-lg bg-emerald-600 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-40"
         :disabled="!isComplete || sending"
+        data-testid="fleet-ready"
         @click="send('toast')"
       >
-        Ready
+        {{ texts.ready }}
       </button>
     </div>
   </div>

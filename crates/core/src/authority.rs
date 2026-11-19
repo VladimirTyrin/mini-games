@@ -12,6 +12,7 @@ use crate::hash_policy::HashPolicy;
 use crate::input::{GameInput, Input};
 use crate::player_kind::PlayerKind;
 use crate::player_spec::PlayerSpec;
+use crate::protocol_misuse::ProtocolMisuse;
 use crate::rng::CoreRng;
 use crate::seat_check::seat_may_command;
 use crate::seated_bot::SeatedBot;
@@ -157,7 +158,11 @@ impl<G: Game> Authority<G> {
     /// clients applying the same command at the start of the frame reach the same state.
     /// Turn-based hosts seal a frame after every accepted command: a move may need world events
     /// (e.g. a spawned tile) before the next move is legal.
-    pub fn submit(&mut self, slot: Slot, command: G::Command) -> Result<(), CommandError> {
+    pub fn submit(
+        &mut self,
+        slot: Slot,
+        command: G::Command,
+    ) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.apply_command(slot, &command)?;
         self.pending_inputs.push(Input::Command { slot, command });
@@ -171,7 +176,7 @@ impl<G: Game> Authority<G> {
         &mut self,
         slot: Slot,
         command: &SecretCommand<G>,
-    ) -> Result<(), CommandError> {
+    ) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game
             .apply_secret_command(&mut self.secret, slot, command)?;
@@ -182,17 +187,15 @@ impl<G: Game> Authority<G> {
 
     /// For a seat whose time to send its private command ran out: the game chooses one. Refused
     /// when the seat owes none (it sent its own) or the game has no default.
-    pub fn submit_default_secret(&mut self, slot: Slot) -> Result<(), CommandError> {
+    pub fn submit_default_secret(&mut self, slot: Slot) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         if !self.game.awaits_secret(slot) {
-            return Err(CommandError::Illegal("this seat owes no private command"));
+            return Err(CommandError::Malformed(ProtocolMisuse::NoSecretOwed));
         }
         let command = self
             .game
             .default_secret_command(slot, &mut self.world_rng)
-            .ok_or(CommandError::Illegal(
-                "this game chooses no private command",
-            ))?;
+            .ok_or(CommandError::Malformed(ProtocolMisuse::NoDefaultSecret))?;
         self.apply_secret_for(slot, &command)
     }
 
@@ -205,7 +208,7 @@ impl<G: Game> Authority<G> {
         &mut self,
         slot: Slot,
         command: &SecretCommand<G>,
-    ) -> Result<(), CommandError> {
+    ) -> Result<(), CommandError<G::Refusal>> {
         self.game
             .apply_secret_command(&mut self.secret, slot, command)?;
         self.has_secret_changes = true;
@@ -244,7 +247,11 @@ impl<G: Game> Authority<G> {
     }
 
     /// What [`Self::submit`] would answer, without changing anything.
-    pub fn check_command(&self, slot: Slot, command: &G::Command) -> Result<(), CommandError> {
+    pub fn check_command(
+        &self,
+        slot: Slot,
+        command: &G::Command,
+    ) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.check_command(slot, command)
     }

@@ -7,8 +7,10 @@ import AppHeader from "@/components/AppHeader.vue";
 import GetTheAppBanner from "@/components/GetTheAppBanner.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
 import { gamePlugins } from "@/games";
+import { t } from "@/i18n";
 import { ANDROID_APK_URL } from "@/platform/android-app";
 import { useMatchStore } from "@/stores/match";
+import { privacyPolicyUrl } from "@/util/privacy-policy";
 
 const router = useRouter();
 const match = useMatchStore();
@@ -25,19 +27,21 @@ const replayFileTypes = __NATIVE_APP__ ? undefined : ".mgreplay";
 
 /** For the template, which cannot see the build-time constant. */
 const isNativeApp = __NATIVE_APP__;
+/** Pictures beside the labels: the same in every language. */
+const ICONS = { settings: "⚙", playOnline: "🌐", openReplay: "🎞", savedReplays: "📂" } as const;
 </script>
 
 <template>
-  <AppHeader title="Mini Games">
+  <AppHeader :title="t.app.name">
     <button class="rounded px-2 py-1 text-sm hover:bg-panel-raised" @click="router.push('/settings')">
-      ⚙ Settings
+      {{ ICONS.settings }} {{ t.settings.title }}
     </button>
   </AppHeader>
   <main class="mx-auto w-full max-w-3xl flex-1 space-y-6 p-4">
     <UpdateBanner />
     <GetTheAppBanner />
     <section>
-      <h2 class="mb-3 text-sm uppercase tracking-wide text-gray-400">Play now — works offline</h2>
+      <h2 class="mb-3 text-sm uppercase tracking-wide text-gray-400">{{ t.home.playNow }}</h2>
       <!-- Phones get two compact tiles per row (icon and title); wider screens have room for the
            tagline. -->
       <div class="grid grid-cols-2 gap-3">
@@ -60,31 +64,31 @@ const isNativeApp = __NATIVE_APP__;
         class="rounded-xl bg-emerald-700 p-4 text-left font-semibold hover:bg-emerald-600"
         @click="router.push('/online')"
       >
-        🌐 Play online
-        <span class="block text-sm font-normal text-emerald-100">Lobbies and chat with other players</span>
+        {{ ICONS.playOnline }} {{ t.home.playOnline }}
+        <span class="block text-sm font-normal text-emerald-100">{{ t.home.playOnlineHint }}</span>
       </button>
       <button
         class="rounded-xl bg-panel p-4 text-left font-semibold hover:bg-panel-raised"
         @click="fileInput?.click()"
       >
-        🎞 Open a replay
-        <span class="block text-sm font-normal text-gray-400">.mgreplay file</span>
+        {{ ICONS.openReplay }} {{ t.home.openReplay }}
+        <span class="block text-sm font-normal text-gray-400">{{ t.home.replayFileHint }}</span>
       </button>
       <button
         v-if="isNativeApp"
         class="rounded-xl bg-panel p-4 text-left font-semibold hover:bg-panel-raised"
         @click="router.push('/replays')"
       >
-        📂 Saved replays
-        <span class="block text-sm font-normal text-gray-400">Watch, share or delete</span>
+        {{ ICONS.savedReplays }} {{ t.replays.title }}
+        <span class="block text-sm font-normal text-gray-400">{{ t.home.savedReplaysHint }}</span>
       </button>
       <input ref="fileInput" type="file" :accept="replayFileTypes" class="hidden" @change="openReplay" />
     </section>
     <p class="text-center text-xs text-gray-500">
-      <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
+      <a :href="privacyPolicyUrl" class="underline hover:text-gray-300">{{ t.app.privacyPolicy }}</a>
       <template v-if="!isNativeApp">
         ·
-        <a :href="ANDROID_APK_URL" class="underline hover:text-gray-300">Android app</a>
+        <a :href="ANDROID_APK_URL" class="underline hover:text-gray-300">{{ t.app.androidApp }}</a>
       </template>
     </p>
   </main>

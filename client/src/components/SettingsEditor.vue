@@ -9,6 +9,7 @@ import {
 import type { GamePlugin } from "@/games/game-plugin";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type SettingsProblem, settingRanges, settingsProblem } from "@/wasm/core";
+import { settingsProblemText } from "@/util/refusal-text";
 
 const settings = defineModel<GameSettings>({ required: true });
 const props = defineProps<{ plugin: GamePlugin; seats: number; audience: SettingsAudience }>();
@@ -35,7 +36,7 @@ provide(
     <component :is="plugin.SettingsForm" v-model="settings" />
     <!-- Problems not tied to one row; the line is always there so nothing below it moves. -->
     <p class="min-h-5 pt-1 text-xs text-rose-300" aria-live="polite">
-      {{ problem && problem.field === null ? problem.message : "" }}
+      {{ problem && problem.field === null ? settingsProblemText(problem) : "" }}
     </p>
   </div>
 </template>

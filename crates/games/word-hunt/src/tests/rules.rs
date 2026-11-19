@@ -6,7 +6,7 @@ use super::table::Table;
 use crate::model::Answers;
 use crate::{
     Command, DayNumber, HiddenWord, KeyHint, Language, LetterMark, Phase, PuzzleMode, RawSettings,
-    Settings, Word, WordError, WordHunt, WordLength, WorldEvent,
+    Refusal, Settings, Word, WordError, WordHunt, WordLength, WorldEvent,
 };
 
 const PLAYER: Slot = Slot::new(0);
@@ -29,7 +29,7 @@ fn game_with_answer(answer: &str, language: Language, hard_mode: bool) -> Table 
     Table::new(game, answer)
 }
 
-fn guess(game: &mut Table, text: &str) -> Result<(), CommandError> {
+fn guess(game: &mut Table, text: &str) -> Result<(), CommandError<Refusal>> {
     game.command(PLAYER, &Command::Guess(text.into()))
 }
 
@@ -112,7 +112,7 @@ fn a_word_already_tried_is_refused_without_using_a_try() {
     for again in ["лиса", "ЛИСА"] {
         assert_eq!(
             guess(&mut game, again),
-            Err(CommandError::Illegal("this word was already tried"))
+            Err(CommandError::Illegal(Refusal::AlreadyTried))
         );
     }
     assert_eq!(game.view(Viewer::Spectator).guesses.len(), 1);
@@ -158,15 +158,11 @@ fn hard_mode_requires_found_letters() {
     // `c` and `e` were found in place, `a` elsewhere.
     assert_eq!(
         guess(&mut game, "brine"),
-        Err(CommandError::Illegal(
-            "hard mode: keep every green letter in its place"
-        ))
+        Err(CommandError::Illegal(Refusal::MovedCorrectLetter))
     );
     assert_eq!(
         guess(&mut game, "chime"),
-        Err(CommandError::Illegal(
-            "hard mode: use every letter you have found"
-        ))
+        Err(CommandError::Illegal(Refusal::DroppedFoundLetter))
     );
     assert_eq!(game.view(Viewer::Spectator).guesses.len(), 1);
     guess(&mut game, "chase").unwrap();
@@ -179,21 +175,15 @@ fn hard_mode_keeps_the_count_of_a_found_repeated_letter() {
     // Both `e`s were found (one in place), so a guess with a single `e` is refused.
     assert_eq!(
         guess(&mut game, "eaten"),
-        Err(CommandError::Illegal(
-            "hard mode: keep every green letter in its place"
-        ))
+        Err(CommandError::Illegal(Refusal::MovedCorrectLetter))
     );
     assert_eq!(
         guess(&mut game, "seats"),
-        Err(CommandError::Illegal(
-            "hard mode: use every letter you have found"
-        ))
+        Err(CommandError::Illegal(Refusal::DroppedFoundLetter))
     );
     assert_eq!(
         guess(&mut game, "ferry"),
-        Err(CommandError::Illegal(
-            "hard mode: use every letter you have found"
-        ))
+        Err(CommandError::Illegal(Refusal::DroppedFoundLetter))
     );
     guess(&mut game, "never").unwrap();
 }
@@ -230,7 +220,7 @@ fn guesses_wait_for_the_answer() {
     let mut game = WordHunt::new(&Settings::default(), &[PlayerSpec::HUMAN]).unwrap();
     assert_eq!(
         game.apply_command(PLAYER, &Command::Guess("crane".into())),
-        Err(CommandError::Illegal("the word is not chosen yet"))
+        Err(CommandError::Illegal(Refusal::WordNotChosenYet))
     );
     game.apply_world(&WorldEvent::WordChosen).unwrap();
     assert!(game.apply_world(&WorldEvent::WordChosen).is_err());
@@ -245,7 +235,7 @@ fn a_guess_waits_for_its_marks() {
     assert_eq!(game.awaiting(), mg_core::Awaiting::Nobody);
     assert_eq!(
         game.apply_command(PLAYER, &Command::Guess("fight".into())),
-        Err(CommandError::Illegal("the last guess is not marked yet"))
+        Err(CommandError::Illegal(Refusal::LastGuessNotMarked))
     );
     assert!(
         game.apply_world(&WorldEvent::GuessMarked(vec![Absent; 4]))

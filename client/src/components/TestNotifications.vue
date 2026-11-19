@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { formatTimeWithSeconds, t } from "@/i18n";
 import { pushAvailability } from "@/platform/push-notifications";
 import { TEST_PUSH_DELAY_SECONDS, useNotificationsStore } from "@/stores/notifications";
+import { formatOneDecimal } from "@/util/format-decimal";
 
 const notifications = useNotificationsStore();
 const availability = pushAvailability();
 
 function seconds(from: number, to: number): string {
-  return `${(Math.max(0, to - from) / 1000).toFixed(1)} s`;
+  return t.app.units.seconds(formatOneDecimal(Math.max(0, to - from) / 1000));
 }
 
 function clockTime(at: number): string {
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return formatTimeWithSeconds(new Date(at));
 }
 
 /** Each step of the last test that the device could time. */
@@ -20,13 +22,13 @@ const timings = computed(() => {
   const test = notifications.lastTest;
   if (!test) return [];
   const lines: string[] = [];
-  if (test.receivedAt !== null)
-    lines.push(`Delivered ${seconds(test.sentAt, test.receivedAt)} after sending`);
+  const texts = t.settings.notifications;
+  if (test.receivedAt !== null) lines.push(texts.delivered(seconds(test.sentAt, test.receivedAt)));
   if (test.tappedAt !== null) {
-    lines.push(`Tapped ${seconds(test.sentAt, test.tappedAt)} after sending`);
-    lines.push(`App ready ${seconds(test.tappedAt, test.handledAt)} after the tap`);
+    lines.push(texts.tapped(seconds(test.sentAt, test.tappedAt)));
+    lines.push(texts.appReady(seconds(test.tappedAt, test.handledAt)));
   } else if (test.receivedAt === null) {
-    lines.push(`Opened ${seconds(test.sentAt, test.handledAt)} after sending`);
+    lines.push(texts.opened(seconds(test.sentAt, test.handledAt)));
   }
   return lines;
 });
@@ -34,21 +36,19 @@ const timings = computed(() => {
 
 <template>
   <section class="space-y-3 rounded-xl bg-panel p-4">
-    <h2 class="font-semibold">Notifications</h2>
+    <h2 class="font-semibold">{{ t.settings.notifications.title }}</h2>
     <p v-if="availability === 'add-to-home-screen-first'" class="text-sm text-gray-400">
-      On iPhone, notifications work in the app added to the Home Screen: tap Share, then “Add to Home Screen”,
-      and open it from there.
+      {{ t.settings.notifications.iphoneHint }}
     </p>
     <p v-else-if="availability === 'unsupported'" class="text-sm text-gray-400">
-      This browser cannot receive notifications.
+      {{ t.settings.notifications.unsupported }}
     </p>
     <p v-else-if="availability === 'blocked'" class="text-sm text-gray-400">
-      Notifications are blocked for this site; allow them in the browser settings.
+      {{ t.settings.notifications.blocked }}
     </p>
     <template v-else>
       <p class="text-xs text-gray-400">
-        Sends a test notification {{ TEST_PUSH_DELAY_SECONDS }} s after the tap, so you can close the app or
-        lock the phone first.
+        {{ t.settings.notifications.testHint(TEST_PUSH_DELAY_SECONDS) }}
       </p>
       <button
         type="button"
@@ -56,18 +56,22 @@ const timings = computed(() => {
         :disabled="notifications.testStatus.kind === 'registering'"
         @click="notifications.sendTest()"
       >
-        Send a test
+        {{ t.settings.notifications.sendTest }}
       </button>
-      <p v-if="notifications.testStatus.kind === 'registering'" class="text-sm text-gray-300">Setting up…</p>
+      <p v-if="notifications.testStatus.kind === 'registering'" class="text-sm text-gray-300">
+        {{ t.settings.notifications.settingUp }}
+      </p>
       <p v-else-if="notifications.testStatus.kind === 'scheduled'" class="text-sm text-emerald-300">
-        Arrives about {{ clockTime(notifications.testStatus.sendsAt) }}. Close the app now.
+        {{ t.settings.notifications.arrivesAt(clockTime(notifications.testStatus.sendsAt)) }}
       </p>
       <p v-else-if="notifications.testStatus.kind === 'failed'" class="text-sm text-red-300">
         {{ notifications.testStatus.message }}
       </p>
     </template>
     <div v-if="notifications.lastTest" class="space-y-1 text-sm text-gray-300">
-      <p class="text-xs text-gray-400">Last test, sent at {{ clockTime(notifications.lastTest.sentAt) }}:</p>
+      <p class="text-xs text-gray-400">
+        {{ t.settings.notifications.lastTestSentAt(clockTime(notifications.lastTest.sentAt)) }}
+      </p>
       <p v-for="line in timings" :key="line">{{ line }}</p>
     </div>
   </section>

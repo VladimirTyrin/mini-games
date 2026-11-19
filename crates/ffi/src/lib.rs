@@ -4,7 +4,8 @@
 //!
 //! Contract for every function (the header repeats it):
 //! * The return value is an [`MgStatus`]; after a failure, [`mg_last_error_message`] describes
-//!   it (per thread, kept until the next failure).
+//!   it (per thread, kept until the next failure), and after [`MgStatus::Rejected`]
+//!   [`mg_last_refusal`] gives the encoded `Refusal`.
 //! * Input bytes are `(pointer, length)` pairs; the pointer may be null only when the length is 0.
 //!   Out-pointers must point to writable memory of their type.
 //! * Handles come from a `*_new`, `*_clone` or `*_from_*` function and are released exactly once
@@ -41,7 +42,9 @@ pub use authority_api::{
 };
 pub use buffer::{MgBuffer, mg_buffer_free};
 pub use catalog_api::{mg_bot_kinds, mg_default_settings, mg_validate_settings};
-pub use error_api::{MG_ABI_VERSION, mg_abi_version, mg_last_error_message};
+pub use error_api::{
+    MG_ABI_VERSION, mg_abi_version, mg_last_error_message, mg_last_refusal, mg_refusal_english,
+};
 pub use local_authority::MgAuthority;
 pub use mirror_api::{
     mg_mirror_advance_to, mg_mirror_apply_catch_up, mg_mirror_apply_frame, mg_mirror_free,

@@ -17,7 +17,8 @@ function mountStepper(modelValue: number, limits: { min?: number; max?: number }
   });
   return {
     wrapper,
-    shown: () => wrapper.get("output").text(),
+    shown: () => (wrapper.get("input").element as HTMLInputElement).value,
+    field: () => wrapper.get("input"),
     decrease: () => wrapper.get('button[aria-label="Decrease Width"]'),
     increase: () => wrapper.get('button[aria-label="Increase Width"]'),
   };
@@ -65,5 +66,25 @@ describe("StepperField", () => {
       props: { label: "Width", modelValue: 2, min: 3, max: 20, error: "Must be between 3 and 20, got 2" },
     });
     expect(wrapper.text()).toContain("Must be between 3 and 20, got 2");
+  });
+
+  it("takes a number typed in, within the limits, once it is entered", async () => {
+    const stepper = mountStepper(10, { min: 3, max: 20 });
+    // Typing: input events alone (setValue would also fire change, as entering does).
+    (stepper.field().element as HTMLInputElement).value = "15";
+    await stepper.field().trigger("input");
+    expect(stepper.wrapper.emitted("update:modelValue")).toBeUndefined();
+    await stepper.field().trigger("change");
+    expect(stepper.shown()).toBe("15");
+
+    await stepper.field().setValue("99");
+    expect(stepper.shown()).toBe("20");
+  });
+
+  it("keeps the value when what is typed is not a number", async () => {
+    const stepper = mountStepper(10, { min: 3, max: 20 });
+    await stepper.field().setValue("abc");
+    expect(stepper.shown()).toBe("10");
+    expect(stepper.wrapper.emitted("update:modelValue")).toBeUndefined();
   });
 });

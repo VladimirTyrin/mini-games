@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import PauseButton from "@/components/PauseButton.vue";
+import { t } from "@/i18n";
 import { SnakeDirection } from "@/proto/minigames/v2/snake_pb";
+
+// Pictures, not words: the same in every language.
+const ARROWS = { up: "▲", left: "◀", down: "▼", right: "▶" } as const;
 
 const emit = defineEmits<{ turn: [direction: SnakeDirection] }>();
 
@@ -18,37 +23,39 @@ function press(direction: SnakeDirection, event: PointerEvent): void {
     class="grid select-none grid-cols-[repeat(3,4rem)] grid-rows-[repeat(2,4rem)] md:grid-cols-[repeat(3,4.5rem)] md:grid-rows-[repeat(2,4.5rem)] justify-center gap-2 pb-1"
     @contextmenu.prevent
   >
+    <!-- The empty corner above ◀, away from the arrows a thumb goes for. -->
+    <PauseButton class="col-start-1 row-start-1 size-12 self-start justify-self-start" />
     <button
       type="button"
-      aria-label="Up"
+      :aria-label="t.games.snake.board.up"
       :class="[BUTTON_CLASS, 'col-start-2']"
       @pointerdown="press(SnakeDirection.UP, $event)"
     >
-      ▲
+      {{ ARROWS.up }}
     </button>
     <button
       type="button"
-      aria-label="Left"
+      :aria-label="t.games.snake.board.left"
       :class="[BUTTON_CLASS, 'col-start-1 row-start-2']"
       @pointerdown="press(SnakeDirection.LEFT, $event)"
     >
-      ◀
+      {{ ARROWS.left }}
     </button>
     <button
       type="button"
-      aria-label="Down"
+      :aria-label="t.games.snake.board.down"
       :class="[BUTTON_CLASS, 'col-start-2 row-start-2']"
       @pointerdown="press(SnakeDirection.DOWN, $event)"
     >
-      ▼
+      {{ ARROWS.down }}
     </button>
     <button
       type="button"
-      aria-label="Right"
+      :aria-label="t.games.snake.board.right"
       :class="[BUTTON_CLASS, 'col-start-3 row-start-2']"
       @pointerdown="press(SnakeDirection.RIGHT, $event)"
     >
-      ▶
+      {{ ARROWS.right }}
     </button>
   </div>
 </template>

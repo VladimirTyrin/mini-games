@@ -1,5 +1,6 @@
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import type { MatchHeader } from "@/proto/minigames/v2/match_pb";
+import { t } from "@/i18n";
 import { seatLabels } from "@/util/players";
 
 import { pluginBySettings } from ".";
@@ -7,7 +8,7 @@ import type { GamePlugin } from "./game-plugin";
 
 /** A bot by its level and its number among the bots at the table: "Careful bot 2". */
 export function botName(plugin: GamePlugin | undefined, kind: BotKind, number: number): string {
-  return `${plugin?.botLabel(kind) ?? "Bot"} ${number}`;
+  return t.match.botName(plugin?.botLabel(kind) ?? t.common.bot, number);
 }
 
 /** Bots numbered from 1 in seat order, by slot index (`null` for a person's seat). */

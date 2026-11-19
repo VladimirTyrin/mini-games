@@ -8,7 +8,7 @@ use mg_core::{
 use crate::io::{Command, WorldEvent};
 use crate::model::{Board, Rank, Side, Square};
 use crate::rules::{
-    DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, REPETITIONS_FOR_DRAW, WinReason,
+    DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove, REPETITIONS_FOR_DRAW, Refusal, WinReason,
     apply_move, legal_moves, position_key,
 };
 use crate::settings::{CaptureRule, PLAYERS, Settings, WhitePlayer};
@@ -183,6 +183,7 @@ impl Game for Checkers {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "checkers",
@@ -221,7 +222,11 @@ impl Game for Checkers {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.end.is_some() {
             return Err(CommandError::GameOver);
         }
@@ -236,9 +241,9 @@ impl Game for Checkers {
         let Some(chosen) = moves.iter().find(|candidate| &candidate.path == path) else {
             let must_capture = moves.iter().any(|candidate| !candidate.captured.is_empty());
             return Err(CommandError::Illegal(if must_capture {
-                "you must capture"
+                Refusal::MustCapture
             } else {
-                "not a legal move"
+                Refusal::NotALegalMove
             }));
         };
         let chosen = chosen.clone();
@@ -254,16 +259,16 @@ impl Game for Checkers {
         vec![WorldEvent::WhiteChosen(white)]
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         let WorldEvent::WhiteChosen(white) = *event;
         if self.white_mode != WhitePlayer::Random
             || self.white_player.is_some()
             || self.end.is_some()
         {
-            return Err(CommandError::Illegal("who plays white is already known"));
+            return Err(CommandError::Illegal(Refusal::WhiteAlreadyKnown));
         }
         if white.get() >= PLAYERS {
-            return Err(CommandError::Illegal("no such seat"));
+            return Err(CommandError::Illegal(Refusal::NoSuchSeat));
         }
         self.white_player = Some(white);
         Ok(())

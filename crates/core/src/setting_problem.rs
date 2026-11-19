@@ -1,14 +1,15 @@
 use std::fmt;
 
 use crate::out_of_range::OutOfRange;
+use crate::setting_rule::SettingRule;
 
 /// What is wrong with one setting's value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingProblem {
     OutOfRange(OutOfRange),
-    /// A rule a range cannot express; `rule` reads as a sentence ("must be a power of two").
+    /// A rule a range cannot express.
     RuleBroken {
-        rule: &'static str,
+        rule: SettingRule,
         value: u32,
     },
 }

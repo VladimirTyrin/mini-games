@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use mg_core::PlayerSpec;
 use mg_protocol::proto;
 use mg_protocol::proto::server_message::Message;
-use mg_registry::{GameKind, create_mirror, validate_bot_kind};
+use mg_registry::{CreateError, GameKind, create_mirror, validate_bot_kind};
 use tokio::time::Instant;
 
 use super::hub::Hub;
@@ -24,8 +24,31 @@ struct LobbySetup {
     max_seats: u8,
 }
 
-/// Why lobby settings were refused; the text is shown to the host.
-struct SettingsRejection(String);
+/// Why lobby settings were refused.
+struct SettingsRejection {
+    /// English, for logs and bots.
+    message: String,
+    /// The one setting at fault, for the client to word; `None` when it is not one setting.
+    setting_problem: Option<proto::SettingProblem>,
+}
+
+impl SettingsRejection {
+    fn general(message: String) -> Self {
+        Self {
+            message,
+            setting_problem: None,
+        }
+    }
+}
+
+impl From<CreateError> for SettingsRejection {
+    fn from(error: CreateError) -> Self {
+        Self {
+            setting_problem: error.setting_problem(),
+            message: error.to_string(),
+        }
+    }
+}
 
 /// Builds a throwaway game with the minimum seat count, so every setting is checked by the
 /// game's own rules. `requested_seats == 0` means "as many as the game allows".
@@ -33,7 +56,8 @@ fn validate_lobby_setup(
     settings: &proto::GameSettings,
     requested_seats: u32,
 ) -> Result<LobbySetup, SettingsRejection> {
-    let kind = GameKind::of_settings(settings).map_err(|e| SettingsRejection(e.to_string()))?;
+    let kind =
+        GameKind::of_settings(settings).map_err(|e| SettingsRejection::general(e.to_string()))?;
     let info = kind.info();
     let max_seats = if requested_seats == 0 {
         u32::from(info.max_players)
@@ -44,21 +68,14 @@ fn validate_lobby_setup(
         .ok()
         .filter(|seats| (info.min_players..=info.max_players).contains(seats))
         .ok_or_else(|| {
-            SettingsRejection(format!(
+            SettingsRejection::general(format!(
                 "{} supports {}..={} players",
                 info.name, info.min_players, info.max_players
             ))
         })?;
     let players = vec![PlayerSpec::HUMAN; usize::from(info.min_players)];
-    create_mirror(settings, &players).map_err(|e| SettingsRejection(e.to_string()))?;
+    create_mirror(settings, &players)?;
     Ok(LobbySetup { kind, max_seats })
-}
-
-fn clean_lobby_name(raw: &str, fallback: &str) -> String {
-    match text::clean(raw, Limits::MAX_LOBBY_NAME_CHARS) {
-        name if name.is_empty() => text::clean(fallback, Limits::MAX_LOBBY_NAME_CHARS),
-        name => name,
-    }
 }
 
 impl Hub {
@@ -138,15 +155,21 @@ impl Hub {
         let LobbySetup { kind, max_seats } = match validate_lobby_setup(&settings, create.max_seats)
         {
             Ok(setup) => setup,
-            Err(SettingsRejection(reason)) => {
-                return self.reject(session, request_id, ErrorCode::InvalidSettings, &reason);
+            Err(rejection) => {
+                return self.reject_settings(
+                    session,
+                    request_id,
+                    ErrorCode::InvalidSettings,
+                    rejection.setting_problem,
+                    &rejection.message,
+                );
             }
         };
-        let host_name = self.identity_of(session).display_name;
         let lobby_id = LobbyId::random();
         let lobby = Lobby {
             id: lobby_id.clone(),
-            name: clean_lobby_name(&create.name, &format!("{host_name}'s {}", kind.info().name)),
+            // Empty when the host gave none: each client names it in its own language.
+            name: text::clean(&create.name, Limits::MAX_LOBBY_NAME_CHARS),
             host: session.clone(),
             kind,
             settings,
@@ -376,8 +399,14 @@ impl Hub {
         let LobbySetup { kind, max_seats } = match validate_lobby_setup(&settings, update.max_seats)
         {
             Ok(setup) => setup,
-            Err(SettingsRejection(reason)) => {
-                return self.reject(session, request_id, ErrorCode::InvalidSettings, &reason);
+            Err(rejection) => {
+                return self.reject_settings(
+                    session,
+                    request_id,
+                    ErrorCode::InvalidSettings,
+                    rejection.setting_problem,
+                    &rejection.message,
+                );
             }
         };
         let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
@@ -662,7 +691,13 @@ impl Hub {
         }
         match self.spawn_match(&lobby_id) {
             Ok(()) => self.ack(session, request_id),
-            Err(error) => self.reject(session, request_id, error.code(), &error.to_string()),
+            Err(error) => self.reject_settings(
+                session,
+                request_id,
+                error.code(),
+                error.setting_problem(),
+                &error.to_string(),
+            ),
         }
     }
 
@@ -723,9 +758,10 @@ impl Hub {
         if let LobbyPhase::PostMatch { play_again_votes } = &mut lobby.phase {
             play_again_votes.clear();
         }
-        let failure = codec::encode(&codec::error(
+        let failure = codec::encode(&codec::settings_error(
             0,
             error.code(),
+            error.setting_problem(),
             format!("cannot start the next match: {error}"),
         ));
         if let Some(lobby) = self.lobbies.get(lobby_id) {

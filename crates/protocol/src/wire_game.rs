@@ -2,6 +2,7 @@ use mg_core::{Game, GameSettings, SeatSecret, SecretCommand};
 
 use crate::proto;
 use crate::wire_error::WireError;
+use crate::wire_refusal::WireRefusal;
 
 /// The unchecked settings form a game parses ([`GameSettings::parse`]).
 pub type RawSettingsOf<G> = <<G as Game>::Settings as GameSettings>::Raw;
@@ -10,7 +11,7 @@ pub type RawSettingsOf<G> = <<G as Game>::Settings as GameSettings>::Raw;
 ///
 /// `*_from_wire` checks the shape (the right game, required fields, known enum values, integers
 /// that fit) and never clamps or panics; game rules, setting ranges included, stay with the game.
-pub trait WireGame: Game {
+pub trait WireGame: Game<Refusal: WireRefusal> {
     /// Raw settings: the caller parses them with [`GameSettings::parse`], the one place ranges
     /// are enforced.
     fn settings_from_wire(settings: &proto::GameSettings)

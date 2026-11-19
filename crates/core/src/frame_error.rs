@@ -1,12 +1,15 @@
 use std::fmt;
 
-use crate::command_error::CommandError;
 use crate::slot::Slot;
 use crate::tick::Tick;
 
 /// Any of these means the receiver is out of sync and must rebuild from the full log.
+///
+/// `E` is why an input was rejected: [`crate::Match`] gives the game's
+/// `CommandError<G::Refusal>`; a host that erases the game type maps it with
+/// [`FrameError::map_rejection`].
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FrameError {
+pub enum FrameError<E> {
     UnexpectedTick {
         expected: Tick,
         got: Tick,
@@ -14,7 +17,7 @@ pub enum FrameError {
     Rejected {
         tick: Tick,
         input_index: usize,
-        error: CommandError,
+        error: E,
     },
     HashMismatch {
         tick: Tick,
@@ -31,7 +34,35 @@ pub enum FrameError {
     },
 }
 
-impl fmt::Display for FrameError {
+impl<E> FrameError<E> {
+    pub fn map_rejection<F>(self, map: impl FnOnce(E) -> F) -> FrameError<F> {
+        match self {
+            Self::UnexpectedTick { expected, got } => FrameError::UnexpectedTick { expected, got },
+            Self::Rejected {
+                tick,
+                input_index,
+                error,
+            } => FrameError::Rejected {
+                tick,
+                input_index,
+                error: map(error),
+            },
+            Self::HashMismatch {
+                tick,
+                expected,
+                actual,
+            } => FrameError::HashMismatch {
+                tick,
+                expected,
+                actual,
+            },
+            Self::UnknownSlot { tick, slot } => FrameError::UnknownSlot { tick, slot },
+            Self::MissingFrameAfterFinish { tick } => FrameError::MissingFrameAfterFinish { tick },
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for FrameError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedTick { expected, got } => {
@@ -62,4 +93,4 @@ impl fmt::Display for FrameError {
     }
 }
 
-impl std::error::Error for FrameError {}
+impl<E: fmt::Debug + fmt::Display> std::error::Error for FrameError<E> {}

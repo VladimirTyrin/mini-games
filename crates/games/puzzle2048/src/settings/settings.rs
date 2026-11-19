@@ -1,4 +1,4 @@
-use mg_core::{Capped, GameSettings, SettingProblem, SettingRange, SettingsError};
+use mg_core::{Capped, GameSettings, SettingProblem, SettingRange, SettingRule, SettingsError};
 
 use crate::settings::{RawSettings, Target};
 
@@ -38,7 +38,7 @@ impl GameSettings for Settings {
         let target = Target::new(raw.target).map_err(SettingsError::at("target"))?;
         if u64::from(target.get()) > largest_tile_on(width, height) {
             return Err(SettingsError::at("target")(SettingProblem::RuleBroken {
-                rule: "cannot be reached on a board this small",
+                rule: SettingRule::TooLargeForBoard,
                 value: target.get(),
             }));
         }

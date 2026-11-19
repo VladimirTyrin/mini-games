@@ -1,11 +1,12 @@
 use mg_puzzle2048::{
-    Cell, Command, Direction, MergeSource, Phase, Puzzle2048, RawSettings, SpawnValue, Tile,
-    TileOrigin, View, WorldEvent,
+    Cell, Command, Direction, MergeSource, Phase, Puzzle2048, RawSettings, Refusal, SpawnValue,
+    Tile, TileOrigin, View, WorldEvent,
 };
 
 use crate::proto;
 use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for Puzzle2048 {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -208,6 +209,25 @@ fn tile_to_wire(tile: &Tile) -> proto::Puzzle2048Tile {
         value: tile.value.get(),
         cell: Some(cell_to_wire(tile.cell)),
         origin: Some(origin),
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::MoveChangesNothing => proto::Puzzle2048Refusal::MoveChangesNothing,
+            Refusal::NoSpawnDue | Refusal::SpawnCellOutside | Refusal::SpawnCellOccupied => {
+                return malformed_refusal();
+            }
+        };
+        proto::refusal::Reason::Puzzle2048(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::Puzzle2048Refusal::try_from(value).ok()? {
+            proto::Puzzle2048Refusal::Unspecified => return None,
+            proto::Puzzle2048Refusal::MoveChangesNothing => Refusal::MoveChangesNothing,
+        })
     }
 }
 

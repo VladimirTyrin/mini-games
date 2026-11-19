@@ -2,6 +2,7 @@
 // (the service worker side is public/push-sw.js).
 import type { MessageInitShape } from "@bufbuild/protobuf";
 
+import { t } from "@/i18n";
 import type { PushTargetSchema } from "@/proto/minigames/v2/push_pb";
 
 import { isAppleMobile, isInstalledWebApp } from "./web-app-install";
@@ -62,11 +63,12 @@ async function nativeToken(): Promise<string> {
   const { PushNotifications } = await import("@capacitor/push-notifications");
   let permission = await PushNotifications.checkPermissions();
   if (permission.receive !== "granted") permission = await PushNotifications.requestPermissions();
-  if (permission.receive !== "granted") throw new Error("Notifications are turned off for this app");
+  if (permission.receive !== "granted") throw new Error(t.app.push.turnedOffForApp);
   // High importance: the notification pops up over other apps instead of only joining the shade.
+  // Created again on every registration, which also renames it after a language switch.
   await PushNotifications.createChannel({
     id: CHANNEL_ID,
-    name: "Game invites",
+    name: t.app.push.channelName,
     importance: 5,
     visibility: 1,
     vibration: true,
@@ -81,7 +83,7 @@ async function nativeToken(): Promise<string> {
         );
         PushNotifications.register().catch(reject);
       }),
-      "Google Play services did not answer",
+      t.app.push.playServicesNoAnswer,
     );
   } finally {
     for (const listener of listeners) void listener.then((handle) => handle.remove());
@@ -90,9 +92,9 @@ async function nativeToken(): Promise<string> {
 
 async function webSubscription(publicKey: string) {
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") throw new Error("Notifications are not allowed for this site");
-  if (!publicKey) throw new Error("This server does not send notifications");
-  const registration = await withTimeout(navigator.serviceWorker.ready, "The offline worker is not running");
+  if (permission !== "granted") throw new Error(t.app.push.notAllowedForSite);
+  if (!publicKey) throw new Error(t.app.push.serverSendsNone);
+  const registration = await withTimeout(navigator.serviceWorker.ready, t.app.push.offlineWorkerNotRunning);
   const serverKey = fromBase64Url(publicKey);
   let subscription = await registration.pushManager.getSubscription();
   // A subscription made for another server key (the server's key was replaced) is useless.
@@ -105,8 +107,7 @@ async function webSubscription(publicKey: string) {
     applicationServerKey: serverKey,
   });
   const { endpoint, keys } = subscription.toJSON();
-  if (!endpoint || !keys?.p256dh || !keys.auth)
-    throw new Error("The browser returned an incomplete subscription");
+  if (!endpoint || !keys?.p256dh || !keys.auth) throw new Error(t.app.push.incompleteSubscription);
   return { endpoint, p256dh: keys.p256dh, auth: keys.auth };
 }
 

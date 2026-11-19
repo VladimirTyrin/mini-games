@@ -17,7 +17,11 @@ pub(crate) fn guard(body: impl FnOnce() -> Result<(), FfiError>) -> MgStatus {
         Ok(Err(error)) => error,
         Err(payload) => FfiError::Panic(panic_message(payload.as_ref())),
     };
-    last_error::set(error.to_string());
+    let refusal = error
+        .refusal()
+        .map(prost::Message::encode_to_vec)
+        .unwrap_or_default();
+    last_error::set(error.to_string(), refusal);
     error.status()
 }
 
@@ -25,7 +29,10 @@ pub(crate) fn guard(body: impl FnOnce() -> Result<(), FfiError>) -> MgStatus {
 /// thread's last error.
 pub(crate) fn guard_release(body: impl FnOnce()) {
     if let Err(payload) = catch_unwind(AssertUnwindSafe(body)) {
-        last_error::set(FfiError::Panic(panic_message(payload.as_ref())).to_string());
+        last_error::set(
+            FfiError::Panic(panic_message(payload.as_ref())).to_string(),
+            Vec::new(),
+        );
     }
 }
 

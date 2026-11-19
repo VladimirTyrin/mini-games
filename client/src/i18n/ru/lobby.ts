@@ -1,0 +1,38 @@
+import type { Messages } from "../messages";
+
+export const lobby: Messages["lobby"] = {
+  title: "Лобби",
+  // A name cannot be declined, so not «Лобби Влада».
+  defaultName: (host: string, game: string) => `${game} · ${host}`,
+  leaveTitle: "Выйти из лобби?",
+  seatGoesToNext: "Твоё место займёт следующий игрок.",
+  becomesHost: (name: string) => `${name} станет хостом.`,
+  stay: "Остаться",
+  // A name cannot be declined: "Убрать Влад?" would read wrong.
+  removeMemberTitle: (name: string) => `${name}: убрать из лобби?`,
+  removeMemberMessage: "Игрока удалят из лобби.",
+  remove: "Убрать",
+  kick: "Выгнать",
+  editSettings: "Изменить настройки",
+  players: (taken: number, max: number) => `Игроки ${taken}/${max}`,
+  host: "хост",
+  reconnecting: "переподключается…",
+  addFriend: "В друзья",
+  seatReady: "готово",
+  seatNotReady: "ждём",
+  watchers: "Зрители:",
+  ready: "Готово",
+  notReady: "Не готово",
+  waitingForVotes: "Ждём",
+  serverUpdatingSoon: "Сервер скоро обновится: начни матч после обновления",
+  editSettingsToStart: "— измени настройки, чтобы начать",
+  start: "Начать",
+  startOffline: "Начать (офлайн)",
+  closed: "Лобби закрыто",
+  closedKicked: "Тебя удалили из лобби",
+  closedInactive: "Лобби закрыто: в нём давно не играли",
+  closedServerShutdown: "Сервер перезапускается",
+  closedByRestart: "Сервер перезапустился для обновления, лобби закрыто",
+  noLongerInLobby: "Ты больше не в этом лобби",
+  playAgainVotesDropped: "Состав игроков или настройки изменились: проголосуй ещё раз, чтобы играть",
+};

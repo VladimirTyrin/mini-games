@@ -22,8 +22,31 @@ Source of truth: `proto/minigames/v2/*.proto` (`buf lint` clean). This page expl
 ## Requests and pushes
 
 `ClientMessage.request_id` (non-zero) is echoed in the reply; a failure is an
-`ErrorResponse { code, message }` with the same id. Messages with `request_id = 0` from the
-server are pushes (lobby updates, frames, chat, some errors).
+`ErrorResponse { code, message, refusal, setting_problem }` with the same id. Messages with
+`request_id = 0` from the server are pushes (lobby updates, frames, chat, some errors).
+
+`message` is English, for logs, bots and the console; clients never show it or parse it. They
+word the error from typed fields instead (see [localization.md](localization.md)):
+
+- `code` always.
+- `refusal` (`refusal.proto`) with `ERROR_CODE_COMMAND_REJECTED`: why a command or private
+  command was refused. Its `reason` is either `CommonRefusal` (game over, not your turn, not
+  playing, busy, paused, malformed) or the game's own enum (`WordHuntRefusal`,
+  `CheckersRefusal`, …), one value per reason a player can meet. `MALFORMED` stands for input
+  no honest client sends; a client shows a generic "not allowed". A value the client does not
+  know (a newer server) falls back to `message`. With a refusal, `message` is its English from
+  `mg_protocol::refusal_english` (the C ABI's `mg_refusal_english`), except that for `MALFORMED`
+  it names what was wrong ("cell is outside the board"), which the enum leaves out.
+- `setting_problem` with `ERROR_CODE_INVALID_SETTINGS` (create or update a lobby, start a match)
+  when one setting is at fault: its `field` (the wire name in the game's settings message) and
+  either `out_of_range { value, min, max }` or `broken_rule { rule, value }` with a generic
+  `SettingRule` (`POWER_OF_TWO`, `TOO_LARGE_FOR_BOARD`, `FIXED_FOR_DAILY_PUZZLE`). Absent when
+  the request as a whole is wrong (no settings, an unknown game, a seat count the game does not
+  support).
+
+The WASM core answers the same way: `MatchMirror.refusalOf` / `secretRefusalOf` and
+`LocalHost.submit` / `submitSecret` return an encoded `Refusal` (or `undefined` when accepted),
+and `validateSettings` an encoded `SettingProblem` in `SettingsProblem.settingProblem`.
 
 ## Session
 
@@ -77,6 +100,8 @@ seat 0 whenever a match starts. Phases: `OPEN → IN_MATCH → POST_MATCH (play-
 REPLAY (shared replay)`.
 
 - The join reply (`LobbyState`) comes before anything about a running match or replay.
+- A lobby's `name` is the host's; empty when they gave none. The server words nothing for players,
+  so each client names such a lobby in its own language ("Vlad's Snake", «Змейка · Влад»).
 - `LobbyList` pushes to clients outside lobbies are coalesced (up to 250 ms) and sent only
   when a summary changed (seats, observers, phase, settings, name, host).
 - `POST_MATCH` carries `last_match_id`, `last_result` and `play_again_votes`. When every seated
@@ -100,8 +125,8 @@ REPLAY (shared replay)`.
 ```
 server → MatchStarted(MatchHeader)          header: settings, seats (slot, identity, bot kind), tick_ms
 server → Frame(TickFrame) …                 every tick / move; inputs + optional state_hash
-client → SubmitCommand(match_id, GameCommand) → Ack | Error(COMMAND_REJECTED)
-client → SubmitSecretCommand(match_id, GameSecretCommand) → Ack | Error(COMMAND_REJECTED)
+client → SubmitCommand(match_id, GameCommand) → Ack | Error(COMMAND_REJECTED, refusal)
+client → SubmitSecretCommand(match_id, GameSecretCommand) → Ack | Error(COMMAND_REJECTED, refusal)
 server → SeatSecret(match_id, GameSeatSecret)  to that seat only
 server → Paused(slot, budget_left_ms, drop_vote_in_ms) / Resumed(countdown_ms)
 client → VoteDropPlayer(slot)               allowed once drop_vote_in_ms elapsed

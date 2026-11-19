@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue
 import Avatar from "@/components/Avatar.vue";
 import BotIcon from "@/components/BotIcon.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
 import { OutcomeKind } from "@/proto/minigames/v2/match_pb";
@@ -11,7 +12,8 @@ import type { WordHuntLetterMark } from "@/proto/minigames/v2/word_hunt_pb";
 import { WordHuntPhase, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
 import { prefersReducedMotion } from "@/render/reduced-motion";
 import { matchSeatNames } from "@/games/seat-names";
-import { asSentence } from "@/util/sentence";
+import { errorMessage } from "@/util/error-message";
+import { refusalText } from "@/util/refusal-text";
 
 import { formatDay } from "./daily";
 import { keyboardRows, letterForKey } from "./keyboard-layout";
@@ -53,7 +55,7 @@ function seatRing(slot: number): string {
   return SEAT_RINGS[slot % SEAT_RINGS.length] ?? "ring-gray-500";
 }
 function seatName(slot: number): string {
-  return names[slot] ?? `Player ${slot + 1}`;
+  return names[slot] ?? t.match.player(slot + 1);
 }
 function isBotSeat(slot: number): boolean {
   return header.seats.find((seat) => seat.slot === slot)?.botKind !== undefined;
@@ -65,9 +67,10 @@ function seatPlayer(slot: number) {
 const turnLine = computed(() => {
   const turn = view.value?.turnSlot;
   if (!isGroup || !isPlaying.value || turn === undefined) return null;
-  if (gaveUp.value) return "You gave up · watching";
-  if (myTurn.value) return "Your turn";
-  return isBotSeat(turn) ? `${seatName(turn)} is thinking…` : `${seatName(turn)}'s turn`;
+  const texts = t.games.wordHunt.board;
+  if (gaveUp.value) return texts.gaveUpWatching;
+  if (myTurn.value) return texts.yourTurn;
+  return isBotSeat(turn) ? texts.botThinking(seatName(turn)) : texts.playerTurn(seatName(turn));
 });
 
 const typed = ref("");
@@ -108,11 +111,6 @@ function refuse(text: string): void {
 }
 onBeforeUnmount(() => clearTimeout(messageTimer));
 
-/** The server's refusal ("illegal move: hard mode: …") as a sentence for the player. */
-function refusalText(error: unknown): string {
-  return asSentence((error instanceof Error ? error.message : String(error)).replace(/^illegal move: /, ""));
-}
-
 /** The last letter sends the guess: there is no Enter to press. */
 function type(letter: string): void {
   if (!canType.value || typed.value.length >= wordLength.value) return;
@@ -127,20 +125,20 @@ function erase(): void {
 async function enter(): Promise<void> {
   if (!canType.value || submitting.value) return;
   const guess = normalizeWord(typed.value);
-  if (guess.length < wordLength.value) return refuse("Not enough letters");
+  if (guess.length < wordLength.value) return refuse(t.games.wordHunt.board.notEnoughLetters);
   const known = words.value?.get(wordLength.value);
-  if (known && !known.has(guess)) return refuse("Not in the word list");
+  if (known && !known.has(guess)) return refuse(t.games.wordHunt.board.notInWordList);
   const command = {
     game: { case: "wordHunt", value: { command: { case: "guess", value: { word: guess } } } },
   } as const;
   // The rules answer at once (hard mode, a word already tried), offline and without a round trip.
   const refusal = props.controller.refusal(command);
-  if (refusal !== null) return refuse(asSentence(refusal));
+  if (refusal !== null) return refuse(refusalText(refusal));
   submitting.value = true;
   try {
     await props.controller.submit(command);
   } catch (error) {
-    refuse(refusalText(error));
+    refuse(errorMessage(error));
   } finally {
     submitting.value = false;
   }
@@ -158,14 +156,13 @@ const canGiveUp = computed(() => props.controller.refusal(GIVE_UP) === null && !
 /** What giving up leads to, asked of the rules: who would win, or whether the others play on. */
 const giveUpMessage = computed(() => {
   const preview = props.controller.preview(GIVE_UP);
-  if (preview.kind === "continues") {
-    return "You drop out and the others play on. The word is shown when the game ends.";
-  }
-  if (preview.kind === "refused" || !isGroup) return "The game ends as a loss and the word is shown.";
+  const texts = t.games.wordHunt.board;
+  if (preview.kind === "continues") return texts.giveUpOthersPlayOn;
+  if (preview.kind === "refused" || !isGroup) return texts.giveUpLoses;
   const [winner] = preview.result.winnerSlots;
   return preview.result.kind === OutcomeKind.WINNER && winner !== undefined
-    ? `The game ends and ${seatName(winner)} wins. The word is shown.`
-    : "The game ends without a winner. The word is shown.";
+    ? texts.giveUpOtherWins(seatName(winner))
+    : texts.giveUpNoWinner;
 });
 
 async function giveUp(): Promise<void> {
@@ -175,7 +172,7 @@ async function giveUp(): Promise<void> {
       game: { case: "wordHunt", value: { command: { case: "giveUp", value: {} } } },
     });
   } catch (error) {
-    refuse(refusalText(error));
+    refuse(errorMessage(error));
   }
 }
 
@@ -191,7 +188,8 @@ useGameKeys(
       erase();
       return true;
     }
-    const letter = letterForKey(settings.value.language, key, event.code);
+    // What the key types, in the player's layout (`key` is its place).
+    const letter = letterForKey(settings.value.language, event.key, event.code);
     if (letter === null) return false;
     type(letter);
     return true;
@@ -261,11 +259,12 @@ const revealRow = computed(() => (prefersReducedMotion() ? -1 : guesses.value.le
 const subtitle = computed(() => {
   const current = settings.value;
   if (!current) return "";
+  const texts = t.games.wordHunt;
   const kind =
     current.mode === WordHuntPuzzleMode.DAILY
-      ? `Word of the day · ${formatDay(current.day)}`
-      : `${current.wordLength} letters`;
-  return current.hardMode ? `${kind} · hard mode` : kind;
+      ? texts.board.dailySubtitle(formatDay(current.day))
+      : texts.facts.letters(current.wordLength);
+  return current.hardMode ? `${kind} · ${texts.facts.hardMode}` : kind;
 });
 
 /** The player's own games only: never replays or observed matches. */
@@ -301,9 +300,15 @@ const shownStats = computed(
     stats.value ??
     (settings.value && !isPlaying.value && !isGroup ? statsFor(settings.value.language) : null),
 );
-const winRate = computed(() => {
+const statsLine = computed(() => {
   const current = shownStats.value;
-  return current && current.played > 0 ? Math.round((100 * current.won) / current.played) : 0;
+  if (!current) return null;
+  return t.games.wordHunt.board.stats({
+    played: current.played,
+    winPercent: current.played > 0 ? Math.round((100 * current.won) / current.played) : 0,
+    streak: current.streak,
+    bestStreak: current.bestStreak,
+  });
 });
 
 /** A group's scroller shows six rows whatever the solo "Guesses" setting says. */
@@ -367,7 +372,9 @@ const gridSize = computed(() => ({
           </div>
         </div>
         <div v-if="missedAnswer" class="mt-3 flex flex-col items-center gap-1.5">
-          <p class="text-xs font-semibold uppercase tracking-widest text-gray-400">The word was</p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            {{ t.games.wordHunt.board.theWordWas }}
+          </p>
           <div class="flex gap-1.5">
             <div
               v-for="(letter, index) in missedAnswer"
@@ -388,10 +395,7 @@ const gridSize = computed(() => ({
           {{ message }}
         </p>
       </div>
-      <p v-if="shownStats && !isPlaying" class="text-sm text-gray-400">
-        Played {{ shownStats.played }} · won {{ winRate }}% · streak {{ shownStats.streak }} (best
-        {{ shownStats.bestStreak }})
-      </p>
+      <p v-if="statsLine && !isPlaying" class="text-sm text-gray-400">{{ statsLine }}</p>
     </div>
     <button
       v-if="canGiveUp"
@@ -399,14 +403,14 @@ const gridSize = computed(() => ({
       class="rounded-lg border border-white/15 px-3 py-1.5 text-sm text-gray-300 hover:bg-white/5"
       @click="confirmingGiveUp = true"
     >
-      Give up
+      {{ t.games.wordHunt.board.giveUp }}
     </button>
     <ConfirmDialog
       v-if="confirmingGiveUp"
-      title="Give up?"
+      :title="t.games.wordHunt.board.giveUpQuestion"
       :message="giveUpMessage"
-      confirm-label="Give up"
-      cancel-label="Keep guessing"
+      :confirm-label="t.games.wordHunt.board.giveUp"
+      :cancel-label="t.games.wordHunt.board.keepGuessing"
       @confirm="giveUp"
       @cancel="confirmingGiveUp = false"
     />

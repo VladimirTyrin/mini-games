@@ -1,6 +1,6 @@
 use mg_sea_battle::{
     BotKind, Cell, CellMark, Command, FLEET_LENGTHS, Fleet, LastShot, Orientation, Phase,
-    RawSettings, SeaBattle, SecretCommand, Ship, ShotOutcome, View, Waters, WorldEvent,
+    RawSettings, Refusal, SeaBattle, SecretCommand, Ship, ShotOutcome, View, Waters, WorldEvent,
 };
 
 use crate::proto::{
@@ -8,6 +8,7 @@ use crate::proto::{
     game_world_event, sea_battle_command, sea_battle_secret_command, sea_battle_world_event,
 };
 use crate::{WireBots, WireError, WireGame, proto, slot_from_wire, slot_to_wire};
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for SeaBattle {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -312,6 +313,39 @@ fn last_shot_to_wire(last: LastShot) -> proto::SeaBattleLastShot {
         by_slot: slot_to_wire(last.by),
         cell: Some(cell_to_wire(last.cell)),
         outcome: outcome_to_wire(last.outcome).into(),
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::BattleNotStarted => proto::SeaBattleRefusal::BattleNotStarted,
+            Refusal::LastShotNotResolved => proto::SeaBattleRefusal::LastShotNotResolved,
+            Refusal::CellAlreadyKnown => proto::SeaBattleRefusal::CellAlreadyKnown,
+            Refusal::FleetAlreadyPlaced => proto::SeaBattleRefusal::FleetAlreadyPlaced,
+            Refusal::WrongShips => proto::SeaBattleRefusal::WrongShips,
+            Refusal::ShipsTouch => proto::SeaBattleRefusal::ShipsTouch,
+            Refusal::FleetCannotBePlacedNow
+            | Refusal::NoShotPending
+            | Refusal::NoSuchSea
+            | Refusal::SunkShipDoesNotFit
+            | Refusal::FirstShooterAlreadyChosen
+            | Refusal::FleetRevealedEarly
+            | Refusal::RevealedFleetInvalid => return malformed_refusal(),
+        };
+        proto::refusal::Reason::SeaBattle(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::SeaBattleRefusal::try_from(value).ok()? {
+            proto::SeaBattleRefusal::Unspecified => return None,
+            proto::SeaBattleRefusal::BattleNotStarted => Refusal::BattleNotStarted,
+            proto::SeaBattleRefusal::LastShotNotResolved => Refusal::LastShotNotResolved,
+            proto::SeaBattleRefusal::CellAlreadyKnown => Refusal::CellAlreadyKnown,
+            proto::SeaBattleRefusal::FleetAlreadyPlaced => Refusal::FleetAlreadyPlaced,
+            proto::SeaBattleRefusal::WrongShips => Refusal::WrongShips,
+            proto::SeaBattleRefusal::ShipsTouch => Refusal::ShipsTouch,
+        })
     }
 }
 

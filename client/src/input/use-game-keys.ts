@@ -1,7 +1,17 @@
 import { onBeforeUnmount, onMounted } from "vue";
 
-/** Returns `true` when the key was used (default action is then prevented). */
+/**
+ * Returns `true` when the key was used (default action is then prevented). `key` names a letter
+ * key by where it is, as its Latin letter ("w" under a Russian layout too, where it types «ц»);
+ * other keys as the browser names them. What a key types is `event.key`.
+ */
 export type KeyHandler = (key: string, event: KeyboardEvent) => boolean;
+
+/** A letter key by its place on the keyboard, any other key by its name. */
+export function gameKey(event: KeyboardEvent): string {
+  const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
+  return letter ? letter.toLowerCase() : event.key;
+}
 
 export interface GameKeyOptions {
   allowRepeat?: boolean;
@@ -31,9 +41,9 @@ export function useGameKeys(handler: KeyHandler, options: GameKeyOptions = {}): 
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.repeat && !options.allowRepeat) return;
     if (isTyping(event.target) || pressesFocusedControl(event.target, event.key)) return;
-    if (handler(event.key, event)) event.preventDefault();
+    if (handler(gameKey(event), event)) event.preventDefault();
   };
-  const up = (event: KeyboardEvent) => options.release?.(event.key);
+  const up = (event: KeyboardEvent) => options.release?.(gameKey(event));
   const blur = () => options.releaseAll?.();
   onMounted(() => {
     window.addEventListener("keydown", down);

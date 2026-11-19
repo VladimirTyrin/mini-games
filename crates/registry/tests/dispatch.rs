@@ -2,7 +2,7 @@ use mg_core::{Clock, Game, GameSettings, HasBots, PlayerSpec, Slot, Viewer};
 use mg_numbers_match::NumbersMatch;
 use mg_protocol::{WireBots, WireGame, proto};
 use mg_puzzle2048::Puzzle2048;
-use mg_registry::{CreateError, GameKind, SeatSpec, create_authority, create_mirror};
+use mg_registry::{CreateError, GameKind, SeatSpec, SubmitError, create_authority, create_mirror};
 use mg_snake::Snake;
 use mg_stack_attack::StackAttack;
 use mg_tictactoe::TicTacToe;
@@ -126,4 +126,63 @@ fn a_mirror_answers_what_a_command_would_do_without_doing_it() {
     assert!(mirror.check_command(waiting, &corner).is_err());
     assert!(!mirror.status_after(mover, &corner).unwrap().is_finished());
     assert_eq!(mirror.state_hash(), hash, "asking changed the mirror");
+}
+
+#[test]
+fn a_rejection_carries_the_games_refusal_for_the_wire() {
+    let settings = default_settings::<TicTacToe>();
+    let seats = [SeatSpec::Human, SeatSpec::Human];
+    let mut authority = create_authority(&settings, &seats, 3).unwrap();
+    authority.seal_frame();
+    let Some(mover) = (0..2)
+        .map(Slot::new)
+        .find(|slot| authority.awaiting() == mg_core::Awaiting::Turn(*slot))
+    else {
+        panic!("nobody to move");
+    };
+    let waiting = Slot::new(1 - mover.get());
+    let corner = TicTacToe::command_to_wire(&mg_tictactoe::Command::Place(mg_tictactoe::Point {
+        x: 0,
+        y: 0,
+    }));
+    authority.submit(mover, &corner).unwrap();
+    authority.seal_frame();
+
+    let reason = |error| match error {
+        Err(SubmitError::Rejected(rejection)) => rejection.refusal.reason,
+        other => panic!("not a rejection: {other:?}"),
+    };
+    assert_eq!(
+        reason(authority.submit(waiting, &corner)),
+        Some(proto::refusal::Reason::Tictactoe(
+            proto::TicTacToeRefusal::CellTaken.into()
+        ))
+    );
+    assert_eq!(
+        reason(authority.submit(mover, &corner)),
+        Some(proto::refusal::Reason::Common(
+            proto::CommonRefusal::NotYourTurn.into()
+        ))
+    );
+}
+
+#[test]
+fn a_broken_setting_rule_is_named_for_the_wire() {
+    let mut settings = default_settings::<Puzzle2048>();
+    if let Some(proto::game_settings::Game::Puzzle2048(puzzle)) = settings.game.as_mut() {
+        puzzle.target = 12;
+    }
+    let error = create_mirror(&settings, &[PlayerSpec::HUMAN]).unwrap_err();
+    assert_eq!(
+        error.setting_problem(),
+        Some(proto::SettingProblem {
+            field: "target".to_owned(),
+            problem: Some(proto::setting_problem::Problem::BrokenRule(
+                proto::setting_problem::BrokenRule {
+                    rule: proto::SettingRule::PowerOfTwo.into(),
+                    value: 12,
+                }
+            )),
+        })
+    );
 }

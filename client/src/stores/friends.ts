@@ -14,7 +14,9 @@ import {
   InviteAnswer,
   InviteState,
   type InviteUpdate,
+  Presence,
 } from "@/proto/minigames/v2/social_pb";
+import { t } from "@/i18n";
 import { canNotifyWithoutAsking, pushAvailability, registerForPush } from "@/platform/push-notifications";
 import { storage } from "@/platform/storage";
 
@@ -73,6 +75,15 @@ export const useFriendsStore = defineStore("friends", () => {
       ]),
   );
   const incomingRequestCount = computed(() => list.value?.incomingRequests.length ?? 0);
+  /** Playing first, then online, then the rest; by name within each. */
+  const sortedFriends = computed(() => {
+    const rank: Partial<Record<Presence, number>> = { [Presence.PLAYING]: 0, [Presence.ONLINE]: 1 };
+    return [...(list.value?.friends ?? [])].sort(
+      (a, b) =>
+        (rank[a.presence] ?? 2) - (rank[b.presence] ?? 2) ||
+        (a.identity?.displayName ?? "").localeCompare(b.identity?.displayName ?? ""),
+    );
+  });
 
   let detach: (() => void)[] = [];
   watch(
@@ -106,9 +117,9 @@ export const useFriendsStore = defineStore("friends", () => {
           // "Coming!" until the friend shows up in the lobby, or for a while if they never do.
           if (update.state === InviteState.ACCEPTED) setDeadline(update.inviteId, ACCEPTED_SHOWN_MS);
           sentInvites.value = new Map(sentInvites.value).set(update.inviteId, update);
-          const name = update.friend?.displayName ?? "Your friend";
-          if (update.state === InviteState.DECLINED) toasts.show(`${name} declined the invitation`);
-          if (update.state === InviteState.EXPIRED) toasts.show(`${name} did not answer`);
+          const name = update.friend?.displayName ?? t.friends.yourFriend;
+          if (update.state === InviteState.DECLINED) toasts.show(t.friends.declinedInvitation(name));
+          if (update.state === InviteState.EXPIRED) toasts.show(t.friends.didNotAnswer(name));
         }),
         session.events.on("signedIn", () => void signedIn()),
       );
@@ -217,7 +228,7 @@ export const useFriendsStore = defineStore("friends", () => {
     pendingLinkCode.value = null;
     try {
       await connection.requireSession().request({ case: "useFriendLink", value: { code } });
-      toasts.show("You have a new friend", "success");
+      toasts.show(t.friends.newFriend, "success");
     } catch (error) {
       toasts.failure(error);
     }
@@ -226,7 +237,7 @@ export const useFriendsStore = defineStore("friends", () => {
   function sendRequest(playerId: string): Promise<void> {
     askForNotificationsOnce();
     return call({ case: "sendFriendRequest", value: { playerId } }).then(() =>
-      toasts.show("Friend request sent", "success"),
+      toasts.show(t.friends.requestSent, "success"),
     );
   }
   function answerRequest(accountId: string, accept: boolean): Promise<ServerPayload> {
@@ -273,7 +284,7 @@ export const useFriendsStore = defineStore("friends", () => {
         .request({ case: "answerInvite", value: { inviteId, answer: InviteAnswer.ACCEPT } });
     } catch (error) {
       if (error instanceof RequestError && error.code === ErrorCode.INVITE_CLOSED) {
-        toasts.show("That invitation is no longer open");
+        toasts.show(t.friends.invitationClosed);
       } else {
         toasts.failure(error);
       }
@@ -316,6 +327,7 @@ export const useFriendsStore = defineStore("friends", () => {
     friendAccounts,
     requestedAccounts,
     incomingRequestCount,
+    sortedFriends,
     refresh,
     registerPush,
     askForNotificationsOnce,

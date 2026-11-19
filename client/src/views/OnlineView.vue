@@ -6,11 +6,14 @@ import { useRouter } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import ChatPanel from "@/components/ChatPanel.vue";
+import FriendsPanel from "@/components/FriendsPanel.vue";
 import HowToPlay from "@/components/HowToPlay.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import { gamePlugins, pluginBySettings } from "@/games";
 import { initialSettings } from "@/games/initial-settings";
+import { lobbyDisplayName } from "@/games/lobby-name";
+import { t } from "@/i18n";
 import { ChatScope, LobbyPhase } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
 import { useFriendsStore } from "@/stores/friends";
@@ -38,8 +41,8 @@ const settingsSummary = computed(() => {
   const facts = plugin.value?.describeSettings(settings.value, minSeats.value) ?? [];
   // The name sits with the folded settings: the summary keeps it in sight.
   const name = lobbyName.value.trim();
-  const summary = facts.length > 0 ? facts.join(" · ") : "Standard settings";
-  return name ? `“${name}” · ${summary}` : summary;
+  const summary = facts.length > 0 ? facts.join(" · ") : t.online.standardSettings;
+  return name ? t.online.namedSettingsSummary(name, summary) : summary;
 });
 // Settings that no longer pass (a remembered value the game now refuses) need fixing first.
 watch(problem, (current) => {
@@ -71,23 +74,31 @@ async function create(): Promise<void> {
   await lobby.create(lobbyName.value, settings.value, maxSeats.value).catch(() => undefined);
 }
 
-const phaseLabel: Record<number, string> = {
-  [LobbyPhase.OPEN]: "open",
-  [LobbyPhase.IN_MATCH]: "playing",
-  [LobbyPhase.POST_MATCH]: "finished",
-  [LobbyPhase.REPLAY]: "watching replay",
-};
+function phaseLabel(phase: LobbyPhase): string {
+  switch (phase) {
+    case LobbyPhase.IN_MATCH:
+      return t.online.phase.playing;
+    case LobbyPhase.POST_MATCH:
+      return t.online.phase.finished;
+    case LobbyPhase.REPLAY:
+      return t.online.phase.watchingReplay;
+    default:
+      return t.online.phase.open;
+  }
+}
 </script>
 
 <template>
-  <AppHeader title="Online" back="/">
+  <AppHeader :title="t.online.title" back="/">
     <!-- Where Settings stands on the home screen; Sign out lives in Settings, out of a stray tap's
          reach. -->
+    <!-- The gear alone on a phone: the title needs the room. -->
     <button
       class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
+      :aria-label="t.online.settings"
       @click="router.push('/settings')"
     >
-      ⚙ Settings
+      {{ "⚙" }} <span class="max-[399px]:hidden">{{ t.online.settings }}</span>
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
@@ -96,9 +107,11 @@ const phaseLabel: Record<number, string> = {
     <div
       v-else
       class="flex flex-1 flex-col gap-3 lg:grid lg:items-start lg:gap-6"
-      :class="lobby.current ? '' : 'lg:grid-cols-[minmax(0,1fr)_34rem] xl:grid-cols-[minmax(0,1fr)_40rem]'"
+      :class="lobby.current ? '' : 'lg:grid-cols-[34rem_minmax(0,1fr)] xl:grid-cols-[40rem_minmax(0,1fr)]'"
     >
-      <div class="contents lg:flex lg:min-w-0 lg:flex-col lg:gap-4 lg:self-stretch">
+      <!-- On a wide screen the lobbies, friends and chat stand on the right, where chat is in a
+           lobby too; creating a lobby on the left. -->
+      <div class="contents lg:order-2 lg:flex lg:min-w-0 lg:flex-col lg:gap-4 lg:self-stretch">
         <!-- Reachable while in a lobby (from Home, or back from Friends): one lobby at a time, so
            the way on is back into it. -->
         <button
@@ -106,94 +119,101 @@ const phaseLabel: Record<number, string> = {
           class="flex min-h-12 w-full items-center gap-2 rounded-xl bg-emerald-700 px-4 text-left font-semibold"
           @click="openCurrent"
         >
-          <span class="min-w-0 flex-1 truncate">You are in {{ lobby.current.name || "a lobby" }}</span>
-          <span class="shrink-0">Open ›</span>
+          <span class="min-w-0 flex-1 truncate">{{
+            t.online.youAreIn(lobbyDisplayName(lobby.current))
+          }}</span>
+          <span class="shrink-0">{{ `${t.online.open} ›` }}</span>
         </button>
+        <!-- A phone has no room for the list: a way to the Friends screen instead. -->
         <RouterLink
           v-if="friends.hasAccount"
           to="/friends"
-          class="flex min-h-12 items-center gap-2 rounded-xl bg-panel px-4 font-semibold"
+          class="flex min-h-12 items-center gap-2 rounded-xl bg-panel px-4 font-semibold lg:hidden"
         >
-          Friends
+          {{ t.online.friends }}
           <span
             v-if="friends.incomingRequestCount"
             class="rounded-full bg-rose-600 px-2 text-xs font-semibold"
           >
-            {{ friends.incomingRequestCount }} new
+            {{ t.online.friendRequestCount(friends.incomingRequestCount) }}
           </span>
-          <span class="ml-auto text-gray-400" aria-hidden="true">›</span>
+          <span class="ml-auto text-gray-400" aria-hidden="true">{{ "›" }}</span>
         </RouterLink>
-        <h2 class="order-2 text-sm uppercase tracking-wide text-gray-400 lg:order-none">Lobbies</h2>
-        <ul class="order-2 space-y-2 lg:order-none">
+        <h2 class="order-2 text-sm uppercase tracking-wide text-gray-400 lg:order-none">
+          {{ t.online.lobbies }}
+        </h2>
+        <!-- On a wide screen it scrolls within its own height: the friends and the chat stay in sight. -->
+        <ul class="order-2 space-y-2 lg:order-none lg:max-h-[min(24rem,34vh)] lg:overflow-y-auto">
           <li
             v-for="summary in lobby.lobbies"
             :key="summary.lobbyId"
-            class="flex items-center gap-3 rounded-xl bg-panel p-3"
+            class="flex flex-wrap items-center gap-3 rounded-xl bg-panel p-3"
           >
             <GameIcon
               v-if="pluginBySettings(summary.settings?.game.case)"
               :plugin="pluginBySettings(summary.settings?.game.case)!"
               class="size-9 text-2xl"
             />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate font-semibold">{{ summary.name }}</span>
+            <!-- Names wrap, and on a narrow phone the buttons go under the card's text. -->
+            <span class="min-w-[9rem] flex-1">
+              <span class="block font-semibold break-words">{{ lobbyDisplayName(summary) }}</span>
               <span v-if="summary.host" class="flex items-center gap-1 text-xs text-gray-300">
                 <Avatar
                   :url="summary.host.avatarUrl"
                   :name="summary.host.displayName"
                   :player-id="summary.host.id"
                 />
-                <span class="truncate">{{ summary.host.displayName }}</span>
+                <span class="min-w-0 break-words">{{ summary.host.displayName }}</span>
               </span>
               <span class="block text-xs text-gray-400">
-                {{ summary.seatsTaken }}/{{ summary.maxSeats }} players · {{ summary.observers }} watching ·
-                {{ phaseLabel[summary.phase] }}
+                {{ t.online.lobbySeats(summary.seatsTaken, summary.maxSeats) }} ·
+                {{ t.online.lobbyWatchers(summary.observers) }} · {{ phaseLabel(summary.phase) }}
               </span>
             </span>
-            <button
-              v-if="summary.lobbyId === lobby.current?.lobbyId"
-              class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
-              @click="openCurrent"
-            >
-              Open
-            </button>
-            <template v-else-if="!lobby.current">
+            <span class="ml-auto flex shrink-0 gap-2">
               <button
-                v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+                v-if="summary.lobbyId === lobby.current?.lobbyId"
                 class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
-                @click="lobby.join(summary.lobbyId, false)"
+                @click="openCurrent"
               >
-                Join
+                {{ t.online.open }}
               </button>
-              <button
-                class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
-                @click="lobby.join(summary.lobbyId, true)"
-              >
-                Watch
-              </button>
-            </template>
+              <template v-else-if="!lobby.current">
+                <button
+                  v-if="summary.phase !== LobbyPhase.IN_MATCH && summary.seatsTaken < summary.maxSeats"
+                  class="min-h-10 rounded bg-emerald-600 px-3 py-2 text-sm"
+                  @click="lobby.join(summary.lobbyId, false)"
+                >
+                  {{ t.online.join }}
+                </button>
+                <button
+                  class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
+                  @click="lobby.join(summary.lobbyId, true)"
+                >
+                  {{ t.online.watch }}
+                </button>
+              </template>
+            </span>
           </li>
           <li v-if="!lobby.lobbies.length" class="rounded-xl bg-panel p-4 text-center text-gray-400">
-            No lobbies yet — create one!
+            {{ t.online.noLobbies }}
           </li>
         </ul>
+        <FriendsPanel v-if="friends.hasAccount" class="hidden lg:flex" />
         <!-- Its usual height when the screen has room; on a phone short of room it gives way, down
              to the input and a couple of lines, rather than make the screen scroll. -->
         <ChatPanel
           class="order-2 max-h-[17rem] min-h-24 flex-1 basis-0 lg:order-none lg:basis-auto"
-          shrinks-to-fit
+          sizing="shrinks-to-fit"
           :messages="lobby.lobbyListChat"
           @send="lobby.sendChat(ChatScope.LOBBY_LIST, $event)"
         />
       </div>
       <!-- Always there: on a phone above the list, on a wide screen beside it with every setting open. -->
-      <section
-        v-if="plugin && !lobby.current"
-        class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4 lg:order-none"
-      >
+      <section v-if="plugin && !lobby.current" class="order-1 space-y-3 rounded-2xl bg-panel p-3 sm:p-4">
         <!-- The games as on the home screen: two per row, low tiles on a phone, with the tagline
              where there is room. -->
-        <div class="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" aria-label="Game">
+        <div class="grid grid-cols-2 gap-2 sm:gap-3" role="radiogroup" :aria-label="t.online.gamePicker">
           <button
             v-for="candidate in gamePlugins"
             :key="candidate.id"
@@ -224,18 +244,18 @@ const phaseLabel: Record<number, string> = {
             class="ml-auto shrink-0 text-sm whitespace-nowrap text-emerald-300 hover:text-emerald-200"
             @click="helpOpen = true"
           >
-            How to play
+            {{ t.match.howToPlay.button }}
           </button>
         </div>
         <div class="flex items-center gap-3 rounded-xl bg-panel-raised px-3 py-2 lg:hidden">
           <p class="min-w-0 flex-1 text-sm text-gray-300">{{ settingsSummary }}</p>
           <button
             type="button"
-            class="min-h-10 shrink-0 rounded-lg px-2 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
+            class="min-h-10 max-w-[45%] shrink-0 rounded-lg px-2 text-right text-sm text-emerald-300 hover:bg-white/5"
             :aria-expanded="editingSettings"
             @click="editingSettings = !editingSettings"
           >
-            {{ editingSettings ? "Hide settings" : "Change settings" }}
+            {{ editingSettings ? t.online.hideSettings : t.online.showSettings }}
           </button>
         </div>
         <!-- Kept mounted while hidden: it reports whether the settings pass. -->
@@ -243,8 +263,8 @@ const phaseLabel: Record<number, string> = {
           <input
             v-model="lobbyName"
             maxlength="48"
-            placeholder="Lobby name (optional)"
-            aria-label="Lobby name"
+            :placeholder="t.online.lobbyNamePlaceholder"
+            :aria-label="t.online.lobbyNameLabel"
             class="h-11 w-full rounded-lg bg-panel-raised px-3 text-[15px]"
           />
           <SettingsEditor
@@ -263,10 +283,11 @@ const phaseLabel: Record<number, string> = {
         >
           <button
             class="h-12 w-full rounded-xl bg-emerald-600 font-semibold shadow-lg shadow-black/40 hover:bg-emerald-500 disabled:opacity-50"
+            data-testid="create-lobby"
             :disabled="!!problem"
             @click="create"
           >
-            Create lobby
+            {{ t.online.createLobby }}
           </button>
         </div>
       </section>

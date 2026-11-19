@@ -6,18 +6,61 @@ interface SheetCell {
   readonly row: number;
 }
 
+interface SpriteCanvas {
+  readonly canvas: HTMLCanvasElement;
+  readonly context: CanvasRenderingContext2D;
+}
+
 /**
- * The v1 sprite sheet: the apple as drawn, and the head recoloured per seat (one copy per colour,
+ * One cell of `source` on a canvas of its own. Drawn straight from the sheet, a sprite scaled up
+ * past its 64 px blends in the edge of its neighbour there (filtering samples beyond the source
+ * rectangle): the head showed a light line of the next row's neck along one side.
+ */
+function cutOut(
+  source: CanvasImageSource,
+  cell: SheetCell,
+  settings?: CanvasRenderingContext2DSettings,
+): SpriteCanvas | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SPRITE_PIXELS;
+  const context = canvas.getContext("2d", settings);
+  if (!context) return null;
+  context.drawImage(
+    source,
+    cell.column * SPRITE_PIXELS,
+    cell.row * SPRITE_PIXELS,
+    SPRITE_PIXELS,
+    SPRITE_PIXELS,
+    0,
+    0,
+    SPRITE_PIXELS,
+    SPRITE_PIXELS,
+  );
+  return { canvas, context };
+}
+
+/**
+ * The v1 sprites: the apple as drawn, and the head recoloured per seat (one copy per colour,
  * built on first use and kept, so drawing a frame never touches pixel data).
  */
 export class SnakeSpriteSheet {
-  private readonly tintedSheets = new Map<string, HTMLCanvasElement>();
+  private readonly tintedHeads = new Map<string, HTMLCanvasElement>();
 
-  constructor(private readonly image: HTMLImageElement) {}
+  private constructor(
+    private readonly apple: HTMLCanvasElement,
+    private readonly head: HTMLCanvasElement,
+  ) {}
+
+  /** `null` when no 2D canvas is available. */
+  static cutFrom(image: CanvasImageSource): SnakeSpriteSheet | null {
+    const apple = cutOut(image, APPLE_CELL);
+    const head = cutOut(image, HEAD_FACING_RIGHT_CELL);
+    return apple && head ? new SnakeSpriteSheet(apple.canvas, head.canvas) : null;
+  }
 
   /** The apple in the square at (`x`, `y`). */
   drawApple(context: CanvasRenderingContext2D, x: number, y: number, size: number): void {
-    this.drawCell(context, this.image, APPLE_CELL, x, y, size);
+    context.drawImage(this.apple, x, y, size, size);
   }
 
   /** The head centred on (`x`, `y`), turned to `heading` radians (0 = facing right). */
@@ -32,42 +75,17 @@ export class SnakeSpriteSheet {
     context.save();
     context.translate(x, y);
     context.rotate(heading);
-    this.drawCell(context, this.tinted(color), HEAD_FACING_RIGHT_CELL, -size / 2, -size / 2, size);
+    context.drawImage(this.tinted(color), -size / 2, -size / 2, size, size);
     context.restore();
   }
 
-  private drawCell(
-    context: CanvasRenderingContext2D,
-    source: CanvasImageSource,
-    cell: SheetCell,
-    x: number,
-    y: number,
-    size: number,
-  ): void {
-    context.drawImage(
-      source,
-      cell.column * SPRITE_PIXELS,
-      cell.row * SPRITE_PIXELS,
-      SPRITE_PIXELS,
-      SPRITE_PIXELS,
-      x,
-      y,
-      size,
-      size,
-    );
-  }
-
-  private tinted(color: RgbColor): CanvasImageSource {
+  private tinted(color: RgbColor): HTMLCanvasElement {
     const key = cssColor(color);
-    const cached = this.tintedSheets.get(key);
+    const cached = this.tintedHeads.get(key);
     if (cached) return cached;
-    const sheet = document.createElement("canvas");
-    sheet.width = this.image.naturalWidth;
-    sheet.height = this.image.naturalHeight;
-    const context = sheet.getContext("2d", { willReadFrequently: true });
-    if (!context) return this.image;
-    context.drawImage(this.image, 0, 0);
-    const pixels = context.getImageData(0, 0, sheet.width, sheet.height);
+    const copy = cutOut(this.head, { column: 0, row: 0 }, { willReadFrequently: true });
+    if (!copy) return this.head;
+    const pixels = copy.context.getImageData(0, 0, SPRITE_PIXELS, SPRITE_PIXELS);
     const data = pixels.data;
     for (let offset = 0; offset < data.length; offset += 4) {
       const tinted = tintedBySprite(color, {
@@ -79,9 +97,9 @@ export class SnakeSpriteSheet {
       data[offset + 1] = tinted.green;
       data[offset + 2] = tinted.blue;
     }
-    context.putImageData(pixels, 0, 0);
-    this.tintedSheets.set(key, sheet);
-    return sheet;
+    copy.context.putImageData(pixels, 0, 0);
+    this.tintedHeads.set(key, copy.canvas);
+    return copy.canvas;
   }
 }
 
@@ -91,11 +109,16 @@ let loading: Promise<SnakeSpriteSheet> | null = null;
 export function loadSnakeSpriteSheet(): Promise<SnakeSpriteSheet> {
   loading ??= new Promise((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(new SnakeSpriteSheet(image));
-    image.onerror = () => {
+    const fail = () => {
       loading = null;
       reject(new Error("snake sprites failed to load"));
     };
+    image.onload = () => {
+      const sheet = SnakeSpriteSheet.cutFrom(image);
+      if (sheet) resolve(sheet);
+      else fail();
+    };
+    image.onerror = fail;
     image.src = `${import.meta.env.BASE_URL}sprites.png`;
   });
   return loading;

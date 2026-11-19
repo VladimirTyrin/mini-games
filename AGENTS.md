@@ -7,7 +7,7 @@ Rust core runs the rules everywhere: on the server, in the browser (WASM), in th
 Design and status: `docs/refactoring-plan.md`. Architecture: `docs/architecture.md`.
 Adding a game: `docs/adding-a-game.md`. Android app and releases: `docs/android.md`.
 Bots (arena, Rust bot SDK, C ABI, C# bots): `docs/bots.md`. Word Hunt rules and word lists: `docs/word-hunt.md`. Checkers rules and bots: `docs/checkers.md`. Sea Battle rules, hidden fleets and bots: `docs/sea-battle.md`.
-Push notifications (FCM, Web Push): `docs/push-notifications.md`.
+Push notifications (FCM, Web Push): `docs/push-notifications.md`. Localization (English, Russian): `docs/localization.md`.
 Known gaps left for later: `docs/tech_debt.md`.
 
 ## Layout
@@ -54,7 +54,17 @@ may depend on the screen's shape (portrait, landscape, nearly square), not only 
 small screens give up secondary interface (Stack Attack's stats, say) to make the game field
 larger; on big screens use the room instead of leaving it empty.
 
-Check every UI change at least on these, in CSS pixels (what the browser sees: a 4K screen at Windows' 150% scaling is 2560×1440). `node tools/screens/shoot.mjs` (with `npm run dev` running) screenshots every game at all of them into `screens-out/` (`all.html` shows them all):
+Check every UI change at least on these, in CSS pixels (what the browser sees: a 4K screen at Windows' 150% scaling is 2560×1440), in every language of the app (English and Russian). With `npm run dev` running (and the server, for the online screens):
+
+- `node tools/screens/fit.mjs --screens <the screens the change touches>` finds clipped, ellipsized
+  or spilling text and sideways scrolling at all of them, in both languages, without pictures; it
+  exits with 1 when anything is found. Run it before committing a UI change; CI (`screens.yml`)
+  runs all of it on every push to `client/`.
+- `node tools/screens/shoot.mjs` screenshots every screen (or `--screens`, `--sizes`, `--langs`)
+  into `screens-out/` (`all.html` shows them by screen, the languages side by side): to look at a
+  layout, and to show it to the user.
+
+Scenarios (`tools/screens/scenarios.mjs`) press buttons by `data-testid`, never by their text.
 
 | Screen | Viewport |
 |---|---|
@@ -98,6 +108,12 @@ work on a phone held sideways. Dialogs over a game (How to play, the result) sti
 - Tests check observable behaviour, not implementation shape. No sleeps or polling in tests; use
   events, controlled clocks or test hooks. A bug fix comes with a test reproducing the defect.
 - Update the docs when behaviour or configuration changes.
-- **Privacy policy** (`client/public/privacy.html`): a feature that collects, stores, shows to
-  others or sends out any player data (a new table or field, a new kind of notification, a new
-  third-party service) updates the policy and its "Last updated" date in the same change.
+- **Privacy policy** (`client/public/privacy.html` and `privacy-ru.html`): a feature that
+  collects, stores, shows to others or sends out any player data (a new table or field, a new kind
+  of notification, a new third-party service) updates both pages and their "Last updated" dates in
+  the same change.
+- **Texts** (`docs/localization.md`): every text a player reads comes from the client's
+  dictionaries (`client/src/i18n`, English and Russian; the lint rule
+  `vue/no-bare-strings-in-template` guards templates). The server and the Rust core never send
+  words for players: error codes, refusal enums, values; push notifications go out as keys
+  (`client/push-texts.json`).

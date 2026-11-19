@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import { create, fromBinary } from "@bufbuild/protobuf";
 
+import { t } from "@/i18n";
 import type { MatchController } from "@/match/match-controller";
 import { MatchCatchUpSchema } from "@/proto/minigames/v2/match_pb";
 import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
@@ -94,9 +95,12 @@ function lastShotOn(slot: number): CellPoint | null {
   return { x: last.cell.x, y: last.cell.y };
 }
 
+const texts = computed(() => t.games.seaBattle.board);
+
 function seaLabel(slot: number): string {
-  if (mySlot.value === null) return names.value[slot] ?? `Seat ${slot + 1}`;
-  return slot === mySlot.value ? "Your fleet" : `${names.value[slot] ?? "Opponent"}'s sea`;
+  if (mySlot.value === null) return names.value[slot] ?? texts.value.seat(slot + 1);
+  if (slot === mySlot.value) return texts.value.yourFleet;
+  return texts.value.opponentsSea(names.value[slot] ?? texts.value.opponent);
 }
 
 /** Cells of the other sea a shot may go to: those still unknown, on the player's turn. */
@@ -128,25 +132,27 @@ const status = computed(() => {
   switch (current.phase) {
     case SeaBattlePhase.PLACING: {
       if (!needsFleet.value)
-        return watching ? "Fleets are being placed…" : "Waiting for the opponent's fleet…";
+        return watching ? texts.value.fleetsBeingPlaced : texts.value.waitingForOpponentsFleet;
       const left = secondsLeft.value;
-      if (left === null) return "Place your fleet";
-      if (left === 0) return "Placing a random fleet…";
-      return `Place your fleet · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+      if (left === null) return texts.value.placeYourFleet;
+      if (left === 0) return texts.value.placingRandomFleet;
+      return texts.value.placeYourFleetWithin(
+        `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`,
+      );
     }
     case SeaBattlePhase.BATTLE: {
       const turn = current.turnSlot;
       if (turn === undefined) return "…";
-      if (watching) return `${names.value[turn] ?? "A player"} fires`;
-      return turn === mySlot.value ? "Your shot" : "Opponent's shot";
+      if (watching) return texts.value.playerFires(names.value[turn] ?? t.match.aPlayer);
+      return turn === mySlot.value ? texts.value.yourShot : texts.value.opponentsShot;
     }
     default: {
       const winner = current.winnerSlot;
-      if (winner === undefined) return "Draw";
-      if (watching) return `${names.value[winner] ?? "A player"} wins`;
+      if (winner === undefined) return texts.value.draw;
+      if (watching) return texts.value.playerWins(names.value[winner] ?? t.match.aPlayer);
       if (current.phase === SeaBattlePhase.FORFEITED && winner === mySlot.value)
-        return "Opponent left — you win";
-      return winner === mySlot.value ? "You win!" : "You lose";
+        return texts.value.opponentLeftYouWin;
+      return winner === mySlot.value ? texts.value.youWin : texts.value.youLose;
     }
   }
 });
@@ -184,7 +190,7 @@ async function fire(cell: CellPoint): Promise<void> {
           class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm sm:landscape:self-end text-gray-300 sm:landscape:w-[min(46vw,calc(100dvh-13rem),640px)]"
         >
           <span class="[overflow-wrap:anywhere]">{{ seaLabel(targetSlot) }}</span>
-          <span class="flex min-w-0 flex-wrap justify-end gap-1" aria-label="Ships afloat">
+          <span class="flex min-w-0 flex-wrap justify-end gap-1" :aria-label="texts.shipsAfloat">
             <ShipPip
               v-for="(length, index) in afloat"
               :key="index"

@@ -11,7 +11,7 @@ pub(crate) fn seat_may_command<G: Game>(
     players: &[PlayerSpec],
     dropped: &[bool],
     slot: Slot,
-) -> Result<(), CommandError> {
+) -> Result<(), CommandError<G::Refusal>> {
     let in_play = !dropped.get(slot.index()).copied().unwrap_or(true);
     match players.get(slot.index()) {
         Some(spec) if spec.is_human() && in_play => {}

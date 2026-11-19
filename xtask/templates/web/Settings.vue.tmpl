@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useGameSettingsForm } from "@/components/form/settings-form";
 import StepperField from "@/components/form/StepperField.vue";
+import { t } from "@/i18n";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 
 const settings = defineModel<GameSettings>({ required: true });
@@ -11,8 +12,8 @@ const value = form.value;
 <template>
   <div v-if="value" class="divide-y divide-white/5">
     <StepperField
-      label="Target"
-      help="Total that ends the game"
+      :label="t.games.{{camel}}.settings.target"
+      :help="t.games.{{camel}}.settings.targetHelp"
       v-bind="form.field('target')"
       :model-value="value.target"
       @update:model-value="form.update({ target: $event })"

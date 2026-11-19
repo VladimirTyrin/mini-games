@@ -1,6 +1,8 @@
 import { type InjectionKey, type Ref, computed, inject } from "vue";
+import { settingsProblemText } from "@/util/refusal-text";
 
 import type { SettingsCase } from "@/games/game-plugin";
+import { t } from "@/i18n";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type SettingRange, type SettingsProblem, settingsProblem } from "@/wasm/core";
 
@@ -13,11 +15,20 @@ import type { Preset } from "./presets";
  */
 export type SettingsAudience = "local" | "watching" | "online";
 
-/** The names of a two-seat game's first and second seat, for settings that pick one of them. */
+/**
+ * The names of a two-seat game's first and second seat, for settings that pick one of them.
+ * Getters, so the names follow the language.
+ */
 export const TWO_SEAT_NAMES: Readonly<Record<SettingsAudience, readonly [string, string]>> = {
-  local: ["You", "Opponent"],
-  watching: ["Bot 1", "Bot 2"],
-  online: ["Host", "Guest"],
+  get local() {
+    return [t.match.twoSeats.you, t.match.twoSeats.opponent] as const;
+  },
+  get watching() {
+    return [t.match.twoSeats.bot(1), t.match.twoSeats.bot(2)] as const;
+  },
+  get online() {
+    return [t.match.twoSeats.host, t.match.twoSeats.guest] as const;
+  },
 };
 
 export interface SettingsFormState {
@@ -39,11 +50,6 @@ type SettingsMessage<Case extends SettingsCase> = Extract<GameSettings["game"], 
 type SettingsValues<Case extends SettingsCase> = Omit<SettingsMessage<Case>, "$typeName">;
 
 export const settingsFormKey: InjectionKey<Readonly<Ref<SettingsFormState>>> = Symbol("settings-form");
-
-/** Core reasons start lower-case ("must be between 3 and 20, got 2"); rows show a sentence. */
-export function sentence(reason: string): string {
-  return reason.charAt(0).toUpperCase() + reason.slice(1);
-}
 
 /** The core names fields as on the wire (`field_width`); protobuf-es uses `fieldWidth`. */
 function wireFieldName(property: string): string {
@@ -83,7 +89,7 @@ export function useGameSettingsForm<Case extends SettingsCase>(
     return {
       min: range?.min,
       max: range?.max,
-      error: problem?.field === name ? sentence(problem.message) : null,
+      error: problem?.field === name ? settingsProblemText(problem) : null,
     };
   }
 

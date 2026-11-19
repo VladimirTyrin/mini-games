@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-const props = withDefaults(defineProps<{ label?: string; hasProblem?: boolean }>(), {
-  label: "More options",
-});
+import { t } from "@/i18n";
+
+const props = defineProps<{ label?: string; hasProblem?: boolean }>();
 
 const expanded = ref(false);
 // A rejected setting hidden in here must stay visible, or the disabled Play button is a riddle.
@@ -18,9 +18,9 @@ const isOpen = computed(() => expanded.value || props.hasProblem);
       :aria-expanded="isOpen"
       @click="expanded = !expanded"
     >
-      <span>{{ label }}</span>
+      <span>{{ label ?? t.match.form.moreOptions }}</span>
       <span class="text-gray-500 transition-transform" :class="isOpen ? 'rotate-180' : ''" aria-hidden="true">
-        ▾
+        {{ "▾" }}
       </span>
     </button>
     <div v-if="isOpen" class="divide-y divide-white/5 border-t border-white/5">

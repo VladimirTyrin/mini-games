@@ -13,6 +13,7 @@ import type { MatchSource } from "@/match/match-source";
 import { OnlineMatchSource } from "@/match/online-match-source";
 import { ReplayMatchSource } from "@/match/replay-match-source";
 import { pluginBySettings } from "@/games";
+import { t } from "@/i18n";
 import { downloadInBrowser } from "@/platform/download";
 import { isAlreadySaved, saveReplayFile } from "@/platform/saved-replays";
 import { replayFileNameForMatch } from "@/replays/replay-file-name";
@@ -86,7 +87,7 @@ export const useMatchStore = defineStore("match", () => {
           // Bots count from 1 whether or not the person here holds a seat.
           displayName: seat.bot
             ? `Bot ${seats.slice(0, slot + 1).filter((earlier) => earlier.bot).length}`
-            : playerName || "You",
+            : playerName || t.common.youName,
           // The signed-in player's picture, so boards that show avatars show theirs offline too.
           avatarUrl: seat.bot ? "" : (connection.identity?.avatarUrl ?? ""),
         },
@@ -139,7 +140,7 @@ export const useMatchStore = defineStore("match", () => {
       replay.value = source;
       return source;
     } catch (error) {
-      toasts.error(`Cannot open the replay: ${errorMessage(error)}`);
+      toasts.error(t.match.replay.cannotOpen(errorMessage(error)));
       return null;
     }
   }
@@ -153,13 +154,13 @@ export const useMatchStore = defineStore("match", () => {
     const source = startReplay(bytes);
     // The literal (see env.d.ts), so the web build drops the app's file storage.
     if (!source || !__NATIVE_APP__) return;
-    const gameTitle = pluginBySettings(source.header.settings?.game.case)?.title ?? "Replay";
+    const gameTitle = pluginBySettings(source.header.settings?.game.case)?.title ?? t.match.replay.fileTitle;
     try {
       if (await isAlreadySaved(bytes)) return;
       await saveReplayFile(bytes, replayFileNameForMatch(source.header, gameTitle, "imported"));
-      toasts.show("Replay added to Saved replays", "success");
+      toasts.show(t.match.replay.imported, "success");
     } catch (error) {
-      toasts.error(`Cannot add the replay to Saved replays: ${errorMessage(error)}`);
+      toasts.error(t.match.replay.cannotImport(errorMessage(error)));
     }
   }
 
@@ -177,20 +178,20 @@ export const useMatchStore = defineStore("match", () => {
     try {
       const bytes = await source.replayFile();
       if (!bytes) {
-        toasts.error("This match has no replay");
+        toasts.error(t.match.replay.noReplay);
         return;
       }
       const fileName = replayFileNameForMatch(source.header, gameTitle, "saved");
       // The literal (see env.d.ts), so the web build drops the app's file storage.
       if (__NATIVE_APP__) {
         await saveReplayFile(bytes, fileName);
-        toasts.show("Replay saved — find it under Saved replays on the home screen", "success", {
-          label: "Show",
+        toasts.show(t.match.replay.savedInApp, "success", {
+          label: t.match.replay.showSaved,
           to: "/replays",
         });
       } else {
         downloadInBrowser(bytes, fileName);
-        toasts.show(`Replay saved to your downloads as ${fileName}`, "success");
+        toasts.show(t.match.replay.savedToDownloads(fileName), "success");
       }
     } catch (error) {
       toasts.failure(error);
@@ -236,11 +237,7 @@ export const useMatchStore = defineStore("match", () => {
       const offSignedIn = session.events.on("signedIn", ({ resumed }) => {
         if (resumed || !(controller.value?.source instanceof OnlineMatchSource)) return;
         close();
-        toasts.show(
-          connection.lostToRestart()
-            ? "The server restarted for an update, and the match was stopped"
-            : "You are no longer in the match you were in",
-        );
+        toasts.show(connection.lostToRestart() ? t.match.serverRestartStoppedMatch : t.match.noLongerInMatch);
       });
       detach = () => {
         offStarted();

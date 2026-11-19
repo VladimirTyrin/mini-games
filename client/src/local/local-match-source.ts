@@ -11,6 +11,7 @@ import {
   MatchHeaderSchema,
   TickFrameSchema,
 } from "@/proto/minigames/v2/match_pb";
+import { CommonRefusal, RefusalSchema } from "@/proto/minigames/v2/refusal_pb";
 import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
 import { CommandRejectedError } from "@/match/command-rejected-error";
 import type {
@@ -20,6 +21,8 @@ import type {
   MatchSourceEvents,
 } from "@/match/match-source";
 import { Emitter } from "@/net/emitter";
+import { commonRefusal } from "@/match/common-refusal";
+import { refusalText } from "@/util/refusal-text";
 
 import type { FromWorker, ToWorker } from "./worker-protocol";
 
@@ -42,7 +45,6 @@ export class LocalMatchSource implements MatchSource {
   private nextRequestId = 1;
   private readonly pending = new Map<number, Pending>();
   private started = false;
-  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   /** Why the game is held; it runs again only once every reason is gone. */
   private readonly pauseReasons = new Set<PauseReason>();
 
@@ -81,10 +83,19 @@ export class LocalMatchSource implements MatchSource {
   }
 
   submit(command: GameCommandInit): Promise<void> {
-    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
-    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    if (!this.started)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.MALFORMED), "the match has not started yet"),
+      );
+    if (this.isHeld)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.PAUSED), "the game is paused"),
+      );
     const slot = this.mySlot;
-    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
+    if (slot === null)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.NOT_PLAYING), "you are watching"),
+      );
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameCommandSchema, create(GameCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -94,10 +105,19 @@ export class LocalMatchSource implements MatchSource {
   }
 
   submitSecret(command: GameSecretCommandInit): Promise<void> {
-    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
-    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    if (!this.started)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.MALFORMED), "the match has not started yet"),
+      );
+    if (this.isHeld)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.PAUSED), "the game is paused"),
+      );
     const slot = this.mySlot;
-    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
+    if (slot === null)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.NOT_PLAYING), "you are watching"),
+      );
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameSecretCommandSchema, create(GameSecretCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -131,43 +151,32 @@ export class LocalMatchSource implements MatchSource {
     return Promise.resolve();
   }
 
-  /**
-   * Holds the game for `reason` (a backgrounded tab or app must not let bots play on; the player
-   * may pause too) or lets it go. A real-time game resumes after `countdownMs`, as an online match
-   * does, not under your feet.
-   */
-  /** Paused, or counting down to the restart: the game takes no commands. */
+  /** Paused for some reason: the game takes no commands. */
   private get isHeld(): boolean {
-    return this.pauseReasons.size > 0 || this.resumeTimer !== null;
+    return this.pauseReasons.size > 0;
   }
 
-  setPaused(reason: PauseReason, paused: boolean, countdownMs = 0): void {
+  /**
+   * Holds the game for `reason` (a backgrounded tab or app must not let bots play on; the player
+   * may pause too) or lets it go once no reason holds it. Alone or with bots there is nobody to
+   * warn, so play goes on at once, without an online match's countdown.
+   */
+  setPaused(reason: PauseReason, paused: boolean): void {
     const wasPaused = this.pauseReasons.size > 0;
     if (paused) this.pauseReasons.add(reason);
     else this.pauseReasons.delete(reason);
     const isPaused = this.pauseReasons.size > 0;
     if (isPaused === wasPaused) return;
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
-    this.resumeTimer = null;
     if (isPaused) {
       this.send({ type: "pause" });
       this.events.emit("paused", []);
       return;
     }
-    if (countdownMs <= 0) {
-      this.send({ type: "resume" });
-      this.events.emit("resumed", { countdownMs: 0 });
-      return;
-    }
-    this.events.emit("resumed", { countdownMs });
-    this.resumeTimer = setTimeout(() => {
-      this.resumeTimer = null;
-      this.send({ type: "resume" });
-    }, countdownMs);
+    this.send({ type: "resume" });
+    this.events.emit("resumed", { countdownMs: 0 });
   }
 
   leave(): void {
-    if (this.resumeTimer) clearTimeout(this.resumeTimer);
     this.send({ type: "stop" });
     for (const pending of this.pending.values()) pending.reject(new Error("match closed"));
     this.pending.clear();
@@ -205,7 +214,8 @@ export class LocalMatchSource implements MatchSource {
       case "rejected": {
         const pending = this.pending.get(message.requestId);
         this.pending.delete(message.requestId);
-        pending?.reject(new CommandRejectedError(message.message));
+        const refusal = fromBinary(RefusalSchema, message.refusal);
+        pending?.reject(new CommandRejectedError(refusal, refusalText(refusal)));
         break;
       }
       case "replay":

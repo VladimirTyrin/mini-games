@@ -137,3 +137,20 @@ message NumbersMatchView {
   NumbersMatchLastAction last_action = 10;
   NumbersMatchStats stats = 11;
 }
+
+// Why a removal, refill or hint is refused. Carried in `Refusal`; the client words each value.
+enum NumbersMatchRefusal {
+  NUMBERS_MATCH_REFUSAL_UNSPECIFIED = 0;
+  NUMBERS_MATCH_REFUSAL_NOT_DEALT_YET = 1;
+  // Both cells of a pair are the same one.
+  NUMBERS_MATCH_REFUSAL_SAME_CELL = 2;
+  NUMBERS_MATCH_REFUSAL_CELL_CROSSED_OUT = 3;
+  // Neither equal numbers nor a sum of 10.
+  NUMBERS_MATCH_REFUSAL_NOT_A_PAIR = 4;
+  // The cells neither touch nor have only crossed-out cells between them.
+  NUMBERS_MATCH_REFUSAL_TOO_FAR_APART = 5;
+  NUMBERS_MATCH_REFUSAL_NO_REFILLS_LEFT = 6;
+  NUMBERS_MATCH_REFUSAL_HINTS_DISABLED = 7;
+  NUMBERS_MATCH_REFUSAL_NO_HINTS_LEFT = 8;
+  NUMBERS_MATCH_REFUSAL_HINT_ALREADY_SHOWN = 9;
+}

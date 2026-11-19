@@ -5,7 +5,7 @@ use mg_core::{
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{Board, Mark, Point};
-use crate::rules::GameEnd;
+use crate::rules::{GameEnd, Refusal};
 use crate::settings::{FirstPlayerMode, PLAYERS, Settings, WinLength};
 use crate::view::View;
 
@@ -73,6 +73,7 @@ impl Game for TicTacToe {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "tictactoe",
@@ -107,7 +108,11 @@ impl Game for TicTacToe {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.end.is_some() {
             return Err(CommandError::GameOver);
         }
@@ -137,16 +142,16 @@ impl Game for TicTacToe {
         vec![WorldEvent::FirstPlayerChosen { x_player }]
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         let WorldEvent::FirstPlayerChosen { x_player } = *event;
         if self.first_player != FirstPlayerMode::Random
             || self.x_player.is_some()
             || self.end.is_some()
         {
-            return Err(CommandError::Illegal("the first player is already known"));
+            return Err(CommandError::Illegal(Refusal::FirstPlayerAlreadyKnown));
         }
         if x_player.get() >= PLAYERS {
-            return Err(CommandError::Illegal("no such seat"));
+            return Err(CommandError::Illegal(Refusal::NoSuchSeat));
         }
         self.x_player = Some(x_player);
         Ok(())

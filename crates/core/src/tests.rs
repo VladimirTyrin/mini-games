@@ -53,6 +53,27 @@ struct Add(u32);
 #[derive(Clone, Debug, PartialEq)]
 struct FirstPlayer(Slot);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RaceRefusal {
+    AmountOutOfRange,
+    FirstPlayerAlreadyChosen,
+}
+
+impl EnglishText for RaceRefusal {
+    fn english(self) -> &'static str {
+        match self {
+            Self::AmountOutOfRange => "add 1..=3",
+            Self::FirstPlayerAlreadyChosen => "first player already chosen",
+        }
+    }
+}
+
+impl std::fmt::Display for RaceRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.english())
+    }
+}
+
 fn opponent(slot: Slot) -> Slot {
     Slot::new(1 - slot.get())
 }
@@ -63,6 +84,7 @@ impl Game for Race {
     type WorldEvent = FirstPlayer;
     type View = Vec<u32>;
     type Secret = ();
+    type Refusal = RaceRefusal;
     const INFO: GameInfo = GameInfo {
         id: "race",
         name: "Race",
@@ -87,7 +109,11 @@ impl Game for Race {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Add) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Add,
+    ) -> Result<(), CommandError<RaceRefusal>> {
         if self.winner.is_some() {
             return Err(CommandError::GameOver);
         }
@@ -95,7 +121,7 @@ impl Game for Race {
             return Err(CommandError::NotYourTurn);
         }
         if !(1..=3).contains(&command.0) {
-            return Err(CommandError::Illegal("add 1..=3"));
+            return Err(CommandError::Illegal(RaceRefusal::AmountOutOfRange));
         }
         let total = &mut self.totals[slot.index()];
         *total += command.0;
@@ -116,9 +142,9 @@ impl Game for Race {
         }
     }
 
-    fn apply_world(&mut self, event: &FirstPlayer) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &FirstPlayer) -> Result<(), CommandError<RaceRefusal>> {
         if self.turn.is_some() || event.0.get() > 1 {
-            return Err(CommandError::Illegal("first player already chosen"));
+            return Err(CommandError::Illegal(RaceRefusal::FirstPlayerAlreadyChosen));
         }
         self.turn = Some(event.0);
         Ok(())

@@ -1,0 +1,27 @@
+use std::fmt;
+
+use mg_core::EnglishText;
+
+/// Why a move is refused. Mirrored by `{{Pascal}}Refusal` in the game's proto file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    AmountOutOfRange,
+    // Input no honest client or authority sends (a world event that does not fit the state).
+    // It travels as COMMON_REFUSAL_MALFORMED; clients show a generic "not allowed".
+    FirstPlayerAlreadyChosen,
+}
+
+impl EnglishText for Refusal {
+    fn english(self) -> &'static str {
+        match self {
+            Self::AmountOutOfRange => "add 1, 2 or 3",
+            Self::FirstPlayerAlreadyChosen => "the first player is already chosen",
+        }
+    }
+}
+
+impl fmt::Display for Refusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.english())
+    }
+}

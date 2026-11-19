@@ -1,4 +1,4 @@
-use mg_core::{Capped, GameSettings, SettingProblem, SettingRange, SettingsError};
+use mg_core::{Capped, GameSettings, SettingProblem, SettingRange, SettingRule, SettingsError};
 
 use crate::settings::{FirstTurn, Language, Puzzle, PuzzleMode, RawSettings};
 
@@ -58,7 +58,7 @@ impl GameSettings for Settings {
                 if word_length.get() != DAILY_WORD_LENGTH {
                     return Err(SettingsError::at("word_length")(
                         SettingProblem::RuleBroken {
-                            rule: "the word of the day has a fixed length",
+                            rule: SettingRule::FixedForDailyPuzzle,
                             value: word_length.get(),
                         },
                     ));

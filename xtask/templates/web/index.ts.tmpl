@@ -1,19 +1,35 @@
 import type { GamePlugin } from "../game-plugin";
+import { t } from "@/i18n";
 
 import Board from "./{{Pascal}}Board.vue";
+import HelpEn from "./{{Pascal}}Help.en.vue";
+import HelpRu from "./{{Pascal}}Help.ru.vue";
 import SettingsForm from "./{{Pascal}}Settings.vue";
 
 export const {{camel}}Plugin: GamePlugin = {
   id: "{{snake}}",
   settingsCase: "{{camel}}",
-  title: "{{Title}}",
+  get title() {
+    return t.games.{{camel}}.title;
+  },
   icon: "🎲",
-  tagline: "Reach the target first",
+  get tagline() {
+    return t.games.{{camel}}.tagline;
+  },
   SettingsForm,
   Board,
+  Help: { en: HelpEn, ru: HelpRu },
   describeSettings(settings) {
-    return settings.game.case === "{{camel}}" ? [`target ${settings.game.value.target}`] : [];
+    if (settings.game.case !== "{{camel}}") return [];
+    return [t.games.{{camel}}.target(settings.game.value.target)];
   },
-  botLabel: () => "Bot",
-  controls: { keyboard: "Press 1, 2 or 3", touch: "Tap +1, +2 or +3" },
+  botLabel: () => t.common.bot,
+  controls: {
+    get keyboard() {
+      return t.games.{{camel}}.controls.keyboard;
+    },
+    get touch() {
+      return t.games.{{camel}}.controls.touch;
+    },
+  },
 };

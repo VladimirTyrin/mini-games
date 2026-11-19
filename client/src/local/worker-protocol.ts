@@ -22,7 +22,8 @@ export type FromWorker =
   | { type: "seatSecret"; secret: Uint8Array }
   /** Encoded `GameSeatSecret` of `slot`, for a spectator (games that show them). */
   | { type: "spectatorSecret"; slot: number; secret: Uint8Array }
-  | { type: "rejected"; requestId: number; message: string }
+  /** Encoded `Refusal`: why the rules (or a paused match) refused the command. */
+  | { type: "rejected"; requestId: number; refusal: Uint8Array }
   | { type: "replay"; requestId: number; replay: Uint8Array | null }
   | { type: "ended" }
   | { type: "failed"; message: string };

@@ -1,0 +1,65 @@
+name: Screens
+
+# Every text fits on every screen, at every size of AGENTS.md "Screens", in every language
+# (tools/screens/fit.mjs). The built app is served by the server itself, so the online screens
+# (online, lobby) are checked too.
+on:
+  push:
+    branches: [master, "feature/**"]
+    paths: ["client/**", "tools/screens/**", ".github/workflows/screens.yml"]
+  pull_request:
+    paths: ["client/**", "tools/screens/**", ".github/workflows/screens.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screens-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - run: npm run generate
+        working-directory: client
+      - run: npm run build
+        working-directory: client
+        env:
+          VITE_SERVER_URL: ws://127.0.0.1:5000/ws
+      - run: cargo build -p mg-server
+      - name: Serve the app
+        run: |
+          # Its output goes to a file: a background process holding the step's output open can
+          # keep the step from finishing.
+          target/debug/mini_games_server --listen 127.0.0.1:5000 --static-dir client/dist > mg-server.log 2>&1 &
+          for attempt in $(seq 1 50); do curl -sf http://127.0.0.1:5000/version > /dev/null && exit 0; sleep 0.2; done
+          echo "::error::the server did not start"
+          exit 1
+      # The runner's system-ui is DejaVu Sans, wider than any phone's font: measure with Android's
+      # Roboto (close to iOS's SF and Windows' Segoe UI), or every tight label fails here alone.
+      - name: Fonts of a phone
+        run: |
+          sudo apt-get install -y -qq fonts-roboto > /dev/null
+          mkdir -p ~/.config/fontconfig
+          cat > ~/.config/fontconfig/fonts.conf <<'EOF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <alias><family>system-ui</family><prefer><family>Roboto</family></prefer></alias>
+            <alias><family>sans-serif</family><prefer><family>Roboto</family></prefer></alias>
+          </fontconfig>
+          EOF
+          fc-cache -f > /dev/null
+          fc-match system-ui
+      - name: Check that every text fits
+        run: node tools/screens/fit.mjs --url http://127.0.0.1:5000 --chrome google-chrome --parallel 6 --require-server
+      - name: Server log
+        if: failure()
+        run: cat mg-server.log

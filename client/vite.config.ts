@@ -54,13 +54,13 @@ export default defineConfig({
           /^\/downloads\//,
           /^\/healthz/,
           /^\/version/,
-          /^\/privacy\.html/,
+          /^\/privacy(-[a-z]+)?\.html/,
           /^\/f\//,
           /^\/\.well-known\//,
         ],
         cleanupOutdatedCaches: true,
-        // Push and notification-click handlers (public/push-sw.js).
-        importScripts: ["push-sw.js"],
+        // Push and notification-click handlers (public/push-sw.js) and their texts.
+        importScripts: ["push-texts.js", "push-sw.js"],
         // Word Hunt's word lists load only when the game starts; once fetched they stay
         // available offline and refresh in the background.
         runtimeCaching: [

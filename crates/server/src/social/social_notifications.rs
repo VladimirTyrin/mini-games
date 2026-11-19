@@ -7,9 +7,8 @@ use std::time::Duration;
 use mg_protocol::proto;
 
 use super::Invite;
-use crate::push::PushNotification;
+use crate::push::{PushNotification, PushText};
 
-const TITLE: &str = "Mini Games";
 /// A friend request or a new friend is news for a while, unlike an invitation.
 const FRIEND_NEWS_LIFETIME: Duration = Duration::from_secs(24 * 3600);
 
@@ -19,8 +18,12 @@ pub(super) fn invitation(
     time_to_live: Duration,
 ) -> PushNotification {
     PushNotification {
-        title: format!("{} invites you to play", invite.from.identity.display_name),
-        body: format!("{}: tap to join.", invite.lobby.game.info().name),
+        title: PushText::InviteTitle {
+            from: invite.from.identity.display_name.clone(),
+        },
+        body: PushText::InviteBody {
+            game: invite.lobby.game,
+        },
         tag: invite_tag(invite),
         data: BTreeMap::from([
             ("kind", "invite".to_owned()),
@@ -38,14 +41,14 @@ pub(super) fn invitation_answered_elsewhere(
     state: proto::InviteState,
     sent_at_ms: i64,
 ) -> PushNotification {
-    let from = &invite.from.identity.display_name;
+    let from = invite.from.identity.display_name.clone();
     let body = if state == proto::InviteState::Accepted {
-        format!("You joined {from}'s game on another device.")
+        PushText::InviteAcceptedElsewhere { from }
     } else {
-        format!("You declined {from}'s invitation on another device.")
+        PushText::InviteDeclinedElsewhere { from }
     };
     PushNotification {
-        title: TITLE.to_owned(),
+        title: PushText::AppTitle,
         body,
         tag: invite_tag(invite),
         data: BTreeMap::from([
@@ -59,8 +62,10 @@ pub(super) fn invitation_answered_elsewhere(
 
 pub(super) fn friend_request(from: &proto::Identity, sent_at_ms: i64) -> PushNotification {
     PushNotification {
-        title: TITLE.to_owned(),
-        body: format!("{} wants to be your friend.", from.display_name),
+        title: PushText::AppTitle,
+        body: PushText::FriendRequest {
+            from: from.display_name.clone(),
+        },
         tag: "friends".to_owned(),
         data: friends_data(sent_at_ms),
         time_to_live: FRIEND_NEWS_LIFETIME,
@@ -69,8 +74,10 @@ pub(super) fn friend_request(from: &proto::Identity, sent_at_ms: i64) -> PushNot
 
 pub(super) fn new_friend(friend: &proto::Identity, sent_at_ms: i64) -> PushNotification {
     PushNotification {
-        title: TITLE.to_owned(),
-        body: format!("{} is now your friend.", friend.display_name),
+        title: PushText::AppTitle,
+        body: PushText::NewFriend {
+            friend: friend.display_name.clone(),
+        },
         tag: "friends".to_owned(),
         data: friends_data(sent_at_ms),
         time_to_live: FRIEND_NEWS_LIFETIME,

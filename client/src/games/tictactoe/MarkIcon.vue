@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from "@/i18n";
 import { TicTacToeMark } from "@/proto/minigames/v2/tictactoe_pb";
 
 // SVG instead of the ✕/○ glyphs: fonts draw ○ much smaller than ✕.
@@ -12,7 +13,7 @@ defineProps<{ mark: TicTacToeMark }>();
     stroke="currentColor"
     stroke-width="3"
     stroke-linecap="round"
-    :aria-label="mark === TicTacToeMark.X ? 'X' : 'O'"
+    :aria-label="mark === TicTacToeMark.X ? t.games.tictactoe.marks.x : t.games.tictactoe.marks.o"
     role="img"
   >
     <path v-if="mark === TicTacToeMark.X" d="M5 5 19 19M19 5 5 19" />

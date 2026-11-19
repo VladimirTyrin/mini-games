@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 
 import Avatar from "@/components/Avatar.vue";
+import { t } from "@/i18n";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import type { ChatMessage } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
@@ -9,14 +10,23 @@ import { playerLabels, sameIdentity } from "@/util/players";
 
 /**
  * `players`: who is shown elsewhere on screen (lobby members), so chat labels match theirs.
- * `shrinksToFit`: in a flex column short of room the panel gives way, down to its input and a
- * couple of lines; otherwise it keeps its usual height.
+ * `sizing`: `usual` keeps its usual height; `shrinks-to-fit` gives way in a flex column short
+ * of room, down to its input and a couple of lines; `fills-column` takes the whole height of
+ * its grid column beside other content (from `md` up), the input at the bottom.
  */
-const props = defineProps<{
-  messages: ChatMessage[];
-  players?: readonly (Identity | undefined)[];
-  shrinksToFit?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    messages: ChatMessage[];
+    players?: readonly (Identity | undefined)[];
+    sizing?: "usual" | "shrinks-to-fit" | "fills-column";
+  }>(),
+  { players: undefined, sizing: "usual" },
+);
+const LIST_HEIGHTS = {
+  usual: "max-h-56 min-h-24",
+  "shrinks-to-fit": "max-h-56 min-h-10",
+  "fills-column": "max-h-56 min-h-24 md:max-h-none",
+} as const;
 const emit = defineEmits<{ send: [text: string] }>();
 const text = ref("");
 const list = ref<HTMLElement | null>(null);
@@ -28,7 +38,7 @@ const labels = computed(() =>
 const isMine = (message: ChatMessage) => sameIdentity(message.sender, connection.identity);
 function senderLabel(message: ChatMessage): string {
   const label = (message.sender && labels.value.get(message.sender.id)) ?? "";
-  return isMine(message) ? `${label} (you)` : label;
+  return isMine(message) ? `${label} (${t.common.you})` : label;
 }
 
 function send(): void {
@@ -50,11 +60,7 @@ watch(
 
 <template>
   <section class="flex min-h-0 flex-col rounded-xl bg-panel">
-    <ol
-      ref="list"
-      class="flex-1 space-y-1 overflow-y-auto p-3 text-sm"
-      :class="shrinksToFit ? 'max-h-56 min-h-10' : 'max-h-56 min-h-24'"
-    >
+    <ol ref="list" class="flex-1 space-y-1 overflow-y-auto p-3 text-sm" :class="LIST_HEIGHTS[sizing]">
       <li v-for="(message, index) in messages" :key="index" class="flex items-start gap-2">
         <Avatar
           v-if="message.sender"
@@ -69,16 +75,18 @@ watch(
           {{ message.text }}
         </span>
       </li>
-      <li v-if="!messages.length" class="text-gray-500">No messages yet</li>
+      <li v-if="!messages.length" class="text-gray-500">{{ t.match.chat.empty }}</li>
     </ol>
     <form class="flex gap-2 border-t border-white/5 p-2" @submit.prevent="send" @keydown.stop>
       <input
         v-model="text"
         maxlength="300"
-        placeholder="Say something"
+        :placeholder="t.match.chat.placeholder"
         class="flex-1 rounded bg-panel-raised px-2 py-1 text-sm"
       />
-      <button class="rounded bg-panel-raised px-3 text-sm" :disabled="!text.trim()">Send</button>
+      <button class="rounded bg-panel-raised px-3 text-sm" :disabled="!text.trim()">
+        {{ t.match.chat.send }}
+      </button>
     </form>
   </section>
 </template>

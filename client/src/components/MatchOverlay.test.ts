@@ -14,10 +14,7 @@ import { useLobbyStore } from "@/stores/lobby";
 import MatchOverlay from "./MatchOverlay.vue";
 
 vi.mock("@/games", () => ({
-  pluginBySettings: (game: string | undefined) => ({
-    id: game,
-    playsWithSpace: game === "stackAttack" || undefined,
-  }),
+  pluginBySettings: (game: string | undefined) => ({ id: game }),
 }));
 vi.mock("@/wasm/core", () => ({
   gameCatalog: () => [
@@ -121,14 +118,14 @@ describe("MatchOverlay", () => {
     ]);
   });
 
-  it("starts the next match with Enter or Space", () => {
+  it("starts the next match with Enter", () => {
     expect(playAgainRequests("puzzle2048", "Enter")).toBe(1);
-    expect(playAgainRequests("puzzle2048", " ")).toBe(1);
+    expect(playAgainRequests("stackAttack", "Enter")).toBe(1);
   });
 
-  it("does not take Space as Play again in a game that jumps with it", () => {
+  it("does not start the next match with Space, the pause key, pressed as the game ends", () => {
     expect(playAgainRequests("stackAttack", " ")).toBe(0);
-    expect(playAgainRequests("stackAttack", "Enter")).toBe(1);
+    expect(playAgainRequests("puzzle2048", " ")).toBe(0);
   });
 
   it("offers Play again neither to an observer of people online nor after an aborted match", () => {

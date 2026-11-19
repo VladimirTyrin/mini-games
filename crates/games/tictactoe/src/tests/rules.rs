@@ -5,8 +5,8 @@ use mg_core::{
 
 use super::{GUEST, HOST, new_game, place, raw_settings, settings};
 use crate::{
-    Command, FirstPlayerMode, GameEnd, Mark, Point, RawSettings, Settings, TicTacToe, WinningLine,
-    WorldEvent,
+    Command, FirstPlayerMode, GameEnd, Mark, Point, RawSettings, Refusal, Settings, TicTacToe,
+    WinningLine, WorldEvent,
 };
 
 const HUMANS: [PlayerSpec; 2] = [PlayerSpec::HUMAN, PlayerSpec::HUMAN];
@@ -116,17 +116,17 @@ fn illegal_commands_are_rejected_without_changing_state() {
         (
             GUEST,
             Point::new(1, 1),
-            CommandError::Illegal("cell is already marked"),
+            CommandError::Illegal(Refusal::CellTaken),
         ),
         (
             GUEST,
             Point::new(3, 0),
-            CommandError::Illegal("cell is outside the board"),
+            CommandError::Illegal(Refusal::CellOutsideBoard),
         ),
         (
             GUEST,
             Point::new(u32::MAX, u32::MAX),
-            CommandError::Illegal("cell is outside the board"),
+            CommandError::Illegal(Refusal::CellOutsideBoard),
         ),
         (
             mg_core::Slot::new(2),

@@ -1,3 +1,5 @@
+import { locale } from "@/i18n";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -8,9 +10,9 @@ export function localDayNumber(now: Date = new Date()): number {
   return Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / DAY_MS);
 }
 
-/** "16 Nov" for a day number. */
+/** "16 Nov" / "16 нояб." for a day number. */
 export function formatDay(day: number): string {
-  return new Date(day * DAY_MS).toLocaleDateString(undefined, {
+  return new Date(day * DAY_MS).toLocaleDateString(locale.value, {
     day: "numeric",
     month: "short",
     timeZone: "UTC",

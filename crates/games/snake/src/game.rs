@@ -5,7 +5,7 @@ use mg_core::{
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{CellContent, Direction, Field, Grid, Point, SeatState, StepCount};
-use crate::rules::{DeathReason, GameEnd, start_body};
+use crate::rules::{DeathReason, GameEnd, Refusal, start_body};
 use crate::settings::{DeadSnakeBehavior, FoodSpawnPermille, MAX_SEATS, MIN_SEATS, Settings};
 use crate::view::{SnakeView, View, crashes};
 
@@ -87,6 +87,7 @@ impl Game for Snake {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "snake",
@@ -144,7 +145,11 @@ impl Game for Snake {
         }
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if !self.is_running() {
             return Err(CommandError::GameOver);
         }
@@ -174,17 +179,17 @@ impl Game for Snake {
             .collect()
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         if !self.is_running() {
             return Err(CommandError::GameOver);
         }
         match *event {
             WorldEvent::SpawnFood(point) => {
                 if self.food.len() >= usize::from(self.max_food_count) {
-                    return Err(CommandError::Illegal("food cap reached"));
+                    return Err(CommandError::Illegal(Refusal::FoodCapReached));
                 }
                 if !self.grid.is_empty_cell(point) {
-                    return Err(CommandError::Illegal("food needs an empty cell"));
+                    return Err(CommandError::Illegal(Refusal::FoodCellNotEmpty));
                 }
                 self.food.push(point);
                 self.grid.set(point, CellContent::Food);

@@ -8,7 +8,7 @@ use crate::model::{
     BoxId, Cell, Column, Crane, CraneId, CraneState, Direction, Field, Level, PatternId, Score,
     Side, TickCount, Worker, WorkerState, WorkerStatus,
 };
-use crate::rules::{EndReason, TICK_MS};
+use crate::rules::{EndReason, Refusal, TICK_MS};
 use crate::settings::{MAX_SEATS, MIN_SEATS, Settings};
 use crate::view::{GameEvent, View, WorkerView};
 
@@ -69,6 +69,7 @@ impl Game for StackAttack {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "stack_attack",
@@ -114,7 +115,11 @@ impl Game for StackAttack {
         Clock::Realtime { tick_ms: TICK_MS }
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.end_reason.is_some() {
             return Err(CommandError::GameOver);
         }
@@ -152,7 +157,7 @@ impl Game for StackAttack {
         }]
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         let WorldEvent::CraneSpawned {
             target_x,
             from,
@@ -162,10 +167,10 @@ impl Game for StackAttack {
             return Err(CommandError::GameOver);
         }
         if !self.crane_spawn_due() {
-            return Err(CommandError::Illegal("no crane spawn is due"));
+            return Err(CommandError::Illegal(Refusal::NoCraneSpawnDue));
         }
         if !self.field.contains_column(target_x) {
-            return Err(CommandError::Illegal("crane target outside the field"));
+            return Err(CommandError::Illegal(Refusal::CraneTargetOutside));
         }
         let crane_id = self.next_crane_id;
         let start_x = from.outside_column(self.field.width());
