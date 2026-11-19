@@ -503,6 +503,21 @@ impl Hub {
         self.send_to(session, &codec::error(request_id, code, text));
     }
 
+    /// Like [`Self::reject`], with the setting at fault for the client to show by its control.
+    pub(super) fn reject_settings(
+        &self,
+        session: &SessionId,
+        request_id: u32,
+        code: proto::ErrorCode,
+        setting_problem: Option<proto::SettingProblem>,
+        text: &str,
+    ) {
+        self.send_to(
+            session,
+            &codec::settings_error(request_id, code, setting_problem, text),
+        );
+    }
+
     pub(super) fn send_to(&self, session: &SessionId, message: &proto::ServerMessage) {
         if let Some(session) = self.sessions.get(session) {
             session.send(message);

@@ -1,0 +1,51 @@
+{
+  "push_title": { "en": "Mini Games", "ru": "Mini Games" },
+  "push_invite_title": { "en": "%1$s invites you to play", "ru": "%1$s зовёт тебя играть" },
+  "push_invite_body_snake": { "en": "Snake: tap to join.", "ru": "Змейка: нажми, чтобы присоединиться." },
+  "push_invite_body_tictactoe": {
+    "en": "Tic-Tac-Toe: tap to join.",
+    "ru": "Крестики-нолики: нажми, чтобы присоединиться."
+  },
+  "push_invite_body_stack_attack": {
+    "en": "Stack Attack: tap to join.",
+    "ru": "Stack Attack: нажми, чтобы присоединиться."
+  },
+  "push_invite_body_puzzle2048": { "en": "2048: tap to join.", "ru": "2048: нажми, чтобы присоединиться." },
+  "push_invite_body_numbers_match": {
+    "en": "Numbers Match: tap to join.",
+    "ru": "Пары чисел: нажми, чтобы присоединиться."
+  },
+  "push_invite_body_word_hunt": {
+    "en": "Word Hunt: tap to join.",
+    "ru": "Угадай слово: нажми, чтобы присоединиться."
+  },
+  "push_invite_body_checkers": {
+    "en": "Checkers: tap to join.",
+    "ru": "Шашки: нажми, чтобы присоединиться."
+  },
+  "push_invite_body_sea_battle": {
+    "en": "Sea Battle: tap to join.",
+    "ru": "Морской бой: нажми, чтобы присоединиться."
+  },
+  "push_invite_accepted_elsewhere": {
+    "en": "You joined %1$s's game on another device.",
+    "ru": "%1$s: приглашение принято на другом устройстве."
+  },
+  "push_invite_declined_elsewhere": {
+    "en": "You declined %1$s's invitation on another device.",
+    "ru": "%1$s: приглашение отклонено на другом устройстве."
+  },
+  "push_friend_request": {
+    "en": "%1$s wants to be your friend.",
+    "ru": "%1$s хочет добавить тебя в друзья."
+  },
+  "push_new_friend": { "en": "%1$s is now your friend.", "ru": "%1$s теперь у тебя в друзьях." },
+  "push_test": {
+    "en": "Test notification: tap to see how long it took.",
+    "ru": "Тестовое уведомление: нажми, чтобы узнать, сколько оно шло."
+  },
+  "push_test_delivered": {
+    "en": "Test notification: delivered in %1$s s. Tap to open the app.",
+    "ru": "Тестовое уведомление: дошло за %1$s с. Нажми, чтобы открыть приложение."
+  }
+}

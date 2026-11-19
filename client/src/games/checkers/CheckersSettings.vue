@@ -5,39 +5,41 @@ import SegmentedField from "@/components/form/SegmentedField.vue";
 import { TWO_SEAT_NAMES, useGameSettingsForm } from "@/components/form/settings-form";
 import { CheckersCaptureRule, CheckersWhitePlayer } from "@/proto/minigames/v2/checkers_pb";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
+import { t } from "@/i18n";
 
 const settings = defineModel<GameSettings>({ required: true });
 const form = useGameSettingsForm(settings, "checkers");
 const { value, audience } = form;
 
+const texts = computed(() => t.games.checkers.settings);
 const whiteOptions = computed(() => {
   const [first, second] = TWO_SEAT_NAMES[audience.value];
   return [
     { value: CheckersWhitePlayer.HOST, label: first },
     { value: CheckersWhitePlayer.GUEST, label: second },
-    { value: CheckersWhitePlayer.RANDOM, label: "Random" },
+    { value: CheckersWhitePlayer.RANDOM, label: t.common.random },
   ];
 });
 
-const captureOptions = [
-  { value: CheckersCaptureRule.TO_THE_END, label: "To the end" },
-  { value: CheckersCaptureRule.MAY_STOP, label: "May stop" },
-];
+const captureOptions = computed(() => [
+  { value: CheckersCaptureRule.TO_THE_END, label: texts.value.toTheEnd },
+  { value: CheckersCaptureRule.MAY_STOP, label: texts.value.mayStop },
+]);
 </script>
 
 <template>
   <div v-if="value" class="divide-y divide-white/5">
     <SegmentedField
-      label="Plays white"
-      help="White moves first"
+      :label="texts.playsWhite"
+      :help="texts.playsWhiteHelp"
       stacked
       :options="whiteOptions"
       :model-value="value.whitePlayer"
       @update:model-value="form.update({ whitePlayer: $event })"
     />
     <SegmentedField
-      label="Captures"
-      help="Russian rules take every piece a capture can reach"
+      :label="texts.captures"
+      :help="texts.capturesHelp"
       stacked
       :options="captureOptions"
       :model-value="

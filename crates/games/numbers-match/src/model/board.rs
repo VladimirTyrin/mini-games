@@ -1,5 +1,6 @@
 use crate::COLUMNS;
 use crate::model::{Batch, Cell, CellIndex, CellPair, CellValue, RowIndex};
+use crate::rules::Refusal;
 
 /// `cells.len()` is always a multiple of [`COLUMNS`], and `batches` runs parallel to `cells`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -50,25 +51,23 @@ impl Board {
         self.pair_refusal(pair).is_none()
     }
 
-    /// Why `pair` cannot be removed, in words for the player; `None` when it can.
-    pub(crate) fn pair_refusal(&self, pair: CellPair) -> Option<&'static str> {
+    /// Why `pair` cannot be removed; `None` when it can.
+    pub(crate) fn pair_refusal(&self, pair: CellPair) -> Option<Refusal> {
         let (first, second) = (pair.first.as_usize(), pair.second.as_usize());
         if first == second {
-            return Some("pick two different cells");
+            return Some(Refusal::SameCell);
         }
         let (Some(first_value), Some(second_value)) =
             (self.active_value(first), self.active_value(second))
         else {
-            return Some("that cell is already crossed out");
+            return Some(Refusal::CellCrossedOut);
         };
         if !first_value.pairs_with(second_value) {
-            return Some("not a pair: equal numbers or a sum of 10");
+            return Some(Refusal::NotAPair);
         }
         let reachable = self.clear_line_between(first, second)
             || self.clear_reading_path_between(first, second);
-        (!reachable).then_some(
-            "too far apart: pairs must touch, or have only crossed-out cells between them",
-        )
+        (!reachable).then_some(Refusal::TooFarApart)
     }
 
     fn clear_reading_path_between(&self, first: usize, second: usize) -> bool {

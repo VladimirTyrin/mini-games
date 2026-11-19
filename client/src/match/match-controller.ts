@@ -1,4 +1,6 @@
 import { shallowRef, type ShallowRef } from "vue";
+import { CommonRefusal, type Refusal } from "@/proto/minigames/v2/refusal_pb";
+import { commonRefusal } from "./common-refusal";
 
 import { create } from "@bufbuild/protobuf";
 
@@ -148,20 +150,20 @@ export class MatchController {
    * accept it. Reads `current`, so a computed that asks follows the match. The authority still
    * decides: the screen may be a frame behind.
    */
-  refusal(command: GameCommandInit): string | null {
+  refusal(command: GameCommandInit): Refusal | null {
     void this.current.value;
     const slot = this.source.mySlot;
-    if (slot === null) return "you are watching";
-    if (!this.mirror) return CANNOT_FOLLOW;
+    if (slot === null) return commonRefusal(CommonRefusal.NOT_PLAYING);
+    if (!this.mirror) return commonRefusal(CommonRefusal.UNSPECIFIED);
     return this.mirror.refusalOf(slot, create(GameCommandSchema, command));
   }
 
   /** Why the rules would refuse this player's private `command` (see `refusal`). */
-  secretRefusal(command: GameSecretCommandInit): string | null {
+  secretRefusal(command: GameSecretCommandInit): Refusal | null {
     void this.current.value;
     const slot = this.source.mySlot;
-    if (slot === null) return "you are watching";
-    if (!this.mirror) return CANNOT_FOLLOW;
+    if (slot === null) return commonRefusal(CommonRefusal.NOT_PLAYING);
+    if (!this.mirror) return commonRefusal(CommonRefusal.UNSPECIFIED);
     return this.mirror.secretRefusalOf(slot, create(GameSecretCommandSchema, command));
   }
 
@@ -175,8 +177,9 @@ export class MatchController {
   preview(command: GameCommandInit): CommandPreview {
     void this.current.value;
     const slot = this.source.mySlot;
-    if (slot === null) return { kind: "refused", reason: "you are watching" };
-    if (!this.mirror) return { kind: "refused", reason: CANNOT_FOLLOW };
+    if (slot === null) return { kind: "refused", refusal: commonRefusal(CommonRefusal.NOT_PLAYING) };
+    // This build does not know the game (it came later): nothing it could check.
+    if (!this.mirror) return { kind: "refused", refusal: commonRefusal(CommonRefusal.UNSPECIFIED) };
     return this.mirror.preview(slot, create(GameCommandSchema, command));
   }
 
@@ -306,8 +309,6 @@ export class MatchController {
     return this.upcoming.at(-1)?.at ?? this.current.value?.at ?? null;
   }
 }
-
-const CANNOT_FOLLOW = "this version of the app cannot play this game";
 
 /** A mirror for `header`, or `null` when this build does not know its game (it came later). */
 function followableMirror(header: MatchHeader): Mirror | null {

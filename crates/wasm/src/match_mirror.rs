@@ -6,6 +6,7 @@ use mg_registry::{
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
+use crate::encoded_refusal::encoded_refusal;
 use crate::match_header::decode_header;
 use crate::match_result::match_result;
 
@@ -96,31 +97,21 @@ impl MatchMirror {
         self.mirror.view(viewer).encode_to_vec()
     }
 
-    /// Why `slot` may not send `command` (encoded `GameCommand`) now, in words for the player;
-    /// `undefined` when the game would accept it. The page asks this before offering an action
-    /// instead of repeating the rule.
+    /// Why `slot` may not send `command` (encoded `GameCommand`) now, as an encoded `Refusal`
+    /// for the page to word; `undefined` when the game would accept it. The page asks this before
+    /// offering an action instead of repeating the rule.
     #[wasm_bindgen(js_name = refusalOf)]
-    pub fn refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<String>, JsError> {
+    pub fn refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<Vec<u8>>, JsError> {
         let command = proto::GameCommand::decode(command)?;
-        match self.mirror.check_command(Slot::new(slot), &command) {
-            Ok(()) => Ok(None),
-            Err(SubmitError::Rejected(refusal)) => Ok(Some(refusal.explanation().to_owned())),
-            Err(SubmitError::Wire(error)) => Err(error.into()),
-        }
+        encoded_refusal(self.mirror.check_command(Slot::new(slot), &command))
     }
 
     /// Why the rules would refuse the private command (encoded `GameSecretCommand`) from `slot`,
-    /// as far as the public state tells, in words for the player; `None` when they accept it.
+    /// as far as the public state tells, as an encoded `Refusal`; `undefined` when they accept it.
     #[wasm_bindgen(js_name = secretRefusalOf)]
-    pub fn secret_refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<String>, JsError> {
+    pub fn secret_refusal_of(&self, slot: u8, command: &[u8]) -> Result<Option<Vec<u8>>, JsError> {
         let command = proto::GameSecretCommand::decode(command)?;
-        Ok(
-            match self.mirror.check_secret_command(Slot::new(slot), &command) {
-                Ok(()) => None,
-                Err(SubmitError::Rejected(refusal)) => Some(refusal.explanation().to_owned()),
-                Err(SubmitError::Wire(error)) => return Err(error.into()),
-            },
-        )
+        encoded_refusal(self.mirror.check_secret_command(Slot::new(slot), &command))
     }
 
     /// Encoded `GameSecretCommand` the game would choose for `slot` (a random fleet); empty when
@@ -142,7 +133,7 @@ impl MatchMirror {
         match self.mirror.status_after(Slot::new(slot), &command) {
             Ok(Status::Finished(outcome)) => Ok(match_result(outcome).encode_to_vec()),
             Ok(Status::InProgress) => Ok(Vec::new()),
-            Err(SubmitError::Rejected(refusal)) => Err(JsError::new(refusal.explanation())),
+            Err(SubmitError::Rejected(rejection)) => Err(JsError::new(rejection.explanation)),
             Err(SubmitError::Wire(error)) => Err(error.into()),
         }
     }

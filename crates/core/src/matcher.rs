@@ -16,6 +16,9 @@ use crate::setup_error::SetupError;
 use crate::slot::Slot;
 use crate::tick::Tick;
 
+/// Why a [`Match`] could not apply a frame.
+pub type MatchFrameError<G> = FrameError<CommandError<<G as Game>::Refusal>>;
+
 /// Receiving side of lockstep: applies authority frames (clients, observers, replays).
 #[derive(Debug)]
 pub struct Match<G: Game> {
@@ -51,14 +54,22 @@ impl<G: Game> Match<G> {
 
     /// What the authority would answer to `command` from `slot` on this state, without changing
     /// anything: its seat checks, then [`Game::check_command`].
-    pub fn check_command(&self, slot: Slot, command: &G::Command) -> Result<(), CommandError> {
+    pub fn check_command(
+        &self,
+        slot: Slot,
+        command: &G::Command,
+    ) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.check_command(slot, command)
     }
 
     /// The game right after `command`, if the authority would accept it; see
     /// [`Game::preview_command`].
-    pub fn preview_command(&self, slot: Slot, command: &G::Command) -> Result<G, CommandError> {
+    pub fn preview_command(
+        &self,
+        slot: Slot,
+        command: &G::Command,
+    ) -> Result<G, CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game.preview_command(slot, command)
     }
@@ -69,7 +80,7 @@ impl<G: Game> Match<G> {
         &self,
         slot: Slot,
         command: &SecretCommand<G>,
-    ) -> Result<(), CommandError> {
+    ) -> Result<(), CommandError<G::Refusal>> {
         seat_may_command(&self.game, &self.players, &self.dropped, slot)?;
         self.game
             .apply_secret_command(&mut G::Secret::default(), slot, command)
@@ -86,7 +97,7 @@ impl<G: Game> Match<G> {
     }
 
     /// After an error the state may be partially updated; rebuild from the full log.
-    pub fn apply_frame(&mut self, frame: &GameFrame<G>) -> Result<(), FrameError> {
+    pub fn apply_frame(&mut self, frame: &GameFrame<G>) -> Result<(), MatchFrameError<G>> {
         if frame.tick != self.next_tick {
             return Err(FrameError::UnexpectedTick {
                 expected: self.next_tick,
@@ -141,7 +152,7 @@ impl<G: Game> Match<G> {
     pub fn apply_frames<'a>(
         &mut self,
         frames: impl IntoIterator<Item = &'a GameFrame<G>>,
-    ) -> Result<(), FrameError> {
+    ) -> Result<(), MatchFrameError<G>> {
         for frame in frames {
             self.apply_frame(frame)?;
         }
@@ -154,8 +165,10 @@ impl<G: Game> Match<G> {
         &mut self,
         log: &CompactLog<GameFrame<G>>,
         stop: Tick,
-    ) -> Result<(), FrameError> {
-        self.apply_compact_log_with(log, stop, |frame| Ok::<_, FrameError>(Cow::Borrowed(frame)))
+    ) -> Result<(), MatchFrameError<G>> {
+        self.apply_compact_log_with(log, stop, |frame| {
+            Ok::<_, MatchFrameError<G>>(Cow::Borrowed(frame))
+        })
     }
 
     /// [`Self::apply_compact_log`] for logs of another frame type: `decode` turns each logged
@@ -168,7 +181,7 @@ impl<G: Game> Match<G> {
     ) -> Result<(), E>
     where
         F: LoggedFrame,
-        E: From<FrameError>,
+        E: From<MatchFrameError<G>>,
     {
         let entries = log
             .entries_from(self.next_tick)

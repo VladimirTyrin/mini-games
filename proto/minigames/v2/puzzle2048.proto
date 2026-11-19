@@ -114,3 +114,9 @@ message Puzzle2048View {
   // Empty while a spawn is due and once the game is over.
   repeated Puzzle2048Direction movable_directions = 10;
 }
+
+// Why a move is refused. Carried in `Refusal`; the client words each value.
+enum Puzzle2048Refusal {
+  PUZZLE2048_REFUSAL_UNSPECIFIED = 0;
+  PUZZLE2048_REFUSAL_MOVE_CHANGES_NOTHING = 1;
+}

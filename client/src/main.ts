@@ -5,12 +5,21 @@ import { createApp } from "vue";
 
 import App from "./App.vue";
 import { setUpNativeApp } from "./platform/native-app";
+import { hasChosenLocale, onLocale, t } from "./i18n";
+import { setNativeAppLocale } from "./platform/app-locale";
+import { keepLocaleForWorker } from "./platform/worker-locale";
 import { router } from "./router";
 import { loadCore } from "./wasm/core";
 import { errorMessage } from "./util/error-message";
 
 async function boot(): Promise<void> {
   await loadCore();
+  // Push notifications are worded on the device: by Android in the app's language, by the
+  // service worker in the one it reads from IndexedDB.
+  onLocale((locale) => {
+    void setNativeAppLocale(hasChosenLocale() ? locale : null);
+    keepLocaleForWorker(locale);
+  });
   const pinia = createPinia();
   createApp(App).use(pinia).use(router).mount("#app");
   await setUpNativeApp();
@@ -38,7 +47,7 @@ async function boot(): Promise<void> {
     const match = matchStore(pinia);
     // A match being played is not dropped for a replay: it can wait.
     if (match.isPlaying && match.controller?.source.kind !== "replay") {
-      useToastStore(pinia).show("Leave the match first to watch the replay");
+      useToastStore(pinia).show(t.app.leaveMatchToWatchReplay);
       return;
     }
     void match.importReplay(bytes);
@@ -56,5 +65,5 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((error: unknown) => {
-  document.body.textContent = `Failed to start: ${errorMessage(error)}`;
+  document.body.textContent = t.app.failedToStart(errorMessage(error));
 });

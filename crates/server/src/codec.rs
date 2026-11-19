@@ -1,5 +1,6 @@
 use axum::extract::ws::Utf8Bytes;
 use mg_protocol::proto;
+use mg_registry::Rejection;
 
 pub(crate) fn decode(text: &str) -> Result<proto::ClientMessage, serde_json::Error> {
     serde_json::from_str(text)
@@ -53,13 +54,52 @@ pub(crate) fn error(
     code: proto::ErrorCode,
     text: impl Into<String>,
 ) -> proto::ServerMessage {
-    reply(
+    error_response(
         request_id,
-        proto::server_message::Message::Error(proto::ErrorResponse {
+        proto::ErrorResponse {
             code: code as i32,
             message: text.into(),
-        }),
+            refusal: None,
+            setting_problem: None,
+        },
     )
+}
+
+/// `ERROR_CODE_COMMAND_REJECTED` with why, for the client to word. The message is the core's
+/// English for the reason, with the detail the wire leaves out of malformed input (which cell
+/// was off the board), for the bot or developer who sent it.
+pub(crate) fn command_rejected(request_id: u32, rejection: Rejection) -> proto::ServerMessage {
+    error_response(
+        request_id,
+        proto::ErrorResponse {
+            code: proto::ErrorCode::CommandRejected as i32,
+            message: rejection.explanation.to_owned(),
+            refusal: Some(rejection.refusal),
+            setting_problem: None,
+        },
+    )
+}
+
+/// An error about settings with the one setting at fault, when there is one.
+pub(crate) fn settings_error(
+    request_id: u32,
+    code: proto::ErrorCode,
+    setting_problem: Option<proto::SettingProblem>,
+    text: impl Into<String>,
+) -> proto::ServerMessage {
+    error_response(
+        request_id,
+        proto::ErrorResponse {
+            code: code as i32,
+            message: text.into(),
+            refusal: None,
+            setting_problem,
+        },
+    )
+}
+
+fn error_response(request_id: u32, error: proto::ErrorResponse) -> proto::ServerMessage {
+    reply(request_id, proto::server_message::Message::Error(error))
 }
 
 #[cfg(test)]

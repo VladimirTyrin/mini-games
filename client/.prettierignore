@@ -4,3 +4,4 @@ src/proto
 src/wasm/pkg
 android
 package-lock.json
+public/push-texts.js

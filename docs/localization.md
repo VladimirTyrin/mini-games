@@ -4,7 +4,7 @@ The app speaks English and Russian. The server does not: it never picks words fo
 Everything a player reads is chosen by the client from its own dictionaries; what the server and
 the Rust core send is codes and values, plus English text for logs, bots and old clients.
 
-Status: design agreed, not built.
+Status: built on `feature/i18n`.
 
 ## Decisions
 
@@ -17,7 +17,7 @@ Status: design agreed, not built.
 | Game names | Translated (table below). The app's own name stays "Mini Games". |
 | Russian tone | «ты», kept plain: "Твой ход", "Ты выиграл", but buttons as actions: "Войти через Google", "Играть снова". No exclamation-mark cheerfulness. |
 | Privacy policy | Two pages, English and Russian; the app links to the one in its language. |
-| Word Hunt | The word list follows the interface language until the player picks one themself. |
+| Word Hunt | A new player's word list is in the interface language (`GamePlugin.defaultSettings`); once Word Hunt settings are remembered (after a first match), they win, the word list with them. |
 | Screen checks | `fit.mjs` finds clipped or overflowing text in both languages without screenshots: locally for the screens a change touches, in CI for all. Screenshots only to look at a layout. |
 
 ## Choosing the language
@@ -28,9 +28,12 @@ Status: design agreed, not built.
 - The Settings switch saves the choice and changes the ref; the screen redraws, nothing reloads.
 - `<html lang>` follows the locale (hyphenation, screen readers).
 - In the Android app the switch also sets the per-app locale (`AppCompatDelegate.setApplicationLocales`,
-  through a small native method of our Capacitor shell). Android then words push notifications in
-  the language of the switch, not only the phone's. Before Android 13 AppCompat keeps it itself
-  (`autoStoreLocales`).
+  through a small native method of our Capacitor shell, `AppLocalePlugin`), but only for a
+  language the player picked: one taken from the phone is left to follow the phone (an empty
+  per-app locale), or Android and the WebView would keep it after the phone changes language.
+  From Android 13 push notifications are then worded in the language of the switch; before it
+  AppCompat keeps the pick (`autoStoreLocales`) for the app's screens only, and notifications
+  follow the phone's language.
 - The service worker cannot read `localStorage`, so the locale is also written to IndexedDB
   (`push-sw.js` reads it for Web Push).
 
@@ -38,24 +41,39 @@ Status: design agreed, not built.
 
 ```
 client/src/i18n/
-  en.ts        the source: every text, nested by screen (home, lobby, match, settings, games.snake…)
-  ru.ts        `export const ru: Messages = {…}`: the same shape, checked by the compiler
-  messages.ts  `export type Messages = typeof en` (texts widened to string)
-  plural.ts    Intl.PluralRules-based helper: one / few / many for Russian, one / other for English
-  use-i18n.ts  `const { t, locale } = useI18n()`; `t` is the dictionary of the current locale
-  format.ts    dates, times, numbers through Intl with the current locale
+  en/<area>.ts      the source, one file per area (common, errors, refusals, app, home, settings,
+                    friends, replays, online, lobby, setup, match) and en/games/<game>.ts
+  ru/<area>.ts      the same shape, each typed `Messages["<area>"]`: checked by the compiler
+  en/index.ts       gathers the areas into `en`; ru/index.ts into `ru: Messages`
+  messages.ts       `export type Messages = typeof en`
+  index.ts          `t`: reads the current language's dictionary (`t.lobby.start`); reactive
+  locale.ts         the current language, the device default, `setLocale`, `onLocale`
+  plural.ts         `pluralEn(n, one, other)`, `pluralRu(n, one, few, many)` (Intl.PluralRules)
+  format.ts         dates, times, numbers through Intl in the current language
 ```
 
+- Every language ships in the bundle, imported statically: nothing is fetched to switch or to
+  start in a language, so the APK (and its over-the-air bundle, a zip of the same `dist/`) works
+  on its own, offline. Word Hunt's word lists of both languages are in `dist/words/` too, and the
+  push notification texts in the APK's resources. Keep it so: no lazy-loaded dictionaries.
 - No library: the dictionaries are plain typed objects. A missing Russian text is a compile
   error, a typo in a key is a compile error, and the bundle gains a few kilobytes of text only.
-- Texts with values are functions: `wins: (count: number) => plural(count, {one: "победа",
-  few: "победы", many: "побед"})`, `invites: (name: string) => \`${name} зовёт тебя играть\``.
+- Texts with values are functions: `wins: (count: number) => \`${count} ${pluralRu(count, "победа",
+  "победы", "побед")}\``, `invites: (name: string) => \`${name} зовёт тебя играть\``.
   No string templates parsed at run time.
-- Each game's plugin takes its texts from `t.games.<game>`: title, How to play, settings labels,
-  bot levels, its board's messages.
+- Each game's plugin takes its texts from `t.games.<game>`: title, settings labels, bot levels,
+  its board's messages.
+- How to play is the exception: one page per language, `<Game>Help.en.vue` and
+  `<Game>Help.ru.vue`, each the whole text written out with its markup (headings, lists, bold).
+  Rules prose cut into "before / bold word / after" dictionary pieces reads badly and translates
+  worse: word order and punctuation differ between languages. `GamePlugin.Help` is
+  `Record<Locale, Component>`, so a game without a page in some language does not compile. What
+  must match the rest of the UI still comes from code: numbers from the game's constants, names of
+  buttons and settings from the dictionary (Sea Battle's Random and Ready, Snake's Wrap).
 - What players type (names, chat, lobby names) is shown as typed, never translated.
 - Lint: `vue/no-bare-strings-in-template` (eslint-plugin-vue) fails on text written straight
   into a template, so new screens cannot skip the dictionary. Symbols and numbers are allowed.
+  The help pages (`src/games/**/*Help.*.vue`) are exempt: each is the text of one language.
 - Replay file names use the game's title in the current language (they are only names).
 
 ## Text that comes from the server or the core
@@ -67,43 +85,62 @@ either a code or an enum value the client words, or a value (a name, a number) p
 
 `ErrorResponse.code` already says what went wrong. The client has a text per code
 (`t.errors.lobbyFull`, …). `ErrorResponse.message` stays English, for logs, bots and the console;
-the UI never shows it.
+the UI shows it only for a code it does not know (below).
 
 ### Refusals of moves and settings problems
 
-Today the core's reasons are English sentences (`CommandError::Illegal("this word was already
-tried")`, `SettingProblem::RuleBroken { rule: "must be a power of two", .. }`), and Word Hunt's
-board shows them. They become enums, from the game's rules to the client's dictionary:
+The core's reasons are enums, from the game's rules to the client's dictionary (done):
 
-- Each game crate has `enum Refusal` (why a move is refused: `AlreadyTried`, `NotInWordList`,
-  `MustCapture`…) and, if its settings have rules a range cannot express, `enum SettingRule`
-  (`PowerOfTwo`…). `Display` gives the English, for logs only.
-- `Game` gets `type Refusal`; `CommandError` becomes generic over it: `GameOver`,
-  `NotYourTurn`, `NotPlaying`, `Busy` stay common, `Illegal(Self::Refusal)` is the game's.
-  `SettingProblem::RuleBroken { rule: SettingRule, value }` the same way; `OutOfRange` keeps
-  its `min`/`max`/`value`, the client words it with the numbers.
-- Wire: each game's proto file mirrors them (`enum WordHuntRefusal`, `enum
-  Puzzle2048SettingRule`); `protocol.proto` gathers them:
+- No rejection carries a string. Each game crate has `enum Refusal` in `rules/refusal.rs`: the
+  reasons a player can meet (`AlreadyTried`, `MustCapture`…), then, grouped under a comment,
+  the input no honest client or authority sends (`SpawnCellOccupied`, `NoSuchSeat`…).
+  `EnglishText::english` gives each one's English (logs, bot clients) and `Display` writes it.
+- `Game` has `type Refusal`; `CommandError<R>` is generic over it: `GameOver`, `NotYourTurn`,
+  `NotPlaying`, `Busy` are common, `Illegal(R)` is the game's, and `Malformed(ProtocolMisuse)`
+  the core's own misuse (a private command to a game without them, a default one for a seat
+  that owes none).
+- Settings: `SettingProblem::RuleBroken { rule: SettingRule, value }`, where `SettingRule` is
+  one core enum of generic kinds (`PowerOfTwo`, `TooLargeForBoard`, `FixedForDailyPuzzle`)
+  rather than an enum per game: only two games have such rules, and a kind is worded once for
+  every game. `OutOfRange` keeps its `min`/`max`/`value`, the client words it with the numbers.
+- Wire: each game's proto file mirrors its refusals (`enum WordHuntRefusal`); `refusal.proto`
+  gathers them, with the settings problem (imported by `protocol.proto`):
 
   ```proto
   message Refusal {
     oneof reason {
-      CommonRefusal common = 1;   // game over, not your turn, not playing, busy
-      WordHuntRefusal word_hunt = 2;
-      CheckersRefusal checkers = 3;
+      CommonRefusal common = 1;   // game over, not your turn, not playing, busy, malformed, paused
+      SnakeRefusal snake = 2;
       // … one per game that refuses moves
     }
   }
-  message ErrorResponse { ErrorCode code = 1; string message = 2; Refusal refusal = 3; }
+  message SettingProblem { string field = 1; oneof problem { OutOfRange out_of_range = 2; BrokenRule broken_rule = 3; } }
+  message ErrorResponse { …; Refusal refusal = 3; SettingProblem setting_problem = 4; }
   ```
 
-  Settings problems get the same shape (`field` plus `OutOfRange` or the game's `SettingRule`),
-  in `ErrorResponse` for the server and from WASM for forms and local play.
-- `mg-registry` maps each Rust enum to its proto enum with an exhaustive `match`: a new variant
-  without a wire value does not compile.
+  `COMMON_REFUSAL_PAUSED` is the server's own (a command while the match is paused).
+  `ErrorResponse` carries them for the server; WASM returns them encoded for forms and local
+  play (see [protocol.md](protocol.md)).
+- Each game's `Refusal` maps to the wire with an exhaustive `match` in `impl WireRefusal` next
+  to the game's `WireGame` in `mg-protocol`, where every other per-game wire mapping lives: a
+  player-facing variant to its proto value, malformed input to `COMMON_REFUSAL_MALFORMED` (so
+  the client words one generic "not allowed"). A new variant does not compile until it is given
+  one or the other. `ProtocolMisuse` is `MALFORMED` too; `SettingRule` maps in `mg-protocol`
+  likewise. `mg-registry` erases the game type into `Rejection { refusal, explanation }`.
+- For bots and logs, `mg_protocol::refusal_english(&proto::Refusal)` turns a wire refusal back
+  into the same English as the Rust enums (`setting_rule_english` for a `SettingRule`); the C
+  ABI exposes it as `mg_refusal_english`. The server's `ErrorResponse.message` for a rejected
+  command is the same English, except for malformed input: there it is the detail the wire
+  leaves out ("cell is outside the board"), for the bot or developer who sent it. The app never
+  uses either: it words refusals itself.
+- Word Hunt has no `NotInWordList`: the word list is the client's check, the rules only see
+  letters.
 - The client words them with dictionaries typed `Record<WordHuntRefusal, string>`: a value
   without a text in either language does not compile either. No key lists, no cross-check tests.
-- A value the client does not know (a newer server) falls back to the error code's text.
+- A code or enum value the client cannot word (only a newer server can send one: the local
+  game's WASM core is the client's own version) falls back to the core's English that came with
+  it (`ErrorResponse.message`, the same text bots get), and with no English to the raw code
+  ("Так нельзя (checkers 9)", "Что-то пошло не так (99)"), so the player can still report it.
 
 ### Default lobby names
 
@@ -121,21 +158,25 @@ bot clients.
 
 The server keeps building notifications but sends keys instead of sentences. Its texts are an
 enum too (`PushText::InviteTitle(GameKind)`, `InviteJoinedElsewhere`, …); the key is only how
-FCM and the service worker name it (`push_invite_title_snake`), derived in one place.
+FCM and the service worker name it (`push_invite_body_snake`), derived in one place.
 
 
 - FCM: `android.notification.title_loc_key` / `body_loc_key` with `*_loc_args` (the inviter's
-  name). Android looks the keys up in `client/android/app/src/main/res/values/strings.xml` and
-  `values-ru/strings.xml`. The game's name cannot be an argument (Android puts arguments in
-  verbatim), so the invitation has a key per game: `push_invite_title_snake`, …
-- The top-level `notification.title/body` stay English: an app installed before this change
-  has no such resources and shows them.
-- Web Push: the payload carries `titleKey`, `bodyKey`, `args`; `push-sw.js` has the same keys
-  for both languages (generated from the dictionaries at build time, so there is one source)
-  and the locale from IndexedDB.
-- A notification arriving while the app is open is worded by the app from the same keys.
-- A test checks that every key the server can send exists in both `strings.xml` files and the
-  service worker's table.
+  name). Android looks the keys up in `client/android/app/src/main/res/values/push_strings.xml`
+  and `values-ru/push_strings.xml`, generated from `client/push-texts.json`. The game's name
+  cannot be an argument (Android puts arguments in verbatim), so the invitation's body has a key
+  per game: `push_invite_body_snake`, …
+- FCM gets no plain `title`/`body`: Android shows plain ones whenever they are present and then
+  never looks at the keys. An app shell from before the keys has no such resources and shows its
+  name without text until the APK is updated.
+- Web Push: the payload carries `titleKey`, `titleArgs`, `bodyKey`, `bodyArgs`; `push-sw.js` has the same keys
+  for both languages (`public/push-texts.js`, generated from `client/push-texts.json` like the
+  Android resources, so there is one source) and the locale from IndexedDB.
+- A notification arriving while the app is open shows none of its text: the app acts on its
+  data (an invitation banner, the test's timings), worded from the dictionaries.
+- A client test checks that the generated files match `push-texts.json`
+  (`npm run generate:push-texts` writes them).
+- A server test checks that every key it can send has both languages in `push-texts.json`.
 - The Android notification channel's name, created by the app, comes from the dictionary.
 
 ## Game names
@@ -175,7 +216,8 @@ clicks, for every screen, game and dialog):
     it hides overflow or ellipsizes;
   - text spills out of its control (a button's or label's text box wider than the control).
 
-  Exit code 1 when anything was found. `--games`, `--sizes`, `--langs` narrow it.
+  Exit code 1 when anything was found, or when a screen could not be opened or its scenario
+  did not reach it (a scenario's `reached`). `--screens`, `--sizes`, `--langs` narrow it.
 - `tools/screens/shoot.mjs` — the pictures, for looking at a layout, and for showing the user:
   every screen of the app, not only the games (home, local setup, online, lobby, friends,
   settings, saved replays, every game, How to play and the result over a game), or a subset
@@ -194,9 +236,10 @@ When they run:
   that builds the client, serves the build and runs it in the runner's Chrome. The safety net
   for what the local run left out.
 
-Both set the locale before the app loads (the storage key the app reads). The scenarios stop
+Both set the locale before the app loads (`mini-games.locale` in localStorage). The scenarios stop
 clicking buttons by their English text: buttons they press get `data-testid` (`play`,
-`add-opponent`, `random`, `ready`), so one scenario drives both languages. Dialogs over a game
+`add-opponent`, `fleet-random`, `fleet-ready`, `tictactoe-cell`, …), so one scenario drives both
+languages. Dialogs over a game
 (How to play, the result) are scenarios too.
 
 AGENTS.md "Screens" then reads: every size, in both languages, checked by `fit.mjs`.
@@ -209,7 +252,7 @@ On `feature/i18n`, merged when done:
 2. Core and server: refusal and setting-rule enums per game, their proto mirrors,
    `ErrorResponse.refusal`, empty default lobby names, keyed pushes.
 3. Russian dictionary, the Settings switch, device-language default, Word Hunt default list.
-4. Android: `strings.xml` in both languages, per-app locale; Web Push service worker.
+4. Android: `push_strings.xml` in both languages, per-app locale; Web Push service worker.
 5. Privacy policy in Russian.
 6. `scenarios.mjs`, `fit.mjs` (local and the CI job), `shoot.mjs` in both languages; fix what
    `fit.mjs` finds.

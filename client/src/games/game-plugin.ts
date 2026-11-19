@@ -1,6 +1,7 @@
 import type { Component } from "vue";
 
 import type { BotKind, GameSettings, GameView } from "@/proto/minigames/v2/game_pb";
+import type { Locale } from "@/i18n";
 import { prefersTouch } from "@/input/prefers-touch";
 
 export type SettingsCase = NonNullable<GameSettings["game"]["case"]>;
@@ -28,8 +29,12 @@ export interface GamePlugin {
   tagline: string;
   SettingsForm: Component;
   Board: Component;
-  /** "How to play": the goal and the rules, no props; the controls are added from `controls`. */
-  Help: Component;
+  /**
+   * "How to play": the goal and the rules, no props; the controls are added from `controls`. One
+   * page per language, written out whole rather than pieced together from dictionary fragments, so
+   * a game without a page in some language does not compile.
+   */
+  Help: Record<Locale, Component>;
   /** The help opens by itself before the first match on this device (a game that needs it). */
   opensHelpFirstTime?: true;
   /**
@@ -42,6 +47,11 @@ export interface GamePlugin {
   controls: ControlsHint;
   /** Space is a game key (Stack Attack's jump): it must not start the next match at the end. */
   playsWithSpace?: true;
+  /**
+   * Starting settings when none are remembered, from the core's defaults (Word Hunt's word list
+   * in the interface's language). Applied before `narrowScreenSettings`.
+   */
+  defaultSettings?(defaults: GameSettings): GameSettings;
   /** Starting settings on a phone when none are remembered; the core defaults otherwise. */
   narrowScreenSettings?(defaults: GameSettings): GameSettings;
   /**

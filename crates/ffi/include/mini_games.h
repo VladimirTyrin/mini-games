@@ -6,7 +6,8 @@
  *
  * Contract for every function:
  *  - The return value is an MgStatus. After a failure, mg_last_error_message() describes it
- *    (per thread, kept until the next failure).
+ *    (per thread, kept until the next failure); after MG_STATUS_REJECTED, mg_last_refusal()
+ *    gives the encoded Refusal.
  *  - Input bytes are (pointer, length) pairs; the pointer may be NULL only when the length is 0.
  *    Out-pointers must point to writable memory of their type.
  *  - Handles come from a *_new, *_clone or *_from_* function and are released exactly once with
@@ -58,6 +59,13 @@ typedef struct MgMirror MgMirror;
 
 uint32_t mg_abi_version(void);
 MgStatus mg_last_error_message(MgBuffer *out_message);
+/* Encoded Refusal of the last failure on this thread when it was MG_STATUS_REJECTED; empty
+ * otherwise. */
+MgStatus mg_last_refusal(MgBuffer *out_refusal);
+/* UTF-8 English of an encoded Refusal, for logs: the text a server puts in
+ * ErrorResponse.message (which names the detail of malformed input instead). An unknown reason
+ * reads as a generic refusal. */
+MgStatus mg_refusal_english(const uint8_t *refusal, size_t refusal_len, MgBuffer *out_text);
 void mg_buffer_free(MgBuffer buffer);
 
 /* Catalog. game_id is UTF-8 ("tictactoe", "snake", ...). */

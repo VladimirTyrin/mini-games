@@ -1,3 +1,51 @@
 import type { Messages } from "../../messages";
 
-export const checkers: Messages["games"]["checkers"] = {};
+export const checkers: Messages["games"]["checkers"] = {
+  title: "Шашки",
+  tagline: "Русские шашки с дальнобойными дамками",
+  facts: {
+    hostPlaysWhite: "белые у хоста",
+    guestPlaysWhite: "белые у гостя",
+    coloursByLot: "цвет по жребию",
+    capturesMayStop: "взятие можно прервать",
+  },
+  bots: { easy: "Лёгкий бот", medium: "Средний бот", hard: "Сильный бот", master: "Бот-мастер (медленный)" },
+  controls: {
+    keyboard: "Щёлкни по шашке, затем по полю, куда ей идти",
+    touch: "Нажми на шашку, затем на поле, куда ей идти",
+  },
+  endReasons: {
+    noPieces: "Шашек не осталось",
+    noMoves: "Ходов не осталось",
+    opponentLeft: "Соперник вне игры",
+    repetition: "Ничья: позиция повторилась трижды",
+    kingMoves: "Ничья: по 15 ходов дамками",
+  },
+  board: {
+    draw: "Ничья",
+    playerWins: (name) => `Победа: ${name}`,
+    opponentLeftYouWin: "Соперник вне игры — ты выиграл",
+    youWin: "Ты выиграл",
+    youLose: "Ты проиграл",
+    choosingWhite: "Выбираем, кто играет белыми…",
+    whiteToMove: (name) => `Ход белых: ${name}`,
+    blackToMove: (name) => `Ход чёрных: ${name}`,
+    somePlayer: "игрок",
+    yourTurn: "Твой ход",
+    opponentsTurn: "Ход соперника",
+    youPlayWhite: "(ты играешь белыми)",
+    youPlayBlack: "(ты играешь чёрными)",
+    king: "дамка",
+    endMoveHere: "Закончить ход здесь",
+    mustCapture: "Бить обязательно",
+    kingMovesToDraw: (moves, movesForDraw) => `Только дамки: ${moves} из ${movesForDraw} ходов до ничьей`,
+  },
+  settings: {
+    playsWhite: "Белыми играет",
+    playsWhiteHelp: "Белые ходят первыми",
+    captures: "Взятие",
+    capturesHelp: "По русским правилам взятие продолжается, пока есть кого бить",
+    toTheEnd: "До конца",
+    mayStop: "Можно прервать",
+  },
+};

@@ -1,4 +1,4 @@
-use mg_core::{Capped, SettingProblem};
+use mg_core::{Capped, SettingProblem, SettingRule};
 
 use crate::model::TileValue;
 
@@ -14,7 +14,7 @@ impl Target {
         let value = TargetRange::new(value)?;
         if !value.get().is_power_of_two() {
             return Err(SettingProblem::RuleBroken {
-                rule: "must be a power of two",
+                rule: SettingRule::PowerOfTwo,
                 value: value.get(),
             });
         }

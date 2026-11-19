@@ -9,12 +9,12 @@ use super::support::{at, board, dealt_game, dealt_game_with_seed, pair, settings
 use crate::{
     COLUMNS, CellValue, Command, Hint, HintMode, HintsLeft, INITIAL_CELLS,
     LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, LastAction, LossReason, NumbersMatch, Phase,
-    RawSettings, Refills, RowIndex, Settings, WorldEvent,
+    RawSettings, Refills, Refusal, RowIndex, Settings, WorldEvent,
 };
 
 const PLAYER: Slot = Slot::new(0);
 
-fn apply(game: &mut NumbersMatch, command: Command) -> Result<(), CommandError> {
+fn apply(game: &mut NumbersMatch, command: Command) -> Result<(), CommandError<Refusal>> {
     game.apply_command(PLAYER, &command)
 }
 
@@ -207,7 +207,7 @@ fn commands_wait_for_the_deal() {
     assert_eq!(game.awaiting(), Awaiting::Turn(PLAYER));
     assert!(matches!(
         apply(&mut game, Command::Refill),
-        Err(CommandError::Illegal(_))
+        Err(CommandError::Illegal(Refusal::NotDealtYet))
     ));
     assert_eq!(game.refills_left(), 5);
 }

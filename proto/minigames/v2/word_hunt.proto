@@ -149,3 +149,20 @@ message WordHuntView {
   // Seats still in the game: not given up, not left.
   repeated uint32 playing_slots = 9;
 }
+
+// Why a guess or giving up is refused. Carried in `Refusal`; the client words each value.
+enum WordHuntRefusal {
+  WORD_HUNT_REFUSAL_UNSPECIFIED = 0;
+  WORD_HUNT_REFUSAL_WORD_NOT_CHOSEN_YET = 1;
+  WORD_HUNT_REFUSAL_LAST_GUESS_NOT_MARKED = 2;
+  WORD_HUNT_REFUSAL_WRONG_LENGTH = 3;
+  // A character outside the language's alphabet.
+  WORD_HUNT_REFUSAL_NOT_A_LETTER = 4;
+  WORD_HUNT_REFUSAL_ALREADY_TRIED = 5;
+  // Hard mode: a letter found in place (green) is missing from its position.
+  WORD_HUNT_REFUSAL_MOVED_CORRECT_LETTER = 6;
+  // Hard mode: a letter found elsewhere (yellow), or a found letter's count, is missing.
+  WORD_HUNT_REFUSAL_DROPPED_FOUND_LETTER = 7;
+  // Only a player still guessing can give up.
+  WORD_HUNT_REFUSAL_CANNOT_GIVE_UP = 8;
+}

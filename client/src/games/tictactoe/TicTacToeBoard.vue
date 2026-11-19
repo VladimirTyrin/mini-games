@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { t } from "@/i18n";
 import type { MatchController } from "@/match/match-controller";
 import { TicTacToeEndReason, TicTacToeMark } from "@/proto/minigames/v2/tictactoe_pb";
 import { useToastStore } from "@/stores/toasts";
@@ -55,24 +56,28 @@ function markOf(slot: number | undefined): TicTacToeMark | null {
 const status = computed<{ text: string; mark: TicTacToeMark | null }>(() => {
   const current = view.value;
   const watching = mySlot.value === null;
+  const text = t.games.tictactoe.board;
   if (!current) return { text: "", mark: null };
   if (current.end) {
-    if (current.end.reason === TicTacToeEndReason.DRAW) return { text: "Draw", mark: null };
+    if (current.end.reason === TicTacToeEndReason.DRAW) return { text: text.draw, mark: null };
     const winner = current.end.winnerSlot;
     if (watching) {
-      const name = winner === undefined ? "Nobody" : (names[winner] ?? "A player");
-      return { text: `${name} wins`, mark: markOf(winner) };
+      if (winner === undefined) return { text: text.nobodyWins, mark: null };
+      return { text: text.wins(names[winner] ?? t.match.aPlayer), mark: markOf(winner) };
     }
     const won = winner === mySlot.value;
     if (current.end.reason === TicTacToeEndReason.PLAYER_DISCONNECTED)
-      return { text: won ? "Opponent left — you win" : "Game over", mark: null };
-    return { text: won ? "You win!" : "You lose", mark: null };
+      return { text: won ? text.opponentLeft : text.gameOver, mark: null };
+    return { text: won ? text.youWin : text.youLose, mark: null };
   }
-  if (current.currentSlot === undefined) return { text: "Choosing who starts…", mark: null };
+  if (current.currentSlot === undefined) return { text: text.choosingFirst, mark: null };
   if (watching) {
-    return { text: `${names[current.currentSlot] ?? "A player"}'s turn`, mark: markOf(current.currentSlot) };
+    return {
+      text: text.playersTurn(names[current.currentSlot] ?? t.match.aPlayer),
+      mark: markOf(current.currentSlot),
+    };
   }
-  return { text: myTurn.value ? "Your turn" : "Opponent's turn", mark: null };
+  return { text: myTurn.value ? text.yourTurn : text.opponentsTurn, mark: null };
 });
 
 async function place(index: number): Promise<void> {
@@ -111,12 +116,12 @@ async function place(index: number): Promise<void> {
         :class="status.mark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300'"
       />
       <span v-if="myMark !== null" class="inline-flex items-center gap-1 text-sm text-gray-400">
-        (you play
+        {{ t.games.tictactoe.board.youPlayBeforeMark }}
         <MarkIcon
           :mark="myMark"
           class="h-[1em] w-[1em]"
           :class="myMark === TicTacToeMark.X ? 'text-sky-300' : 'text-rose-300'"
-        />)
+        />{{ t.games.tictactoe.board.youPlayAfterMark }}
       </span>
     </p>
     <!-- The board's own aspect ratio sizes it and fixed tracks split it, so no cell content can
@@ -145,6 +150,7 @@ async function place(index: number): Promise<void> {
               : '',
           ]"
           :disabled="!myTurn || mark !== TicTacToeMark.UNSPECIFIED"
+          data-testid="tictactoe-cell"
           @click="place(index)"
         >
           <MarkIcon

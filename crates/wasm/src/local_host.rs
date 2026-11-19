@@ -4,6 +4,7 @@ use mg_registry::{DynAuthority, create_authority_from_header};
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
+use crate::encoded_refusal::encoded_refusal;
 use crate::match_header::decode_header;
 use crate::match_result::match_result;
 
@@ -37,18 +38,19 @@ impl LocalHost {
         }
     }
 
-    /// `command`: encoded `GameCommand`.
-    pub fn submit(&mut self, slot: u8, command: &[u8]) -> Result<(), JsError> {
+    /// `command`: encoded `GameCommand`. `undefined` when accepted, otherwise the encoded
+    /// `Refusal` for the page to word.
+    pub fn submit(&mut self, slot: u8, command: &[u8]) -> Result<Option<Vec<u8>>, JsError> {
         let command = proto::GameCommand::decode(command)?;
-        Ok(self.authority.submit(Slot::new(slot), &command)?)
+        encoded_refusal(self.authority.submit(Slot::new(slot), &command))
     }
 
     /// `command`: encoded `GameSecretCommand`, a private command (a fleet). The caller seals a
-    /// frame after it, as after a command.
+    /// frame after it, as after a command. Answers like [`LocalHost::submit`].
     #[wasm_bindgen(js_name = submitSecret)]
-    pub fn submit_secret(&mut self, slot: u8, command: &[u8]) -> Result<(), JsError> {
+    pub fn submit_secret(&mut self, slot: u8, command: &[u8]) -> Result<Option<Vec<u8>>, JsError> {
         let command = proto::GameSecretCommand::decode(command)?;
-        Ok(self.authority.submit_secret(Slot::new(slot), &command)?)
+        encoded_refusal(self.authority.submit_secret(Slot::new(slot), &command))
     }
 
     /// Encoded `GameSeatSecret`: what `slot` may see of the game's secret (its own fleet);

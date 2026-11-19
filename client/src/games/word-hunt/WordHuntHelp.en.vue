@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { t } from "@/i18n";
+</script>
+
 <template>
   <h3>Goal</h3>
   <p>Guess the hidden word, Russian or English, in as few tries as you can.</p>
@@ -14,6 +18,9 @@
       finds the word wins.
     </li>
     <li>In <b>hard mode</b> every guess must keep the green letters in place and use the amber ones.</li>
-    <li><b>Give up</b> shows the word when you play alone; in a group you leave and the others play on.</li>
+    <li>
+      <b>{{ t.games.wordHunt.board.giveUp }}</b> shows the word when you play alone; in a group you leave and
+      the others play on.
+    </li>
   </ul>
 </template>

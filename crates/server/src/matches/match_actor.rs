@@ -6,7 +6,7 @@ use axum::extract::ws::Utf8Bytes;
 use mg_core::{Awaiting, CancelToken, Clock, OutcomeKind, Slot, Status, Tick};
 use mg_protocol::proto::server_message::Message;
 use mg_protocol::{REPLAY_FORMAT_VERSION, proto, slot_from_wire};
-use mg_registry::{DynAuthority, DynBotDecision, SubmitError};
+use mg_registry::{DynAuthority, DynBotDecision, Rejection, SubmitError};
 use prost::Message as _;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinError;
@@ -277,20 +277,20 @@ impl MatchActor {
         let Some(outbound) = self.outbound_of(session).cloned() else {
             return;
         };
-        let reject = |code: proto::ErrorCode, text: &str| {
-            outbound.send(&codec::error(request_id, code, text));
+        let refuse = |reason: proto::CommonRefusal| {
+            outbound.send(&codec::command_rejected(
+                request_id,
+                Rejection::common(reason),
+            ));
         };
         let Some(slot) = self.slot_of(session) else {
-            return reject(proto::ErrorCode::CommandRejected, "observers cannot play");
+            return refuse(proto::CommonRefusal::NotPlaying);
         };
         if self.dropped.contains(&slot) {
-            return reject(
-                proto::ErrorCode::CommandRejected,
-                "you were dropped from this match",
-            );
+            return refuse(proto::CommonRefusal::NotPlaying);
         }
         if self.state != RunState::Running {
-            return reject(proto::ErrorCode::CommandRejected, "the match is paused");
+            return refuse(proto::CommonRefusal::Paused);
         }
         let Some(authority) = self.authority.as_mut() else {
             return;
@@ -304,10 +304,14 @@ impl MatchActor {
                 }
             }
             Err(SubmitError::Wire(error)) => {
-                reject(proto::ErrorCode::InvalidRequest, &error.to_string());
+                outbound.send(&codec::error(
+                    request_id,
+                    proto::ErrorCode::InvalidRequest,
+                    error.to_string(),
+                ));
             }
-            Err(SubmitError::Rejected(error)) => {
-                reject(proto::ErrorCode::CommandRejected, &error.to_string());
+            Err(SubmitError::Rejected(rejection)) => {
+                outbound.send(&codec::command_rejected(request_id, rejection));
             }
         }
     }
@@ -321,17 +325,17 @@ impl MatchActor {
         let Some(outbound) = self.outbound_of(session).cloned() else {
             return;
         };
-        let reject = |code: proto::ErrorCode, text: &str| {
-            outbound.send(&codec::error(request_id, code, text));
+        let refuse = |reason: proto::CommonRefusal| {
+            outbound.send(&codec::command_rejected(
+                request_id,
+                Rejection::common(reason),
+            ));
         };
         let Some(slot) = self.slot_of(session) else {
-            return reject(proto::ErrorCode::CommandRejected, "observers cannot play");
+            return refuse(proto::CommonRefusal::NotPlaying);
         };
         if self.dropped.contains(&slot) {
-            return reject(
-                proto::ErrorCode::CommandRejected,
-                "you were dropped from this match",
-            );
+            return refuse(proto::CommonRefusal::NotPlaying);
         }
         let Some(authority) = self.authority.as_mut() else {
             return;
@@ -350,10 +354,14 @@ impl MatchActor {
                 }
             }
             Err(SubmitError::Wire(error)) => {
-                reject(proto::ErrorCode::InvalidRequest, &error.to_string());
+                outbound.send(&codec::error(
+                    request_id,
+                    proto::ErrorCode::InvalidRequest,
+                    error.to_string(),
+                ));
             }
-            Err(SubmitError::Rejected(error)) => {
-                reject(proto::ErrorCode::CommandRejected, &error.to_string());
+            Err(SubmitError::Rejected(rejection)) => {
+                outbound.send(&codec::command_rejected(request_id, rejection));
             }
         }
     }

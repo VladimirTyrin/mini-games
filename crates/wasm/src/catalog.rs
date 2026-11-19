@@ -109,15 +109,27 @@ mod tests {
     #[test]
     fn a_rejected_setting_names_its_field() {
         assert_eq!(validate_settings(&tictactoe_settings(15), 2), None);
+        let expected = proto::SettingProblem {
+            field: "field_width".to_owned(),
+            problem: Some(proto::setting_problem::Problem::OutOfRange(
+                proto::setting_problem::OutOfRange {
+                    value: 2,
+                    min: 3,
+                    max: 20,
+                },
+            )),
+        };
         assert_eq!(
             validate_settings(&tictactoe_settings(2), 2),
             Some(SettingsProblem {
                 field: Some("field_width".to_owned()),
+                setting_problem: Some(expected.encode_to_vec()),
                 message: "must be between 3 and 20, got 2".to_owned(),
             })
         );
         let wrong_seats = validate_settings(&tictactoe_settings(15), 3).unwrap();
         assert_eq!(wrong_seats.field, None);
+        assert_eq!(wrong_seats.setting_problem, None);
     }
 
     #[test]

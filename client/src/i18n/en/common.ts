@@ -14,4 +14,15 @@ export const common = {
   bot: "Bot",
   loading: "Loading…",
   tryAgain: "Try again",
+  random: "Random",
+  /** The board size row of a game's settings. */
+  boardSize: {
+    label: "Board size",
+    small: "Small",
+    medium: "Medium",
+    large: "Large",
+    custom: "Custom",
+    width: "Width",
+    height: "Height",
+  },
 };

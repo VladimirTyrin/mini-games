@@ -1,3 +1,5 @@
+use crate::rules::Refusal;
+
 /// Why a guess breaks hard mode.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HardModeViolation {
@@ -7,13 +9,11 @@ pub enum HardModeViolation {
     DroppedFoundLetter,
 }
 
-impl HardModeViolation {
-    pub(crate) const fn reason(self) -> &'static str {
-        match self {
-            HardModeViolation::MovedCorrectLetter => {
-                "hard mode: keep every green letter in its place"
-            }
-            HardModeViolation::DroppedFoundLetter => "hard mode: use every letter you have found",
+impl From<HardModeViolation> for Refusal {
+    fn from(violation: HardModeViolation) -> Self {
+        match violation {
+            HardModeViolation::MovedCorrectLetter => Refusal::MovedCorrectLetter,
+            HardModeViolation::DroppedFoundLetter => Refusal::DroppedFoundLetter,
         }
     }
 }

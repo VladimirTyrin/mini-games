@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
+
 import SettingRow from "./SettingRow.vue";
 
 const model = defineModel<number>({ required: true });
@@ -33,7 +35,7 @@ function stepBy(direction: 1 | -1): void {
       <button
         type="button"
         class="flex size-11 items-center justify-center rounded-lg text-xl text-gray-200 hover:bg-white/5"
-        :aria-label="`Decrease ${label}`"
+        :aria-label="t.match.form.decrease(label)"
         :disabled="!canDecrease"
         @click="stepBy(-1)"
       >
@@ -49,7 +51,7 @@ function stepBy(direction: 1 | -1): void {
       <button
         type="button"
         class="flex size-11 items-center justify-center rounded-lg text-xl text-gray-200 hover:bg-white/5"
-        :aria-label="`Increase ${label}`"
+        :aria-label="t.match.form.increase(label)"
         :disabled="!canIncrease"
         @click="stepBy(1)"
       >

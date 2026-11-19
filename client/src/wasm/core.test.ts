@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { GameCommandSchema } from "@/proto/minigames/v2/game_pb";
 import { IdentityKind } from "@/proto/minigames/v2/identity_pb";
 import { MatchHeaderSchema } from "@/proto/minigames/v2/match_pb";
-import { NumbersMatchHintMode } from "@/proto/minigames/v2/numbers_match_pb";
+import { NumbersMatchHintMode, NumbersMatchRefusal } from "@/proto/minigames/v2/numbers_match_pb";
 
 import { Mirror } from "./core";
 import { initSync } from "./pkg/mg_wasm";
@@ -34,12 +34,14 @@ const refill = create(GameCommandSchema, {
 });
 
 describe("Mirror", () => {
-  it("answers in the rules' own words why a command would be refused", () => {
+  it("answers with the rules' own reason why a command would be refused", () => {
     const mirror = numbersMatch();
+    const notDealt = { case: "numbersMatch", value: NumbersMatchRefusal.NOT_DEALT_YET };
     try {
       // Nothing is dealt before the authority's first frame.
-      expect(mirror.refusalOf(0, refill)).toBe("the board is not dealt yet");
-      expect(mirror.preview(0, refill)).toEqual({ kind: "refused", reason: "the board is not dealt yet" });
+      expect(mirror.refusalOf(0, refill)?.reason).toEqual(notDealt);
+      const preview = mirror.preview(0, refill);
+      expect(preview.kind === "refused" && preview.refusal.reason).toEqual(notDealt);
     } finally {
       mirror.free();
     }

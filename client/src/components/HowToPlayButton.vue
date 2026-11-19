@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from "@/i18n";
+
 defineEmits<{ open: [] }>();
 </script>
 
@@ -6,8 +8,9 @@ defineEmits<{ open: [] }>();
   <button
     type="button"
     class="flex size-8 shrink-0 items-center justify-center rounded-full border border-white/15 text-sm font-semibold text-gray-300 hover:bg-panel-raised hover:text-white"
-    aria-label="How to play"
-    title="How to play"
+    :aria-label="t.match.howToPlay.button"
+    :title="t.match.howToPlay.button"
+    data-testid="how-to-play"
     @click="$emit('open')"
   >
     ?

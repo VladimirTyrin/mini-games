@@ -1,1 +1,30 @@
-export const online = {};
+import { pluralEn } from "../plural";
+
+export const online = {
+  title: "Online",
+  settings: "Settings",
+  youAreIn: (lobbyName: string) => `You are in ${lobbyName}`,
+  open: "Open",
+  friends: "Friends",
+  newFriendRequests: (count: number) => `${count} new`,
+  lobbies: "Lobbies",
+  lobbySeats: (taken: number, max: number) => `${taken}/${max} ${pluralEn(max, "player", "players")}`,
+  lobbyWatchers: (count: number) => `${count} watching`,
+  phase: {
+    open: "open",
+    playing: "playing",
+    finished: "finished",
+    watchingReplay: "watching replay",
+  },
+  join: "Join",
+  watch: "Watch",
+  noLobbies: "No lobbies yet — create one!",
+  gamePicker: "Game",
+  standardSettings: "Standard settings",
+  namedSettingsSummary: (lobbyName: string, summary: string) => `“${lobbyName}” · ${summary}`,
+  showSettings: "Change settings",
+  hideSettings: "Hide settings",
+  lobbyNamePlaceholder: "Lobby name (optional)",
+  lobbyNameLabel: "Lobby name",
+  createLobby: "Create lobby",
+};

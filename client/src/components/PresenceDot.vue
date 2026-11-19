@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
 import { Presence } from "@/proto/minigames/v2/social_pb";
 
 const props = defineProps<{ presence: Presence }>();
@@ -8,11 +9,11 @@ const props = defineProps<{ presence: Presence }>();
 const look = computed(() => {
   switch (props.presence) {
     case Presence.PLAYING:
-      return { dot: "bg-amber-400", label: "Playing" };
+      return { dot: "bg-amber-400", label: t.friends.presence.playing };
     case Presence.ONLINE:
-      return { dot: "bg-emerald-400", label: "Online" };
+      return { dot: "bg-emerald-400", label: t.friends.presence.online };
     default:
-      return { dot: "bg-gray-500", label: "Offline" };
+      return { dot: "bg-gray-500", label: t.friends.presence.offline };
   }
 });
 </script>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 
 import { prefersTouch } from "@/input/prefers-touch";
 import { useGameKeys } from "@/input/use-game-keys";
+import { t } from "@/i18n";
 import type { ReplayMatchSource } from "@/match/replay-match-source";
 
 const props = defineProps<{ replay: ReplayMatchSource }>();
@@ -79,7 +80,7 @@ const BUTTON =
       <input
         type="range"
         class="h-2 min-w-0 flex-1 accent-emerald-500"
-        aria-label="Position in the replay"
+        :aria-label="t.match.replay.position"
         min="0"
         :max="replay.length"
         :value="position"
@@ -90,37 +91,39 @@ const BUTTON =
     <div class="flex flex-wrap items-center justify-center gap-2">
       <button
         :class="BUTTON"
-        aria-label="Restart"
-        :title="showsKeys ? 'Restart (R)' : undefined"
+        :aria-label="t.match.replay.restart"
+        :title="showsKeys ? `${t.match.replay.restart} (R)` : undefined"
         @click="replay.restart()"
       >
-        ⏮
+        {{ "⏮" }}
       </button>
       <button
         :class="BUTTON"
-        aria-label="Step back"
-        :title="showsKeys ? 'Step back (←)' : undefined"
+        :aria-label="t.match.replay.stepBack"
+        :title="showsKeys ? `${t.match.replay.stepBack} (←)` : undefined"
         @click="replay.stepBack()"
       >
-        ◀︎
+        {{ "◀︎" }}
       </button>
       <button
         class="flex h-11 min-w-24 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 font-semibold"
-        :aria-label="playing ? 'Pause' : 'Play'"
+        :aria-label="playing ? t.match.replay.pause : t.match.replay.play"
         @click="togglePlay"
       >
-        {{ playing ? "❚❚ Pause" : "▶ Play" }}
-        <kbd v-if="showsKeys" class="rounded bg-white/20 px-1 text-xs font-normal">Space</kbd>
+        {{ playing ? `❚❚ ${t.match.replay.pause}` : `▶ ${t.match.replay.play}` }}
+        <kbd v-if="showsKeys" class="rounded bg-white/20 px-1 text-xs font-normal">{{
+          t.match.replay.spaceKey
+        }}</kbd>
       </button>
       <button
         :class="BUTTON"
-        aria-label="Step forward"
-        :title="showsKeys ? 'Step (→)' : undefined"
+        :aria-label="t.match.replay.stepForward"
+        :title="showsKeys ? `${t.match.replay.step} (→)` : undefined"
         @click="replay.step()"
       >
-        ▶︎
+        {{ "▶︎" }}
       </button>
-      <div role="radiogroup" aria-label="Speed" class="flex rounded-lg bg-panel-raised p-0.5">
+      <div role="radiogroup" :aria-label="t.match.replay.speed" class="flex rounded-lg bg-panel-raised p-0.5">
         <button
           v-for="value in SPEEDS"
           :key="value"
@@ -136,7 +139,7 @@ const BUTTON =
       </div>
     </div>
     <p v-if="showsKeys" class="text-center text-xs text-gray-500">
-      Space play/pause · ← → step · R restart · − + speed
+      {{ t.match.replay.keysHint }}
     </p>
   </div>
 </template>

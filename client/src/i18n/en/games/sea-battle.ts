@@ -1,1 +1,50 @@
-export const seaBattle = {};
+export const seaBattle = {
+  title: "Sea Battle",
+  tagline: "Find and sink the hidden fleet",
+  facts: { classicRules: "classic rules" },
+  bots: { easy: "Easy bot", medium: "Medium bot", hard: "Hard bot" },
+  controls: {
+    keyboard: "Click cells to place your fleet, then click the other sea to fire",
+    touch: "Tap cells to place your fleet, then tap the other sea to fire",
+  },
+  endReasons: {
+    fleetSunk: "The whole fleet is sunk",
+    gaveUpOrLeft: "A player gave up or left",
+  },
+  /** Column letters of the sea, left to right (rows are numbered). */
+  columns: "ABCDEFGHIJ",
+  ship: (length: number) => `${length}-deck ship`,
+  board: {
+    seat: (number: number) => `Seat ${number}`,
+    yourFleet: "Your fleet",
+    opponentsSea: (name: string) => `${name}'s sea`,
+    opponent: "Opponent",
+    shipsAfloat: "Ships afloat",
+    fleetsBeingPlaced: "Fleets are being placed…",
+    waitingForOpponentsFleet: "Waiting for the opponent's fleet…",
+    placeYourFleet: "Place your fleet",
+    placingRandomFleet: "Placing a random fleet…",
+    placeYourFleetWithin: (time: string) => `Place your fleet · ${time}`,
+    playerFires: (name: string) => `${name} fires`,
+    yourShot: "Your shot",
+    opponentsShot: "Opponent's shot",
+    draw: "Draw",
+    playerWins: (name: string) => `${name} wins`,
+    opponentLeftYouWin: "Opponent left — you win",
+    youWin: "You win!",
+    youLose: "You lose",
+  },
+  fleetEditor: {
+    shipsToPlace: "Ships to place",
+    noRoom: "No room left for the rest of the fleet: clear some decks",
+    hint: "Tap a light cell to add a deck; tap a ship to take one away",
+    random: "Random",
+    clear: "Clear",
+    ready: "Ready",
+  },
+  settings: {
+    classicRules:
+      "Classic rules: a 10×10 sea and ten ships — one of four cells, two of three, three of two, four of one.",
+    noTouching: "Ships may not touch, not even at a corner. A hit fires again.",
+  },
+};

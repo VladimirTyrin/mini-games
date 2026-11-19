@@ -1,6 +1,6 @@
 use mg_core::{Authority, CommandError, Game, GameSettings, PlayerSpec, Slot, Status};
 
-use crate::{Command, RawSettings, Settings, Target, {{Pascal}}};
+use crate::{Command, RawSettings, Refusal, Settings, Target, {{Pascal}}};
 
 fn started(players: usize) -> Authority<{{Pascal}}> {
     let mut authority =
@@ -17,7 +17,10 @@ fn rejects_out_of_turn_and_out_of_range_moves() {
     let current = view.current.unwrap();
     let other = Slot::new(1 - current.get());
     assert_eq!(authority.submit(other, Command::Add(1)), Err(CommandError::NotYourTurn));
-    assert!(matches!(authority.submit(current, Command::Add(4)), Err(CommandError::Illegal(_))));
+    assert_eq!(
+        authority.submit(current, Command::Add(4)),
+        Err(CommandError::Illegal(Refusal::AmountOutOfRange))
+    );
 }
 
 #[test]

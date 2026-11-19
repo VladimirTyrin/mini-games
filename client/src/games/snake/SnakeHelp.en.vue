@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { t } from "@/i18n";
+</script>
+
 <template>
   <h3>Goal</h3>
   <p>Grow the longest snake and stay alive. With others on the field, the last snake left wins.</p>
@@ -7,7 +11,7 @@
     <li>Each apple makes it one cell longer and is worth a point.</li>
     <li>
       Hitting yourself or another snake ends your run. So does a wall, unless the walls are set to
-      <b>Wrap</b>: then you come out on the other side.
+      <b>{{ t.games.snake.settings.wallsWrap }}</b>: then you come out on the other side.
     </li>
     <li>Two heads meeting head-on both crash.</li>
     <li>When you are out, you can watch the others to the end.</li>

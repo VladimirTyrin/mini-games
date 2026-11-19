@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 
 import Avatar from "@/components/Avatar.vue";
+import { t } from "@/i18n";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import type { ChatMessage } from "@/proto/minigames/v2/lobby_pb";
 import { useConnectionStore } from "@/stores/connection";
@@ -28,7 +29,7 @@ const labels = computed(() =>
 const isMine = (message: ChatMessage) => sameIdentity(message.sender, connection.identity);
 function senderLabel(message: ChatMessage): string {
   const label = (message.sender && labels.value.get(message.sender.id)) ?? "";
-  return isMine(message) ? `${label} (you)` : label;
+  return isMine(message) ? `${label} (${t.common.you})` : label;
 }
 
 function send(): void {
@@ -69,16 +70,18 @@ watch(
           {{ message.text }}
         </span>
       </li>
-      <li v-if="!messages.length" class="text-gray-500">No messages yet</li>
+      <li v-if="!messages.length" class="text-gray-500">{{ t.match.chat.empty }}</li>
     </ol>
     <form class="flex gap-2 border-t border-white/5 p-2" @submit.prevent="send" @keydown.stop>
       <input
         v-model="text"
         maxlength="300"
-        placeholder="Say something"
+        :placeholder="t.match.chat.placeholder"
         class="flex-1 rounded bg-panel-raised px-2 py-1 text-sm"
       />
-      <button class="rounded bg-panel-raised px-3 text-sm" :disabled="!text.trim()">Send</button>
+      <button class="rounded bg-panel-raised px-3 text-sm" :disabled="!text.trim()">
+        {{ t.match.chat.send }}
+      </button>
     </form>
   </section>
 </template>

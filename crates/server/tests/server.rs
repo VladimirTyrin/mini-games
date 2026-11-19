@@ -128,7 +128,20 @@ async fn invalid_settings_are_rejected() {
             max_seats: 0,
         }))
         .await;
-    expect_error(reply, proto::ErrorCode::InvalidSettings);
+    let error = expect_error(reply, proto::ErrorCode::InvalidSettings);
+    assert_eq!(
+        error.setting_problem,
+        Some(proto::SettingProblem {
+            field: "field_width".to_owned(),
+            problem: Some(proto::setting_problem::Problem::OutOfRange(
+                proto::setting_problem::OutOfRange {
+                    value: 100,
+                    min: 3,
+                    max: 20,
+                }
+            )),
+        })
+    );
 }
 
 #[tokio::test]
@@ -175,10 +188,40 @@ async fn moves_out_of_turn_and_from_observers_are_rejected() {
     let mut host = server.guest("Host").await.client;
     let mut guest = server.guest("Guest").await.client;
     let match_id = start_two_player_tictactoe(&mut host, &mut guest).await;
-    expect_error(
+    let out_of_turn = expect_error(
         guest.request(place(&match_id, 1, 1)).await,
         proto::ErrorCode::CommandRejected,
     );
+    assert_eq!(
+        out_of_turn.refusal.and_then(|refusal| refusal.reason),
+        Some(proto::refusal::Reason::Common(
+            proto::CommonRefusal::NotYourTurn.into()
+        ))
+    );
+    expect_ok(host.request(place(&match_id, 0, 0)).await);
+    let taken = expect_error(
+        guest.request(place(&match_id, 0, 0)).await,
+        proto::ErrorCode::CommandRejected,
+    );
+    assert_eq!(
+        taken.refusal.and_then(|refusal| refusal.reason),
+        Some(proto::refusal::Reason::Tictactoe(
+            proto::TicTacToeRefusal::CellTaken.into()
+        ))
+    );
+    // Input no honest client sends: a generic refusal for the client to word, the detail in
+    // English for whoever sent it.
+    let off_board = expect_error(
+        guest.request(place(&match_id, 99, 0)).await,
+        proto::ErrorCode::CommandRejected,
+    );
+    assert_eq!(
+        off_board.refusal.and_then(|refusal| refusal.reason),
+        Some(proto::refusal::Reason::Common(
+            proto::CommonRefusal::Malformed.into()
+        ))
+    );
+    assert_eq!(off_board.message, "cell is outside the board");
     expect_error(
         host.request(place("0000000000000000", 1, 1)).await,
         proto::ErrorCode::MatchNotFound,

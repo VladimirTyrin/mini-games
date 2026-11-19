@@ -230,6 +230,21 @@ fn rejected_commands_change_nothing_and_say_why() {
     authority.play(0, 1, 1);
     assert_eq!(authority.submit(1, &place(1, 1)), MgStatus::Rejected);
     assert!(last_error().contains("rejected"), "{}", last_error());
+    let mut buffer = empty_buffer();
+    assert_eq!(unsafe { mg_last_refusal(&mut buffer) }, MgStatus::Ok);
+    let refusal = take(buffer);
+    assert_eq!(
+        proto::Refusal::decode(refusal.as_slice()).unwrap().reason,
+        Some(proto::refusal::Reason::Tictactoe(
+            proto::TicTacToeRefusal::CellTaken.into()
+        ))
+    );
+    let mut buffer = empty_buffer();
+    assert_eq!(
+        unsafe { mg_refusal_english(refusal.as_ptr(), refusal.len(), &mut buffer) },
+        MgStatus::Ok
+    );
+    assert_eq!(take(buffer), b"cell is already marked");
     assert_eq!(authority.submit(0, &place(0, 0)), MgStatus::Rejected);
     assert_eq!(authority.submit(9, &place(0, 0)), MgStatus::Rejected);
     assert_eq!(

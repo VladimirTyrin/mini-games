@@ -53,7 +53,18 @@ matters only for friend links: the Friends screen takes a pasted link, and a req
      importance, so the notification pops up.
    - Web Push (RFC 8030): the payload is encrypted for the subscription (RFC 8291,
      `aes128gcm`) and signed with the VAPID key (RFC 8292).
-4. Each payload carries `title`, `body`, `tag` and `data`:
+4. Each payload carries `title`, `body`, `tag` and `data`. The server words nothing for the
+   player: `title` and `body` are `PushText`s, sent as a key with arguments (`%1$s`, a name) and
+   worded on the device in its language. Web Push carries their English too (a service worker from
+   before the keys shows it); FCM does not: Android would show plain text instead of the keys.
+   The keys and every language's texts are in `client/push-texts.json`; `npm run
+   generate:push-texts` writes them into the Android resources (`res/values*/push_strings.xml`)
+   and `public/push-texts.js` for the service worker, and tests check both sides agree.
+   - FCM: `android.notification.title_loc_key`/`body_loc_key` with `*_loc_args`; Android picks the
+     resource of the app's language (the app sets it from the in-app switch, `AppLocalePlugin`;
+     before Android 13 notifications follow the phone's language).
+   - Web Push: `titleKey`, `titleArgs`, `bodyKey`, `bodyArgs`; the worker reads the app's language
+     from IndexedDB (`mg-worker`, written by `platform/worker-locale.ts`).
    - `data` holds `kind` and `sentAt`, the server clock in unix ms.
    - The service worker (`client/public/push-sw.js`) adds `receivedAt` and must show a
      notification for every push. Safari cancels the subscription of a site whose push shows

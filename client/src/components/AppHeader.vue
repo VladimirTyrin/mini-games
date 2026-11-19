@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 
 import Avatar from "@/components/Avatar.vue";
+import { t } from "@/i18n";
 import { useBackHandler } from "@/platform/back-navigation";
 import { useConnectionStore } from "@/stores/connection";
 
@@ -13,14 +14,17 @@ const connection = useConnectionStore();
 const status = computed(() => {
   switch (connection.state) {
     case "signed-in":
-      return { text: connection.identity?.displayName ?? "online", tone: latencyTone(connection.latencyMs) };
+      return {
+        text: connection.identity?.displayName ?? t.app.header.online,
+        tone: latencyTone(connection.latencyMs),
+      };
     case "connecting":
     case "reconnecting":
-      return { text: "connecting…", tone: "bg-amber-400" };
+      return { text: t.app.header.connecting, tone: "bg-amber-400" };
     case "outdated":
-      return { text: "update the app", tone: "bg-rose-500" };
+      return { text: t.app.header.updateTheApp, tone: "bg-rose-500" };
     case "replaced":
-      return { text: "open in another window", tone: "bg-gray-500" };
+      return { text: t.app.header.openInAnotherWindow, tone: "bg-gray-500" };
     default:
       return null;
   }
@@ -49,7 +53,7 @@ if (props.back) useBackHandler(goBack);
     <button
       v-if="back"
       class="rounded px-2 py-1 text-lg hover:bg-panel-raised"
-      aria-label="Back"
+      :aria-label="t.common.back"
       @click="goBack"
     >
       ←
@@ -61,8 +65,8 @@ if (props.back) useBackHandler(goBack);
       <span
         v-if="connection.state === 'signed-in' && connection.latencyMs !== null"
         class="shrink-0 tabular-nums"
-        title="Round trip to the server"
-        >{{ connection.latencyMs }} ms</span
+        :title="t.app.header.roundTrip"
+        >{{ t.app.units.milliseconds(connection.latencyMs) }}</span
       >
       <Avatar
         v-if="connection.state === 'signed-in' && connection.identity"

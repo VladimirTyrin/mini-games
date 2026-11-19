@@ -1,6 +1,6 @@
 use mg_numbers_match::{
     Batch, COLUMNS, Cell, CellIndex, CellPair, CellValue, Command, Hint, HintMode, HintsLeft,
-    LastAction, LossReason, NumbersMatch, Phase, RawSettings, Stats, View, WorldEvent,
+    LastAction, LossReason, NumbersMatch, Phase, RawSettings, Refusal, Stats, View, WorldEvent,
 };
 
 use crate::proto;
@@ -10,6 +10,7 @@ use crate::proto::{
 };
 use crate::wire_error::WireError;
 use crate::wire_game::WireGame;
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for NumbersMatch {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -233,6 +234,41 @@ fn stats_to_wire(stats: Stats) -> proto::NumbersMatchStats {
         pairs_removed: stats.pairs_removed,
         refills_used: stats.refills_used,
         hints_used: stats.hints_used,
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::NotDealtYet => proto::NumbersMatchRefusal::NotDealtYet,
+            Refusal::SameCell => proto::NumbersMatchRefusal::SameCell,
+            Refusal::CellCrossedOut => proto::NumbersMatchRefusal::CellCrossedOut,
+            Refusal::NotAPair => proto::NumbersMatchRefusal::NotAPair,
+            Refusal::TooFarApart => proto::NumbersMatchRefusal::TooFarApart,
+            Refusal::NoRefillsLeft => proto::NumbersMatchRefusal::NoRefillsLeft,
+            Refusal::HintsDisabled => proto::NumbersMatchRefusal::HintsDisabled,
+            Refusal::NoHintsLeft => proto::NumbersMatchRefusal::NoHintsLeft,
+            Refusal::HintAlreadyShown => proto::NumbersMatchRefusal::HintAlreadyShown,
+            Refusal::DealWrongSize | Refusal::DealHasAdjacentTwins | Refusal::AlreadyDealt => {
+                return malformed_refusal();
+            }
+        };
+        proto::refusal::Reason::NumbersMatch(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::NumbersMatchRefusal::try_from(value).ok()? {
+            proto::NumbersMatchRefusal::Unspecified => return None,
+            proto::NumbersMatchRefusal::NotDealtYet => Refusal::NotDealtYet,
+            proto::NumbersMatchRefusal::SameCell => Refusal::SameCell,
+            proto::NumbersMatchRefusal::CellCrossedOut => Refusal::CellCrossedOut,
+            proto::NumbersMatchRefusal::NotAPair => Refusal::NotAPair,
+            proto::NumbersMatchRefusal::TooFarApart => Refusal::TooFarApart,
+            proto::NumbersMatchRefusal::NoRefillsLeft => Refusal::NoRefillsLeft,
+            proto::NumbersMatchRefusal::HintsDisabled => Refusal::HintsDisabled,
+            proto::NumbersMatchRefusal::NoHintsLeft => Refusal::NoHintsLeft,
+            proto::NumbersMatchRefusal::HintAlreadyShown => Refusal::HintAlreadyShown,
+        })
     }
 }
 

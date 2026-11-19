@@ -1,246 +1,83 @@
 #!/usr/bin/env node
-// Screenshots of every game at every screen size of AGENTS.md "Screens", for a look at the
-// layouts side by side. Drives the installed Chrome headless over the DevTools protocol (no
-// packages needed): each shot gets a fresh tab with the size and touch of the device, starts a
-// local match the way a player would, and saves a PNG. Then one contact sheet per game.
+// Screenshots of the app's screens at the sizes of AGENTS.md "Screens", in its languages, to
+// look at layouts side by side (fit.mjs is the check). Everything by default; narrow it with
 //
 //   node tools/screens/shoot.mjs [--url http://localhost:5174] [--out screens-out]
-//                                [--games snake,checkers] [--sizes iphone-se,ipad-landscape]
+//                                [--screens home,lobby,checkers] [--sizes iphone-se,ipad]
+//                                [--langs ru] [--parallel 4]
 //
-// The app must be served at --url (`npm run dev` in client/); local matches need no server.
+// Files: <out>/<lang>/<screen>/<size>.png; <out>/all.html shows every shot there (this run's
+// and earlier ones'), by screen, the languages side by side. The app must be served at --url;
+// online screens (online, lobby) need the server too, and are skipped without it.
 
-import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
-const SIZES = [
-  { id: "iphone-se-old", label: "iPhone SE 1st 320×568", width: 320, height: 568, scale: 2, touch: true },
-  { id: "iphone-se", label: "iPhone SE 375×667", width: 375, height: 667, scale: 2, touch: true },
-  { id: "iphone-15-pro", label: "iPhone 15 Pro 393×852", width: 393, height: 852, scale: 3, touch: true },
-  { id: "pixel-10a", label: "Pixel 10a 412×915", width: 412, height: 915, scale: 2, touch: true },
-  { id: "pixel-10a-landscape", label: "Pixel 10a sideways 915×412", width: 915, height: 412, scale: 2, touch: true },
-  { id: "ipad", label: "iPad 2018 768×1024", width: 768, height: 1024, scale: 2, touch: true },
-  { id: "ipad-landscape", label: "iPad 2018 sideways 1024×768", width: 1024, height: 768, scale: 2, touch: true },
-  { id: "laptop-half", label: "2K 16\" half 853×1067", width: 853, height: 1067, scale: 1, touch: false },
-  { id: "laptop", label: "2K 16\" laptop 1707×1067", width: 1707, height: 1067, scale: 1, touch: false },
-  { id: "monitor-half", label: "4K 27\" at 150% half 1280×1440", width: 1280, height: 1440, scale: 1, touch: false },
-  { id: "monitor", label: "4K 27\" at 150% 2560×1440", width: 2560, height: 1440, scale: 1, touch: false },
-];
+import { LANGS, SIZES, inParallel, launchChrome, option, runOptions, visit, visits, withRetries } from "./chrome.mjs";
+import { SCENARIOS } from "./scenarios.mjs";
+import { serverIsUp } from "./server-probe.mjs";
 
-const click = (text) => `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(${JSON.stringify(text)}))?.click()`;
-const wait = (ms) => `await new Promise((r) => setTimeout(r, ${ms}))`;
-const play = `${click("Play")}; ${wait(1500)};`;
-
-/** Per game: what a player does before the shot (page JS, may await). `shots` names extra views. */
-const GAMES = [
-  { id: "home", route: "/", steps: [wait(800)] },
-  { id: "snake", route: "/play/snake", steps: [click("+ Add opponent"), click("+ Add opponent"), wait(200), play, wait(4500)] },
-  { id: "tictactoe", route: "/play/tictactoe", steps: [play, `document.querySelector('main button[aria-label]')?.click()`, wait(1200)] },
-  { id: "stack_attack", route: "/play/stack_attack", steps: [play, wait(4500)] },
-  {
-    id: "puzzle2048",
-    route: "/play/puzzle2048",
-    steps: [play, ...["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].map((key) => `window.dispatchEvent(new KeyboardEvent('keydown', { key: '${key}' })); ${wait(250)}`)],
-  },
-  { id: "numbers_match", route: "/play/numbers_match", steps: [play, wait(500)] },
-  {
-    id: "word_hunt",
-    route: "/play/word_hunt",
-    steps: [click("English"), play, ...[..."crane"].map((letter) => `${click(letter)}; ${wait(120)}`), wait(1200)],
-  },
-  { id: "checkers", route: "/play/checkers", steps: [play, wait(1500)] },
-  { id: "sea_battle-placing", route: "/play/sea_battle", steps: [play, click("Random"), wait(400)] },
-  {
-    id: "sea_battle",
-    route: "/play/sea_battle",
-    steps: [
-      play,
-      click("Random"),
-      wait(300),
-      click("Ready"),
-      wait(1500),
-      `for (let i = 0; i < 12; i++) { const open = [...(document.querySelectorAll('[role=grid]')[0]?.querySelectorAll('button:not(:disabled)') ?? [])]; open[(i * 37) % Math.max(1, open.length)]?.click(); ${wait(500)}; }`,
-    ],
-  },
-];
-
-function option(name, fallback) {
-  const at = process.argv.indexOf(`--${name}`);
-  return at > 0 ? process.argv[at + 1] : fallback;
-}
-
-const url = option("url", "http://localhost:5174");
+const options = runOptions();
 const out = resolve(option("out", "screens-out"));
-const onlyGames = option("games", null)?.split(",");
-const onlySizes = option("sizes", null)?.split(",");
-const chromePath = option("chrome", "C:/Program Files/Google/Chrome/Application/chrome.exe");
-const port = 9333;
-
-mkdirSync(out, { recursive: true });
-
-const chrome = spawn(
-  chromePath,
-  [
-    "--headless=new",
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${mkdtempSync(join(tmpdir(), "mg-screens-"))}`,
-    "--hide-scrollbars",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "about:blank",
-  ],
-  { stdio: "ignore" },
-);
-
-async function devtools(path, method = "GET") {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}${path}`, { method });
-      const text = await response.text();
-      // /json/close answers in plain text.
-      return text.startsWith("{") ? JSON.parse(text) : text;
-    } catch {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-  }
-  throw new Error(`Chrome DevTools did not answer on ${port}`);
+const online = await serverIsUp(options.url);
+const all = visits(options);
+const planned = all.filter(({ scenario }) => online || !scenario.needsServer);
+if (planned.length < all.length) {
+  console.warn(`The server does not answer at ${options.url}/ws: skipping the online screens.`);
 }
 
-/** A fresh tab and a `send(method, params)` over its DevTools socket. */
-async function openTab() {
-  const target = await devtools("/json/new?about:blank", "PUT");
-  const socket = new WebSocket(target.webSocketDebuggerUrl);
-  await new Promise((resolveOpen, reject) => {
-    socket.onopen = resolveOpen;
-    socket.onerror = reject;
+const shotPath = (lang, screen, size) => join(lang, screen, `${size}.png`);
+
+const chrome = launchChrome(options);
+try {
+  await inParallel(planned, options.parallel, async (planned) => {
+    const { scenario, size, lang } = planned;
+    const file = join(out, shotPath(lang, scenario.id, size.id));
+    const saved = await withRetries(`${scenario.id} · ${size.id} · ${lang}`, () =>
+      visit(chrome, options.url, planned, async (tab) => {
+        const shot = await tab.send("Page.captureScreenshot", { format: "png" });
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, Buffer.from(shot.data, "base64"));
+        return file;
+      }),
+    );
+    if (saved) console.log(saved);
   });
-  let nextId = 1;
-  const pending = new Map();
-  socket.onmessage = (message) => {
-    const data = JSON.parse(message.data);
-    if (data.id && pending.has(data.id)) {
-      const { resolveCall, reject } = pending.get(data.id);
-      pending.delete(data.id);
-      if (data.error) reject(new Error(data.error.message));
-      else resolveCall(data.result);
-    }
-  };
-  const send = (method, params = {}) =>
-    new Promise((resolveCall, reject) => {
-      const id = nextId++;
-      pending.set(id, { resolveCall, reject });
-      socket.send(JSON.stringify({ id, method, params }));
-    });
-  const close = async () => {
-    socket.close();
-    await devtools(`/json/close/${target.id}`);
-  };
-  return { send, close };
+} finally {
+  chrome.stop();
 }
 
-async function shoot(game, size) {
-  const tab = await openTab();
-  try {
-    await tab.send("Emulation.setDeviceMetricsOverride", {
-      width: size.width,
-      height: size.height,
-      deviceScaleFactor: size.scale,
-      mobile: size.touch,
-    });
-    await tab.send("Emulation.setTouchEmulationEnabled", size.touch ? { enabled: true, maxTouchPoints: 5 } : { enabled: false });
-    await tab.send("Page.enable");
-    await tab.send("Page.navigate", { url: `${url}/#${game.route}` });
-    await new Promise((r) => setTimeout(r, 2500));
-    const script = `(async () => { ${game.steps.join(";\n")} })()`;
-    await tab.send("Runtime.evaluate", { expression: script, awaitPromise: true });
-    const shot = await tab.send("Page.captureScreenshot", { format: "png" });
-    const file = join(out, `${game.id}--${size.id}.png`);
-    writeFileSync(file, Buffer.from(shot.data, "base64"));
-    return file;
-  } finally {
-    await tab.close();
-  }
-}
+const STYLE = `<style>
+  body { margin: 0; padding: 16px; background: #0b0f17; color: #e5e7eb; font: 15px system-ui; }
+  nav { position: sticky; top: 0; background: #0b0f17; padding: 8px 0; z-index: 1; line-height: 1.9; }
+  nav a { color: #93c5fd; margin-right: 10px; }
+  h1 { margin: 28px 0 8px; font-size: 22px; }
+  h2 { margin: 12px 0 6px; font-size: 15px; color: #9ca3af; font-weight: 600; }
+  .row { display: flex; gap: 14px; align-items: flex-start; overflow-x: auto; padding-bottom: 6px; }
+  figure { margin: 0; flex: none; } img { display: block; border: 1px solid #374151; height: 380px; }
+  figcaption { margin-top: 4px; color: #9ca3af; font-size: 13px; }
+</style>`;
 
-const SHEET_STYLE = `<style>
-    body { margin: 0; padding: 16px; background: #0b0f17; color: #e5e7eb; font: 16px system-ui; }
-    h1 { margin: 24px 0 12px; font-size: 22px; } h1:first-of-type { margin-top: 0; }
-    main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
-    figure { margin: 0; } img { display: block; border: 1px solid #374151; }
-    figcaption { margin-top: 4px; color: #9ca3af; }
-  </style>`;
-
-/** A game's shots at every size, scaled to one height and labelled. */
-function gameSection(game, sizes, rowHeight) {
-  const cells = sizes
-    .map(
-      (size) =>
-        `<figure><a href="${game.id}--${size.id}.png"><img src="${game.id}--${size.id}.png" style="height:${rowHeight}px" loading="lazy"></a><figcaption>${size.label}</figcaption></figure>`,
-    )
+/** all.html: every screen, one row of sizes per language, each shot opening at full size. */
+function writeAllPage() {
+  const sections = SCENARIOS.map((scenario) => {
+    const rows = LANGS.map((lang) => {
+      const cells = SIZES.filter((size) => existsSync(join(out, shotPath(lang, scenario.id, size.id))))
+        .map((size) => {
+          const src = shotPath(lang, scenario.id, size.id).replaceAll("\\", "/");
+          return `<figure><a href="${src}"><img src="${src}" loading="lazy"></a><figcaption>${size.label}</figcaption></figure>`;
+        })
+        .join("");
+      return cells ? `<h2>${lang.toUpperCase()}</h2><div class="row">${cells}</div>` : "";
+    }).join("");
+    return rows ? `<h1 id="${scenario.id}">${scenario.id}</h1>${rows}` : "";
+  }).filter(Boolean);
+  const links = SCENARIOS.filter((scenario) => sections.some((section) => section.includes(`id="${scenario.id}"`)))
+    .map((scenario) => `<a href="#${scenario.id}">${scenario.id}</a>`)
     .join("");
-  return `<h1 id="${game.id}">${game.id}</h1><main>${cells}</main>`;
-}
-
-/** all.html: every game on one page, each shot opening at full size. */
-function writeAllPage(games, sizes) {
-  const links = games.map((game) => `<a href="#${game.id}" style="color:#93c5fd;margin-right:12px">${game.id}</a>`).join("");
-  const html = `<!doctype html><meta charset="utf-8"><title>Screens</title>${SHEET_STYLE}<p>${links}</p>${games
-    .map((game) => gameSection(game, sizes, 420))
-    .join("")}`;
   const page = join(out, "all.html");
-  writeFileSync(page, html);
+  writeFileSync(page, `<!doctype html><meta charset="utf-8"><title>Screens</title>${STYLE}<nav>${links}</nav>${sections.join("")}`);
   return page;
 }
 
-/** One page per game: every size scaled to the same height, labelled, shot as one image. */
-async function contactSheet(game, sizes) {
-  const html = `<!doctype html><meta charset="utf-8">${SHEET_STYLE}${gameSection(game, sizes, 520)}`;
-  const page = join(out, `${game.id}.html`);
-  writeFileSync(page, html);
-  const tab = await openTab();
-  try {
-    await tab.send("Emulation.setDeviceMetricsOverride", { width: 3000, height: 800, deviceScaleFactor: 1, mobile: false });
-    await tab.send("Page.enable");
-    await tab.send("Page.navigate", { url: pathToFileURL(page).href });
-    await new Promise((r) => setTimeout(r, 1500));
-    const { result } = await tab.send("Runtime.evaluate", { expression: "document.documentElement.scrollHeight" });
-    const shot = await tab.send("Page.captureScreenshot", {
-      format: "jpeg",
-      quality: 85,
-      captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: 3000, height: result.value, scale: 0.6 },
-    });
-    const file = join(out, `sheet--${game.id}.jpg`);
-    writeFileSync(file, Buffer.from(shot.data, "base64"));
-    return file;
-  } finally {
-    await tab.close();
-  }
-}
-
-try {
-  const games = GAMES.filter((game) => !onlyGames || onlyGames.includes(game.id));
-  const sizes = SIZES.filter((size) => !onlySizes || onlySizes.includes(size.id));
-  for (const game of games) {
-    for (const size of sizes) {
-      // A page reloading itself mid-script (a service worker taking over, say) loses the shot:
-      // try again, then go on without it rather than lose the whole run.
-      for (let attempt = 1; ; attempt++) {
-        try {
-          console.log(await shoot(game, size));
-          break;
-        } catch (error) {
-          console.error(`${game.id} at ${size.id}, attempt ${attempt}: ${error.message}`);
-          if (attempt === 3) break;
-        }
-      }
-    }
-    console.log(await contactSheet(game, sizes));
-  }
-  // The page lists every game and size, shot in this run or an earlier one.
-  console.log(writeAllPage(GAMES, SIZES));
-} finally {
-  chrome.kill();
-}
+console.log(writeAllPage());

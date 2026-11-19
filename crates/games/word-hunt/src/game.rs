@@ -7,7 +7,7 @@ use crate::io::{Command, WorldEvent};
 use crate::model::{
     Answers, HiddenWord, LetterMark, PendingGuess, Phase, ScoredGuess, Seats, Word,
 };
-use crate::rules::{GROUP_GUESS_CAP, check_hard_mode, mark_guess};
+use crate::rules::{GROUP_GUESS_CAP, Refusal, check_hard_mode, mark_guess};
 use crate::settings::{FirstTurn, Puzzle, Settings};
 use crate::view::{KeyHint, View};
 
@@ -116,16 +116,16 @@ impl WordHunt {
         }
     }
 
-    fn record_marks(&mut self, marks: &[LetterMark]) -> Result<(), CommandError> {
+    fn record_marks(&mut self, marks: &[LetterMark]) -> Result<(), CommandError<Refusal>> {
         if self.phase != Phase::Guessing {
-            return Err(CommandError::Illegal("no guess is being made"));
+            return Err(CommandError::Illegal(Refusal::NoGuessPending));
         }
         let pending = match self.pending_guess.take() {
             Some(pending) if marks.len() == pending.word.letters().len() => pending,
             unfit => {
                 // A refused event leaves the state untouched: the guess goes back.
                 self.pending_guess = unfit;
-                return Err(CommandError::Illegal("there is no guess these marks fit"));
+                return Err(CommandError::Illegal(Refusal::MarksFitNoGuess));
             }
         };
         let scored = ScoredGuess {
@@ -146,11 +146,9 @@ impl WordHunt {
         Ok(())
     }
 
-    fn give_up(&mut self, slot: Slot) -> Result<(), CommandError> {
+    fn give_up(&mut self, slot: Slot) -> Result<(), CommandError<Refusal>> {
         if self.phase != Phase::Guessing || !self.seats.is_in_play(slot) {
-            return Err(CommandError::Illegal(
-                "only a player still guessing can give up",
-            ));
+            return Err(CommandError::Illegal(Refusal::CannotGiveUp));
         }
         if self.seats.is_group() {
             self.leave_table(slot);
@@ -168,6 +166,7 @@ impl Game for WordHunt {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = HiddenWord;
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "word_hunt",
@@ -206,7 +205,11 @@ impl Game for WordHunt {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.phase.is_over() {
             return Err(CommandError::GameOver);
         }
@@ -215,22 +218,22 @@ impl Game for WordHunt {
             Command::Guess(text) => text,
         };
         if self.phase != Phase::Guessing {
-            return Err(CommandError::Illegal("the word is not chosen yet"));
+            return Err(CommandError::Illegal(Refusal::WordNotChosenYet));
         }
         if self.pending_guess.is_some() {
-            return Err(CommandError::Illegal("the last guess is not marked yet"));
+            return Err(CommandError::Illegal(Refusal::LastGuessNotMarked));
         }
         if self.turn != Some(slot) {
             return Err(CommandError::NotYourTurn);
         }
         let guess = Word::parse(text, self.settings.language, self.settings.word_length())
-            .map_err(|error| CommandError::Illegal(error.reason()))?;
+            .map_err(|error| CommandError::Illegal(error.into()))?;
         if self.guesses.iter().any(|earlier| earlier.word == guess) {
-            return Err(CommandError::Illegal("this word was already tried"));
+            return Err(CommandError::Illegal(Refusal::AlreadyTried));
         }
         if self.settings.hard_mode {
             check_hard_mode(&guess, &self.guesses)
-                .map_err(|violation| CommandError::Illegal(violation.reason()))?;
+                .map_err(|violation| CommandError::Illegal(violation.into()))?;
         }
         self.pending_guess = Some(PendingGuess {
             word: guess,
@@ -292,11 +295,11 @@ impl Game for WordHunt {
             .collect()
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         match event {
             WorldEvent::WordChosen => {
                 if self.phase != Phase::Choosing {
-                    return Err(CommandError::Illegal("the word is already chosen"));
+                    return Err(CommandError::Illegal(Refusal::WordAlreadyChosen));
                 }
                 self.phase = Phase::Guessing;
                 // Alone there is nobody to choose: the one seat starts.
@@ -311,15 +314,13 @@ impl Game for WordHunt {
                     || !self.guesses.is_empty()
                     || !self.seats.is_in_play(*slot)
                 {
-                    return Err(CommandError::Illegal("the first player is already chosen"));
+                    return Err(CommandError::Illegal(Refusal::FirstPlayerAlreadyChosen));
                 }
                 if self
                     .fixed_first_player()
                     .is_some_and(|fixed| fixed != *slot)
                 {
-                    return Err(CommandError::Illegal(
-                        "the settings name another first player",
-                    ));
+                    return Err(CommandError::Illegal(Refusal::FirstPlayerAgainstSettings));
                 }
                 self.turn = Some(*slot);
                 Ok(())
@@ -327,10 +328,10 @@ impl Game for WordHunt {
             WorldEvent::GuessMarked(marks) => self.record_marks(marks),
             WorldEvent::WordRevealed(text) => {
                 if !self.phase.is_over() || self.revealed_answer.is_some() {
-                    return Err(CommandError::Illegal("the word is revealed at the end"));
+                    return Err(CommandError::Illegal(Refusal::WordRevealedEarly));
                 }
                 let answer = Word::parse(text, self.settings.language, self.settings.word_length())
-                    .map_err(|error| CommandError::Illegal(error.reason()))?;
+                    .map_err(|_| CommandError::Illegal(Refusal::RevealedWordInvalid))?;
                 self.revealed_answer = Some(answer);
                 Ok(())
             }

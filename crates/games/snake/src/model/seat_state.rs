@@ -4,7 +4,7 @@ use mg_core::{CommandError, PlayerKind};
 
 use crate::io::INPUT_BUFFER;
 use crate::model::{Direction, Point, Score};
-use crate::rules::DeathReason;
+use crate::rules::{DeathReason, Refusal};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SeatState {
@@ -46,7 +46,7 @@ impl SeatState {
         self.queued_turns.last().copied().unwrap_or(self.direction)
     }
 
-    pub(crate) fn queue_turn(&mut self, direction: Direction) -> Result<(), CommandError> {
+    pub(crate) fn queue_turn(&mut self, direction: Direction) -> Result<(), CommandError<Refusal>> {
         if !self.is_alive() {
             return Err(CommandError::NotPlaying);
         }
@@ -55,10 +55,10 @@ impl SeatState {
         }
         let intended = self.intended_direction();
         if direction == intended {
-            return Err(CommandError::Illegal("already heading that way"));
+            return Err(CommandError::Illegal(Refusal::AlreadyHeadingThatWay));
         }
         if direction.is_opposite(intended) {
-            return Err(CommandError::Illegal("cannot reverse"));
+            return Err(CommandError::Illegal(Refusal::CannotReverse));
         }
         self.queued_turns.push(direction);
         Ok(())

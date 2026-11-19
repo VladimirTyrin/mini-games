@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
 import { WordHuntLetterMark, type WordHuntKeyHint } from "@/proto/minigames/v2/word_hunt_pb";
 
 import { markClass } from "./mark-style";
@@ -16,6 +17,7 @@ const emit = defineEmits<{ letter: [letter: string]; erase: [] }>();
 
 const markOf = computed(() => new Map(props.hints.map((hint) => [hint.letter, hint.mark])));
 
+const ERASE_SYMBOL = "⌫";
 const UNTRIED = "bg-gray-500/40 text-gray-100";
 /** Still pressable: a missing letter may be typed on purpose, e.g. to rule others out. */
 const MISSING = "bg-gray-900 text-gray-600 ring-1 ring-inset ring-white/5";
@@ -63,12 +65,12 @@ function activate(event: MouseEvent, action: () => void): void {
       <button
         v-if="index === rows.length - 1"
         type="button"
-        aria-label="Delete letter"
+        :aria-label="t.games.wordHunt.board.deleteLetter"
         class="h-12 min-w-0 flex-[1.6] rounded-md bg-gray-500/40 text-lg text-gray-100 active:brightness-125"
         @pointerdown="press($event, () => emit('erase'))"
         @click="activate($event, () => emit('erase'))"
       >
-        ⌫
+        {{ ERASE_SYMBOL }}
       </button>
     </div>
   </div>

@@ -1,27 +1,37 @@
 <script setup lang="ts">
 import { ANDROID_APK_URL } from "@/platform/android-app";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
 import Avatar from "@/components/Avatar.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
 import TestNotifications from "@/components/TestNotifications.vue";
 import UpdateBanner from "@/components/UpdateBanner.vue";
+import { LOCALES, type Locale, locale, setLocale, t } from "@/i18n";
 import { normalizeServerUrl } from "@/platform/server-url";
 import { nativeShellBuild } from "@/platform/web-bundle";
 import { useAppUpdateStore } from "@/stores/app-update";
 import { useConnectionStore } from "@/stores/connection";
 import { usePrefsStore } from "@/stores/prefs";
 import { useToastStore } from "@/stores/toasts";
+import { privacyPolicyUrl } from "@/util/privacy-policy";
 
 const prefs = usePrefsStore();
 const connection = useConnectionStore();
 const appUpdate = useAppUpdateStore();
 const toasts = useToastStore();
 const serverInput = ref(prefs.serverUrl);
+/** Each language named in itself, so a player who cannot read the current one still finds theirs. */
+const LANGUAGE_NAMES: Record<Locale, string> = { en: "English", ru: "Русский" };
+/** The app shell's build, when the running web bundle came over the air on top of it. */
+const shellBuild = ref<number | null>(null);
 // The build is 0 in a local build without MG_BUILD_NUMBER (deploy.sh and the Android build set it).
-const webVersion = __APP_BUILD__ > 0 ? `${__APP_VERSION__} (${__APP_BUILD__})` : __APP_VERSION__;
-const version = ref(__NATIVE_APP__ ? `${__APP_VERSION__} (web ${__APP_BUILD__})` : webVersion);
+const version = computed(() => {
+  if (!__NATIVE_APP__) return __APP_BUILD__ > 0 ? `${__APP_VERSION__} (${__APP_BUILD__})` : __APP_VERSION__;
+  return shellBuild.value === null
+    ? t.settings.versionWithWebBuild(__APP_VERSION__, __APP_BUILD__)
+    : t.settings.versionWithBuilds(__APP_VERSION__, __APP_BUILD__, shellBuild.value);
+});
 const checkingForUpdates = ref(false);
 /** For the template, which cannot see the build-time constant. */
 const isNativeApp = __NATIVE_APP__;
@@ -29,8 +39,7 @@ const isNativeApp = __NATIVE_APP__;
 onMounted(async () => {
   if (!__NATIVE_APP__) return;
   // The running web bundle may be newer than the app shell when it came over the air.
-  const shellBuild = await nativeShellBuild().catch(() => null);
-  if (shellBuild !== null) version.value = `${__APP_VERSION__} (web ${__APP_BUILD__}, app ${shellBuild})`;
+  shellBuild.value = await nativeShellBuild().catch(() => null);
 });
 
 async function checkForUpdates(): Promise<void> {
@@ -39,17 +48,17 @@ async function checkForUpdates(): Promise<void> {
   checkingForUpdates.value = false;
   switch (report.kind) {
     case "up-to-date":
-      toasts.show("Up to date", "success");
+      toasts.show(t.settings.upToDate, "success");
       break;
     case "web-bundle-ready":
-      toasts.show("Update downloaded — it starts once you leave the match or lobby", "success");
+      toasts.show(t.settings.updateDownloaded, "success");
       break;
     case "apk-available":
-      toasts.show("A new app version is available — tap Download", "success");
+      toasts.show(t.settings.newAppVersion, "success");
       break;
     case "no-release-info":
     case "check-failed":
-      toasts.error("Could not check for updates — is the server reachable?");
+      toasts.error(t.settings.updateCheckFailed);
       break;
   }
 }
@@ -57,7 +66,7 @@ async function checkForUpdates(): Promise<void> {
 function saveServer(): void {
   const url = normalizeServerUrl(serverInput.value);
   if (!url) {
-    toasts.error("That does not look like a server address");
+    toasts.error(t.settings.notAServerAddress);
     return;
   }
   if (url !== prefs.serverUrl) {
@@ -66,7 +75,7 @@ function saveServer(): void {
     prefs.sessionToken = "";
   }
   serverInput.value = url;
-  toasts.show("Server saved", "success");
+  toasts.show(t.settings.serverSaved, "success");
   void connection.loadServerInfo();
   void appUpdate.check();
 }
@@ -81,12 +90,28 @@ function resetServer(): void {
 </script>
 
 <template>
-  <AppHeader title="Settings" back="/" />
+  <AppHeader :title="t.settings.title" back="/" />
   <main class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
     <section class="space-y-3 rounded-xl bg-panel p-4">
-      <h2 class="font-semibold">Server</h2>
+      <h2 class="font-semibold">{{ t.settings.language }}</h2>
+      <div class="flex gap-2">
+        <button
+          v-for="language in LOCALES"
+          :key="language"
+          :lang="language"
+          class="min-h-10 flex-1 rounded px-3 text-sm"
+          :class="language === locale ? 'bg-emerald-600 font-semibold' : 'bg-panel-raised'"
+          :aria-pressed="language === locale"
+          @click="setLocale(language)"
+        >
+          {{ LANGUAGE_NAMES[language] }}
+        </button>
+      </div>
+    </section>
+    <section class="space-y-3 rounded-xl bg-panel p-4">
+      <h2 class="font-semibold">{{ t.settings.server }}</h2>
       <p class="text-xs text-gray-400">
-        Address of the game server, e.g. braintvsminigames.xyz or 146.103.106.44.
+        {{ t.settings.serverHint }}
       </p>
       <form class="flex gap-2" @submit.prevent="saveServer">
         <input
@@ -95,12 +120,12 @@ function resetServer(): void {
           autocapitalize="off"
           spellcheck="false"
         />
-        <button class="rounded bg-emerald-600 px-3 text-sm">Save</button>
+        <button class="rounded bg-emerald-600 px-3 text-sm">{{ t.common.save }}</button>
       </form>
-      <button class="text-xs text-gray-400" @click="resetServer">Reset to default</button>
+      <button class="text-xs text-gray-400" @click="resetServer">{{ t.settings.resetToDefault }}</button>
     </section>
     <section v-if="connection.isSignedIn" class="space-y-3 rounded-xl bg-panel p-4">
-      <h2 class="font-semibold">Account</h2>
+      <h2 class="font-semibold">{{ t.settings.account }}</h2>
       <div class="flex items-center gap-3">
         <Avatar
           :url="connection.identity?.avatarUrl ?? ''"
@@ -108,38 +133,38 @@ function resetServer(): void {
           :player-id="connection.identity?.id"
         />
         <p class="flex-1 truncate text-sm text-gray-300">
-          Signed in as {{ connection.identity?.displayName }}
+          {{ t.settings.signedInAs(connection.identity?.displayName ?? "") }}
         </p>
         <button class="rounded bg-panel-raised px-3 py-2 text-sm" @click="connection.signOut()">
-          Sign out
+          {{ t.settings.signOut }}
         </button>
       </div>
     </section>
     <section v-else class="space-y-2">
-      <h2 class="px-1 font-semibold">Account</h2>
+      <h2 class="px-1 font-semibold">{{ t.settings.account }}</h2>
       <SignInPanel />
     </section>
     <TestNotifications v-if="connection.isSignedIn" />
     <section v-if="!isNativeApp" class="flex items-center gap-3 rounded-xl bg-panel p-4">
       <div class="min-w-0 flex-1">
-        <h2 class="font-semibold">Android app</h2>
-        <p class="text-xs text-gray-400">Plays offline and updates itself.</p>
+        <h2 class="font-semibold">{{ t.app.androidApp }}</h2>
+        <p class="text-xs text-gray-400">{{ t.settings.androidAppPitch }}</p>
       </div>
       <a
         :href="ANDROID_APK_URL"
         class="rounded-lg border border-white/15 px-3 py-1.5 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
-        >Download</a
+        >{{ t.app.download }}</a
       >
     </section>
     <UpdateBanner />
-    <p class="text-center text-xs text-gray-500">Version {{ version }}</p>
+    <p class="text-center text-xs text-gray-500">{{ t.settings.version(version) }}</p>
     <p v-if="isNativeApp" class="text-center text-xs text-gray-500">
       <button class="underline hover:text-gray-300" :disabled="checkingForUpdates" @click="checkForUpdates">
-        {{ checkingForUpdates ? "Checking for updates…" : "Check for updates" }}
+        {{ checkingForUpdates ? t.settings.checkingForUpdates : t.settings.checkForUpdates }}
       </button>
     </p>
     <p class="text-center text-xs text-gray-500">
-      <a href="privacy.html" class="underline hover:text-gray-300">Privacy policy</a>
+      <a :href="privacyPolicyUrl" class="underline hover:text-gray-300">{{ t.app.privacyPolicy }}</a>
     </p>
   </main>
 </template>

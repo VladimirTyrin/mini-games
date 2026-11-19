@@ -1,7 +1,8 @@
 use mg_core::{CommandError, CoreRng, Game, GameSettings, PlayerSpec, Slot, Viewer};
 
 use crate::{
-    Cell, Command, Direction, Puzzle2048, RawSettings, Settings, SpawnValue, View, WorldEvent,
+    Cell, Command, Direction, Puzzle2048, RawSettings, Refusal, Settings, SpawnValue, View,
+    WorldEvent,
 };
 
 pub(super) const PLAYER: Slot = Slot::new(0);
@@ -44,7 +45,10 @@ pub(super) fn tile_count(game: &Puzzle2048) -> usize {
     view(game).tiles.len()
 }
 
-pub(super) fn try_move(game: &mut Puzzle2048, direction: Direction) -> Result<(), CommandError> {
+pub(super) fn try_move(
+    game: &mut Puzzle2048,
+    direction: Direction,
+) -> Result<(), CommandError<Refusal>> {
     game.apply_command(PLAYER, &Command::Move(direction))
 }
 
@@ -53,7 +57,7 @@ pub(super) fn spawn(
     row: u8,
     col: u8,
     value: SpawnValue,
-) -> Result<(), CommandError> {
+) -> Result<(), CommandError<Refusal>> {
     game.apply_world(&WorldEvent::TileSpawned {
         cell: Cell::new(row, col),
         value,
@@ -71,7 +75,7 @@ pub(super) fn play(
     game: &mut Puzzle2048,
     direction: Direction,
     rng: &mut CoreRng,
-) -> Result<(), CommandError> {
+) -> Result<(), CommandError<Refusal>> {
     try_move(game, direction)?;
     deliver_spawns(game, rng);
     Ok(())

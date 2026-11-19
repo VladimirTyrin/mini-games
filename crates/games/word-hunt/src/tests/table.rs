@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use mg_core::{CommandError, CoreRng, Game, Slot};
 
-use crate::{Command, HiddenWord, Word, WordHunt, WorldEvent};
+use crate::{Command, HiddenWord, Refusal, Word, WordHunt, WorldEvent};
 
 /// A game run the way the authority runs it, with the word set by the test instead of drawn:
 /// after every command it gets what the authority would send (the marks, the word at the end).
@@ -30,13 +30,17 @@ impl Table {
         }
     }
 
-    pub(crate) fn command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    pub(crate) fn command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         self.game.apply_command(slot, command)?;
         self.roll();
         Ok(())
     }
 
-    pub(crate) fn world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    pub(crate) fn world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         self.game.apply_world(event)
     }
 

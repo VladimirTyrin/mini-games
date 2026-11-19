@@ -5,7 +5,7 @@ use mg_core::{
 
 use crate::io::{Command, SecretCommand, WorldEvent};
 use crate::model::{Cell, CellMark, Fleet, HiddenFleets, LastShot, Phase, ShotOutcome, Waters};
-use crate::rules::resolve_shot;
+use crate::rules::{Refusal, resolve_shot};
 use crate::settings::Settings;
 use crate::view::View;
 
@@ -75,9 +75,9 @@ impl SeaBattle {
         }
     }
 
-    fn place(&mut self, slot: Slot) -> Result<(), CommandError> {
+    fn place(&mut self, slot: Slot) -> Result<(), CommandError<Refusal>> {
         if self.phase != Phase::Placing || !self.is_in_play(slot) || self.is_ready(slot) {
-            return Err(CommandError::Illegal("this fleet cannot be placed now"));
+            return Err(CommandError::Illegal(Refusal::FleetCannotBePlacedNow));
         }
         if let Some(ready) = self.ready.get_mut(slot.index()) {
             *ready = true;
@@ -88,14 +88,14 @@ impl SeaBattle {
         Ok(())
     }
 
-    fn record_shot(&mut self, outcome: ShotOutcome) -> Result<(), CommandError> {
+    fn record_shot(&mut self, outcome: ShotOutcome) -> Result<(), CommandError<Refusal>> {
         let (Phase::Battle, Some(cell), Some(shooter)) = (self.phase, self.pending_shot, self.turn)
         else {
-            return Err(CommandError::Illegal("no shot is being fired"));
+            return Err(CommandError::Illegal(Refusal::NoShotPending));
         };
         let target = opponent(shooter);
         let Some(waters) = self.waters.get_mut(target.index()) else {
-            return Err(CommandError::Illegal("no such sea"));
+            return Err(CommandError::Illegal(Refusal::NoSuchSea));
         };
         match outcome {
             ShotOutcome::Miss => {
@@ -110,7 +110,7 @@ impl SeaBattle {
                         .filter(|own| *own != cell)
                         .all(|own| waters.mark(own) == CellMark::Hit);
                 if !fits {
-                    return Err(CommandError::Illegal("that ship was not hit there"));
+                    return Err(CommandError::Illegal(Refusal::SunkShipDoesNotFit));
                 }
                 waters.sink(ship);
             }
@@ -135,6 +135,7 @@ impl Game for SeaBattle {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = HiddenFleets;
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "sea_battle",
@@ -169,16 +170,18 @@ impl Game for SeaBattle {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.phase.is_over() {
             return Err(CommandError::GameOver);
         }
         let cell = match command {
             Command::GiveUp => {
                 if !self.is_in_play(slot) {
-                    return Err(CommandError::Illegal(
-                        "only a player still in play can give up",
-                    ));
+                    return Err(CommandError::NotPlaying);
                 }
                 self.forfeit(slot);
                 return Ok(());
@@ -186,17 +189,17 @@ impl Game for SeaBattle {
             Command::Fire(cell) => *cell,
         };
         if self.phase != Phase::Battle {
-            return Err(CommandError::Illegal("the battle has not started yet"));
+            return Err(CommandError::Illegal(Refusal::BattleNotStarted));
         }
         if self.pending_shot.is_some() {
-            return Err(CommandError::Illegal("the last shot is not resolved yet"));
+            return Err(CommandError::Illegal(Refusal::LastShotNotResolved));
         }
         if self.turn != Some(slot) {
             return Err(CommandError::NotYourTurn);
         }
         let target = self.waters.get(opponent(slot).index());
         if !target.is_some_and(|waters| waters.mark(cell).is_open()) {
-            return Err(CommandError::Illegal("that cell is known already"));
+            return Err(CommandError::Illegal(Refusal::CellAlreadyKnown));
         }
         self.pending_shot = Some(cell);
         Ok(())
@@ -249,12 +252,12 @@ impl Game for SeaBattle {
             .collect()
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         match event {
             WorldEvent::FleetPlaced(slot) => self.place(*slot),
             WorldEvent::FirstShooterChosen(slot) => {
                 if self.phase != Phase::Battle || self.turn.is_some() || !SEATS.contains(slot) {
-                    return Err(CommandError::Illegal("the first shooter is already chosen"));
+                    return Err(CommandError::Illegal(Refusal::FirstShooterAlreadyChosen));
                 }
                 self.turn = Some(*slot);
                 Ok(())
@@ -263,12 +266,10 @@ impl Game for SeaBattle {
             WorldEvent::FleetRevealed { slot, ships } => {
                 let already = self.revealed.get(slot.index()).is_none_or(Option::is_some);
                 if !self.phase.is_over() || already {
-                    return Err(CommandError::Illegal(
-                        "fleets are revealed once, at the end",
-                    ));
+                    return Err(CommandError::Illegal(Refusal::FleetRevealedEarly));
                 }
-                let fleet =
-                    Fleet::parse(ships).map_err(|error| CommandError::Illegal(error.reason()))?;
+                let fleet = Fleet::parse(ships)
+                    .map_err(|_| CommandError::Illegal(Refusal::RevealedFleetInvalid))?;
                 if let Some(revealed) = self.revealed.get_mut(slot.index()) {
                     *revealed = Some(fleet);
                 }
@@ -324,12 +325,12 @@ impl Game for SeaBattle {
         secret: &mut HiddenFleets,
         slot: Slot,
         command: &SecretCommand,
-    ) -> Result<(), CommandError> {
+    ) -> Result<(), CommandError<Refusal>> {
         if !self.awaits_secret(slot) || secret.fleet(slot).is_some() {
-            return Err(CommandError::Illegal("the fleet is placed already"));
+            return Err(CommandError::Illegal(Refusal::FleetAlreadyPlaced));
         }
         let SecretCommand::PlaceFleet(ships) = command;
-        let fleet = Fleet::parse(ships).map_err(|error| CommandError::Illegal(error.reason()))?;
+        let fleet = Fleet::parse(ships).map_err(|error| CommandError::Illegal(error.into()))?;
         secret.place(slot, fleet);
         Ok(())
     }

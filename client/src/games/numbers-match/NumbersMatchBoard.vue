@@ -2,6 +2,7 @@
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import { CommandRejectedError } from "@/match/command-rejected-error";
 import type { MatchController } from "@/match/match-controller";
@@ -13,7 +14,7 @@ import {
   NumbersMatchPhase,
 } from "@/proto/minigames/v2/numbers_match_pb";
 import { useToastStore } from "@/stores/toasts";
-import { asSentence } from "@/util/sentence";
+import { refusalText } from "@/util/refusal-text";
 
 import ActionButton from "./ActionButton.vue";
 import CellGrid from "./CellGrid.vue";
@@ -59,7 +60,7 @@ const HINT: Command = { command: { case: "requestHint", value: {} } };
 /** The rules' answer for the state on screen, in a sentence; `null` when they accept. */
 function refusalOf(command: Command): string | null {
   const refusal = props.controller.refusal({ game: { case: "numbersMatch", value: command } });
-  return refusal === null ? null : asSentence(refusal);
+  return refusal === null ? null : refusalText(refusal);
 }
 
 // Asked of the rules, so the buttons are off exactly when the game would refuse.
@@ -71,20 +72,21 @@ const activeCellCount = computed(
 
 const status = computed(() => {
   if (rejection.value) return { text: rejection.value.reason, tone: "text-rose-300" };
+  const text = t.games.numbersMatch.board;
   const current = view.value;
   switch (current?.phase) {
     case NumbersMatchPhase.WON:
-      return { text: "Board cleared!", tone: "text-emerald-300" };
+      return { text: text.cleared, tone: "text-emerald-300" };
     case NumbersMatchPhase.LOST:
       return current.lossReason === NumbersMatchLossReason.DROPPED
-        ? { text: "Game abandoned", tone: "text-gray-400" }
-        : { text: "No moves left", tone: "text-rose-400" };
+        ? { text: text.abandoned, tone: "text-gray-400" }
+        : { text: text.noMovesLeft, tone: "text-rose-400" };
     case NumbersMatchPhase.PLAYING:
       return suggestsRefill.value
-        ? { text: "No pairs left — refill!", tone: "text-amber-300" }
-        : { text: `${activeCellCount.value} numbers left`, tone: "text-gray-400" };
+        ? { text: text.noPairsRefill, tone: "text-amber-300" }
+        : { text: text.numbersLeft(activeCellCount.value), tone: "text-gray-400" };
     default:
-      return { text: "Dealing…", tone: "text-gray-400" };
+      return { text: text.dealing, tone: "text-gray-400" };
   }
 });
 
@@ -140,7 +142,7 @@ function select(index: number): void {
     return;
   }
   // The authority may still refuse (the screen can be a frame behind): ask again for the reason.
-  void send(removal, () => refuse(refusalOf(removal) ?? "That pair cannot be removed"));
+  void send(removal, () => refuse(refusalOf(removal) ?? t.games.numbersMatch.board.pairRefused));
 }
 
 function refill(): void {
@@ -198,8 +200,8 @@ useGameKeys((key) => {
       class="flex items-center justify-center gap-8 pt-2 pb-1 short-landscape:flex-col short-landscape:gap-4"
     >
       <ActionButton
-        caption="Refill"
-        label="Refill (R)"
+        :caption="t.games.numbersMatch.board.refill"
+        :label="t.games.numbersMatch.board.refillWithKey"
         icon="➕"
         :count="String(view.refillsLeft)"
         :disabled="!canRefill"
@@ -208,8 +210,8 @@ useGameKeys((key) => {
       />
       <ActionButton
         v-if="hintsEnabled"
-        caption="Hint"
-        label="Hint (H)"
+        :caption="t.games.numbersMatch.board.hint"
+        :label="t.games.numbersMatch.board.hintWithKey"
         icon="💡"
         :count="hintsLeftText"
         :disabled="!canHint"

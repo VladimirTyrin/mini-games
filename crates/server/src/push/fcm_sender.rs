@@ -102,23 +102,7 @@ impl FcmSender {
         notification: &PushNotification,
     ) -> Result<(), PushError> {
         let access_token = self.access_token()?;
-        let message = serde_json::json!({
-            "message": {
-                "token": token.as_str(),
-                "notification": { "title": notification.title, "body": notification.body },
-                "data": notification.data,
-                "android": {
-                    "priority": "HIGH",
-                    "ttl": format!("{}s", notification.time_to_live.as_secs()),
-                    "notification": {
-                        // Created by the app (push-notifications.ts) with high importance, so
-                        // the notification pops up instead of only landing in the shade.
-                        "channel_id": "invites",
-                        "tag": notification.tag,
-                    },
-                },
-            },
-        });
+        let message = fcm_message(token, notification);
         let response = self
             .agent
             .post(&self.send_url)
@@ -208,5 +192,62 @@ impl FcmSender {
             value: token.access_token,
             renew_after: started + lifetime,
         })
+    }
+}
+
+/// The FCM v1 message for `notification`. Keys only, no `title`/`body`: Android shows plain ones
+/// whenever they are present, and would never word the keys in the app's language. An app shell
+/// from before the keys finds no resources for them and shows its name with no text.
+fn fcm_message(token: &FcmToken, notification: &PushNotification) -> serde_json::Value {
+    serde_json::json!({
+        "message": {
+            "token": token.as_str(),
+            "data": notification.data,
+            "android": {
+                "priority": "HIGH",
+                "ttl": format!("{}s", notification.time_to_live.as_secs()),
+                "notification": {
+                    // Created by the app (push-notifications.ts) with high importance, so
+                    // the notification pops up instead of only landing in the shade.
+                    "channel_id": "invites",
+                    "tag": notification.tag,
+                    "title_loc_key": notification.title.key(),
+                    "title_loc_args": notification.title.args(),
+                    "body_loc_key": notification.body.key(),
+                    "body_loc_args": notification.body.args(),
+                },
+            },
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::push::PushText;
+
+    #[test]
+    fn android_words_the_notification_from_its_keys_alone() {
+        let token = FcmToken::parse("device-token".to_owned()).expect("a valid token");
+        let notification = PushNotification {
+            title: PushText::FriendRequest {
+                from: "Sam".to_owned(),
+            },
+            body: PushText::Test,
+            tag: "friends".to_owned(),
+            data: BTreeMap::new(),
+            time_to_live: Duration::from_secs(60),
+        };
+        let message = fcm_message(&token, &notification);
+        let android = &message["message"]["android"]["notification"];
+        assert_eq!(android["title_loc_key"], "push_friend_request");
+        assert_eq!(android["title_loc_args"], serde_json::json!(["Sam"]));
+        assert_eq!(android["body_loc_key"], "push_test");
+        // Plain text anywhere would be shown instead of the app's own words.
+        assert!(message["message"].get("notification").is_none());
+        assert!(android.get("title").is_none() && android.get("body").is_none());
     }
 }

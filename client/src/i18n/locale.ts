@@ -6,7 +6,7 @@ export const LOCALES = ["en", "ru"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 /** Read by the screen tools too (`tools/screens`), which set it before the app loads. */
-export const LOCALE_STORAGE_KEY = "mg.locale";
+export const LOCALE_STORAGE_KEY = "mini-games.locale";
 
 function isLocale(value: string | null): value is Locale {
   return (LOCALES as readonly (string | null)[]).includes(value);
@@ -45,7 +45,11 @@ export function onLocale(listener: (next: Locale) => void): void {
   listener(locale.value);
 }
 
-watch(locale, (next) => {
-  if (typeof document !== "undefined") document.documentElement.lang = next;
-  for (const listener of listeners) listener(next);
-}, { immediate: true });
+watch(
+  locale,
+  (next) => {
+    if (typeof document !== "undefined") document.documentElement.lang = next;
+    for (const listener of listeners) listener(next);
+  },
+  { immediate: true },
+);

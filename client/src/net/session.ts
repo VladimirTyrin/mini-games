@@ -217,7 +217,8 @@ export class Session {
       this.pending.delete(message.requestId);
       clearTimeout(pending.timer);
       if (payload.case === "error") {
-        pending.reject(new RequestError(payload.value.code, payload.value.message));
+        const { code, message: text, refusal, settingProblem } = payload.value;
+        pending.reject(new RequestError(code, text, "refused", refusal, settingProblem));
       } else {
         pending.resolve(payload);
       }

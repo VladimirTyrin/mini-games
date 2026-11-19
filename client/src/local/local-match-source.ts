@@ -11,6 +11,7 @@ import {
   MatchHeaderSchema,
   TickFrameSchema,
 } from "@/proto/minigames/v2/match_pb";
+import { CommonRefusal, RefusalSchema } from "@/proto/minigames/v2/refusal_pb";
 import { ReplayFileSchema } from "@/proto/minigames/v2/replay_pb";
 import { CommandRejectedError } from "@/match/command-rejected-error";
 import type {
@@ -20,6 +21,8 @@ import type {
   MatchSourceEvents,
 } from "@/match/match-source";
 import { Emitter } from "@/net/emitter";
+import { commonRefusal } from "@/match/common-refusal";
+import { refusalText } from "@/util/refusal-text";
 
 import type { FromWorker, ToWorker } from "./worker-protocol";
 
@@ -81,10 +84,19 @@ export class LocalMatchSource implements MatchSource {
   }
 
   submit(command: GameCommandInit): Promise<void> {
-    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
-    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    if (!this.started)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.MALFORMED), "the match has not started yet"),
+      );
+    if (this.isHeld)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.PAUSED), "the game is paused"),
+      );
     const slot = this.mySlot;
-    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
+    if (slot === null)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.NOT_PLAYING), "you are watching"),
+      );
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameCommandSchema, create(GameCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -94,10 +106,19 @@ export class LocalMatchSource implements MatchSource {
   }
 
   submitSecret(command: GameSecretCommandInit): Promise<void> {
-    if (!this.started) return Promise.reject(new CommandRejectedError("the match has not started yet"));
-    if (this.isHeld) return Promise.reject(new CommandRejectedError("the game is paused"));
+    if (!this.started)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.MALFORMED), "the match has not started yet"),
+      );
+    if (this.isHeld)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.PAUSED), "the game is paused"),
+      );
     const slot = this.mySlot;
-    if (slot === null) return Promise.reject(new CommandRejectedError("you are watching"));
+    if (slot === null)
+      return Promise.reject(
+        new CommandRejectedError(commonRefusal(CommonRefusal.NOT_PLAYING), "you are watching"),
+      );
     const requestId = this.nextRequestId++;
     const bytes = toBinary(GameSecretCommandSchema, create(GameSecretCommandSchema, command));
     return new Promise<void>((resolve, reject) => {
@@ -205,7 +226,8 @@ export class LocalMatchSource implements MatchSource {
       case "rejected": {
         const pending = this.pending.get(message.requestId);
         this.pending.delete(message.requestId);
-        pending?.reject(new CommandRejectedError(message.message));
+        const refusal = fromBinary(RefusalSchema, message.refusal);
+        pending?.reject(new CommandRejectedError(refusal, refusalText(refusal)));
         break;
       }
       case "replay":

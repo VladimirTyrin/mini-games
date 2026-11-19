@@ -12,6 +12,7 @@ import ReplayBar from "@/components/ReplayBar.vue";
 import { pluginBySettings } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { matchSeatNames } from "@/games/seat-names";
+import { t } from "@/i18n";
 import { LocalMatchSource } from "@/local/local-match-source";
 import { awaySlots } from "@/match/away-seats";
 import { hasSeenHelp } from "@/platform/help-seen";
@@ -44,10 +45,8 @@ const awayNotice = computed(() => {
   );
   if (slots.length === 0) return null;
   const names = matchSeatNames(current.source.header);
-  const who = slots.map((slot) => names[slot] ?? "A player").join(", ");
-  return slots.length === 1
-    ? `${who} is away: play goes on until their turn`
-    : `${who} are away: play goes on until their turns`;
+  const who = slots.map((slot) => names[slot] ?? t.match.aPlayer).join(", ");
+  return slots.length === 1 ? t.match.awayOne(who) : t.match.awayMany(who);
 });
 const endReason = computed(() => {
   const view = controller.value?.current.value?.view;
@@ -59,9 +58,7 @@ onMounted(() => {
 });
 
 const incompatibleMessage = computed(() =>
-  match.replay
-    ? "This replay was recorded with another version of the game and cannot be shown."
-    : "The game was updated on the server. Update the app to go on playing.",
+  match.replay ? t.match.incompatibleReplay : t.match.incompatibleMatch,
 );
 
 // A replay this build cannot follow would play on behind the message.
@@ -82,7 +79,7 @@ async function update(): Promise<void> {
   const report = await appUpdate.check();
   if (report.kind === "web-bundle-ready") return;
   if (report.kind === "apk-available") await appUpdate.install();
-  else toasts.show("No update is out yet. Try again in a minute.");
+  else toasts.show(t.match.noUpdateYet);
 }
 
 /** Set when this screen ends the match itself and navigates on its own. */
@@ -154,11 +151,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onPauseKey));
 
 /** A running match is easy to quit by accident (back gesture, header arrow): ask first. */
 const confirmingLeave = ref(false);
-const leaveMessage = computed(() =>
-  isOnline.value
-    ? "The others will play on without you, and your seat may be dropped."
-    : "This game will be lost.",
-);
+const leaveMessage = computed(() => (isOnline.value ? t.match.leaveOnline : t.match.leaveLocal));
 
 /** A match still being played, which leaving would give up. */
 function isRunning(): boolean {
@@ -262,14 +255,14 @@ function again(): void {
   match.startLocal(
     header.settings,
     header.seats.map((seat) => ({ bot: seat.botKind ?? null })),
-    header.seats.find((seat) => !seat.botKind)?.player?.displayName ?? "You",
+    header.seats.find((seat) => !seat.botKind)?.player?.displayName ?? t.common.youName,
     "continued",
   );
 }
 </script>
 
 <template>
-  <AppHeader :title="plugin?.title ?? 'Match'" :back="requestLeave">
+  <AppHeader :title="plugin?.title ?? t.match.title" :back="requestLeave">
     <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
     <button
       v-if="canPause && !pausedByPlayer"
@@ -277,16 +270,16 @@ function again(): void {
       class="rounded px-2 py-1 text-sm whitespace-nowrap hover:bg-panel-raised"
       @click="setPausedByPlayer(true)"
     >
-      ⏸ Pause
+      {{ `⏸ ${t.match.pause}` }}
     </button>
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
   <ConfirmDialog
     v-if="confirmingLeave"
-    title="Leave the match?"
+    :title="t.match.leaveTitle"
     :message="leaveMessage"
-    confirm-label="Leave"
-    cancel-label="Stay"
+    :confirm-label="t.common.leave"
+    :cancel-label="t.match.stay"
     @confirm="leave"
     @cancel="confirmingLeave = false"
   />
@@ -317,14 +310,14 @@ function again(): void {
             class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-emerald-500"
             @click="update"
           >
-            Update
+            {{ t.match.update }}
           </button>
           <button
             type="button"
             class="rounded-lg border border-white/15 px-4 py-2 text-sm whitespace-nowrap text-gray-200 hover:bg-white/5"
             @click="leave"
           >
-            Leave
+            {{ t.common.leave }}
           </button>
         </div>
       </div>
@@ -336,13 +329,13 @@ function again(): void {
         <div
           class="flex flex-col items-center gap-3 rounded-2xl bg-panel/95 px-6 py-4 text-center shadow-xl ring-1 ring-white/10"
         >
-          <h2 class="text-xl font-semibold">Paused</h2>
+          <h2 class="text-xl font-semibold">{{ t.match.paused }}</h2>
           <button
             type="button"
             class="rounded-lg bg-emerald-600 px-6 py-2 font-medium whitespace-nowrap text-white hover:bg-emerald-500"
             @click="setPausedByPlayer(false)"
           >
-            Resume
+            {{ t.match.resume }}
           </button>
         </div>
       </div>
@@ -352,7 +345,7 @@ function again(): void {
         :end-reason="endReason"
         :series="match.series"
         @leave="leave"
-        @replay="match.saveReplay(plugin?.title ?? 'Match')"
+        @replay="match.saveReplay(plugin?.title ?? t.match.title)"
         @again="again"
       />
     </div>

@@ -1,1 +1,40 @@
-export const settings = {};
+export const settings = {
+  title: "Settings",
+  language: "Language",
+  server: "Server",
+  serverHint: "Address of the game server, e.g. braintvsminigames.xyz or 146.103.106.44.",
+  resetToDefault: "Reset to default",
+  serverSaved: "Server saved",
+  notAServerAddress: "That does not look like a server address",
+  account: "Account",
+  signedInAs: (name: string) => `Signed in as ${name}`,
+  signOut: "Sign out",
+  androidAppPitch: "Plays offline and updates itself.",
+  version: (version: string) => `Version ${version}`,
+  versionWithWebBuild: (version: string, webBuild: number) => `${version} (web ${webBuild})`,
+  versionWithBuilds: (version: string, webBuild: number, appBuild: number) =>
+    `${version} (web ${webBuild}, app ${appBuild})`,
+  checkForUpdates: "Check for updates",
+  checkingForUpdates: "Checking for updates…",
+  upToDate: "Up to date",
+  updateDownloaded: "Update downloaded — it starts once you leave the match or lobby",
+  newAppVersion: "A new app version is available — tap Download",
+  updateCheckFailed: "Could not check for updates — is the server reachable?",
+  notifications: {
+    title: "Notifications",
+    iphoneHint:
+      "On iPhone, notifications work in the app added to the Home Screen: tap Share, then “Add to Home Screen”, and open it from there.",
+    unsupported: "This browser cannot receive notifications.",
+    blocked: "Notifications are blocked for this site; allow them in the browser settings.",
+    testHint: (seconds: number) =>
+      `Sends a test notification ${seconds} s after the tap, so you can close the app or lock the phone first.`,
+    sendTest: "Send a test",
+    settingUp: "Setting up…",
+    arrivesAt: (time: string) => `Arrives about ${time}. Close the app now.`,
+    lastTestSentAt: (time: string) => `Last test, sent at ${time}:`,
+    delivered: (duration: string) => `Delivered ${duration} after sending`,
+    tapped: (duration: string) => `Tapped ${duration} after sending`,
+    appReady: (duration: string) => `App ready ${duration} after the tap`,
+    opened: (duration: string) => `Opened ${duration} after sending`,
+  },
+};

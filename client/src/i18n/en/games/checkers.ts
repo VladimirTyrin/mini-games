@@ -1,1 +1,50 @@
-export const checkers = {};
+export const checkers = {
+  title: "Checkers",
+  tagline: "Russian draughts with flying kings",
+  facts: {
+    hostPlaysWhite: "host plays white",
+    guestPlaysWhite: "guest plays white",
+    coloursByLot: "colours by lot",
+    capturesMayStop: "captures may stop",
+  },
+  bots: { easy: "Easy bot", medium: "Medium bot", hard: "Hard bot", master: "Master bot (slow)" },
+  controls: {
+    keyboard: "Click a piece, then where it goes",
+    touch: "Tap a piece, then where it goes",
+  },
+  endReasons: {
+    noPieces: "No pieces left",
+    noMoves: "No moves left",
+    opponentLeft: "The opponent left",
+    repetition: "Draw: the same position three times",
+    kingMoves: "Draw: fifteen king moves each",
+  },
+  board: {
+    draw: "Draw",
+    playerWins: (name: string) => `${name} wins`,
+    opponentLeftYouWin: "Opponent left — you win",
+    youWin: "You win!",
+    youLose: "You lose",
+    choosingWhite: "Choosing who plays white…",
+    whiteToMove: (name: string) => `White to move: ${name}`,
+    blackToMove: (name: string) => `Black to move: ${name}`,
+    somePlayer: "a player",
+    yourTurn: "Your turn",
+    opponentsTurn: "Opponent's turn",
+    youPlayWhite: "(you play white)",
+    youPlayBlack: "(you play black)",
+    king: "king",
+    endMoveHere: "End the move here",
+    mustCapture: "You must capture",
+    kingMovesToDraw: (moves: number, movesForDraw: number) =>
+      `Kings only: ${moves} of ${movesForDraw} moves to a draw`,
+  },
+  settings: {
+    playsWhite: "Plays white",
+    playsWhiteHelp: "White moves first",
+    captures: "Captures",
+    capturesHelp: "Russian rules take every piece a capture can reach",
+    toTheEnd: "To the end",
+    mayStop: "May stop",
+  },
+};

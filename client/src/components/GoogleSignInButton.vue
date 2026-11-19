@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from "@/i18n";
+
 // Native-app counterpart of Google's own web button, following Google's sign-in branding
 // guidelines (dark theme, pill shape, standard "G" mark).
 defineProps<{ disabled?: boolean }>();
@@ -30,6 +32,6 @@ defineEmits<{ click: [] }>();
         d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
       />
     </svg>
-    Sign in with Google
+    {{ t.app.signIn.withGoogle }}
   </button>
 </template>

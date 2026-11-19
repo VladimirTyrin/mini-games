@@ -1,6 +1,7 @@
 use mg_checkers::{
     BotKind, CaptureRule, Checkers, Command, DrawReason, GameEnd, KING_MOVES_FOR_DRAW, LegalMove,
-    Path, PlacedPiece, RawSettings, Side, Square, View, WhitePlayer, WinReason, WorldEvent,
+    Path, PlacedPiece, RawSettings, Refusal, Side, Square, View, WhitePlayer, WinReason,
+    WorldEvent,
 };
 
 use crate::proto::{
@@ -9,6 +10,7 @@ use crate::proto::{
     game_world_event,
 };
 use crate::{WireBots, WireError, WireGame, proto, slot_from_wire, slot_to_wire};
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for Checkers {
     /// Shape only: the game's `Settings::parse` checks the values.
@@ -224,6 +226,25 @@ fn game_end_to_wire(end: GameEnd) -> proto::CheckersGameEnd {
     proto::CheckersGameEnd {
         reason: reason.into(),
         winner_slot: end.winner().map(slot_to_wire),
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::MustCapture => proto::CheckersRefusal::MustCapture,
+            Refusal::NotALegalMove => proto::CheckersRefusal::NotALegalMove,
+            Refusal::WhiteAlreadyKnown | Refusal::NoSuchSeat => return malformed_refusal(),
+        };
+        proto::refusal::Reason::Checkers(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::CheckersRefusal::try_from(value).ok()? {
+            proto::CheckersRefusal::Unspecified => return None,
+            proto::CheckersRefusal::MustCapture => Refusal::MustCapture,
+            proto::CheckersRefusal::NotALegalMove => Refusal::NotALegalMove,
+        })
     }
 }
 

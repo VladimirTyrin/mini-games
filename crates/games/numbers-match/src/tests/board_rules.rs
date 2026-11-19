@@ -1,8 +1,8 @@
 //! Legacy `board.rs` tests (ported) plus board-level additions.
 
 use super::support::{at, board, digit_at, pair, value};
-use crate::Cell;
 use crate::model::{Batch, Board, RowIndex};
+use crate::{Cell, Refusal};
 
 #[test]
 fn test_board_from_values_creates_correct_layout() {
@@ -94,6 +94,28 @@ fn test_can_remove_pair_same_cell() {
 fn test_can_remove_pair_different_values_not_sum_ten() {
     let board = board(&[3, 5, 0, 0, 0, 0, 0, 0, 0]);
     assert!(!board.can_remove_pair(pair(at(0, 0), at(0, 1))));
+}
+
+#[test]
+fn a_refused_pair_says_why() {
+    let board = board(&[5, 1, 5, 3, 3, 0, 0, 0, 0]);
+    assert_eq!(
+        board.pair_refusal(pair(at(0, 0), at(0, 0))),
+        Some(Refusal::SameCell)
+    );
+    assert_eq!(
+        board.pair_refusal(pair(at(0, 0), at(0, 1))),
+        Some(Refusal::NotAPair)
+    );
+    assert_eq!(
+        board.pair_refusal(pair(at(0, 0), at(0, 2))),
+        Some(Refusal::TooFarApart)
+    );
+    assert_eq!(
+        board.pair_refusal(pair(at(0, 4), at(0, 5))),
+        Some(Refusal::CellCrossedOut)
+    );
+    assert_eq!(board.pair_refusal(pair(at(0, 3), at(0, 4))), None);
 }
 
 #[test]

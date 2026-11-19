@@ -11,6 +11,7 @@ import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginById } from "@/games";
 import { controlsHintFor } from "@/games/game-plugin";
 import { initialSettings } from "@/games/initial-settings";
+import { t } from "@/i18n";
 import type { BotKind } from "@/proto/minigames/v2/game_pb";
 import { type LocalSeat, useMatchStore } from "@/stores/match";
 import { useConnectionStore } from "@/stores/connection";
@@ -53,7 +54,7 @@ function start(): void {
 </script>
 
 <template>
-  <AppHeader :title="plugin?.title ?? 'Unknown game'" back="/">
+  <AppHeader :title="plugin?.title ?? t.setup.unknownGame" back="/">
     <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
@@ -77,7 +78,7 @@ function start(): void {
               aria-hidden="true"
               >?</span
             >
-            How to play
+            {{ t.match.howToPlay.button }}
           </button>
         </div>
       </header>
@@ -106,14 +107,15 @@ function start(): void {
     >
       <button
         class="h-13 w-full rounded-xl bg-emerald-600 text-lg font-semibold shadow-lg shadow-black/40 hover:bg-emerald-500 disabled:bg-emerald-900 disabled:text-white/60"
+        data-testid="play"
         :disabled="!!problem || !seatCountOk"
         @click="start"
       >
-        {{ seatCountOk ? "Play" : `Needs ${info.minPlayers} players` }}
+        {{ seatCountOk ? t.common.play : t.setup.needsPlayers(info.minPlayers) }}
       </button>
     </div>
     <button class="h-11 w-full text-sm text-gray-400 hover:text-gray-200" @click="router.push('/online')">
-      Play with people instead →
+      {{ t.setup.playWithPeople }} →
     </button>
   </main>
 </template>

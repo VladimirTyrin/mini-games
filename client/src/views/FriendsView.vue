@@ -7,6 +7,7 @@ import Avatar from "@/components/Avatar.vue";
 import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import PresenceDot from "@/components/PresenceDot.vue";
 import SignInPanel from "@/components/SignInPanel.vue";
+import { locale, t } from "@/i18n";
 import { friendLinkCode, friendLinkUrl, shareLink } from "@/platform/friend-links";
 import { canNotifyWithoutAsking, pushAvailability } from "@/platform/push-notifications";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
@@ -34,11 +35,11 @@ const availability = pushAvailability();
 const notificationHint = computed(() => {
   switch (availability) {
     case "add-to-home-screen-first":
-      return "To get invitations on iPhone, add this site to the Home Screen (Share, then Add to Home Screen) and open it from there.";
+      return t.friends.iphoneNotificationsHint;
     case "blocked":
-      return "Notifications are blocked for this site: allow them in the browser settings to get invitations while the app is closed.";
+      return t.friends.notificationsBlockedHint;
     default:
-      return "Turn on notifications to get invitations while the app is closed.";
+      return t.friends.notificationsHint;
   }
 });
 
@@ -67,8 +68,8 @@ async function share(kind: FriendLinkKind): Promise<void> {
   if (!link) return;
   const url = friendLinkUrl(prefs.serverUrl, link.code);
   try {
-    const how = await shareLink(url, "Add me as a friend in Mini Games");
-    if (how === "copied") toasts.show("Link copied", "success");
+    const how = await shareLink(url, t.friends.shareText);
+    if (how === "copied") toasts.show(t.friends.linkCopied, "success");
   } catch {
     // Closing the share sheet is no error; the link stays in the list below.
   }
@@ -77,7 +78,7 @@ async function share(kind: FriendLinkKind): Promise<void> {
 async function addFromPaste(): Promise<void> {
   const code = friendLinkCode(pasted.value);
   if (!code) {
-    toasts.error("That is not a friend link");
+    toasts.error(t.friends.notAFriendLink);
     return;
   }
   pasted.value = "";
@@ -91,20 +92,17 @@ async function confirmRemove(): Promise<void> {
 }
 
 function expiry(unixMs: bigint): string {
-  return new Date(Number(unixMs)).toLocaleDateString([], { day: "numeric", month: "short" });
+  // Day and month only: a link lasts a week, and the line is narrow.
+  return new Date(Number(unixMs)).toLocaleDateString(locale.value, { day: "numeric", month: "short" });
 }
 </script>
 
 <template>
-  <AppHeader title="Friends" :back="goBack" />
+  <AppHeader :title="t.friends.title" :back="goBack" />
   <main class="mx-auto w-full max-w-lg flex-1 space-y-4 p-4">
     <template v-if="!friends.hasAccount">
       <p class="rounded-xl bg-panel p-4 text-sm text-gray-300">
-        {{
-          friends.pendingLinkCode
-            ? "Sign in with Google to add your friend."
-            : "Friends need a Google account: sign in with Google to add them and invite them to games."
-        }}
+        {{ friends.pendingLinkCode ? t.friends.needGoogleToAddFriend : t.friends.needGoogle }}
       </p>
       <SignInPanel v-if="!connection.isSignedIn" />
     </template>
@@ -121,55 +119,55 @@ function expiry(unixMs: bigint): string {
           class="min-h-11 w-full rounded-lg bg-emerald-600 px-3 text-sm font-semibold"
           @click="turnOnNotifications"
         >
-          Turn on notifications
+          {{ t.friends.turnOnNotifications }}
         </button>
       </section>
 
       <section class="space-y-3 rounded-xl bg-panel p-4">
-        <h2 class="font-semibold">Add friends</h2>
-        <p class="text-xs text-gray-400">Links work for 7 days.</p>
+        <h2 class="font-semibold">{{ t.friends.addFriends }}</h2>
+        <p class="text-xs text-gray-400">{{ t.friends.linksLast }}</p>
         <div class="grid gap-2 sm:grid-cols-2">
           <button
             class="min-h-11 rounded-lg bg-emerald-600 px-3 text-sm font-semibold"
             @click="share(FriendLinkKind.SINGLE_USE)"
           >
-            Link for one friend
+            {{ t.friends.linkForOneFriend }}
           </button>
           <button
             class="min-h-11 rounded-lg bg-panel-raised px-3 text-sm font-semibold"
             @click="share(FriendLinkKind.MULTI_USE)"
           >
-            Link for a group chat
+            {{ t.friends.linkForGroupChat }}
           </button>
         </div>
         <form class="flex gap-2" @submit.prevent="addFromPaste">
           <input
             v-model="pasted"
             class="min-w-0 flex-1 rounded-lg bg-panel-raised px-3 py-2 text-sm"
-            placeholder="Paste a friend's link"
-            aria-label="Friend link"
+            :placeholder="t.friends.pasteLink"
+            :aria-label="t.friends.friendLink"
             autocapitalize="off"
             spellcheck="false"
           />
           <button class="min-h-11 rounded-lg bg-panel-raised px-4 text-sm" :disabled="!pasted.trim()">
-            Add
+            {{ t.friends.add }}
           </button>
         </form>
         <ul v-if="friends.list?.links.length" class="space-y-1">
           <li v-for="link in friends.list.links" :key="link.code" class="flex items-center gap-2 text-sm">
             <span class="min-w-0 flex-1 truncate text-gray-300">
-              {{ link.kind === FriendLinkKind.MULTI_USE ? "Group link" : "One-friend link" }}
-              · until {{ expiry(link.expiresAtUnixMs) }}
+              {{ link.kind === FriendLinkKind.MULTI_USE ? t.friends.groupLink : t.friends.oneFriendLink }}
+              · {{ t.friends.until(expiry(link.expiresAtUnixMs)) }}
             </span>
             <button class="min-h-10 px-2 text-xs text-gray-400" @click="friends.revokeLink(link.code)">
-              Revoke
+              {{ t.friends.revoke }}
             </button>
           </li>
         </ul>
       </section>
 
       <section v-if="friends.list?.incomingRequests.length" class="space-y-2 rounded-xl bg-panel p-4">
-        <h2 class="font-semibold">Friend requests</h2>
+        <h2 class="font-semibold">{{ t.friends.friendRequests }}</h2>
         <ul class="space-y-2">
           <li
             v-for="request in friends.list.incomingRequests"
@@ -182,22 +180,22 @@ function expiry(unixMs: bigint): string {
               class="min-h-10 rounded bg-emerald-600 px-3 text-sm"
               @click="friends.answerRequest(request.id, true)"
             >
-              Accept
+              {{ t.friends.accept }}
             </button>
             <button
               class="min-h-10 rounded bg-panel-raised px-3 text-sm"
               @click="friends.answerRequest(request.id, false)"
             >
-              Decline
+              {{ t.friends.decline }}
             </button>
           </li>
         </ul>
       </section>
 
       <section class="space-y-2 rounded-xl bg-panel p-4">
-        <h2 class="font-semibold">Friends</h2>
+        <h2 class="font-semibold">{{ t.friends.title }}</h2>
         <p v-if="!sortedFriends.length" class="text-sm text-gray-400">
-          No friends yet. Send someone a link, or tap “+ Friend” next to a player in a lobby.
+          {{ t.friends.noFriendsYet(`+ ${t.lobby.addFriend}`) }}
         </p>
         <ul class="space-y-2">
           <li v-for="friend in sortedFriends" :key="friend.identity?.id" class="flex items-center gap-2">
@@ -211,12 +209,14 @@ function expiry(unixMs: bigint): string {
               <PresenceDot :presence="friend.presence" />
             </span>
             <button class="min-h-10 px-2 text-xs text-gray-400" @click="removing = friend.identity ?? null">
-              Remove
+              {{ t.friends.remove }}
             </button>
           </li>
         </ul>
         <template v-if="friends.list?.outgoingRequests.length">
-          <h3 class="pt-2 text-xs uppercase tracking-wide text-gray-400">Waiting for an answer</h3>
+          <h3 class="pt-2 text-xs uppercase tracking-wide text-gray-400">
+            {{ t.friends.waitingForAnswer }}
+          </h3>
           <ul class="space-y-2">
             <li
               v-for="request in friends.list.outgoingRequests"
@@ -226,7 +226,7 @@ function expiry(unixMs: bigint): string {
               <Avatar :url="request.avatarUrl" :name="request.displayName" :player-id="request.id" />
               <span class="min-w-0 flex-1 truncate text-sm text-gray-300">{{ request.displayName }}</span>
               <button class="min-h-10 px-2 text-xs text-gray-400" @click="friends.remove(request.id)">
-                Cancel
+                {{ t.common.cancel }}
               </button>
             </li>
           </ul>
@@ -236,10 +236,10 @@ function expiry(unixMs: bigint): string {
   </main>
   <ConfirmDialog
     v-if="removing"
-    :title="`Remove ${removing.displayName}?`"
-    message="You will no longer see each other in your friend lists."
-    confirm-label="Remove"
-    cancel-label="Keep"
+    :title="t.friends.removeTitle(removing.displayName)"
+    :message="t.friends.removeMessage"
+    :confirm-label="t.friends.remove"
+    :cancel-label="t.friends.keep"
     @confirm="confirmRemove"
     @cancel="removing = null"
   />

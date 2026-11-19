@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from "vue";
 
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import { type SwipeDirection, useSwipe } from "@/input/use-swipe";
 import type { MatchController, ViewSnapshot } from "@/match/match-controller";
@@ -35,8 +36,8 @@ const mySeat = computed(() => {
 const canSteer = computed(() => mySeat.value?.alive === true && !view.value?.end);
 const status = computed(() => {
   if (!view.value || view.value.end) return "";
-  if (props.controller.mySlot === null) return "Watching";
-  return mySeat.value?.alive === false ? "You're out — watching the others" : "";
+  if (props.controller.mySlot === null) return t.games.snake.board.watching;
+  return mySeat.value?.alive === false ? t.games.snake.board.outWatching : "";
 });
 
 const { invalidate } = useCanvas(

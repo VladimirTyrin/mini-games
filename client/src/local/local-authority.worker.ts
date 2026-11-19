@@ -5,8 +5,12 @@
 import init, { LocalHost } from "@/wasm/pkg/mg_wasm";
 import wasmUrl from "@/wasm/pkg/mg_wasm_bg.wasm?url";
 
+import { toBinary } from "@bufbuild/protobuf";
+
+import { commonRefusal } from "@/match/common-refusal";
+import { CommonRefusal, RefusalSchema } from "@/proto/minigames/v2/refusal_pb";
+
 import type { FromWorker, ToWorker } from "./worker-protocol";
-import { errorMessage } from "@/util/error-message";
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -23,6 +27,16 @@ let botMove: ReturnType<typeof setTimeout> | null = null;
 /** Watching: the seats' secrets as last sent, so only changes go out. */
 let watchedSeats = 0;
 let sentSpectatorSecrets: string[] = [];
+
+/** A refusal of the match itself, not of the rules (not running, paused), encoded. */
+function encodedCommonRefusal(reason: CommonRefusal): Uint8Array {
+  return toBinary(RefusalSchema, commonRefusal(reason));
+}
+
+/** For the console only: the worker has no dictionaries (nothing here reaches the screen). */
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function post(message: FromWorker, transfer: Transferable[] = []): void {
   self.postMessage(message, transfer);
@@ -95,36 +109,57 @@ async function handle(message: ToWorker): Promise<void> {
     }
     case "submit": {
       if (!host) {
-        post({ type: "rejected", requestId: message.requestId, message: "the match is not running" });
+        post({
+          type: "rejected",
+          requestId: message.requestId,
+          refusal: encodedCommonRefusal(CommonRefusal.GAME_OVER),
+        });
         break;
       }
       if (paused) {
-        post({ type: "rejected", requestId: message.requestId, message: "the game is paused" });
+        post({
+          type: "rejected",
+          requestId: message.requestId,
+          refusal: encodedCommonRefusal(CommonRefusal.PAUSED),
+        });
         break;
       }
       try {
-        host.submit(message.slot, message.command);
+        const refusal = host.submit(message.slot, message.command);
+        if (refusal) {
+          post({ type: "rejected", requestId: message.requestId, refusal });
+          break;
+        }
         post({ type: "accepted", requestId: message.requestId });
         if (host.tickMs() === 0) {
           sealAndPost();
           driveBots();
         }
       } catch (error) {
+        console.error("local authority refused a malformed command:", describe(error));
         post({
           type: "rejected",
           requestId: message.requestId,
-          message: errorMessage(error),
+          refusal: encodedCommonRefusal(CommonRefusal.MALFORMED),
         });
       }
       break;
     }
     case "submitSecret": {
       if (!host) {
-        post({ type: "rejected", requestId: message.requestId, message: "the match is not running" });
+        post({
+          type: "rejected",
+          requestId: message.requestId,
+          refusal: encodedCommonRefusal(CommonRefusal.GAME_OVER),
+        });
         break;
       }
       try {
-        host.submitSecret(message.slot, message.command);
+        const refusal = host.submitSecret(message.slot, message.command);
+        if (refusal) {
+          post({ type: "rejected", requestId: message.requestId, refusal });
+          break;
+        }
         post({ type: "accepted", requestId: message.requestId });
         const secret = host.seatSecret(message.slot);
         if (secret.length > 0) post({ type: "seatSecret", secret }, [secret.buffer]);
@@ -135,10 +170,11 @@ async function handle(message: ToWorker): Promise<void> {
           driveBots();
         }
       } catch (error) {
+        console.error("local authority refused a malformed command:", describe(error));
         post({
           type: "rejected",
           requestId: message.requestId,
-          message: errorMessage(error),
+          refusal: encodedCommonRefusal(CommonRefusal.MALFORMED),
         });
       }
       break;
@@ -170,5 +206,5 @@ let handled: Promise<void> = Promise.resolve();
 self.onmessage = (event: MessageEvent<ToWorker>) => {
   handled = handled
     .then(() => handle(event.data))
-    .catch((error: unknown) => post({ type: "failed", message: errorMessage(error) }));
+    .catch((error: unknown) => post({ type: "failed", message: describe(error) }));
 };

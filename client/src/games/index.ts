@@ -1,3 +1,5 @@
+import { LOCALES, messagesFor } from "@/i18n";
+
 import type { GamePlugin, SettingsCase } from "./game-plugin";
 import { numbersMatchPlugin } from "./numbers-match";
 import { puzzle2048Plugin } from "./puzzle2048";
@@ -28,4 +30,14 @@ export function pluginById(id: string): GamePlugin | undefined {
 
 export function pluginBySettings(settingsCase: SettingsCase | undefined): GamePlugin | undefined {
   return gamePlugins.find((plugin) => plugin.settingsCase === settingsCase);
+}
+
+/**
+ * The game a title names in any language the app speaks: a saved replay's file keeps the title
+ * in the language it was saved in.
+ */
+export function pluginByTitle(title: string | null): GamePlugin | undefined {
+  return gamePlugins.find((plugin) =>
+    LOCALES.some((language) => messagesFor(language).games[plugin.settingsCase].title === title),
+  );
 }

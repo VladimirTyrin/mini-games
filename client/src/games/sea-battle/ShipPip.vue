@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from "@/i18n";
+
 import ShipSprite from "./ShipSprite.vue";
 
 /** A small ship for a list of ships, drawn like the ships on the sea. */
@@ -17,7 +19,7 @@ const DECK_PX = { small: 12, medium: 14 } as const;
   <span
     class="inline-block"
     :style="{ width: `${length * DECK_PX[size]}px`, height: `${DECK_PX[size]}px` }"
-    :aria-label="`${length}-deck ship`"
+    :aria-label="t.games.seaBattle.ship(length)"
   >
     <ShipSprite :length="length" horizontal :look="look === 'solid' ? 'afloat' : 'ghost'" />
   </span>

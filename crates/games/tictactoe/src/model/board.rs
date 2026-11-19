@@ -1,7 +1,7 @@
 use mg_core::CommandError;
 
 use crate::model::{LineDirection, Mark, Point};
-use crate::rules::WinningLine;
+use crate::rules::{Refusal, WinningLine};
 use crate::settings::{Dimensions, WinLength};
 
 /// Row-major grid.
@@ -37,14 +37,14 @@ impl Board {
             .and_then(|index| self.cells.get(index).copied().flatten())
     }
 
-    pub(crate) fn place(&mut self, point: Point, mark: Mark) -> Result<(), CommandError> {
+    pub(crate) fn place(&mut self, point: Point, mark: Mark) -> Result<(), CommandError<Refusal>> {
         let cell = self
             .dimensions
             .index_of(point)
             .and_then(|index| self.cells.get_mut(index))
-            .ok_or(CommandError::Illegal("cell is outside the board"))?;
+            .ok_or(CommandError::Illegal(Refusal::CellOutsideBoard))?;
         if cell.is_some() {
-            return Err(CommandError::Illegal("cell is already marked"));
+            return Err(CommandError::Illegal(Refusal::CellTaken));
         }
         *cell = Some(mark);
         Ok(())

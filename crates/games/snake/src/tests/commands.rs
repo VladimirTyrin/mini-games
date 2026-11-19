@@ -1,7 +1,7 @@
 use mg_core::{CommandError, Game, Slot};
 
 use super::support::{field_settings, humans, new_game, point, snake};
-use crate::{Command, DeadSnakeBehavior, Direction, Snake, WallCollisionMode};
+use crate::{Command, DeadSnakeBehavior, Direction, Refusal, Snake, WallCollisionMode};
 
 fn game() -> Snake {
     new_game(
@@ -15,7 +15,7 @@ fn game() -> Snake {
     )
 }
 
-fn turn(game: &mut Snake, direction: Direction) -> Result<(), CommandError> {
+fn turn(game: &mut Snake, direction: Direction) -> Result<(), CommandError<Refusal>> {
     game.apply_command(Slot::new(0), &Command::Turn(direction))
 }
 
@@ -24,20 +24,20 @@ fn reversal_and_repeat_are_checked_against_the_last_queued_turn() {
     let mut game = game();
     assert_eq!(
         turn(&mut game, Direction::Down),
-        Err(CommandError::Illegal("cannot reverse"))
+        Err(CommandError::Illegal(Refusal::CannotReverse))
     );
     assert_eq!(
         turn(&mut game, Direction::Up),
-        Err(CommandError::Illegal("already heading that way"))
+        Err(CommandError::Illegal(Refusal::AlreadyHeadingThatWay))
     );
     assert_eq!(turn(&mut game, Direction::Left), Ok(()));
     assert_eq!(
         turn(&mut game, Direction::Left),
-        Err(CommandError::Illegal("already heading that way"))
+        Err(CommandError::Illegal(Refusal::AlreadyHeadingThatWay))
     );
     assert_eq!(
         turn(&mut game, Direction::Right),
-        Err(CommandError::Illegal("cannot reverse"))
+        Err(CommandError::Illegal(Refusal::CannotReverse))
     );
     assert_eq!(turn(&mut game, Direction::Down), Ok(()));
     assert_eq!(

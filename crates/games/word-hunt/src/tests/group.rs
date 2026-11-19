@@ -9,7 +9,7 @@ use super::table::Table;
 use crate::model::Answers;
 use crate::{
     BotKind, Command, FirstTurn, GROUP_GUESS_CAP, Language, Phase, PuzzleMode, RawSettings,
-    Settings, WordHunt, WorldEvent,
+    Refusal, Settings, WordHunt, WorldEvent,
 };
 
 const HUMAN: PlayerSpec = PlayerSpec::HUMAN;
@@ -29,7 +29,7 @@ fn group(players: &[PlayerSpec], first: Slot) -> Table {
     game
 }
 
-fn guess(game: &mut Table, slot: Slot, text: &str) -> Result<(), CommandError> {
+fn guess(game: &mut Table, slot: Slot, text: &str) -> Result<(), CommandError<Refusal>> {
     game.command(slot, &Command::Guess(text.into()))
 }
 
@@ -217,9 +217,7 @@ fn a_player_may_give_up_out_of_turn_and_the_others_play_on() {
     assert_eq!(game.view(Viewer::Spectator).turn, Some(SECOND));
     assert_eq!(
         game.command(THIRD, &Command::GiveUp),
-        Err(CommandError::Illegal(
-            "only a player still guessing can give up"
-        ))
+        Err(CommandError::Illegal(Refusal::CannotGiveUp))
     );
 }
 
@@ -312,9 +310,7 @@ fn a_first_player_other_than_the_settings_name_is_refused() {
     game.apply_world(&WorldEvent::WordChosen).unwrap();
     assert_eq!(
         game.apply_world(&WorldEvent::FirstPlayerChosen(SECOND)),
-        Err(CommandError::Illegal(
-            "the settings name another first player"
-        ))
+        Err(CommandError::Illegal(Refusal::FirstPlayerAgainstSettings))
     );
     game.apply_world(&WorldEvent::FirstPlayerChosen(FIRST))
         .unwrap();

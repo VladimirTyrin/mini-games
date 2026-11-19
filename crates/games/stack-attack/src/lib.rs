@@ -28,7 +28,7 @@ pub use model::{
     BoxId, CargoBox, Cell, Column, Crane, CraneId, CraneState, Direction, Level, PatternId, Row,
     Score, Side, TickCount, WorkerState, WorkerStatus,
 };
-pub use rules::EndReason;
+pub use rules::{EndReason, Refusal};
 pub use settings::{FieldHeight, FieldWidth, MAX_SEATS, MIN_SEATS, RawSettings, Settings};
 pub use view::{GameEvent, View, WorkerView};
 

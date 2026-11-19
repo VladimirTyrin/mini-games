@@ -28,6 +28,7 @@ pub use model::{
     Cell, CellMark, FLEET_LENGTHS, Fleet, FleetError, HiddenFleets, LastShot, Orientation, Phase,
     Ship, ShotOutcome, Waters,
 };
+pub use rules::Refusal;
 pub use settings::{RawSettings, Settings};
 pub use view::View;
 

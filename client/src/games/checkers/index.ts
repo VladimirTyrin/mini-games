@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { GamePlugin } from "../game-plugin";
 import {
   CheckersBotKind,
@@ -7,41 +8,51 @@ import {
 } from "@/proto/minigames/v2/checkers_pb";
 
 import Board from "./CheckersBoard.vue";
-import Help from "./CheckersHelp.vue";
+import HelpEn from "./CheckersHelp.en.vue";
+import HelpRu from "./CheckersHelp.ru.vue";
 import CheckersIcon from "./CheckersIcon.vue";
 import SettingsForm from "./CheckersSettings.vue";
 
 function whiteLabel(white: CheckersWhitePlayer): string {
   switch (white) {
     case CheckersWhitePlayer.HOST:
-      return "host plays white";
+      return t.games.checkers.facts.hostPlaysWhite;
     case CheckersWhitePlayer.GUEST:
-      return "guest plays white";
+      return t.games.checkers.facts.guestPlaysWhite;
     default:
-      return "colours by lot";
+      return t.games.checkers.facts.coloursByLot;
   }
 }
 
-const BOT_LABELS: Record<number, string> = {
-  [CheckersBotKind.EASY]: "Easy bot",
-  [CheckersBotKind.MEDIUM]: "Medium bot",
-  [CheckersBotKind.HARD]: "Hard bot",
-  [CheckersBotKind.MASTER]: "Master bot (slow)",
-};
+function botLabel(kind: CheckersBotKind): string {
+  switch (kind) {
+    case CheckersBotKind.EASY:
+      return t.games.checkers.bots.easy;
+    case CheckersBotKind.MEDIUM:
+      return t.games.checkers.bots.medium;
+    case CheckersBotKind.HARD:
+      return t.games.checkers.bots.hard;
+    case CheckersBotKind.MASTER:
+      return t.games.checkers.bots.master;
+    default:
+      return t.common.bot;
+  }
+}
 
 /** Why the game ended, shown with the result. */
 export function endReason(reason: CheckersEndReason): string | null {
+  const texts = t.games.checkers.endReasons;
   switch (reason) {
     case CheckersEndReason.NO_PIECES:
-      return "No pieces left";
+      return texts.noPieces;
     case CheckersEndReason.NO_MOVES:
-      return "No moves left";
+      return texts.noMoves;
     case CheckersEndReason.OPPONENT_LEFT:
-      return "The opponent left";
+      return texts.opponentLeft;
     case CheckersEndReason.REPETITION:
-      return "Draw: the same position three times";
+      return texts.repetition;
     case CheckersEndReason.KING_MOVES:
-      return "Draw: fifteen king moves each";
+      return texts.kingMoves;
     default:
       return null;
   }
@@ -50,26 +61,34 @@ export function endReason(reason: CheckersEndReason): string | null {
 export const checkersPlugin: GamePlugin = {
   id: "checkers",
   settingsCase: "checkers",
-  title: "Checkers",
+  get title() {
+    return t.games.checkers.title;
+  },
   icon: "⚪",
   Icon: CheckersIcon,
-  tagline: "Russian draughts with flying kings",
+  get tagline() {
+    return t.games.checkers.tagline;
+  },
   SettingsForm,
   Board,
-  Help,
+  Help: { en: HelpEn, ru: HelpRu },
   describeSettings(settings) {
     if (settings.game.case !== "checkers") return [];
     const { whitePlayer, captureRule } = settings.game.value;
     return captureRule === CheckersCaptureRule.MAY_STOP
-      ? [whiteLabel(whitePlayer), "captures may stop"]
+      ? [whiteLabel(whitePlayer), t.games.checkers.facts.capturesMayStop]
       : [whiteLabel(whitePlayer)];
   },
   botLabel(kind) {
-    return kind.game.case === "checkers" ? (BOT_LABELS[kind.game.value] ?? "Bot") : "Bot";
+    return kind.game.case === "checkers" ? botLabel(kind.game.value) : t.common.bot;
   },
   controls: {
-    keyboard: "Click a piece, then where it goes",
-    touch: "Tap a piece, then where it goes",
+    get keyboard() {
+      return t.games.checkers.controls.keyboard;
+    },
+    get touch() {
+      return t.games.checkers.controls.touch;
+    },
   },
   describeEnd(view) {
     if (view.game.case !== "checkers") return null;

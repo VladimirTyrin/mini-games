@@ -69,6 +69,7 @@ impl GameNames {
             .replace("{{Pascal}}", &self.pascal)
             .replace("{{camel}}", &self.camel)
             .replace("{{Title}}", &self.title)
+            .replace("{{SCREAMING}}", &self.snake.to_ascii_uppercase())
     }
 }
 

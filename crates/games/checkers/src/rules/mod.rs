@@ -5,6 +5,7 @@ mod game_end;
 mod legal_move;
 mod move_generator;
 mod position_key;
+mod refusal;
 mod win_reason;
 
 pub(crate) use apply_move::apply_move;
@@ -14,4 +15,5 @@ pub use game_end::GameEnd;
 pub use legal_move::LegalMove;
 pub(crate) use move_generator::legal_moves;
 pub(crate) use position_key::position_key;
+pub use refusal::Refusal;
 pub use win_reason::WinReason;

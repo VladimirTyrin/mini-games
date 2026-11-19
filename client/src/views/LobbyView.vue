@@ -12,7 +12,9 @@ import ConfirmDialog from "@/components/ConfirmDialog.vue";
 import InviteFriends from "@/components/InviteFriends.vue";
 import SettingsEditor from "@/components/SettingsEditor.vue";
 import { pluginBySettings } from "@/games";
+import { lobbyDisplayName } from "@/games/lobby-name";
 import { botName, botNumbers } from "@/games/seat-names";
+import { t } from "@/i18n";
 import { hasCounted } from "@/match/match-series";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { type Identity, IdentityKind } from "@/proto/minigames/v2/identity_pb";
@@ -23,6 +25,7 @@ import { useLobbyStore } from "@/stores/lobby";
 import { useMatchStore } from "@/stores/match";
 import { usePrefsStore } from "@/stores/prefs";
 import { sameIdentity } from "@/util/players";
+import { settingsProblemText } from "@/util/refusal-text";
 import { type SettingsProblem, botKinds, gameCatalog, settingsProblem } from "@/wasm/core";
 
 const router = useRouter();
@@ -128,8 +131,8 @@ const othersInLobby = computed(() =>
 );
 const leaveMessage = computed(() => {
   const [nextHost] = othersInLobby.value;
-  if (!lobby.isHost || !nextHost) return "Your seat goes to whoever joins next.";
-  return `${labelOf(nextHost)} becomes the host.`;
+  if (!lobby.isHost || !nextHost) return t.lobby.seatGoesToNext;
+  return t.lobby.becomesHost(labelOf(nextHost));
 });
 function requestLeave(): void {
   if (othersInLobby.value.length > 0) confirmingLeave.value = true;
@@ -151,25 +154,25 @@ function kick(): void {
 </script>
 
 <template>
-  <AppHeader :title="state?.name ?? 'Lobby'" :back="requestLeave">
+  <AppHeader :title="state ? lobbyDisplayName(state) : t.lobby.title" :back="requestLeave">
     <HowToPlayButton v-if="plugin" @open="helpOpen = true" />
   </AppHeader>
   <HowToPlay v-if="helpOpen && plugin" :plugin="plugin" @close="helpOpen = false" />
   <ConfirmDialog
     v-if="confirmingLeave"
-    title="Leave the lobby?"
+    :title="t.lobby.leaveTitle"
     :message="leaveMessage"
-    confirm-label="Leave"
-    cancel-label="Stay"
+    :confirm-label="t.common.leave"
+    :cancel-label="t.lobby.stay"
     @confirm="leave"
     @cancel="confirmingLeave = false"
   />
   <ConfirmDialog
     v-if="kicking"
-    :title="`Remove ${labelOf(kicking)}?`"
-    message="They are taken out of the lobby."
-    confirm-label="Remove"
-    cancel-label="Cancel"
+    :title="t.lobby.removeMemberTitle(labelOf(kicking))"
+    :message="t.lobby.removeMemberMessage"
+    :confirm-label="t.lobby.remove"
+    :cancel-label="t.common.cancel"
     @confirm="kick"
     @cancel="kicking = null"
   />
@@ -187,7 +190,7 @@ function kick(): void {
             class="ml-auto h-11 rounded-lg px-3 text-sm text-emerald-300 hover:bg-panel-raised"
             @click="editSettings"
           >
-            Edit settings
+            {{ t.lobby.editSettings }}
           </button>
         </div>
         <template v-if="draft && canEditSettings">
@@ -200,14 +203,14 @@ function kick(): void {
           />
           <div class="flex gap-2">
             <button class="h-11 flex-1 rounded-lg bg-panel-raised text-sm" @click="draft = null">
-              Cancel
+              {{ t.common.cancel }}
             </button>
             <button
               class="h-11 flex-1 rounded-lg bg-emerald-600 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
               :disabled="!!draftProblem"
               @click="saveSettings"
             >
-              Save
+              {{ t.common.save }}
             </button>
           </div>
         </template>
@@ -218,8 +221,8 @@ function kick(): void {
 
       <section class="space-y-2 rounded-xl bg-panel p-4">
         <h2 class="text-sm text-gray-400">
-          Players {{ state.seats.length }}/{{ state.maxSeats }}
-          <template v-if="series?.draws"> · Draws: {{ series.draws }}</template>
+          {{ t.lobby.players(state.seats.length, state.maxSeats) }}
+          <template v-if="series?.draws"> · {{ t.match.series.draws(series.draws) }}</template>
         </h2>
         <div
           v-for="(seat, index) in state.seats"
@@ -238,33 +241,35 @@ function kick(): void {
               botName(plugin, seat.botKind, botNumbers(state.seats)[index] ?? 0)
             }}</template>
             <template v-else>{{ seat.occupant ? labelOf(seat.occupant) : "" }}</template>
-            <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> (you)</span>
-            <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300"> host</span>
-            <span v-if="seat.connectionLost" class="text-xs text-rose-300"> reconnecting…</span>
+            <span v-if="isMe(seat.occupant)" class="text-xs text-sky-300"> ({{ t.common.you }})</span>
+            <span v-if="sameIdentity(seat.occupant, state.host)" class="text-xs text-amber-300">
+              {{ t.lobby.host }}</span
+            >
+            <span v-if="seat.connectionLost" class="text-xs text-rose-300"> {{ t.lobby.reconnecting }}</span>
           </span>
           <span v-if="series" class="text-xs whitespace-nowrap text-gray-300">
-            {{ series.wins[index] ?? 0 }} {{ series.wins[index] === 1 ? "win" : "wins" }}
+            {{ t.match.series.wins(series.wins[index] ?? 0) }}
           </span>
           <button
             v-if="canBefriend(seat.occupant)"
             class="-my-1 min-h-9 rounded px-2 text-sm whitespace-nowrap text-emerald-300 hover:bg-white/5"
             @click="friends.sendRequest(seat.occupant!.id)"
           >
-            + Friend
+            + {{ t.lobby.addFriend }}
           </button>
           <span
             v-if="!seat.botKind"
             class="text-xs"
             :class="seat.ready ? 'text-emerald-300' : 'text-gray-500'"
           >
-            {{ seat.ready ? "ready" : "not ready" }}
+            {{ seat.ready ? t.lobby.seatReady : t.lobby.seatNotReady }}
           </span>
           <button
             v-if="lobby.isHost && seat.botKind"
             class="-my-1 min-h-9 rounded px-2 text-sm text-gray-400 hover:bg-white/5 hover:text-rose-300"
             @click="lobby.removeSeat(index)"
           >
-            Remove
+            {{ t.lobby.remove }}
           </button>
           <button
             v-else-if="
@@ -276,7 +281,7 @@ function kick(): void {
             class="-my-1 min-h-9 rounded px-2 text-sm text-gray-400 hover:bg-white/5 hover:text-rose-300"
             @click="kicking = seat.occupant"
           >
-            Kick
+            {{ t.lobby.kick }}
           </button>
         </div>
         <div
@@ -287,16 +292,17 @@ function kick(): void {
             v-for="kind in availableBots"
             :key="plugin.botLabel(kind)"
             class="min-h-10 rounded bg-panel-raised px-3 py-2 text-sm"
+            data-testid="add-bot"
             @click="lobby.addBot(kind)"
           >
             + {{ plugin.botLabel(kind) }}
           </button>
         </div>
         <p v-if="state.observers.length" class="pt-2 text-xs text-gray-400">
-          Watching:
+          {{ t.lobby.watchers }}
           <template v-for="(observer, index) in state.observers" :key="observer.id">
             <span>{{ index > 0 ? ", " : "" }}{{ labelOf(observer) }}</span>
-            <span v-if="isMe(observer)" class="text-sky-300"> (you)</span>
+            <span v-if="isMe(observer)" class="text-sky-300"> ({{ t.common.you }})</span>
           </template>
         </p>
       </section>
@@ -309,13 +315,13 @@ function kick(): void {
           class="rounded bg-panel px-4 py-2"
           @click="lobby.setReady(!mySeat.ready)"
         >
-          {{ mySeat.ready ? "Not ready" : "Ready" }}
+          {{ mySeat.ready ? t.lobby.notReady : t.lobby.ready }}
         </button>
         <button v-if="mySeat" class="rounded bg-panel px-4 py-2 text-sm" @click="lobby.switchToObserver()">
-          Watch instead
+          {{ t.match.watchInstead }}
         </button>
         <button v-else class="rounded bg-panel px-4 py-2 text-sm" @click="lobby.switchToPlayer()">
-          Take a seat
+          {{ t.match.takeSeat }}
         </button>
         <button
           v-if="state.phase === LobbyPhase.POST_MATCH && mySeat"
@@ -323,15 +329,14 @@ function kick(): void {
           :disabled="iVotedToPlayAgain"
           @click="lobby.votePlayAgain()"
         >
-          {{ iVotedToPlayAgain ? "Waiting" : "Play again" }} · {{ state.playAgainVotes.length }}/{{
-            humanSeats
-          }}
+          {{ iVotedToPlayAgain ? t.lobby.waitingForVotes : t.match.playAgain }} ·
+          {{ state.playAgainVotes.length }}/{{ humanSeats }}
         </button>
         <p v-if="canStart && startPausedForUpdate" class="ml-auto text-sm text-amber-300">
-          The server updates in a moment: start the match after it
+          {{ t.lobby.serverUpdatingSoon }}
         </p>
         <p v-else-if="canStart && startProblem" class="ml-auto text-sm text-rose-300">
-          {{ startProblem.message }} — edit the settings to start
+          {{ settingsProblemText(startProblem) }} {{ t.lobby.editSettingsToStart }}
         </p>
         <button
           v-if="canStart"
@@ -340,7 +345,7 @@ function kick(): void {
           :disabled="!!startProblem || startPausedForUpdate"
           @click="start"
         >
-          {{ startsLocally ? "Start (offline)" : "Start" }}
+          {{ startsLocally ? t.lobby.startOffline : t.lobby.start }}
         </button>
       </section>
     </div>

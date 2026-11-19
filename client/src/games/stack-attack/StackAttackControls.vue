@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { reactive } from "vue";
+import { computed, reactive } from "vue";
+
+import { t } from "@/i18n";
 
 import type { WorkerAction } from "./worker-input-pacer";
 
@@ -37,17 +39,17 @@ const BUTTON_CLASS =
 const buttonState = (action: WorkerAction) =>
   pointers[action].size > 0 ? "scale-95 bg-emerald-700 text-white" : "bg-panel-raised text-gray-100";
 
-const BUTTONS: readonly { action: WorkerAction; label: string; symbol: string }[] = [
-  { action: "left", label: "Walk left", symbol: "◀" },
-  { action: "right", label: "Walk right", symbol: "▶" },
-];
+const buttons = computed((): readonly { action: WorkerAction; label: string; symbol: string }[] => [
+  { action: "left", label: t.games.stackAttack.board.walkLeft, symbol: "◀" },
+  { action: "right", label: t.games.stackAttack.board.walkRight, symbol: "▶" },
+]);
 </script>
 
 <template>
   <div class="flex select-none items-center justify-between gap-3 pb-1" @contextmenu.prevent>
     <div class="flex gap-2">
       <button
-        v-for="button in BUTTONS"
+        v-for="button in buttons"
         :key="button.action"
         type="button"
         :aria-label="button.label"
@@ -62,7 +64,7 @@ const BUTTONS: readonly { action: WorkerAction; label: string; symbol: string }[
     </div>
     <button
       type="button"
-      aria-label="Jump"
+      :aria-label="t.games.stackAttack.board.jump"
       :class="[
         BUTTON_CLASS,
         buttonState('jump'),
@@ -73,7 +75,7 @@ const BUTTONS: readonly { action: WorkerAction; label: string; symbol: string }[
       @pointercancel="up('jump', $event)"
       @lostpointercapture="up('jump', $event)"
     >
-      Jump
+      {{ t.games.stackAttack.board.jump }}
     </button>
   </div>
 </template>

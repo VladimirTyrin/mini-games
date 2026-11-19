@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import { useSwipe } from "@/input/use-swipe";
 import type { MatchController } from "@/match/match-controller";
@@ -28,11 +29,11 @@ const canPlay = computed(
 const status = computed(() => {
   switch (view.value?.phase) {
     case Puzzle2048Phase.WON:
-      return { text: `You reached ${view.value.target}!`, tone: "text-amber-300" };
+      return { text: t.games.puzzle2048.board.reachedTarget(view.value.target), tone: "text-amber-300" };
     case Puzzle2048Phase.LOST:
-      return { text: "No moves left", tone: "text-rose-400" };
+      return { text: t.games.puzzle2048.board.noMovesLeft, tone: "text-rose-400" };
     case Puzzle2048Phase.ABANDONED:
-      return { text: "Game abandoned", tone: "text-gray-400" };
+      return { text: t.games.puzzle2048.board.abandoned, tone: "text-gray-400" };
     default:
       return null;
   }
@@ -76,9 +77,9 @@ useSwipe(boardArea, { swipe: (swipe) => move(directionFromSwipe(swipe)) });
 <template>
   <div v-if="view" class="flex flex-col items-center gap-3">
     <div class="flex w-full max-w-md items-stretch justify-between gap-2">
-      <ScoreBox label="Score" :value="view.score" bump />
-      <ScoreBox label="Moves" :value="view.moves" />
-      <ScoreBox label="Target" :value="view.target" />
+      <ScoreBox :label="t.games.puzzle2048.board.score" :value="view.score" bump />
+      <ScoreBox :label="t.games.puzzle2048.board.moves" :value="view.moves" />
+      <ScoreBox :label="t.games.puzzle2048.board.target" :value="view.target" />
     </div>
     <p class="h-7 text-lg font-bold" :class="status?.tone">{{ status?.text }}</p>
     <div ref="boardArea" class="board-area flex min-h-0 w-full flex-1 items-center justify-center">

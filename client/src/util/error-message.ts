@@ -1,9 +1,15 @@
 import { t } from "@/i18n";
+import { CommandRejectedError } from "@/match/command-rejected-error";
 import { RequestError } from "@/net/request-error";
 import { ErrorCode } from "@/proto/minigames/v2/protocol_pb";
 
-/** The words for a server's error code; the server's own text is English for logs only. */
-export function errorCodeText(code: ErrorCode): string {
+import { refusalText, settingProblemText } from "./refusal-text";
+
+/**
+ * The words for a server's error code. The server's own English (`english`) is shown only for a
+ * code this build does not know (a newer server's).
+ */
+export function errorCodeText(code: ErrorCode, english?: string): string {
   const texts = t.errors;
   switch (code) {
     case ErrorCode.INTERNAL:
@@ -59,7 +65,8 @@ export function errorCodeText(code: ErrorCode): string {
     case ErrorCode.ACCOUNT_NOT_FOUND:
       return texts.accountNotFound;
     default:
-      return texts.unspecified;
+      // A code this build does not know: the server's English, else the raw code.
+      return english || `${texts.unspecified} (${code})`;
   }
 }
 
@@ -68,10 +75,14 @@ export function errorCodeText(code: ErrorCode): string {
  * language; any other error's own message (the app's own errors are worded where thrown).
  */
 export function errorMessage(error: unknown): string {
+  // Their messages are the core's English: the fallback for a reason this build cannot word.
+  if (error instanceof CommandRejectedError) return refusalText(error.refusal, error.message);
   if (error instanceof RequestError) {
     if (error.failure === "timed-out") return t.errors.timedOut;
     if (error.failure === "disconnected") return t.errors.disconnected;
-    return errorCodeText(error.code);
+    if (error.refusal) return refusalText(error.refusal, error.message);
+    if (error.settingProblem) return settingProblemText(error.settingProblem, error.message);
+    return errorCodeText(error.code, error.message);
   }
   return error instanceof Error ? error.message : String(error);
 }

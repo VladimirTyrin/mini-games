@@ -5,7 +5,7 @@ use mg_core::{
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{Batch, Board, Cell, CellPair, CellValue, Hint, HintsLeft};
-use crate::rules::{LossReason, Phase};
+use crate::rules::{LossReason, Phase, Refusal};
 use crate::settings::{HintMode, LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, Settings};
 use crate::view::{LastAction, Stats, View};
 use crate::{COLUMNS, INITIAL_CELLS};
@@ -74,7 +74,7 @@ impl NumbersMatch {
         }
     }
 
-    fn remove_pair(&mut self, pair: CellPair) -> Result<(), CommandError> {
+    fn remove_pair(&mut self, pair: CellPair) -> Result<(), CommandError<Refusal>> {
         if let Some(refusal) = self.board.pair_refusal(pair) {
             return Err(CommandError::Illegal(refusal));
         }
@@ -87,9 +87,9 @@ impl NumbersMatch {
         Ok(())
     }
 
-    fn refill(&mut self) -> Result<(), CommandError> {
+    fn refill(&mut self) -> Result<(), CommandError<Refusal>> {
         if self.refills_left == 0 {
-            return Err(CommandError::Illegal("no refills left"));
+            return Err(CommandError::Illegal(Refusal::NoRefillsLeft));
         }
         self.refills_left -= 1;
         self.stats.refills_used = self.stats.refills_used.saturating_add(1);
@@ -105,15 +105,15 @@ impl NumbersMatch {
         Ok(())
     }
 
-    fn request_hint(&mut self) -> Result<(), CommandError> {
+    fn request_hint(&mut self) -> Result<(), CommandError<Refusal>> {
         if self.settings.hint_mode == HintMode::Disabled {
-            return Err(CommandError::Illegal("hints are disabled"));
+            return Err(CommandError::Illegal(Refusal::HintsDisabled));
         }
         if self.hints_left == HintsLeft::Count(0) {
-            return Err(CommandError::Illegal("no hints left"));
+            return Err(CommandError::Illegal(Refusal::NoHintsLeft));
         }
         if self.hint.is_some() {
-            return Err(CommandError::Illegal("a hint is already shown"));
+            return Err(CommandError::Illegal(Refusal::HintAlreadyShown));
         }
         // While playing, "no pair" implies a refill is left, otherwise the game would be lost.
         let hint = self
@@ -172,15 +172,15 @@ fn deal(rng: &mut CoreRng) -> Vec<CellValue> {
     values
 }
 
-fn check_deal(values: &[CellValue]) -> Result<(), CommandError> {
+fn check_deal(values: &[CellValue]) -> Result<(), CommandError<Refusal>> {
     if values.len() != INITIAL_CELLS {
-        return Err(CommandError::Illegal("the deal must have 42 values"));
+        return Err(CommandError::Illegal(Refusal::DealWrongSize));
     }
     let has_adjacent_duplicate = values
         .chunks(COLUMNS)
         .any(|row| row.windows(2).any(|pair| pair.first() == pair.get(1)));
     if has_adjacent_duplicate {
-        return Err(CommandError::Illegal("dealt row has equal adjacent values"));
+        return Err(CommandError::Illegal(Refusal::DealHasAdjacentTwins));
     }
     Ok(())
 }
@@ -191,6 +191,7 @@ impl Game for NumbersMatch {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "numbers_match",
@@ -233,12 +234,16 @@ impl Game for NumbersMatch {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if slot != PLAYER {
             return Err(CommandError::NotPlaying);
         }
         match self.phase {
-            Phase::Dealing => return Err(CommandError::Illegal("the board is not dealt yet")),
+            Phase::Dealing => return Err(CommandError::Illegal(Refusal::NotDealtYet)),
             Phase::Won | Phase::Lost(_) => return Err(CommandError::GameOver),
             Phase::Playing => {}
         }
@@ -257,11 +262,11 @@ impl Game for NumbersMatch {
         }
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         match event {
             WorldEvent::BoardDealt { values } => {
                 if self.phase != Phase::Dealing {
-                    return Err(CommandError::Illegal("the board is already dealt"));
+                    return Err(CommandError::Illegal(Refusal::AlreadyDealt));
                 }
                 check_deal(values)?;
                 self.board = Board::dealt(values);

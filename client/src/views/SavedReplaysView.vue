@@ -2,7 +2,8 @@
 import { onMounted, ref } from "vue";
 
 import AppHeader from "@/components/AppHeader.vue";
-import { gamePlugins } from "@/games";
+import { pluginByTitle } from "@/games";
+import { formatDateTime, t } from "@/i18n";
 import {
   deleteSavedReplay,
   listSavedReplays,
@@ -21,10 +22,7 @@ const toasts = useToastStore();
 const replays = ref<SavedReplay[] | null>(null);
 const confirmingDelete = ref<string | null>(null);
 
-const iconOf = (replay: SavedReplay) =>
-  gamePlugins.find((plugin) => plugin.title === replay.gameTitle)?.icon ?? "🎞";
-const playedAtText = (replay: SavedReplay) =>
-  replay.playedAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+const iconOf = (replay: SavedReplay) => pluginByTitle(replay.gameTitle)?.icon ?? "🎞";
 
 async function refresh(): Promise<void> {
   try {
@@ -40,7 +38,7 @@ async function play(replay: SavedReplay): Promise<void> {
     match.startReplay(await readSavedReplay(replay.fileName));
   } catch (error) {
     // Deleted or moved outside the app since the list was read.
-    toasts.error(`Cannot open the replay: ${errorMessage(error)}`);
+    toasts.error(t.replays.cannotOpen(errorMessage(error)));
     await refresh();
   }
 }
@@ -57,7 +55,7 @@ async function remove(replay: SavedReplay): Promise<void> {
   confirmingDelete.value = null;
   try {
     await deleteSavedReplay(replay.fileName);
-    toasts.show("Replay deleted");
+    toasts.show(t.replays.deleted);
   } catch (error) {
     toasts.failure(error);
   }
@@ -68,13 +66,13 @@ onMounted(refresh);
 </script>
 
 <template>
-  <AppHeader title="Saved replays" back="/" />
+  <AppHeader :title="t.replays.title" back="/" />
   <main class="mx-auto w-full max-w-3xl flex-1 space-y-3 p-4">
-    <p v-if="replays === null" class="text-center text-sm text-gray-400">Loading…</p>
+    <p v-if="replays === null" class="text-center text-sm text-gray-400">{{ t.common.loading }}</p>
     <div v-else-if="replays.length === 0" class="space-y-2 rounded-xl bg-panel p-6 text-center">
-      <p class="font-semibold">No saved replays yet</p>
+      <p class="font-semibold">{{ t.replays.noneYet }}</p>
       <p class="text-sm text-gray-400">
-        When a match ends, tap “Save replay” and it shows up here, ready to watch again or share.
+        {{ t.replays.noneYetHint(t.match.result.saveReplay) }}
       </p>
     </div>
     <ul v-else class="space-y-2">
@@ -88,35 +86,38 @@ onMounted(refresh);
             <span class="min-w-0">
               <span class="block truncate font-semibold">{{ replay.gameTitle ?? replay.fileName }}</span>
               <span class="block text-sm text-gray-400">
-                {{ playedAtText(replay) }}
-                <template v-if="replay.origin === 'imported'"> · Imported</template>
+                {{ formatDateTime(replay.playedAt) }}
+                <template v-if="replay.origin === 'imported'"> · {{ t.replays.imported }}</template>
                 · {{ formatFileSize(replay.sizeBytes) }}
               </span>
             </span>
           </button>
           <button class="rounded px-3 py-2 text-sm hover:bg-panel-raised" @click="share(replay)">
-            Share
+            {{ t.replays.share }}
           </button>
           <button
             class="rounded px-3 py-2 text-sm text-rose-300 hover:bg-panel-raised"
             @click="confirmingDelete = replay.fileName"
           >
-            Delete
+            {{ t.replays.delete }}
           </button>
         </div>
         <div
           v-if="confirmingDelete === replay.fileName"
           class="flex items-center justify-end gap-2 border-t border-white/5 px-4 py-2 text-sm"
         >
-          <span class="flex-1 text-gray-300">Delete this replay? This cannot be undone.</span>
-          <button class="rounded bg-panel-raised px-3 py-1" @click="confirmingDelete = null">Keep</button>
-          <button class="rounded bg-rose-700 px-3 py-1" @click="remove(replay)">Delete</button>
+          <span class="flex-1 text-gray-300">{{ t.replays.confirmDelete }}</span>
+          <button class="rounded bg-panel-raised px-3 py-1" @click="confirmingDelete = null">
+            {{ t.replays.keep }}
+          </button>
+          <button class="rounded bg-rose-700 px-3 py-1" @click="remove(replay)">
+            {{ t.replays.delete }}
+          </button>
         </div>
       </li>
     </ul>
     <p class="text-center text-xs text-gray-500">
-      Kept in the app's folder (Android/data/xyz.braintvsminigames.app/files/replays) and removed if you
-      uninstall the app. Share a replay to keep a copy elsewhere.
+      {{ t.replays.whereKept }}
     </p>
   </main>
 </template>

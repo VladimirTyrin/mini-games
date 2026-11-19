@@ -28,7 +28,7 @@ mod view;
 pub use game::NumbersMatch;
 pub use io::{Command, WorldEvent};
 pub use model::{Batch, Cell, CellIndex, CellPair, CellValue, Hint, HintsLeft, RowIndex};
-pub use rules::{COLUMNS, INITIAL_CELLS, LossReason, Phase};
+pub use rules::{COLUMNS, INITIAL_CELLS, LossReason, Phase, Refusal};
 pub use settings::{
     HintMode, LIMITED_HINTS_PER_REFILL, LIMITED_INITIAL_HINTS, RawSettings, Refills, Settings,
 };

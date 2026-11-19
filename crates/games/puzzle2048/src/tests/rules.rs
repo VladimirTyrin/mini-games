@@ -1,6 +1,6 @@
 use mg_core::{
     Awaiting, Clock, CommandError, CoreRng, Game, GameSettings, OutcomeKind, PlayerSpec,
-    SettingProblem, SettingsError, SetupError, Slot, Status,
+    SettingProblem, SettingRule, SettingsError, SetupError, Slot, Status,
 };
 
 use super::support::{
@@ -8,7 +8,8 @@ use super::support::{
     try_move, values, view,
 };
 use crate::{
-    BoardSize, Command, Direction, Phase, Puzzle2048, RawSettings, Settings, SpawnValue, WorldEvent,
+    BoardSize, Command, Direction, Phase, Puzzle2048, RawSettings, Refusal, Settings, SpawnValue,
+    WorldEvent,
 };
 
 fn create(settings: &Settings) -> Result<Puzzle2048, SetupError> {
@@ -71,7 +72,7 @@ fn target_is_a_bounded_power_of_two() {
     assert_eq!(
         Settings::parse(raw_settings(4, 4, 12)).unwrap_err().problem,
         SettingProblem::RuleBroken {
-            rule: "must be a power of two",
+            rule: SettingRule::PowerOfTwo,
             value: 12
         }
     );
@@ -192,7 +193,7 @@ fn invalid_spawns_are_rejected_without_changes() {
     let before = game.state_hash();
     assert!(matches!(
         spawn(&mut game, 1, 1, SpawnValue::Two),
-        Err(CommandError::Illegal(_))
+        Err(CommandError::Illegal(Refusal::NoSpawnDue))
     ));
     try_move(&mut game, Direction::Right).unwrap();
     let after_move = game.state_hash();
@@ -200,7 +201,9 @@ fn invalid_spawns_are_rejected_without_changes() {
     for (row, col) in [(0, 1), (2, 0), (0, 2), (u8::MAX, u8::MAX)] {
         assert!(matches!(
             spawn(&mut game, row, col, SpawnValue::Two),
-            Err(CommandError::Illegal(_))
+            Err(CommandError::Illegal(
+                Refusal::SpawnCellOccupied | Refusal::SpawnCellOutside
+            ))
         ));
         assert_eq!(game.state_hash(), after_move, "({row}, {col})");
     }
@@ -278,7 +281,7 @@ fn full_board_without_merges_accepts_no_move() {
         assert!(!game.can_move(direction));
         assert!(matches!(
             try_move(&mut game, direction),
-            Err(CommandError::Illegal(_))
+            Err(CommandError::Illegal(Refusal::MoveChangesNothing))
         ));
     }
 }

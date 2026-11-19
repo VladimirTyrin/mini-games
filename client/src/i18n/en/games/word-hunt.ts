@@ -1,1 +1,66 @@
-export const wordHunt = {};
+import { pluralEn } from "../../plural";
+
+export const wordHunt = {
+  title: "Word Hunt",
+  tagline: "Guess the word: Russian or English",
+  /** The word list's language, named as its own speakers do. */
+  wordLanguages: { russian: "Русский", english: "English" },
+  facts: {
+    wordOfTheDay: "word of the day",
+    letters: (count: number) => `${count} ${pluralEn(count, "letter", "letters")}`,
+    guesses: (count: number) => `${count} ${pluralEn(count, "guess", "guesses")}`,
+    hostFirst: "host first",
+    hostLast: "host last",
+    hardMode: "hard mode",
+  },
+  bots: { easy: "Easy bot", medium: "Medium bot", hard: "Hard bot" },
+  controls: {
+    keyboard: "Type a word: it is checked as soon as its last letter is in",
+    touch: "Tap the letters: the word is checked as soon as its last letter is in",
+  },
+  end: {
+    foundIn: (guesses: number) => `Found in ${guesses}`,
+    wordWas: (word: string) => `The word was ${word}`,
+  },
+  board: {
+    gaveUpWatching: "You gave up · watching",
+    yourTurn: "Your turn",
+    botThinking: (name: string) => `${name} is thinking…`,
+    playerTurn: (name: string) => `${name}'s turn`,
+    notEnoughLetters: "Not enough letters",
+    notInWordList: "Not in the word list",
+    dailySubtitle: (date: string) => `Word of the day · ${date}`,
+    theWordWas: "The word was",
+    stats: (stats: { played: number; winPercent: number; streak: number; bestStreak: number }) =>
+      `Played ${stats.played} · won ${stats.winPercent}% · streak ${stats.streak} (best ${stats.bestStreak})`,
+    giveUp: "Give up",
+    giveUpQuestion: "Give up?",
+    keepGuessing: "Keep guessing",
+    giveUpOthersPlayOn: "You drop out and the others play on. The word is shown when the game ends.",
+    giveUpLoses: "The game ends as a loss and the word is shown.",
+    giveUpOtherWins: (name: string) => `The game ends and ${name} wins. The word is shown.`,
+    giveUpNoWinner: "The game ends without a winner. The word is shown.",
+    deleteLetter: "Delete letter",
+  },
+  settings: {
+    language: "Language",
+    word: "Word",
+    wordHelp: "The word of the day is the same for everyone",
+    wordOfTheDay: "Word of the day",
+    unlimited: "Unlimited",
+    letters: "Letters",
+    guesses: "Guesses",
+    firstTurn: "First turn",
+    firstTurnHelp: "Turns then go round the table",
+    /** By who sits in the first seat: the person here, the first bot of a watched table, the host. */
+    firstSeatFirst: { local: "Me first", watching: "Bot 1 first", online: "Host first" },
+    firstSeatLast: { local: "Me last", watching: "Bot 1 last", online: "Host last" },
+    hardMode: "Hard mode",
+    hardModeHelp: "Every guess must use the letters found so far",
+    markMissing: "Mark missing letters",
+    markMissingHelp: "Darken keyboard letters that are not in the word",
+    off: "Off",
+    on: "On",
+    credits: "Word lists from OpenCorpora, SCOWL (Kevin Atkinson) and wordfreq; licensed CC BY-SA 4.0.",
+  },
+};

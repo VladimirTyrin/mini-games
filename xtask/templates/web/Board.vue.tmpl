@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import type { MatchController } from "@/match/match-controller";
 import { useToastStore } from "@/stores/toasts";
@@ -12,6 +13,7 @@ const view = computed(() => {
   const game = props.controller.current.value?.view.game;
   return game?.case === "{{camel}}" ? game.value : null;
 });
+const board = computed(() => t.games.{{camel}}.board);
 const myTurn = computed(
   () => view.value?.currentSlot !== undefined && view.value.currentSlot === props.controller.mySlot,
 );
@@ -23,7 +25,7 @@ async function add(amount: number): Promise<void> {
       game: { case: "{{camel}}", value: { command: { case: "add", value: { amount } } } },
     });
   } catch (error) {
-    toasts.error(error instanceof Error ? error.message : String(error));
+    toasts.failure(error);
   }
 }
 
@@ -38,7 +40,7 @@ useGameKeys((key) => {
 <template>
   <div v-if="view" class="flex flex-col items-center gap-6 p-6">
     <p class="text-6xl font-bold">{{ view.total }} / {{ view.target }}</p>
-    <p class="text-gray-300">{{ myTurn ? "Your move" : "Waiting…" }}</p>
+    <p class="text-gray-300">{{ myTurn ? board.yourMove : board.waiting }}</p>
     <div class="flex gap-3">
       <button
         v-for="amount in [1, 2, 3]"

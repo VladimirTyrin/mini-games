@@ -2,7 +2,7 @@ use mg_core::{CommandError, CoreRng, Game};
 
 use super::support::{arrange, field_settings, humans, new_game, point, put_food};
 use crate::{
-    DeadSnakeBehavior, Direction, Point, RawSettings, Snake, WallCollisionMode, WorldEvent,
+    DeadSnakeBehavior, Direction, Point, RawSettings, Refusal, Snake, WallCollisionMode, WorldEvent,
 };
 
 fn game(max_food_count: u32, food_spawn_permille: u32) -> Snake {
@@ -106,7 +106,7 @@ fn invalid_spawns_are_rejected_without_side_effects() {
     for cell in [point(0, 0), body_cell, point(10, 3), point(3, 10)] {
         assert_eq!(
             game.apply_world(&WorldEvent::SpawnFood(cell)),
-            Err(CommandError::Illegal("food needs an empty cell")),
+            Err(CommandError::Illegal(Refusal::FoodCellNotEmpty)),
             "{cell:?}"
         );
     }
@@ -114,6 +114,6 @@ fn invalid_spawns_are_rejected_without_side_effects() {
     put_food(&mut game, point(1, 0));
     assert_eq!(
         game.apply_world(&WorldEvent::SpawnFood(point(2, 0))),
-        Err(CommandError::Illegal("food cap reached"))
+        Err(CommandError::Illegal(Refusal::FoodCapReached))
     );
 }

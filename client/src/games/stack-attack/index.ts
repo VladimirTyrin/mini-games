@@ -1,7 +1,9 @@
 import type { GamePlugin } from "../game-plugin";
+import { t } from "@/i18n";
 
 import Board from "./StackAttackBoard.vue";
-import Help from "./StackAttackHelp.vue";
+import HelpEn from "./StackAttackHelp.en.vue";
+import HelpRu from "./StackAttackHelp.ru.vue";
 import SettingsForm from "./StackAttackSettings.vue";
 import { describeStackAttackEnd } from "./end-reason";
 import StackAttackIcon from "./StackAttackIcon.vue";
@@ -9,25 +11,32 @@ import StackAttackIcon from "./StackAttackIcon.vue";
 export const stackAttackPlugin: GamePlugin = {
   id: "stack_attack",
   settingsCase: "stackAttack",
-  title: "Stack Attack",
+  get title() {
+    return t.games.stackAttack.title;
+  },
   icon: "📦",
   Icon: StackAttackIcon,
-  tagline: "Co-op: survive the falling crates",
+  get tagline() {
+    return t.games.stackAttack.tagline;
+  },
   SettingsForm,
   Board,
-  Help,
+  Help: { en: HelpEn, ru: HelpRu },
   describeSettings(settings) {
     if (settings.game.case !== "stackAttack") return [];
     const value = settings.game.value;
-    return [`${value.fieldWidth}×${value.fieldHeight}`, "co-op"];
+    return [`${value.fieldWidth}×${value.fieldHeight}`, t.games.stackAttack.facts.coop];
   },
   // Stack Attack has no built-in bot kinds.
-  botLabel: () => "Bot",
+  botLabel: () => t.common.bot,
   playsWithSpace: true,
   controls: {
-    keyboard:
-      "Hold ←/→ or A/D to walk and push crates · Space, W or ↑ to jump · jump, then walk to climb a crate",
-    touch: "Hold ◀ ▶ to walk and push crates · Jump, then walk to climb a crate",
+    get keyboard() {
+      return t.games.stackAttack.controls.keyboard;
+    },
+    get touch() {
+      return t.games.stackAttack.controls.touch;
+    },
   },
   describeEnd: describeStackAttackEnd,
 };

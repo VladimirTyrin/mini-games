@@ -107,3 +107,9 @@ enum TicTacToeBotKind {
   // Any empty cell within two cells of a mark.
   TIC_TAC_TOE_BOT_KIND_RANDOM = 2;
 }
+
+// Why a move is refused. Carried in `Refusal`; the client words each value.
+enum TicTacToeRefusal {
+  TIC_TAC_TOE_REFUSAL_UNSPECIFIED = 0;
+  TIC_TAC_TOE_REFUSAL_CELL_TAKEN = 1;
+}

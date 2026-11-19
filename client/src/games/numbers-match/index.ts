@@ -1,30 +1,41 @@
 import type { GamePlugin } from "../game-plugin";
+import { t } from "@/i18n";
 
 import { hintModeLabel } from "./hint-mode-options";
 import Board from "./NumbersMatchBoard.vue";
-import Help from "./NumbersMatchHelp.vue";
+import HelpEn from "./NumbersMatchHelp.en.vue";
+import HelpRu from "./NumbersMatchHelp.ru.vue";
 import SettingsForm from "./NumbersMatchSettings.vue";
 import NumbersMatchIcon from "./NumbersMatchIcon.vue";
 
 export const numbersMatchPlugin: GamePlugin = {
   id: "numbers_match",
   settingsCase: "numbersMatch",
-  title: "Numbers Match",
+  get title() {
+    return t.games.numbersMatch.title;
+  },
   icon: "🔟",
   Icon: NumbersMatchIcon,
-  tagline: "Pair equal numbers or tens",
+  get tagline() {
+    return t.games.numbersMatch.tagline;
+  },
   SettingsForm,
   Board,
-  Help,
+  Help: { en: HelpEn, ru: HelpRu },
   opensHelpFirstTime: true,
   describeSettings(settings) {
     if (settings.game.case !== "numbersMatch") return [];
     const value = settings.game.value;
-    return [`hints: ${hintModeLabel(value.hintMode).toLowerCase()}`, `${value.refills} refills`];
+    const facts = t.games.numbersMatch.facts;
+    return [facts.hints(hintModeLabel(value.hintMode).toLowerCase()), facts.refills(value.refills)];
   },
-  botLabel: () => "Bot",
+  botLabel: () => t.common.bot,
   controls: {
-    keyboard: "Click two equal numbers or two that sum to 10 · H for a hint · R to refill",
-    touch: "Tap two equal numbers or two that sum to 10 · Hint and Refill are below the board",
+    get keyboard() {
+      return t.games.numbersMatch.controls.keyboard;
+    },
+    get touch() {
+      return t.games.numbersMatch.controls.touch;
+    },
   },
 };

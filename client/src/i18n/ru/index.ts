@@ -1,5 +1,6 @@
 import { common } from "./common";
 import { errors } from "./errors";
+import { refusals } from "./refusals";
 import { app } from "./app";
 import { home } from "./home";
 import { settings } from "./settings";
@@ -17,12 +18,14 @@ import { numbersMatch } from "./games/numbers-match";
 import { wordHunt } from "./games/word-hunt";
 import { checkers } from "./games/checkers";
 import { seaBattle } from "./games/sea-battle";
+// xtask:imports
 
 import type { Messages } from "../messages";
 
 export const ru: Messages = {
   common,
   errors,
+  refusals,
   app,
   home,
   settings,
@@ -32,5 +35,15 @@ export const ru: Messages = {
   lobby,
   setup,
   match,
-  games: { snake, tictactoe, stackAttack, puzzle2048, numbersMatch, wordHunt, checkers, seaBattle },
+  games: {
+    snake,
+    tictactoe,
+    stackAttack,
+    puzzle2048,
+    numbersMatch,
+    wordHunt,
+    checkers,
+    seaBattle,
+    // xtask:games
+  },
 };

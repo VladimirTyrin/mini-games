@@ -2,6 +2,7 @@
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import { computed, ref, watch } from "vue";
 
+import { t } from "@/i18n";
 import { useGameKeys } from "@/input/use-game-keys";
 import { useSwipe } from "@/input/use-swipe";
 import { matchSeatNames } from "@/games/seat-names";
@@ -47,8 +48,9 @@ const canAct = computed(
 );
 const status = computed(() => {
   if (!view.value || view.value.endReason !== undefined) return "";
-  if (mySlot.value === null) return "Watching";
-  if (myWorker.value?.status === StackAttackWorkerStatus.CRUSHED) return "You were crushed — watching";
+  if (mySlot.value === null) return t.games.stackAttack.board.watching;
+  if (myWorker.value?.status === StackAttackWorkerStatus.CRUSHED)
+    return t.games.stackAttack.board.crushedWatching;
   return "";
 });
 

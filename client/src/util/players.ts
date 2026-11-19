@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import type { MatchHeader } from "@/proto/minigames/v2/match_pb";
 
@@ -31,7 +32,7 @@ export function seatLabels(header: MatchHeader): string[] {
   const labels = playerLabels(header.seats.map((seat) => seat.player));
   const bySlot: string[] = [];
   for (const seat of header.seats) {
-    bySlot[seat.slot] = (seat.player && labels.get(seat.player.id)) || `Player ${seat.slot + 1}`;
+    bySlot[seat.slot] = (seat.player && labels.get(seat.player.id)) || t.match.player(seat.slot + 1);
   }
   return bySlot;
 }

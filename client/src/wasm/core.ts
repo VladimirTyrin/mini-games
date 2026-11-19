@@ -24,12 +24,18 @@ import {
   TickFrameSchema,
 } from "@/proto/minigames/v2/match_pb";
 
+import {
+  type Refusal,
+  RefusalSchema,
+  type SettingProblem,
+  SettingProblemSchema,
+} from "@/proto/minigames/v2/refusal_pb";
 import init, * as wasm from "./pkg/mg_wasm";
 import wasmUrl from "./pkg/mg_wasm_bg.wasm?url";
 
 /** What a command would lead to, asked of the rules before sending it. */
 export type CommandPreview =
-  | { readonly kind: "refused"; readonly reason: string }
+  | { readonly kind: "refused"; readonly refusal: Refusal }
   | { readonly kind: "continues" }
   | { readonly kind: "ends"; readonly result: MatchResult };
 
@@ -76,10 +82,13 @@ export interface SettingRange {
   max: number;
 }
 
-/** Why settings are invalid; `field` names the one setting at fault, if there is one. */
+/**
+ * Why settings are invalid: `field` and `detail` the one setting at fault, if there is one
+ * (`settingsProblemText` words it); else they do not suit the players seated.
+ */
 export interface SettingsProblem {
   field: string | null;
-  message: string;
+  detail: SettingProblem | null;
 }
 
 /** The game's own rules decide; returns the reason when `settings` are invalid. */
@@ -87,7 +96,8 @@ export function settingsProblem(settings: GameSettings, seats: number): Settings
   const problem = wasm.validateSettings(toBinary(GameSettingsSchema, settings), seats);
   if (!problem) return null;
   try {
-    return { field: problem.field ?? null, message: problem.message };
+    const detail = problem.settingProblem;
+    return { field: problem.field ?? null, detail: detail ? fromBinary(SettingProblemSchema, detail) : null };
   } finally {
     problem.free();
   }
@@ -159,14 +169,16 @@ export class Mirror {
     return this.inner.stateHash();
   }
 
-  /** Why the rules would refuse `command` from `slot` now, for the player; `null` if they accept it. */
-  refusalOf(slot: number, command: GameCommand): string | null {
-    return this.inner.refusalOf(slot, toBinary(GameCommandSchema, command)) ?? null;
+  /** Why the rules would refuse `command` from `slot` now (`refusalText` words it); `null` if they accept it. */
+  refusalOf(slot: number, command: GameCommand): Refusal | null {
+    const refusal = this.inner.refusalOf(slot, toBinary(GameCommandSchema, command));
+    return refusal ? fromBinary(RefusalSchema, refusal) : null;
   }
 
   /** Why the rules would refuse the private `command` from `slot`; `null` if they accept it. */
-  secretRefusalOf(slot: number, command: GameSecretCommand): string | null {
-    return this.inner.secretRefusalOf(slot, toBinary(GameSecretCommandSchema, command)) ?? null;
+  secretRefusalOf(slot: number, command: GameSecretCommand): Refusal | null {
+    const refusal = this.inner.secretRefusalOf(slot, toBinary(GameSecretCommandSchema, command));
+    return refusal ? fromBinary(RefusalSchema, refusal) : null;
   }
 
   /** The private command the game would choose for `slot` (a random fleet), if it has one. */
@@ -179,8 +191,8 @@ export class Mirror {
   /** What `command` from `slot` would lead to: refused, the game goes on, or how it ends. */
   preview(slot: number, command: GameCommand): CommandPreview {
     const encoded = toBinary(GameCommandSchema, command);
-    const reason = this.inner.refusalOf(slot, encoded);
-    if (reason !== undefined) return { kind: "refused", reason };
+    const refusal = this.inner.refusalOf(slot, encoded);
+    if (refusal !== undefined) return { kind: "refused", refusal: fromBinary(RefusalSchema, refusal) };
     const result = this.inner.resultAfter(slot, encoded);
     return result.length === 0
       ? { kind: "continues" }

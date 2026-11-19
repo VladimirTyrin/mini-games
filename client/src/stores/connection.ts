@@ -7,6 +7,7 @@ import type { Credentials } from "@/net/credentials";
 import { probeServer } from "@/net/probe-server";
 import { RequestError } from "@/net/request-error";
 import { type ConnectionState, Session } from "@/net/session";
+import { t } from "@/i18n";
 import { storage, tabStorage } from "@/platform/storage";
 
 /**
@@ -44,7 +45,7 @@ export const useConnectionStore = defineStore("connection", () => {
   const serverError = ref<string | null>(null);
   const isSignedIn = computed(() => state.value === "signed-in" && identity.value !== null);
   /** The name local games seat the player under: the account's when signed in, as on the cards. */
-  const playerName = computed(() => identity.value?.displayName || prefs.guestName || "You");
+  const playerName = computed(() => identity.value?.displayName || prefs.guestName || t.common.youName);
 
   async function loadServerInfo(): Promise<void> {
     serverError.value = null;
@@ -99,21 +100,21 @@ export const useConnectionStore = defineStore("connection", () => {
     });
     created.events.on("refused", (error) => {
       if (signingInWith !== "session") {
-        toasts.error(error.message);
+        toasts.failure(error);
         return;
       }
       // A stored session the server no longer accepts (expired, server secret or token format
       // changed): forget it and ask for a fresh sign-in instead of showing the raw error.
       prefs.sessionToken = "";
-      toasts.show("Your session has expired. Please sign in again.");
+      toasts.show(t.app.session.expired);
     });
     created.events.on("shuttingDown", () => {
       restartedAt = Date.now();
-      toasts.show("The server is restarting");
+      toasts.show(t.app.session.serverRestarting);
     });
     created.events.on("serverUpdating", () => {
       if (!serverUpdating.value) {
-        toasts.show("The server updates soon: games in progress finish first, new ones start in a minute");
+        toasts.show(t.app.session.serverUpdatesSoon);
       }
       serverUpdating.value = true;
     });

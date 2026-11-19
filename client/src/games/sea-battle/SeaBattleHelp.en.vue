@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { t } from "@/i18n";
+</script>
+
 <template>
   <h3>Goal</h3>
   <p>Find and sink the other side's whole fleet before yours goes down.</p>
@@ -7,7 +11,8 @@
     <li>Ships are straight and may not touch each other, not even at a corner.</li>
     <li>
       Tap cells to place decks (lit cells are the ones allowed), tap a deck to take it away, or press
-      <b>Random</b>. Then press <b>Ready</b>.
+      <b>{{ t.games.seaBattle.fleetEditor.random }}</b>. Then press
+      <b>{{ t.games.seaBattle.fleetEditor.ready }}</b>.
     </li>
   </ul>
   <h3>Battle</h3>

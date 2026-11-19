@@ -130,3 +130,11 @@ enum CheckersBotKind {
   // Searches far deeper, remembering the positions it has searched: seconds a move.
   CHECKERS_BOT_KIND_MASTER = 4;
 }
+
+// Why a move is refused. Carried in `Refusal`; the client words each value.
+enum CheckersRefusal {
+  CHECKERS_REFUSAL_UNSPECIFIED = 0;
+  // A capture is available, and capturing is compulsory.
+  CHECKERS_REFUSAL_MUST_CAPTURE = 1;
+  CHECKERS_REFUSAL_NOT_A_LEGAL_MOVE = 2;
+}

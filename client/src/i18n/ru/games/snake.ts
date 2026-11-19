@@ -1,3 +1,66 @@
 import type { Messages } from "../../messages";
 
-export const snake: Messages["games"]["snake"] = {};
+export const snake: Messages["games"]["snake"] = {
+  title: "Змейка",
+  tagline: "Классическая змейка, до 10 игроков",
+  facts: {
+    wrapAround: "сквозные стены",
+    wallsKill: "стены убивают",
+    deadSnakesStay: "мёртвые остаются",
+    deadSnakesVanish: "мёртвые исчезают",
+  },
+  bots: {
+    random: "Случайный бот",
+    careful: "Осторожный бот",
+    efficient: "Жадный бот",
+  },
+  controls: {
+    keyboard: "Стрелки или WASD — поворот",
+    touch: "Проведи по полю или нажимай стрелки, чтобы повернуть",
+  },
+  speeds: {
+    slow: "Медленно",
+    normal: "Обычно",
+    fast: "Быстро",
+  },
+  customSpeed: (tickIntervalMs) => `${tickIntervalMs} мс на шаг`,
+  settings: {
+    speed: "Скорость",
+    customSpeed: (tickIntervalMs) => `Своя (${tickIntervalMs} мс)`,
+    walls: "Стены",
+    wallsHelp: "Сквозные: ушёл за край — вышел с другой стороны",
+    wallsDeath: "Убивают",
+    wallsWrap: "Сквозные",
+    deadSnakes: "Мёртвые змейки",
+    deadSnakesHelp: "Остаются: их тела загораживают путь",
+    deadSnakesVanish: "Исчезают",
+    deadSnakesStay: "Остаются",
+    foodOnField: "Еды на поле",
+    foodOnFieldHelp: "Сколько штук лежит одновременно",
+    foodAppears: "Еда появляется",
+    foodAppearsHelp: "Как скоро появляется новая",
+    foodInstantly: "Сразу",
+    foodOften: "Часто",
+    foodRarely: "Редко",
+    customFoodChance: (percent) => `Шанс ${percent}%`,
+  },
+  board: {
+    watching: "Ты зритель",
+    outWatching: "Ты выбыл — смотришь за остальными",
+    up: "Вверх",
+    left: "Влево",
+    down: "Вниз",
+    right: "Вправо",
+  },
+  scoreboard: {
+    winner: "победитель",
+    you: "(ты)",
+    // Short and without past-tense verbs: they follow any player's name.
+    hitWall: "в стену",
+    bitItself: "в свой хвост",
+    crashed: "в змейку",
+    crashedHeadOn: "лоб в лоб",
+    left: "вне игры",
+    out: "вне игры",
+  },
+};

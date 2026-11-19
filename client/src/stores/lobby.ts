@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref, shallowRef, watch } from "vue";
 
+import { t } from "@/i18n";
 import type { BotKind, GameSettings } from "@/proto/minigames/v2/game_pb";
 import {
   type ChatMessage,
@@ -19,13 +20,18 @@ import { useToastStore } from "./toasts";
 
 const MAX_CHAT_MESSAGES = 200;
 
-const CLOSED_REASONS: Record<LobbyClosedReason, string> = {
-  [LobbyClosedReason.UNSPECIFIED]: "The lobby was closed",
-  [LobbyClosedReason.HOST_LEFT]: "The lobby was closed",
-  [LobbyClosedReason.KICKED]: "You were removed from the lobby",
-  [LobbyClosedReason.INACTIVE]: "The lobby was closed for inactivity",
-  [LobbyClosedReason.SERVER_SHUTDOWN]: "The server is restarting",
-};
+function closedReasonText(reason: LobbyClosedReason): string {
+  switch (reason) {
+    case LobbyClosedReason.KICKED:
+      return t.lobby.closedKicked;
+    case LobbyClosedReason.INACTIVE:
+      return t.lobby.closedInactive;
+    case LobbyClosedReason.SERVER_SHUTDOWN:
+      return t.lobby.closedServerShutdown;
+    default:
+      return t.lobby.closed;
+  }
+}
 
 export const useLobbyStore = defineStore("lobby", () => {
   const connection = useConnectionStore();
@@ -71,7 +77,7 @@ export const useLobbyStore = defineStore("lobby", () => {
         session.events.on("lobbyClosed", (closed) => {
           current.value = null;
           lobbyChat.value = [];
-          toasts.show(CLOSED_REASONS[closed.reason] ?? CLOSED_REASONS[LobbyClosedReason.UNSPECIFIED]);
+          toasts.show(closedReasonText(closed.reason));
         }),
         session.events.on("chat", (message) => {
           const target = message.scope === ChatScope.LOBBY ? lobbyChat : lobbyListChat;
@@ -86,10 +92,10 @@ export const useLobbyStore = defineStore("lobby", () => {
             lobbyChat.value = [];
             // The first sign-in of a new session (another account, say) is no reconnect.
             if (connection.lostToRestart()) {
-              toasts.show("The server restarted for an update, and the lobby was closed");
+              toasts.show(t.lobby.closedByRestart);
             } else if (reconnecting) {
               // The server does not say why: away too long, removed, or the lobby closed meanwhile.
-              toasts.show("You are no longer in the lobby you were in");
+              toasts.show(t.lobby.noLongerInLobby);
             }
           }
           reconnecting = true;
@@ -116,7 +122,7 @@ export const useLobbyStore = defineStore("lobby", () => {
     const stillVoted = state.playAgainVotes.some((voter) => sameIdentity(voter, connection.identity));
     // The server drops the votes when the players or the settings change after a match.
     if (hadVoted && !stillVoted && state.phase === LobbyPhase.POST_MATCH) {
-      toasts.show("The players or settings changed: vote again to play");
+      toasts.show(t.lobby.playAgainVotesDropped);
     }
     if (!known && !isMember) return;
     current.value = state;

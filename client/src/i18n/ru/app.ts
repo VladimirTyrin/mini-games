@@ -1,3 +1,82 @@
 import type { Messages } from "../messages";
 
-export const app: Messages["app"] = {};
+export const app: Messages["app"] = {
+  name: "Mini Games",
+  failedToStart: (reason: string) => `Не удалось запустить: ${reason}`,
+  leaveMatchToWatchReplay: "Чтобы посмотреть повтор, сначала выйди из матча",
+  privacyPolicy: "Политика конфиденциальности",
+  androidApp: "Android-приложение",
+  download: "Скачать",
+  notNow: "Не сейчас",
+  units: {
+    milliseconds: (amount: number) => `${amount} мс`,
+    seconds: (amount: number | string) => `${amount} с`,
+    bytes: (amount: number) => `${amount} Б`,
+    kilobytes: (amount: string) => `${amount} КБ`,
+    megabytes: (amount: string) => `${amount} МБ`,
+  },
+  header: {
+    online: "в сети",
+    connecting: "подключение…",
+    updateTheApp: "обнови приложение",
+    openInAnotherWindow: "открыто в другом окне",
+    roundTrip: "Время отклика сервера",
+  },
+  getTheApp: {
+    androidPitch: "Android-приложение: работает без сети, обновляется само.",
+    getTheApp: "Скачать",
+    iosTap: "Установи как приложение: нажми",
+    iosShare: "Поделиться",
+    iosThen: "⎙, затем",
+    iosAddToHomeScreen: "На экран «Домой»",
+    iosWorksOffline: ". Работает и без сети.",
+  },
+  updateAvailable: "Есть обновление:",
+  signIn: {
+    withGoogle: "Войти через Google",
+    serverUnreachable: (reason: string, serverUrl: string) =>
+      `${reason} (${serverUrl}). Проверь подключение или адрес сервера в настройках.`,
+    serverIsNewer: "На сервере более новая версия. Обнови приложение.",
+    reconnectingAs: (name: string) => `Снова входим как ${name}…`,
+    signingIn: "Входим…",
+    yourName: "Твоё имя",
+    playAsGuest: "Войти гостем",
+    contactingServer: "Связываемся с сервером…",
+    googleNeedsHttps: "Вход через Google работает только на https-сайте (или в Android-приложении).",
+    googleUnavailable: "Вход через Google недоступен",
+    cannotLoadGoogle: "не удалось загрузить вход через Google",
+    googleReturnedNoToken: "Google не вернул ID-токен",
+    serverDoesNotAnswer: "сервер не отвечает",
+    cannotReachServer: "не удаётся связаться с сервером",
+  },
+  session: {
+    expired: "Сессия истекла. Войди снова.",
+    serverRestarting: "Сервер перезапускается",
+    serverUpdatesSoon: "Сервер скоро обновится: начатые игры доиграют, новые начнутся через минуту",
+  },
+  signedInElsewhere: {
+    openInAnotherWindow: "Игра открыта в другом окне.",
+    playHere: "Играть здесь",
+  },
+  invite: {
+    invitesYouTo: (game: string | null) => (game ? `зовёт тебя в игру «${game}»` : "зовёт тебя в игру"),
+    yourFriend: "твой друг",
+    leaveMatchTitle: "Выйти из матча?",
+    // A name cannot be declined, so the sentence keeps it in the nominative.
+    leaveMatchMessage: (name: string) =>
+      `${name} зовёт тебя в игру. Если примешь приглашение, ты выйдешь из текущего матча.`,
+    leaveAndJoin: "Выйти и принять",
+    keepPlaying: "Играть дальше",
+    decline: "Отклонить",
+    join: "Принять",
+  },
+  push: {
+    channelName: "Приглашения в игры",
+    turnedOffForApp: "Уведомления для приложения выключены",
+    notAllowedForSite: "Уведомления для этого сайта запрещены",
+    serverSendsNone: "Этот сервер не отправляет уведомления",
+    offlineWorkerNotRunning: "Офлайн-обработчик не запущен",
+    playServicesNoAnswer: "Сервисы Google Play не ответили",
+    incompleteSubscription: "Браузер вернул неполную подписку",
+  },
+};

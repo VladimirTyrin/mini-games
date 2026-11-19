@@ -3,7 +3,7 @@
 use mg_core::{CommandError, CoreRng, Game, OutcomeKind, Status};
 
 use super::support::{board, play, settings, spawn, started, tile_count, try_move, values, view};
-use crate::{Direction, Phase, Settings, SpawnValue};
+use crate::{Direction, Phase, Refusal, Settings, SpawnValue};
 
 #[rustfmt::skip]
 const EMPTY_4X4: [u32; 16] = [
@@ -69,7 +69,7 @@ fn move_that_changes_nothing_is_rejected() {
     let before = game.state_hash();
     assert!(matches!(
         try_move(&mut game, Direction::Left),
-        Err(CommandError::Illegal(_))
+        Err(CommandError::Illegal(Refusal::MoveChangesNothing))
     ));
     assert_eq!(game.state_hash(), before);
     assert_eq!(game.moves(), 0);

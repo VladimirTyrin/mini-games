@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from "vue";
 
 import GameIcon from "@/components/GameIcon.vue";
 import { type GamePlugin, controlsHintFor } from "@/games/game-plugin";
+import { locale, t } from "@/i18n";
 import { useBackHandler } from "@/platform/back-navigation";
 import { markHelpSeen } from "@/platform/help-seen";
 import { usePageScrollLock } from "@/util/scroll-lock";
@@ -34,7 +35,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, { capture: tr
     class="fixed inset-0 z-50 flex touch-none items-end justify-center overscroll-none bg-gray-950/60 sm:items-center sm:p-4"
     role="dialog"
     aria-modal="true"
-    :aria-label="`How to play ${props.plugin.title}`"
+    :aria-label="t.match.howToPlay.title(props.plugin.title)"
     @click.self="close"
   >
     <div
@@ -42,19 +43,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, { capture: tr
     >
       <header class="flex items-center gap-3 border-b border-white/5 px-4 py-3">
         <GameIcon :plugin="props.plugin" class="size-8 text-xl" />
-        <h2 class="min-w-0 flex-1 text-lg font-semibold">How to play {{ props.plugin.title }}</h2>
+        <h2 class="min-w-0 flex-1 text-lg font-semibold">
+          {{ t.match.howToPlay.title(props.plugin.title) }}
+        </h2>
         <button
           type="button"
           class="rounded px-2 py-1 text-lg hover:bg-panel-raised"
-          aria-label="Close"
+          :aria-label="t.common.close"
           @click="close"
         >
           ✕
         </button>
       </header>
       <div class="how-to-play min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-        <component :is="props.plugin.Help" />
-        <h3>Controls</h3>
+        <component :is="props.plugin.Help[locale]" />
+        <h3>{{ t.match.howToPlay.controls }}</h3>
         <p>{{ controlsHintFor(props.plugin) }}</p>
       </div>
       <div
@@ -66,7 +69,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey, { capture: tr
           class="h-11 w-full rounded-xl bg-emerald-600 font-semibold hover:bg-emerald-500"
           @click="close"
         >
-          Got it
+          {{ t.match.howToPlay.gotIt }}
         </button>
       </div>
     </div>

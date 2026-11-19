@@ -1,3 +1,63 @@
 import type { Messages } from "../messages";
 
-export const friends: Messages["friends"] = {};
+export const friends: Messages["friends"] = {
+  title: "Друзья",
+  needGoogleToAddFriend: "Войди через Google, чтобы добавить друга.",
+  needGoogle:
+    "Для друзей нужен аккаунт Google: войди через Google, чтобы добавлять друзей и звать их в игры.",
+  iphoneNotificationsHint:
+    "Чтобы получать приглашения на iPhone, добавь сайт на экран «Домой» («Поделиться», затем «На экран „Домой“») и открывай его оттуда.",
+  notificationsBlockedHint:
+    "Уведомления для этого сайта заблокированы: разреши их в настройках браузера, чтобы получать приглашения, когда приложение закрыто.",
+  notificationsHint: "Включи уведомления, чтобы получать приглашения, когда приложение закрыто.",
+  turnOnNotifications: "Включить уведомления",
+  addFriends: "Добавить друзей",
+  linksLast: "Ссылки действуют 7 дней.",
+  linkForOneFriend: "Ссылка для одного друга",
+  linkForGroupChat: "Ссылка для группового чата",
+  shareText: "Добавь меня в друзья в Mini Games",
+  linkCopied: "Ссылка скопирована",
+  pasteLink: "Вставь ссылку от друга",
+  friendLink: "Ссылка от друга",
+  add: "Добавить",
+  notAFriendLink: "Это не ссылка для друзей",
+  groupLink: "Ссылка для группы",
+  oneFriendLink: "Ссылка для друга",
+  until: (date: string) => `до ${date}`,
+  revoke: "Отозвать",
+  friendRequests: "Заявки в друзья",
+  accept: "Принять",
+  decline: "Отклонить",
+  noFriendsYet: (addFriendButton: string) =>
+    `Друзей пока нет. Отправь кому-нибудь ссылку или нажми «${addFriendButton}» рядом с игроком в лобби.`,
+  remove: "Удалить",
+  waitingForAnswer: "Ждут ответа",
+  // A name cannot be declined: "Удалить Влад" would read wrong.
+  removeTitle: (name: string) => `${name}: удалить из друзей?`,
+  removeMessage: "Вы больше не увидите друг друга в списках друзей.",
+  keep: "Оставить",
+  newFriend: "У тебя новый друг",
+  requestSent: "Заявка отправлена",
+  yourFriend: "Твой друг",
+  declinedInvitation: (name: string) => `${name}: приглашение отклонено`,
+  didNotAnswer: (name: string) => `${name}: нет ответа`,
+  invitationClosed: "Приглашение уже закрыто",
+  presence: {
+    playing: "Играет",
+    online: "В сети",
+    offline: "Не в сети",
+  },
+  invite: {
+    title: "Позвать друзей",
+    show: "Показать",
+    hide: "Скрыть",
+    noFriendsYet: "Друзей пока нет.",
+    addFriends: "Добавить друзей",
+    allHere: "Все твои друзья уже здесь.",
+    invite: "Позвать",
+    waiting: (seconds: number) => `Ждём… ${seconds} с`,
+    coming: "Уже идёт",
+    declined: "Отказ",
+    noAnswer: "Нет ответа",
+  },
+};

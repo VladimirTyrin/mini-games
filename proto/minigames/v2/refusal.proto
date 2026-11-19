@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package minigames.v2;
+
+import "minigames/v2/snake.proto";
+import "minigames/v2/tictactoe.proto";
+import "minigames/v2/puzzle2048.proto";
+import "minigames/v2/numbers_match.proto";
+import "minigames/v2/word_hunt.proto";
+import "minigames/v2/checkers.proto";
+import "minigames/v2/sea_battle.proto";
+// xtask:imports
+
+// Why the server or the core refused a command: in ErrorResponse (with
+// ERROR_CODE_COMMAND_REJECTED) and from the WASM core's checks. The client words it in the
+// player's language; a reason it does not know (a newer server) falls back to
+// ErrorResponse.message. Games that refuse nothing of their own (Stack Attack) have no case here.
+message Refusal {
+  oneof reason {
+    CommonRefusal common = 1;
+    SnakeRefusal snake = 2;
+    TicTacToeRefusal tictactoe = 3;
+    Puzzle2048Refusal puzzle2048 = 4;
+    NumbersMatchRefusal numbers_match = 5;
+    WordHuntRefusal word_hunt = 6;
+    CheckersRefusal checkers = 7;
+    SeaBattleRefusal sea_battle = 8;
+    // xtask:Refusal
+  }
+}
+
+// Refusals every game shares.
+enum CommonRefusal {
+  COMMON_REFUSAL_UNSPECIFIED = 0;
+  COMMON_REFUSAL_GAME_OVER = 1;
+  COMMON_REFUSAL_NOT_YOUR_TURN = 2;
+  // The seat is out of play (dropped, gave up, a bot's seat), or the sender only watches.
+  COMMON_REFUSAL_NOT_PLAYING = 3;
+  // Too many inputs queued for this tick; the next tick takes them again.
+  COMMON_REFUSAL_BUSY = 4;
+  // Input no honest client sends (a cell off the board, a private command to a game without
+  // them); worth a generic "not allowed".
+  COMMON_REFUSAL_MALFORMED = 5;
+  // The match is paused until the players are back.
+  COMMON_REFUSAL_PAUSED = 6;
+}
+
+// A rule on one setting that a range cannot express; generic kinds, worded once for every game.
+enum SettingRule {
+  SETTING_RULE_UNSPECIFIED = 0;
+  // 2048's target tile must be a power of two.
+  SETTING_RULE_POWER_OF_TWO = 1;
+  // 2048's target tile cannot be reached on a board of the chosen size.
+  SETTING_RULE_TOO_LARGE_FOR_BOARD = 2;
+  // The daily puzzle fixes this value (Word Hunt's word length).
+  SETTING_RULE_FIXED_FOR_DAILY_PUZZLE = 3;
+}
+
+// What is wrong with one setting: in ErrorResponse (with ERROR_CODE_INVALID_SETTINGS) and from
+// the WASM core's settings check.
+message SettingProblem {
+  // The value is outside its inclusive bounds; the client words it with the numbers.
+  message OutOfRange {
+    uint32 value = 1;
+    uint32 min = 2;
+    uint32 max = 3;
+  }
+
+  message BrokenRule {
+    SettingRule rule = 1;
+    uint32 value = 2;
+  }
+
+  // Field name in the game's settings message (`word_length`), so a form shows the problem
+  // next to its control.
+  string field = 1;
+  oneof problem {
+    OutOfRange out_of_range = 2;
+    BrokenRule broken_rule = 3;
+  }
+}

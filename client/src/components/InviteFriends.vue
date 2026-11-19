@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { RouterLink } from "vue-router";
 
 import Avatar from "@/components/Avatar.vue";
+import { t } from "@/i18n";
 import PresenceDot from "@/components/PresenceDot.vue";
 import type { Identity } from "@/proto/minigames/v2/identity_pb";
 import { InviteState, Presence } from "@/proto/minigames/v2/social_pb";
@@ -54,14 +55,14 @@ function status(accountId: string): string | null {
         0,
         Math.floor((friends.deadlineOf(update?.inviteId ?? "") - now.value) / 1000),
       );
-      return `Waiting… ${seconds} s`;
+      return t.friends.invite.waiting(seconds);
     }
     case InviteState.ACCEPTED:
-      return "Coming!";
+      return t.friends.invite.coming;
     case InviteState.DECLINED:
-      return "Declined";
+      return t.friends.invite.declined;
     case InviteState.EXPIRED:
-      return "No answer";
+      return t.friends.invite.noAnswer;
     default:
       return null;
   }
@@ -84,15 +85,17 @@ function cancel(accountId: string): void {
       :aria-expanded="open"
       @click="open = !open"
     >
-      Invite friends
-      <span class="text-sm text-gray-400">{{ open ? "Hide" : "Show" }}</span>
+      {{ t.friends.invite.title }}
+      <span class="text-sm text-gray-400">{{ open ? t.friends.invite.hide : t.friends.invite.show }}</span>
     </button>
     <template v-if="open">
       <p v-if="!friends.list?.friends.length" class="text-sm text-gray-400">
-        No friends yet.
-        <RouterLink to="/friends" class="text-emerald-300 underline">Add friends</RouterLink>
+        {{ t.friends.invite.noFriendsYet }}
+        <RouterLink to="/friends" class="text-emerald-300 underline">{{
+          t.friends.invite.addFriends
+        }}</RouterLink>
       </p>
-      <p v-else-if="!candidates.length" class="text-sm text-gray-400">All your friends are here.</p>
+      <p v-else-if="!candidates.length" class="text-sm text-gray-400">{{ t.friends.invite.allHere }}</p>
       <ul class="space-y-2">
         <li v-for="friend in candidates" :key="friend.identity!.id" class="flex items-center gap-2">
           <Avatar
@@ -112,14 +115,14 @@ function cancel(accountId: string): void {
             class="min-h-10 rounded bg-panel-raised px-3 text-sm"
             @click="cancel(friend.identity!.id)"
           >
-            Cancel
+            {{ t.common.cancel }}
           </button>
           <button
             v-else
             class="min-h-10 rounded bg-emerald-600 px-3 text-sm"
             @click="friends.invite(friend.identity!.id)"
           >
-            Invite
+            {{ t.friends.invite.invite }}
           </button>
         </li>
       </ul>

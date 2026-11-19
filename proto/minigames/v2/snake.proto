@@ -135,3 +135,12 @@ message SnakeGameEnd {
   // last human. Empty for a draw and for solo matches.
   repeated uint32 winner_slots = 2;
 }
+
+// Why a turn is refused. Carried in `Refusal`; the client words each value.
+enum SnakeRefusal {
+  SNAKE_REFUSAL_UNSPECIFIED = 0;
+  // The snake already heads that way (after its queued turns).
+  SNAKE_REFUSAL_ALREADY_HEADING_THAT_WAY = 1;
+  // A snake cannot turn back onto itself.
+  SNAKE_REFUSAL_CANNOT_REVERSE = 2;
+}

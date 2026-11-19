@@ -5,7 +5,7 @@ use mg_core::{
 
 use crate::io::{Command, WorldEvent};
 use crate::model::{Board, Cell, Direction, Score, SpawnValue, Tile, TileId};
-use crate::rules::Phase;
+use crate::rules::{Phase, Refusal};
 use crate::settings::{Settings, Target};
 use crate::view::{TileOrigin, View};
 
@@ -100,6 +100,7 @@ impl Game for Puzzle2048 {
     type WorldEvent = WorldEvent;
     type View = View;
     type Secret = ();
+    type Refusal = Refusal;
 
     const INFO: GameInfo = GameInfo {
         id: "puzzle2048",
@@ -136,7 +137,11 @@ impl Game for Puzzle2048 {
         Clock::TurnBased
     }
 
-    fn apply_command(&mut self, slot: Slot, command: &Command) -> Result<(), CommandError> {
+    fn apply_command(
+        &mut self,
+        slot: Slot,
+        command: &Command,
+    ) -> Result<(), CommandError<Refusal>> {
         if self.phase != Phase::Playing {
             return Err(CommandError::GameOver);
         }
@@ -149,7 +154,7 @@ impl Game for Puzzle2048 {
         let Command::Move(direction) = *command;
         let slide = self.board.slide(direction, self.next_tile_id);
         if !slide.changed {
-            return Err(CommandError::Illegal("the move does not change the board"));
+            return Err(CommandError::Illegal(Refusal::MoveChangesNothing));
         }
         self.board = slide.board;
         self.next_tile_id = slide.next_tile_id;
@@ -184,19 +189,19 @@ impl Game for Puzzle2048 {
         events
     }
 
-    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError> {
+    fn apply_world(&mut self, event: &WorldEvent) -> Result<(), CommandError<Refusal>> {
         let WorldEvent::TileSpawned { cell, value } = *event;
         if self.phase != Phase::Playing {
             return Err(CommandError::GameOver);
         }
         if self.pending_spawns == 0 {
-            return Err(CommandError::Illegal("no tile spawn is due"));
+            return Err(CommandError::Illegal(Refusal::NoSpawnDue));
         }
         if !self.board.contains(cell) {
-            return Err(CommandError::Illegal("spawn cell is outside the board"));
+            return Err(CommandError::Illegal(Refusal::SpawnCellOutside));
         }
         if self.board.tile(cell).is_some() {
-            return Err(CommandError::Illegal("spawn cell is occupied"));
+            return Err(CommandError::Illegal(Refusal::SpawnCellOccupied));
         }
         self.board.put(Tile {
             id: self.next_tile_id,

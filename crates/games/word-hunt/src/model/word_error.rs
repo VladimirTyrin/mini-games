@@ -1,3 +1,5 @@
+use crate::rules::Refusal;
+
 /// Why a text is not a word of this game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WordError {
@@ -5,11 +7,11 @@ pub enum WordError {
     NotALetter,
 }
 
-impl WordError {
-    pub(crate) const fn reason(self) -> &'static str {
-        match self {
-            WordError::WrongLength => "the word has the wrong number of letters",
-            WordError::NotALetter => "the word has a character outside the alphabet",
+impl From<WordError> for Refusal {
+    fn from(error: WordError) -> Self {
+        match error {
+            WordError::WrongLength => Refusal::WrongLength,
+            WordError::NotALetter => Refusal::NotALetter,
         }
     }
 }

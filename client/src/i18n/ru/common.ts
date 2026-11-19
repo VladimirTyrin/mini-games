@@ -14,5 +14,15 @@ export const common: Messages["common"] = {
   youName: "Ты",
   bot: "Бот",
   loading: "Загрузка…",
-  tryAgain: "Попробовать снова",
+  tryAgain: "Повторить",
+  random: "Случайно",
+  boardSize: {
+    label: "Размер поля",
+    small: "Малое",
+    medium: "Среднее",
+    large: "Большое",
+    custom: "Своё",
+    width: "Ширина",
+    height: "Высота",
+  },
 };

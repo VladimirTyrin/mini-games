@@ -1,13 +1,14 @@
 use mg_core::PlayerKind;
 use mg_snake::{
     BotKind, Command, DeadSnakeBehavior, DeathReason, Direction, GameEnd, Point, RawSettings,
-    Snake, SnakeView, View, WallCollisionMode, WorldEvent,
+    Refusal, Snake, SnakeView, View, WallCollisionMode, WorldEvent,
 };
 
 use crate::proto;
 use crate::slot_to_wire;
 use crate::wire_error::WireError;
 use crate::wire_game::{WireBots, WireGame};
+use crate::{WireRefusal, malformed_refusal};
 
 impl WireGame for Snake {
     fn settings_from_wire(settings: &proto::GameSettings) -> Result<RawSettings, WireError> {
@@ -259,6 +260,25 @@ fn game_end_to_wire(end: &GameEnd) -> proto::SnakeGameEnd {
     proto::SnakeGameEnd {
         reason: death_reason_to_wire(end.reason).into(),
         winner_slots: end.winners.iter().copied().map(slot_to_wire).collect(),
+    }
+}
+
+impl WireRefusal for Refusal {
+    fn refusal_to_wire(self) -> proto::refusal::Reason {
+        let refusal = match self {
+            Refusal::AlreadyHeadingThatWay => proto::SnakeRefusal::AlreadyHeadingThatWay,
+            Refusal::CannotReverse => proto::SnakeRefusal::CannotReverse,
+            Refusal::FoodCapReached | Refusal::FoodCellNotEmpty => return malformed_refusal(),
+        };
+        proto::refusal::Reason::Snake(refusal.into())
+    }
+
+    fn refusal_from_wire(value: i32) -> Option<Self> {
+        Some(match proto::SnakeRefusal::try_from(value).ok()? {
+            proto::SnakeRefusal::Unspecified => return None,
+            proto::SnakeRefusal::AlreadyHeadingThatWay => Refusal::AlreadyHeadingThatWay,
+            proto::SnakeRefusal::CannotReverse => Refusal::CannotReverse,
+        })
     }
 }
 

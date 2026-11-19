@@ -25,7 +25,7 @@ pub use bots::{BotKind, MINIMAX_BOT_BUDGET, MinimaxBot, RANDOM_BOT_BUDGET, Rando
 pub use game::TicTacToe;
 pub use io::{Command, WorldEvent};
 pub use model::{Mark, Point};
-pub use rules::{GameEnd, WinningLine};
+pub use rules::{GameEnd, Refusal, WinningLine};
 pub use settings::{FieldSize, FirstPlayerMode, PLAYERS, RawSettings, Settings};
 pub use view::View;
 

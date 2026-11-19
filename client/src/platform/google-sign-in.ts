@@ -1,3 +1,5 @@
+import { type Locale, t } from "@/i18n";
+
 interface GoogleIdentityServices {
   accounts: {
     id: {
@@ -21,10 +23,10 @@ function loadScript(): Promise<GoogleIdentityServices> {
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.onload = () =>
-      window.google ? resolve(window.google) : reject(new Error("Google sign-in unavailable"));
+      window.google ? resolve(window.google) : reject(new Error(t.app.signIn.googleUnavailable));
     script.onerror = () => {
       loading = null;
-      reject(new Error("cannot load Google sign-in"));
+      reject(new Error(t.app.signIn.cannotLoadGoogle));
     };
     document.head.append(script);
   });
@@ -38,6 +40,7 @@ function loadScript(): Promise<GoogleIdentityServices> {
 export async function renderGoogleButton(
   element: HTMLElement,
   clientId: string,
+  language: Locale,
   onIdToken: (idToken: string) => void,
 ): Promise<void> {
   const google = await loadScript();
@@ -50,6 +53,7 @@ export async function renderGoogleButton(
     size: "large",
     shape: "pill",
     text: "signin_with",
+    locale: language,
     // Google caps the width at 400 px; filling the panel lines it up with the guest form.
     width: Math.min(400, Math.floor(element.clientWidth)),
   });
@@ -83,7 +87,8 @@ export async function signInWithGoogleNatively(webClientId: string): Promise<str
   try {
     const response = await SocialLogin.login({ provider: "google", options: {} });
     const result = response.result;
-    if (result.responseType !== "online" || !result.idToken) throw new Error("Google returned no ID token");
+    if (result.responseType !== "online" || !result.idToken)
+      throw new Error(t.app.signIn.googleReturnedNoToken);
     return result.idToken;
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && error.code === "USER_CANCELLED") {

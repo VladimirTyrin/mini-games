@@ -6,6 +6,7 @@ import SegmentedField from "@/components/form/SegmentedField.vue";
 import StepperField from "@/components/form/StepperField.vue";
 import type { GameSettings } from "@/proto/minigames/v2/game_pb";
 import { WordHuntFirstTurn, WordHuntLanguage, WordHuntPuzzleMode } from "@/proto/minigames/v2/word_hunt_pb";
+import { t } from "@/i18n";
 
 import { localDayNumber } from "./daily";
 import { marksMissingLetters } from "./preferences";
@@ -14,29 +15,31 @@ const settings = defineModel<GameSettings>({ required: true });
 const form = useGameSettingsForm(settings, "wordHunt");
 const value = form.value;
 
-const languageOptions = [
-  { value: WordHuntLanguage.RUSSIAN, label: "Русский" },
-  { value: WordHuntLanguage.ENGLISH, label: "English" },
-] as const;
-const DAILY_OPTION = { value: WordHuntPuzzleMode.DAILY, label: "Word of the day" } as const;
-const UNLIMITED_OPTION = { value: WordHuntPuzzleMode.UNLIMITED, label: "Unlimited" } as const;
+const texts = computed(() => t.games.wordHunt.settings);
+const languageOptions = computed(() => [
+  { value: WordHuntLanguage.RUSSIAN, label: t.games.wordHunt.wordLanguages.russian },
+  { value: WordHuntLanguage.ENGLISH, label: t.games.wordHunt.wordLanguages.english },
+]);
 /** With opponents: turns on one word; the word of the day is for playing alone. */
 const isGroup = computed(() => form.seats.value > 1);
-const modeOptions = computed(() => (isGroup.value ? [UNLIMITED_OPTION] : [DAILY_OPTION, UNLIMITED_OPTION]));
-/** Who the first seat is: the person here, the first bot of a table being watched, the host. */
-const FIRST_SEAT = { local: "Me", watching: "Bot 1", online: "Host" } as const;
-const firstTurnOptions = computed(() => {
-  const first = FIRST_SEAT[form.audience.value];
-  return [
-    { value: WordHuntFirstTurn.RANDOM, label: "Random" },
-    { value: WordHuntFirstTurn.HOST_FIRST, label: `${first} first` },
-    { value: WordHuntFirstTurn.HOST_LAST, label: `${first} last` },
-  ];
+const modeOptions = computed(() => {
+  const unlimited = { value: WordHuntPuzzleMode.UNLIMITED, label: texts.value.unlimited };
+  if (isGroup.value) return [unlimited];
+  return [{ value: WordHuntPuzzleMode.DAILY, label: texts.value.wordOfTheDay }, unlimited];
 });
-const offOnOptions = [
-  { value: 0, label: "Off" },
-  { value: 1, label: "On" },
-] as const;
+const firstTurnOptions = computed(() => [
+  { value: WordHuntFirstTurn.RANDOM, label: t.common.random },
+  { value: WordHuntFirstTurn.HOST_FIRST, label: texts.value.firstSeatFirst[form.audience.value] },
+  { value: WordHuntFirstTurn.HOST_LAST, label: texts.value.firstSeatLast[form.audience.value] },
+]);
+const offOnOptions = computed(() => [
+  { value: 0, label: texts.value.off },
+  { value: 1, label: texts.value.on },
+]);
+
+function setLanguage(language: WordHuntLanguage): void {
+  form.update({ language });
+}
 
 function setMarksMissing(marks: boolean): void {
   marksMissingLetters.value = marks;
@@ -80,15 +83,15 @@ onMounted(() => {
 <template>
   <div v-if="value" class="divide-y divide-white/5">
     <SegmentedField
-      label="Language"
+      :label="texts.language"
       :options="languageOptions"
       :model-value="value.language"
-      @update:model-value="form.update({ language: $event })"
+      @update:model-value="setLanguage"
     />
     <SegmentedField
       v-if="!isGroup"
-      label="Word"
-      help="The word of the day is the same for everyone"
+      :label="texts.word"
+      :help="texts.wordHelp"
       stacked
       :options="modeOptions"
       :model-value="value.mode"
@@ -96,22 +99,22 @@ onMounted(() => {
     />
     <StepperField
       v-if="value.mode !== WordHuntPuzzleMode.DAILY"
-      label="Letters"
+      :label="texts.letters"
       v-bind="form.field('word_length')"
       :model-value="value.wordLength"
       @update:model-value="form.update({ wordLength: $event })"
     />
     <StepperField
       v-if="!isGroup"
-      label="Guesses"
+      :label="texts.guesses"
       v-bind="form.field('max_guesses')"
       :model-value="value.maxGuesses"
       @update:model-value="form.update({ maxGuesses: $event })"
     />
     <SegmentedField
       v-if="isGroup"
-      label="First turn"
-      help="Turns then go round the table"
+      :label="texts.firstTurn"
+      :help="texts.firstTurnHelp"
       stacked
       :options="firstTurnOptions"
       :model-value="
@@ -120,21 +123,19 @@ onMounted(() => {
       @update:model-value="form.update({ firstTurn: $event })"
     />
     <SegmentedField
-      label="Hard mode"
-      help="Every guess must use the letters found so far"
+      :label="texts.hardMode"
+      :help="texts.hardModeHelp"
       :options="offOnOptions"
       :model-value="value.hardMode ? 1 : 0"
       @update:model-value="form.update({ hardMode: $event === 1 })"
     />
     <SegmentedField
-      label="Mark missing letters"
-      help="Darken keyboard letters that are not in the word"
+      :label="texts.markMissing"
+      :help="texts.markMissingHelp"
       :options="offOnOptions"
       :model-value="marksMissingLetters ? 1 : 0"
       @update:model-value="setMarksMissing($event === 1)"
     />
-    <p class="pt-3 text-xs text-gray-500">
-      Word lists from OpenCorpora, SCOWL (Kevin Atkinson) and wordfreq; licensed CC BY-SA 4.0.
-    </p>
+    <p class="pt-3 text-xs text-gray-500">{{ texts.credits }}</p>
   </div>
 </template>
