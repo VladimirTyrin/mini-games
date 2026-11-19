@@ -85,7 +85,8 @@ export function launchChrome({ chromePath, port }) {
   );
 
   async function devtools(path, method = "GET") {
-    for (let attempt = 0; attempt < 50; attempt++) {
+    // Up to 30 s: a cold CI runner can take that long to start Chrome.
+    for (let attempt = 0; attempt < 150; attempt++) {
       try {
         const response = await fetch(`http://127.0.0.1:${port}${path}`, { method });
         const text = await response.text();
@@ -132,7 +133,13 @@ export function launchChrome({ chromePath, port }) {
    * neither share a language nor remember each other's settings.
    */
   async function openTab() {
-    browser ??= devtools("/json/version").then((version) => connect(version.webSocketDebuggerUrl));
+    // A failed connection is not kept: the next visit tries again instead of failing at once.
+    browser ??= devtools("/json/version")
+      .then((version) => connect(version.webSocketDebuggerUrl))
+      .catch((error) => {
+        browser = null;
+        throw error;
+      });
     const control = await browser;
     const { browserContextId } = await control.send("Target.createBrowserContext");
     const { targetId } = await control.send("Target.createTarget", { url: "about:blank", browserContextId });

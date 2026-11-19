@@ -161,10 +161,15 @@ function screenCell(square: number): { column: number; row: number } {
   return flipped.value ? { column: 7 - x, row: y } : { column: x, row: 7 - y };
 }
 
-/** Moved with a transform (a share of the piece's own size), which slides on the GPU without layout. */
-function screenPosition(square: number): { transform: string } {
+/**
+ * Where a piece stands, as CSS variables: its class turns them into a transform (a share of the
+ * piece's own size, which slides on the GPU without layout). Not an inline transform:
+ * TransitionGroup writes and then clears inline transforms of its children, and a cleared one was
+ * not set again (Vue saw no change), leaving the piece in the top-left corner.
+ */
+function screenPosition(square: number): Record<"--column" | "--row", number> {
   const { column, row } = screenCell(square);
-  return { transform: `translate(${column * 100}%, ${row * 100}%)` };
+  return { "--column": column, "--row": row };
 }
 
 function tap(square: number): void {
@@ -240,7 +245,9 @@ const status = computed(() => {
       class="relative aspect-square overflow-hidden rounded-md border-4 border-[#3f2a1d] shadow-lg"
       :style="{ width: 'min(100%, max(62dvh, calc(100dvh - 11rem)))' }"
     >
-      <div class="grid h-full w-full grid-cols-8 grid-rows-8">
+      <!-- Spread by inset, as the pieces' layer is: a percentage height of a box sized by its
+           aspect ratio is not resolved by every Safari, and the rows then outgrew the board. -->
+      <div class="absolute inset-0 grid grid-cols-8 grid-rows-8">
         <button
           v-for="cell in cells"
           :key="cell.square"
@@ -275,7 +282,12 @@ const status = computed(() => {
       </svg>
       <!-- Pieces are drawn over the squares, keyed by id, so a move slides instead of jumping; the
            squares underneath take the taps. -->
-      <TransitionGroup name="checkers-piece" tag="div" class="pointer-events-none absolute inset-0">
+      <TransitionGroup
+        name="checkers-piece"
+        move-class="checkers-piece-stays"
+        tag="div"
+        class="pointer-events-none absolute inset-0"
+      >
         <div
           v-for="piece in shownPieces"
           :key="piece.id"
@@ -328,7 +340,13 @@ const status = computed(() => {
 
 <style scoped>
 .checkers-piece {
+  transform: translate(calc(var(--column) * 100%), calc(var(--row) * 100%));
   transition: transform 0.22s ease-out;
+}
+/* No FLIP of the other pieces when one leaves: each one's own transition moves it already, and
+   TransitionGroup only moves children whose move class has a transform transition. */
+.checkers-piece-stays {
+  transition: none;
 }
 .checkers-piece-leave-active {
   transition: opacity 0.25s ease;
