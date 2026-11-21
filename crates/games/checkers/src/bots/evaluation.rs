@@ -12,9 +12,6 @@ const CENTRE: i32 = 3;
 const LONG_DIAGONAL: i32 = 8;
 
 /// The position from `side`'s point of view: positive is good for it.
-// Not inlined so that `cargo asm -p mg-checkers --lib evaluate` can show it on its own; the
-// call costs a few nanoseconds against the tens the evaluation itself takes.
-#[inline(never)]
 pub(crate) fn evaluate(board: &Board, side: Side) -> i32 {
     board
         .pieces()
